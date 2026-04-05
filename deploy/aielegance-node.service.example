@@ -1,0 +1,24 @@
+# Nuxt Nitro (production .output) — same host as nginx → 127.0.0.1:3000
+#
+# 1. Copy:   sudo cp deploy/aielegance-node.service.example /etc/systemd/system/aielegance-node.service
+# 2. Edit:   User=, paths, and EnvironmentFile if needed
+# 3. Enable: sudo systemctl daemon-reload && sudo systemctl enable --now aielegance-node
+# 4. After each ./scripts/deploy-vps.sh:  sudo systemctl restart aielegance-node
+#
+# Requires /var/www/aielegance/.env with POCKETBASE_*, OPENROUTER_*, etc.
+
+[Unit]
+Description=AI Elegance Nuxt (Nitro)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/var/www/aielegance
+EnvironmentFile=-/var/www/aielegance/.env
+ExecStart=/usr/bin/node /var/www/aielegance/.output/server/index.mjs
+Restart=on-failure
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,29 @@
+{
+  "name": "ai-elegance",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build && node scripts/sync-nitro-public.mjs && node scripts/verify-output.mjs",
+    "dev": "nuxt dev",
+    "generate": "nuxt generate",
+    "preview": "nuxt preview",
+    "start": "node -r dotenv/config .output/server/index.mjs",
+    "postinstall": "nuxt prepare",
+    "setup-db": "node scripts/setup-collections.js",
+    "add-fields": "node scripts/add-fields-to-collections.js",
+    "deploy": "bash scripts/deploy-vps.sh"
+  },
+  "devDependencies": {
+    "@nuxt/devtools": "latest",
+    "autoprefixer": "^10.4.16",
+    "nuxt": "^3.12.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "fast-xml-parser": "^5.5.10",
+    "pdf-parse": "^2.4.5",
+    "pocketbase": "^0.25.2"
+  }
+}

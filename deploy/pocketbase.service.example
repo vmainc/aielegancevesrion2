@@ -1,0 +1,27 @@
+# Example systemd unit for PocketBase on a VPS.
+# Copy to /etc/systemd/system/pocketbase.service, adjust User/ paths, then:
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now pocketbase
+#
+# Nginx should proxy /pb/ to this listener, e.g.:
+#   location /pb/ { proxy_pass http://127.0.0.1:8090/; ... }
+
+[Unit]
+Description=PocketBase
+After=network.target
+
+[Service]
+Type=simple
+User=pocketbase
+Group=pocketbase
+WorkingDirectory=/opt/pocketbase
+ExecStart=/opt/pocketbase/pocketbase serve --http=127.0.0.1:8090 --dir=/pb_data
+Restart=on-failure
+RestartSec=5
+
+# Hardening (optional; relax if something breaks)
+NoNewPrivileges=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

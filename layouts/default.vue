@@ -1,0 +1,295 @@
+<template>
+  <div class="min-h-screen flex flex-col" :class="isLandingHome ? 'bg-zinc-950' : 'bg-white'">
+    <nav class="shrink-0 bg-dark-bg border-b border-dark-border">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-20">
+          <!-- Logo and Desktop Navigation -->
+          <div class="flex items-center space-x-4 lg:space-x-10">
+            <NuxtLink to="/" class="flex items-center">
+              <img
+                :src="logo"
+                alt="AI Elegance"
+                class="h-12 sm:h-14 w-auto"
+              />
+            </NuxtLink>
+            <div class="hidden lg:flex items-center space-x-10">
+              <NuxtLink
+                to="/projects"
+                class="text-gray-400 hover:text-primary transition-colors text-base font-medium"
+              >
+                Projects
+              </NuxtLink>
+              <NuxtLink
+                to="/#how-it-works"
+                class="text-gray-400 hover:text-primary transition-colors text-base font-medium"
+              >
+                How it works
+              </NuxtLink>
+            </div>
+          </div>
+          <!-- Mobile Menu Button and Auth Section -->
+          <div class="flex items-center space-x-2 sm:space-x-4">
+            <!-- Mobile Menu Button -->
+            <button
+              @click.stop="toggleMobileMenu"
+              class="lg:hidden p-2 text-gray-400 hover:text-primary transition-colors rounded-lg hover:bg-dark-card"
+              aria-label="Toggle menu"
+            >
+              <svg
+                v-if="!mobileMenuOpen"
+                class="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+              <svg
+                v-else
+                class="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+
+            <ClientOnly>
+              <div class="flex items-center space-x-2 sm:space-x-4">
+                <template v-if="isAuthenticated">
+                  <div class="relative">
+                    <button
+                      @click="toggleDropdown"
+                      class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-gray-400 hover:text-primary transition-colors rounded-lg hover:bg-dark-card"
+                      aria-label="Account"
+                    >
+                      <svg
+                        class="w-5 h-5 sm:w-6 sm:h-6"
+                        fill="none"
+                        stroke="currentColor"
+                        viewBox="0 0 24 24"
+                        xmlns="http://www.w3.org/2000/svg"
+                      >
+                        <path
+                          stroke-linecap="round"
+                          stroke-linejoin="round"
+                          stroke-width="2"
+                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+                        />
+                      </svg>
+                      <span v-if="userFirstName" class="hidden sm:inline text-sm font-medium text-gray-300">
+                        {{ userFirstName }}
+                      </span>
+                    </button>
+                    <div
+                      v-if="dropdownOpen"
+                      ref="dropdownRef"
+                      class="absolute right-0 top-full mt-2 w-48 bg-dark-card border border-dark-border rounded-lg shadow-lg z-50"
+                    >
+                      <NuxtLink
+                        to="/my-questions"
+                        @click="closeDropdown"
+                        class="block px-4 py-3 text-gray-300 hover:bg-dark-border hover:text-primary transition-colors first:rounded-t-lg"
+                      >
+                        My Questions
+                      </NuxtLink>
+                      <NuxtLink
+                        to="/account"
+                        @click="closeDropdown"
+                        class="block px-4 py-3 text-gray-300 hover:bg-dark-border hover:text-primary transition-colors"
+                      >
+                        Settings
+                      </NuxtLink>
+                      <button
+                        @click="handleLogout"
+                        class="w-full text-left px-4 py-3 text-gray-300 hover:bg-dark-border hover:text-red-400 transition-colors last:rounded-b-lg"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                </template>
+                <template v-else>
+                  <NuxtLink
+                    to="/login"
+                    class="hidden sm:block text-gray-400 hover:text-primary transition-colors text-base font-medium"
+                  >
+                    Login
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/signup"
+                    class="px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-sm sm:text-base"
+                  >
+                    Sign Up
+                  </NuxtLink>
+                </template>
+              </div>
+            <template #fallback>
+              <div class="flex items-center space-x-4">
+                <NuxtLink
+                  to="/login"
+                  class="text-gray-400 hover:text-primary transition-colors text-base font-medium"
+                >
+                  Login
+                </NuxtLink>
+                <NuxtLink
+                  to="/signup"
+                  class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors"
+                >
+                  Sign Up
+                </NuxtLink>
+              </div>
+            </template>
+          </ClientOnly>
+        </div>
+        </div>
+      </div>
+
+      <!-- Mobile Menu -->
+      <Transition
+        enter-active-class="transition ease-out duration-200"
+        enter-from-class="opacity-0 -translate-y-2"
+        enter-to-class="opacity-100 translate-y-0"
+        leave-active-class="transition ease-in duration-150"
+        leave-from-class="opacity-100 translate-y-0"
+        leave-to-class="opacity-0 -translate-y-2"
+      >
+        <div
+          v-if="mobileMenuOpen"
+          ref="mobileMenuRef"
+          class="lg:hidden border-t border-dark-border bg-dark-bg"
+        >
+          <div class="px-4 py-4 space-y-2">
+            <NuxtLink
+              to="/projects"
+              @click="closeMobileMenu"
+              class="block px-4 py-3.5 text-gray-400 hover:text-primary hover:bg-dark-card active:bg-dark-card transition-colors rounded-lg font-medium"
+            >
+              Projects
+            </NuxtLink>
+            <NuxtLink
+              to="/#how-it-works"
+              @click="closeMobileMenu"
+              class="block px-4 py-3.5 text-gray-400 hover:text-primary hover:bg-dark-card active:bg-dark-card transition-colors rounded-lg font-medium"
+            >
+              How it works
+            </NuxtLink>
+            <NuxtLink
+              to="/account"
+              @click="closeMobileMenu"
+              class="block px-4 py-3.5 text-gray-400 hover:text-primary hover:bg-dark-card active:bg-dark-card transition-colors rounded-lg font-medium"
+            >
+              Settings
+            </NuxtLink>
+            <ClientOnly>
+              <template v-if="!isAuthenticated">
+                <div class="pt-2 border-t border-dark-border mt-2">
+                  <NuxtLink
+                    to="/login"
+                    @click="closeMobileMenu"
+                    class="block px-4 py-3.5 text-gray-400 hover:text-primary hover:bg-dark-card active:bg-dark-card transition-colors rounded-lg mb-2 font-medium"
+                  >
+                    Login
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/signup"
+                    @click="closeMobileMenu"
+                    class="block px-4 py-3.5 bg-primary hover:bg-primary/90 active:bg-primary/80 text-gray-950 font-semibold rounded-lg transition-colors text-center"
+                  >
+                    Sign Up
+                  </NuxtLink>
+                </div>
+              </template>
+            </ClientOnly>
+          </div>
+        </div>
+      </Transition>
+    </nav>
+    <main
+      class="flex-1"
+      :class="isLandingHome ? 'bg-zinc-950 text-zinc-100' : 'bg-white text-gray-900'"
+    >
+      <slot />
+    </main>
+  </div>
+</template>
+
+<script setup>
+import logo from '~/assets/img/logo.svg'
+
+const route = useRoute()
+const isLandingHome = computed(() => route.path === '/')
+
+const { isAuthenticated, logout, user } = useAuth()
+
+const dropdownOpen = ref(false)
+const dropdownRef = ref(null)
+const mobileMenuOpen = ref(false)
+const mobileMenuRef = ref(null)
+
+const userFirstName = computed(() => {
+  if (!user.value?.name) return null
+  return user.value.name.split(' ')[0]
+})
+
+const toggleDropdown = () => {
+  dropdownOpen.value = !dropdownOpen.value
+}
+
+const closeDropdown = () => {
+  dropdownOpen.value = false
+}
+
+const toggleMobileMenu = () => {
+  mobileMenuOpen.value = !mobileMenuOpen.value
+  if (dropdownOpen.value) {
+    dropdownOpen.value = false
+  }
+}
+
+const closeMobileMenu = () => {
+  mobileMenuOpen.value = false
+}
+
+const handleLogout = () => {
+  closeDropdown()
+  logout()
+}
+
+const handleClickOutside = (event) => {
+  // Handle dropdown
+  if (dropdownOpen.value && dropdownRef.value && !dropdownRef.value.contains(event.target)) {
+    const button = event.target.closest('button[aria-label="Account"]')
+    if (!button) {
+      closeDropdown()
+    }
+  }
+  // Close mobile menu if clicking outside
+  if (mobileMenuOpen.value) {
+    const mobileMenuButton = event.target.closest('button[aria-label="Toggle menu"]')
+    // Don't close if clicking the toggle button itself
+    if (mobileMenuButton) {
+      return
+    }
+    // Check if click is inside the mobile menu
+    if (mobileMenuRef.value && !mobileMenuRef.value.contains(event.target)) {
+      closeMobileMenu()
+    }
+  }
+}
+
+onMounted(() => {
+  // Use a small delay to avoid immediate closure on mobile
+  setTimeout(() => {
+    document.addEventListener('click', handleClickOutside)
+    document.addEventListener('touchstart', handleClickOutside)
+  }, 100)
+})
+
+onUnmounted(() => {
+  document.removeEventListener('click', handleClickOutside)
+  document.removeEventListener('touchstart', handleClickOutside)
+})
+</script>
+
