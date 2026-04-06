@@ -8,6 +8,7 @@
 #   VPS_HOST=... VPS_PATH=... NUXT_PUBLIC_POCKETBASE_URL=...
 #   DEPLOY_PM2_NAME=myapp          (default: aielegance)
 #   DEPLOY_SKIP_RESTART=1          (only rsync, no restart)
+#   DEPLOY_SKIP_BUILD=1            (skip npm run build — use after a fresh local `NUXT_PUBLIC_POCKETBASE_URL=... npm run build`)
 #   DEPLOY_SYSTEMD_UNIT=foo        (use systemd instead of pm2)
 #   DEPLOY_SSH_CMD='ssh ...'       (custom command after rsync)
 
@@ -21,10 +22,15 @@ cd "$ROOT"
 # Browser-facing PocketBase (HTTPS on live site — avoids mixed-content on https://aielegance.com/)
 : "${NUXT_PUBLIC_POCKETBASE_URL:=https://aielegance.com/pb}"
 
-echo "==> Building with NUXT_PUBLIC_POCKETBASE_URL=$NUXT_PUBLIC_POCKETBASE_URL"
-rm -rf .nuxt/dist
-export NUXT_PUBLIC_POCKETBASE_URL
-npm run build
+if [ "${DEPLOY_SKIP_BUILD:-0}" = "1" ]; then
+  echo "==> Skipping build (DEPLOY_SKIP_BUILD=1). Using existing .output/"
+else
+  echo "==> Building with NUXT_PUBLIC_POCKETBASE_URL=$NUXT_PUBLIC_POCKETBASE_URL"
+  # Drop dev client output only (avoids stale chunks). Stop `npm run dev` first — parallel dev + this rm can race Nuxt’s mkdir.
+  rm -rf .nuxt/dist
+  export NUXT_PUBLIC_POCKETBASE_URL
+  npm run build
+fi
 
 echo "==> Rsync .output/ → $VPS_HOST:$VPS_PATH/.output/"
 rsync -avz --delete -e ssh "$ROOT/.output/" "$VPS_HOST:$VPS_PATH/.output/"
