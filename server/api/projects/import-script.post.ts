@@ -94,7 +94,7 @@ export default defineEventHandler(async (event) => {
 
   const project = await pb.collection('creative_projects').create({
     name: title,
-    user: userId,
+    owned_by: userId,
     aspect_ratio: aspectRatio,
     goal,
     synopsis: enrichment.summary,
@@ -129,8 +129,8 @@ export default defineEventHandler(async (event) => {
     if (seenChar.has(key)) continue
     seenChar.add(key)
     await pb.collection('creative_characters').create({
+      owned_by: userId,
       project: projectId,
-      user: userId,
       name: c.name.slice(0, 200),
       role_description: c.role_description.slice(0, 5000)
     })

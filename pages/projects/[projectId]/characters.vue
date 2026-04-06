@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
-      Character bios and consistency checks will live here. For now, use placeholders and the legacy vault to browse saved Q&amp;A.
+      Character bios and consistency checks will live here. Use Assets to attach character references and exports per project.
     </p>
 
     <div
@@ -21,15 +21,15 @@
     </div>
 
     <div class="rounded-xl border border-gray-200 bg-gray-50 p-5">
-      <h3 class="text-sm font-medium text-gray-700 mb-2">Legacy reference</h3>
+      <h3 class="text-sm font-medium text-gray-700 mb-2">Project assets</h3>
       <p class="text-sm text-gray-500 mb-3">
-        Questions vault (unchanged route, not in main nav).
+        Store character sheets, images, and related files under Assets for this workflow.
       </p>
       <NuxtLink
-        :to="withProjectQuery('/vault')"
+        :to="withProjectQuery('/assets/characters')"
         class="text-sm text-primary font-medium hover:underline"
       >
-        Open Vault →
+        Characters in Assets →
       </NuxtLink>
     </div>
 

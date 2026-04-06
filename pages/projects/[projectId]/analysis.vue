@@ -22,24 +22,13 @@
           Character arc
         </button>
       </div>
-      <h3 class="text-sm font-medium text-gray-600 mb-2">Legacy tools (direct routes)</h3>
-      <ul class="space-y-2 text-sm">
-        <li>
-          <NuxtLink :to="withProjectQuery('/explore')" class="text-primary hover:underline">
-            Explore community questions
-          </NuxtLink>
-        </li>
-        <li>
-          <NuxtLink :to="withProjectQuery('/leaderboard')" class="text-primary hover:underline">
-            Leaderboard
-          </NuxtLink>
-        </li>
-        <li>
-          <NuxtLink :to="withProjectQuery('/meet-the-models')" class="text-primary hover:underline">
-            Meet the Models
-          </NuxtLink>
-        </li>
-      </ul>
+      <h3 class="text-sm font-medium text-gray-600 mb-2">Related</h3>
+      <p class="text-sm text-gray-600 mb-2">
+        Project scripts, characters, and renders live under Assets and Tools in the main nav.
+      </p>
+      <NuxtLink :to="withProjectQuery('/assets')" class="text-sm text-primary font-medium hover:underline">
+        Open Assets →
+      </NuxtLink>
     </div>
 
     <NuxtLink

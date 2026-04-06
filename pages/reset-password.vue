@@ -6,7 +6,7 @@
           <img
             :src="logo"
             alt="AI Elegance"
-            class="h-16 w-auto mx-auto"
+            class="h-16 w-auto mx-auto rounded-md shadow-sm"
           />
         </NuxtLink>
         <h1 class="text-3xl font-bold text-gray-900 mb-2">Set New Password</h1>
@@ -86,7 +86,7 @@
 </template>
 
 <script setup lang="ts">
-import logo from '~/assets/img/logo.svg'
+import logo from '~/assets/img/logo.png'
 
 definePageMeta({
   layout: false

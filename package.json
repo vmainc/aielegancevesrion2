@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "nuxt build && node scripts/sync-nitro-public.mjs && node scripts/verify-output.mjs",
+    "build": "nuxt build && node scripts/sync-nitro-public.mjs && node scripts/verify-output.mjs && node scripts/verify-production-bundle.mjs",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
@@ -24,6 +24,6 @@
     "dotenv": "^16.4.7",
     "fast-xml-parser": "^5.5.10",
     "pdf-parse": "^2.4.5",
-    "pocketbase": "^0.25.2"
+    "pocketbase": "^0.26.8"
   }
 }

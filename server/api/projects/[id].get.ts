@@ -2,6 +2,7 @@ import { createError, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
+import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -12,7 +13,7 @@ export default defineEventHandler(async (event) => {
   const pb = await getAuthenticatedPocketBase()
 
   const record = await pb.collection('creative_projects').getOne(id)
-  const owner = typeof record.user === 'string' ? record.user : (record.user as { id?: string })?.id
+  const owner = pbRecordOwnerId(record as { owner?: unknown; user?: unknown })
   if (owner !== userId) {
     throw createError({ statusCode: 403, message: 'Forbidden' })
   }

@@ -1,6 +1,6 @@
 # Environment Variables Setup
 
-To enable server-side operations (like saving questions), you need to configure PocketBase admin credentials.
+To enable server-side operations that create or update PocketBase records (projects, assets, etc.), configure PocketBase admin credentials.
 
 ## Required Environment Variables
 
@@ -45,5 +45,5 @@ After setting the environment variables, restart your Nuxt dev server:
 npm run dev
 ```
 
-You should no longer see authentication errors when saving questions.
+You should no longer see superuser authentication errors from those API routes.
 

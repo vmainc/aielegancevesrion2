@@ -13,10 +13,25 @@ const { resolvePocketBaseUrlFromEnv } = require('./lib/resolve-pocketbase-url');
 const POCKETBASE_URL = resolvePocketBaseUrlFromEnv(process.argv[4]);
 
 function fieldExists(collection, fieldName) {
-  if (!collection.schema || !Array.isArray(collection.schema)) {
+  const fields = collection.fields || collection.schema;
+  if (!fields || !Array.isArray(fields)) {
     return false;
   }
-  return collection.schema.some(field => field.name === fieldName);
+  return fields.some(field => field.name === fieldName);
+}
+
+/** Merge legacy `options` into field (PocketBase 0.22+ flat fields). */
+function flattenField(f) {
+  if (!f || typeof f !== 'object' || f.options == null) return f;
+  const { options, ...rest } = f;
+  const opt = { ...options };
+  if (f.type === 'select' && Array.isArray(opt.values)) {
+    opt.values = opt.values.map((v) =>
+      typeof v === 'object' && v !== null && 'value' in v ? v.value : v
+    );
+  }
+  const merged = { ...rest, ...opt };
+  return Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined));
 }
 
 async function addFieldsToCollections(adminEmail, adminPassword) {
@@ -27,149 +42,12 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
     await pb.collection('_superusers').authWithPassword(adminEmail, adminPassword);
     console.log('✅ Authenticated successfully\n');
 
-    // Get users collection ID for relations
-    console.log('🔍 Looking up users collection...');
-    let usersCollectionId;
-    try {
-      const usersCollection = await pb.collections.getFirstListItem('name="users"');
-      usersCollectionId = usersCollection.id;
-      console.log(`✅ Found users collection (ID: ${usersCollectionId})\n`);
-    } catch (error) {
-      usersCollectionId = '_pb_users_auth_';
-      console.log(`⚠️  Using default users collection ID: ${usersCollectionId}\n`);
-    }
-
-    // Update questions collection
-    console.log('📝 Checking "questions" collection...');
-    try {
-      const questionsCollection = await pb.collections.getFirstListItem('name="questions"');
-      console.log('✅ Found questions collection\n');
-
-      const fieldsToAdd = [];
-      const currentSchema = questionsCollection.schema || [];
-
-      // Check for question field
-      if (!fieldExists(questionsCollection, 'question')) {
-        fieldsToAdd.push({
-          name: 'question',
-          type: 'text',
-          required: true,
-          options: { min: 1, max: 5000 }
-        });
-        console.log('  ➕ Will add: question (text, required)');
-      } else {
-        console.log('  ✓ question field already exists');
-      }
-
-      // Check for responses field
-      if (!fieldExists(questionsCollection, 'responses')) {
-        fieldsToAdd.push({
-          name: 'responses',
-          type: 'json',
-          required: false
-        });
-        console.log('  ➕ Will add: responses (json, optional)');
-      } else {
-        console.log('  ✓ responses field already exists');
-      }
-
-      // Check for user field
-      if (!fieldExists(questionsCollection, 'user')) {
-        fieldsToAdd.push({
-          name: 'user',
-          type: 'relation',
-          required: true,
-          options: {
-            collectionId: usersCollectionId,
-            cascadeDelete: false,
-            minSelect: null,
-            maxSelect: 1,
-            displayFields: ['email']
-          }
-        });
-        console.log('  ➕ Will add: user (relation to users, required)');
-      } else {
-        console.log('  ✓ user field already exists');
-      }
-
-      if (fieldsToAdd.length > 0) {
-        console.log(`\n📝 Adding ${fieldsToAdd.length} field(s) to questions collection...`);
-        const updatedSchema = [...currentSchema, ...fieldsToAdd];
-        await pb.collections.update(questionsCollection.id, {
-          schema: updatedSchema
-        });
-        console.log('✅ Questions collection updated successfully\n');
-      } else {
-        console.log('✅ All required fields already exist in questions collection\n');
-      }
-
-    } catch (error) {
-      console.log('⚠️  Questions collection not found. Skipping...\n');
-    }
-
-    // Update user_points collection
-    console.log('🎯 Checking "user_points" collection...');
-    try {
-      const userPointsCollection = await pb.collections.getFirstListItem('name="user_points"');
-      console.log('✅ Found user_points collection\n');
-
-      const fieldsToAdd = [];
-      const currentSchema = userPointsCollection.schema || [];
-
-      // Check for user field
-      if (!fieldExists(userPointsCollection, 'user')) {
-        fieldsToAdd.push({
-          name: 'user',
-          type: 'relation',
-          required: true,
-          unique: true,
-          options: {
-            collectionId: usersCollectionId,
-            cascadeDelete: true,
-            minSelect: null,
-            maxSelect: 1,
-            displayFields: ['email']
-          }
-        });
-        console.log('  ➕ Will add: user (relation to users, required, unique)');
-      } else {
-        console.log('  ✓ user field already exists');
-      }
-
-      // Check for points field
-      if (!fieldExists(userPointsCollection, 'points')) {
-        fieldsToAdd.push({
-          name: 'points',
-          type: 'number',
-          required: true,
-          options: { min: 0 }
-        });
-        console.log('  ➕ Will add: points (number, required, min: 0)');
-      } else {
-        console.log('  ✓ points field already exists');
-      }
-
-      if (fieldsToAdd.length > 0) {
-        console.log(`\n🎯 Adding ${fieldsToAdd.length} field(s) to user_points collection...`);
-        const updatedSchema = [...currentSchema, ...fieldsToAdd];
-        await pb.collections.update(userPointsCollection.id, {
-          schema: updatedSchema
-        });
-        console.log('✅ User points collection updated successfully\n');
-      } else {
-        console.log('✅ All required fields already exist in user_points collection\n');
-      }
-
-    } catch (error) {
-      console.log('⚠️  User points collection not found. Skipping...\n');
-    }
-
     // creative_projects — director + continuity (existing installs)
     console.log('🎬 Checking "creative_projects" collection...');
     try {
       const col = await pb.collections.getFirstListItem('name="creative_projects"');
       const fieldsToAdd = [];
-      const currentSchema = col.schema || [];
+      const currentSchema = col.fields || col.schema || [];
 
       if (!fieldExists(col, 'director')) {
         fieldsToAdd.push({ name: 'director', type: 'json', required: false });
@@ -201,7 +79,9 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
       }
 
       if (fieldsToAdd.length > 0) {
-        await pb.collections.update(col.id, { schema: [...currentSchema, ...fieldsToAdd] });
+        await pb.collections.update(col.id, {
+          fields: [...currentSchema, ...fieldsToAdd.map(flattenField)]
+        });
         console.log('✅ creative_projects updated\n');
       } else {
         console.log('✅ creative_projects already has director/continuity fields\n');

@@ -1,5 +1,5 @@
 import PocketBase from 'pocketbase'
-import { onMounted } from 'vue'
+import { getCurrentInstance, onMounted } from 'vue'
 import { resolveBrowserPocketBaseUrl } from '~/lib/resolve-browser-pocketbase-url'
 
 // Create a shared PocketBase instance
@@ -28,13 +28,18 @@ export const useAuth = () => {
 
   if (import.meta.client && !authStoreListenerAttached) {
     authStoreListenerAttached = true
-    // After mount so first hydrated paint still matches SSR (user = null), then sync from PocketBase.
-    onMounted(() => {
+    const syncFromPb = () => {
       user.value = pb.authStore.model || null
       pb.authStore.onChange((_token, model) => {
         user.value = model
       })
-    })
+    }
+    // Plugins and route middleware call useAuth() with no active component — onMounted would warn.
+    if (getCurrentInstance()) {
+      onMounted(syncFromPb)
+    } else {
+      syncFromPb()
+    }
   }
 
   // Initialize auth from stored token

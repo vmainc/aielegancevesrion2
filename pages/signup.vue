@@ -6,7 +6,7 @@
           <img
             :src="logo"
             alt="AI Elegance"
-            class="h-16 w-auto mx-auto"
+            class="h-16 w-auto mx-auto rounded-md shadow-sm"
           />
         </NuxtLink>
         <h1 class="text-3xl font-bold text-gray-900 mb-2">Create Account</h1>
@@ -89,7 +89,10 @@
         <div class="mt-6 text-center">
           <p class="text-sm text-gray-600">
             Already have an account?
-            <NuxtLink to="/login" class="text-primary hover:text-primary/80 font-semibold transition-colors">
+            <NuxtLink
+              :to="{ path: '/login', query: route.query }"
+              class="text-primary hover:text-primary/80 font-semibold transition-colors"
+            >
               Sign in
             </NuxtLink>
           </p>
@@ -100,7 +103,8 @@
 </template>
 
 <script setup>
-import logo from '~/assets/img/logo.svg'
+import logo from '~/assets/img/logo.png'
+import { safeInternalPath } from '~/lib/safe-internal-path'
 
 definePageMeta({
   layout: false
@@ -108,6 +112,7 @@ definePageMeta({
 
 const { signup } = useAuth()
 const router = useRouter()
+const route = useRoute()
 
 const formData = ref({
   email: '',
@@ -156,8 +161,7 @@ const handleSignup = async () => {
     const result = await signup(email, formData.value.password, formData.value.passwordConfirm)
     
     if (result.success) {
-      // Redirect to home page
-      await router.push('/')
+      await router.push(safeInternalPath(route.query.redirect, '/projects'))
     } else {
       error.value = result.error || 'Signup failed. Please try again.'
     }
@@ -173,7 +177,7 @@ const handleSignup = async () => {
 onMounted(async () => {
   const { isAuthenticated } = useAuth()
   if (isAuthenticated.value) {
-    await router.push('/')
+    await router.push(safeInternalPath(route.query.redirect, '/projects'))
   }
 })
 </script>

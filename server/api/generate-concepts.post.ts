@@ -3,6 +3,7 @@ import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { CONCEPT_GENERATOR_MODELS, getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 import { generateConceptWithOpenRouter } from '~/server/utils/generate-concept-ai'
+import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import type { ConceptGeneratorResultItem } from '~/types/concept-generator'
 
 const PB_ID = /^[a-z0-9]{15}$/
@@ -44,8 +45,7 @@ export default defineEventHandler(async (event) => {
     const pb = await getAuthenticatedPocketBase()
     try {
       const project = await pb.collection('creative_projects').getOne(projectId)
-      const owner =
-        typeof project.user === 'string' ? project.user : (project.user as { id?: string })?.id
+      const owner = pbRecordOwnerId(project as { owner?: unknown; user?: unknown })
       if (owner !== userId) {
         throw createError({ statusCode: 403, message: 'Forbidden' })
       }

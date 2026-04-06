@@ -11,7 +11,10 @@ export default defineNuxtConfig({
   devtools: { enabled: true },
   app: {
     head: {
-      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }]
+      link: [
+        { rel: 'icon', type: 'image/png', href: '/favicon.png' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
+      ],
     }
   },
   css: ['~/assets/css/main.css'],
@@ -30,11 +33,12 @@ export default defineNuxtConfig({
       process.env.NUXT_POCKETBASE_ADMIN_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL,
     pocketbaseAdminPassword:
       process.env.NUXT_POCKETBASE_ADMIN_PASSWORD || process.env.POCKETBASE_ADMIN_PASSWORD,
-    // Optional: direct PB URL for server-side API routes (e.g. http://127.0.0.1:8090) when public URL is a browser-only proxy
+    // Direct PB URL for server-side API routes (auth-refresh, collections). Must be reachable from Node.
+    // Defaults to the same host as Nitro’s /pb proxy so local dev works when NUXT_PUBLIC_* points at a remote /pb URL.
     pocketbaseInternalUrl:
       process.env.NUXT_POCKETBASE_INTERNAL_URL ||
       process.env.POCKETBASE_INTERNAL_URL ||
-      '',
+      pocketbaseProxyTarget,
     // Public (client + server); prefer VITE_POCKETBASE_URL for VPS /pb proxy setups
     public: {
       pocketbaseUrl: resolvePocketBaseUrlFromEnv()
@@ -48,7 +52,15 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'node-server',
     routeRules: {
-      '/pb/**': { proxy: `${pocketbaseProxyTarget}/**` }
+      '/pb/**': { proxy: `${pocketbaseProxyTarget}/**` },
+      '/ask': { redirect: { to: '/', statusCode: 301 } },
+      '/explore': { redirect: { to: '/', statusCode: 301 } },
+      '/vault': { redirect: { to: '/', statusCode: 301 } },
+      '/leaderboard': { redirect: { to: '/', statusCode: 301 } },
+      '/meet-the-models': { redirect: { to: '/', statusCode: 301 } },
+      '/my-questions': { redirect: { to: '/projects', statusCode: 301 } },
+      '/my-questions/**': { redirect: { to: '/projects', statusCode: 301 } },
+      '/questions/**': { redirect: { to: '/', statusCode: 301 } }
     }
   }
 })

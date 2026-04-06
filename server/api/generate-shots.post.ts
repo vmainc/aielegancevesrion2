@@ -5,6 +5,7 @@ import { checkShotsContinuity } from '~/server/utils/continuity-check-ai'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
+import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
@@ -22,7 +23,7 @@ export default defineEventHandler(async (event) => {
   const pb = await getAuthenticatedPocketBase()
 
   const project = await pb.collection('creative_projects').getOne(projectId)
-  const owner = typeof project.user === 'string' ? project.user : (project.user as { id?: string })?.id
+  const owner = pbRecordOwnerId(project as { owner?: unknown; user?: unknown })
   if (owner !== userId) {
     throw createError({ statusCode: 403, message: 'Forbidden' })
   }
@@ -33,7 +34,7 @@ export default defineEventHandler(async (event) => {
   if (sceneProject !== projectId) {
     throw createError({ statusCode: 400, message: 'Scene does not belong to this project' })
   }
-  const sceneUser = typeof scene.user === 'string' ? scene.user : (scene.user as { id?: string })?.id
+  const sceneUser = pbRecordOwnerId(scene as { owner?: unknown; user?: unknown })
   if (sceneUser !== userId) {
     throw createError({ statusCode: 403, message: 'Forbidden' })
   }
@@ -120,17 +121,17 @@ export default defineEventHandler(async (event) => {
     let rec
     try {
       rec = await pb.collection('creative_shots').create({
-      project: projectId,
-      scene: sceneId,
-      user: userId,
-      sort_order: g.order - 1,
-      title: g.title,
-      description: g.description,
-      shot_type: g.shot_type,
-      camera_move: g.camera_move,
-      duration_seconds: g.duration_seconds,
-      image_prompt: g.image_prompt,
-      video_prompt: g.video_prompt
+        owned_by: userId,
+        project: projectId,
+        scene: sceneId,
+        sort_order: g.order - 1,
+        title: g.title,
+        description: g.description,
+        shot_type: g.shot_type,
+        camera_move: g.camera_move,
+        duration_seconds: g.duration_seconds,
+        image_prompt: g.image_prompt,
+        video_prompt: g.video_prompt
       })
     } catch {
       throw createError({

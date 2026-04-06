@@ -26,10 +26,7 @@ npm install
    **Option B: Manual Setup**
    See [COLLECTIONS_SETUP.md](./COLLECTIONS_SETUP.md) for detailed manual setup instructions.
 
-   The collections needed are:
-   - `questions` - Stores questions and AI model responses
-   - `user_points` - Tracks user points for leaderboard
-   - `users` - Created automatically by PocketBase
+   The collections needed include the creative workspace (`creative_projects`, scenes, characters, shots), **`project_assets`**, and **`users`** (built-in). See [COLLECTIONS_SETUP.md](./COLLECTIONS_SETUP.md).
 
 4. Set environment variables:
    
@@ -47,7 +44,7 @@ npm install
    OPENROUTER_API_KEY=your-openrouter-api-key
    ```
    
-   **Important:** You need PocketBase admin credentials to save questions. Use the same email/password you used when setting up PocketBase.
+   **Important:** PocketBase admin credentials are used by server routes that call PocketBase as superuser. Use the same email/password you used when setting up PocketBase.
    
    See [ENV_SETUP.md](./ENV_SETUP.md) for detailed instructions.
 
@@ -78,15 +75,7 @@ If logs show missing files under `.output/server/chunks/public/_nuxt/`, the sync
 
 ## Features
 
-- Ask questions and receive responses from multiple AI models
-- View previously asked questions in the vault
-- Leaderboard based on user activity points
-
-## Scoring
-
-- Post Question: 50 points
-- Rate Answer: 10 points
-- Comment: 15 points
-- Daily Login: 5 points
-- Weekly Streak: 25 points
+- Import scripts and manage creative projects (scenes, characters, storyboard shots)
+- Tools for character concepts and video generation (OpenRouter)
+- Per-project asset library (`project_assets`) for scripts, character refs, storyboards, and video
 

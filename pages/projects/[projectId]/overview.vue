@@ -5,12 +5,61 @@
       · Shape the idea; director bible and continuity live on the Director tab.
     </p>
 
-    <!-- Concept generator -->
-    <section class="rounded-xl border border-gray-200 bg-gray-50 p-6 sm:p-8 mb-8">
-      <h2 class="text-lg font-semibold text-gray-900 mb-1">Start by generating your concept</h2>
-      <p class="text-sm text-gray-500 mb-5">
-        Describe your idea, pick one or more models, and compare results. You can regenerate anytime.
+    <!-- Saved concept: actions (generator hidden until they choose "different AI") -->
+    <div
+      v-if="hasConcept && !showGeneratorForm"
+      class="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6 mb-8"
+    >
+      <h2 class="text-lg font-semibold text-gray-900 mb-1">Concept saved</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Try other models or remove this concept to start fresh.
       </p>
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors"
+          @click="openGeneratorAgain"
+        >
+          Generate with different AI
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 border border-red-200 text-red-800 hover:bg-red-50 rounded-lg text-sm font-medium transition-colors"
+          :disabled="deletingConcept"
+          @click="deleteConcept"
+        >
+          {{ deletingConcept ? 'Removing…' : 'Delete concept' }}
+        </button>
+      </div>
+    </div>
+
+    <!-- Concept generator (first time, or after "Generate with different AI") -->
+    <section
+      v-if="showGeneratorForm || !hasConcept"
+      class="rounded-xl border border-gray-200 bg-gray-50 p-6 sm:p-8 mb-8"
+    >
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900 mb-1">
+            {{ hasConcept ? 'Compare new AI concepts' : 'Start by generating your concept' }}
+          </h2>
+          <p class="text-sm text-gray-500">
+            {{
+              hasConcept
+                ? 'Your saved concept stays below until you pick a new one.'
+                : 'Describe your idea, pick one or more models, and compare results.'
+            }}
+          </p>
+        </div>
+        <button
+          v-if="hasConcept"
+          type="button"
+          class="shrink-0 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-white transition-colors"
+          @click="cancelGeneratorPanel"
+        >
+          Cancel
+        </button>
+      </div>
 
       <ClientOnly>
         <p
@@ -25,8 +74,12 @@
         {{ modelsLoadError }}
       </div>
 
-      <label class="block text-sm font-medium text-gray-700 mb-2">Your idea</label>
+      <div class="flex justify-between items-center gap-2 mb-2">
+        <label class="text-sm font-medium text-gray-700">Your idea</label>
+        <PromptEnhanceButton v-model="conceptPrompt" context="concept" />
+      </div>
       <textarea
+        ref="promptTextareaRef"
         v-model="conceptPrompt"
         rows="4"
         class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-5"
@@ -34,7 +87,7 @@
         :disabled="generating"
       />
 
-      <fieldset class="mb-5" :disabled="generating || !modelOptions.length">
+      <fieldset class="mb-5" :disabled="generating || !(modelOptions?.length)">
         <legend class="text-sm font-medium text-gray-700 mb-2">Models</legend>
         <p class="text-xs text-gray-500 mb-3">Select one or more; requests run in parallel.</p>
         <div class="flex flex-wrap gap-3">
@@ -67,7 +120,7 @@
         Generating concepts...
       </p>
 
-      <div v-if="conceptResults !== null && conceptResults.length" class="mt-8 space-y-4">
+      <div v-if="conceptResults != null && conceptResults.length" class="mt-8 space-y-4">
         <h3 class="text-sm font-semibold text-gray-800 uppercase tracking-wide">Results</h3>
         <div class="grid gap-4 sm:grid-cols-1">
           <article
@@ -107,11 +160,14 @@
     </section>
 
     <div v-if="hasConcept" class="rounded-xl border border-gray-200 bg-gray-50 p-6 mb-8 space-y-4">
-      <div v-if="project?.genre || project?.tone || (project?.themes && project.themes.length)" class="flex flex-wrap gap-2">
-        <span v-if="project.genre" class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-800 capitalize">{{ project.genre }}</span>
-        <span v-if="project.tone" class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700">{{ project.tone }}</span>
+      <div
+        v-if="project?.genre || project?.tone || (project?.themes && project.themes.length)"
+        class="flex flex-wrap gap-2"
+      >
+        <span v-if="project?.genre" class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-800 capitalize">{{ project.genre }}</span>
+        <span v-if="project?.tone" class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700">{{ project.tone }}</span>
         <span
-          v-for="t in project.themes"
+          v-for="t in (project?.themes ?? [])"
           :key="t"
           class="text-xs px-2 py-1 rounded border border-gray-200 text-gray-600"
         >{{ t }}</span>
@@ -136,30 +192,6 @@
       >
         Open Director →
       </NuxtLink>
-    </div>
-
-    <h2 class="text-lg font-semibold text-gray-900 mb-4">Project notes</h2>
-    <div class="space-y-4 mb-8">
-      <div>
-        <label class="block text-sm text-gray-600 mb-1">Synopsis</label>
-        <textarea
-          v-model="synopsisLocal"
-          rows="4"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-          placeholder="One or two paragraphs…"
-          @blur="saveSynopsis"
-        />
-      </div>
-      <div>
-        <label class="block text-sm text-gray-600 mb-1">Concept notes</label>
-        <textarea
-          v-model="conceptLocal"
-          rows="3"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-          placeholder="Tone, references, constraints…"
-          @blur="saveConcept"
-        />
-      </div>
     </div>
 
     <h2 class="text-lg font-semibold text-gray-900 mb-3">Quick actions</h2>
@@ -198,9 +230,6 @@ const toast = useToast()
 const projectId = activeProjectId
 const project = activeProject
 
-const synopsisLocal = ref('')
-const conceptLocal = ref('')
-
 const modelOptions = ref<Array<{ id: string; label: string }>>([])
 const modelsLoadError = ref('')
 const conceptPrompt = ref('')
@@ -208,18 +237,19 @@ const selectedModelIds = ref<string[]>([])
 const generating = ref(false)
 const conceptResults = ref<ConceptGeneratorResultItem[] | null>(null)
 const applyingModel = ref<string | null>(null)
-
-watch(project, (p) => {
-  if (!p) return
-  synopsisLocal.value = p.synopsis
-  conceptLocal.value = p.conceptNotes
-}, { immediate: true })
+const showGeneratorForm = ref(true)
+const deletingConcept = ref(false)
+const promptTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
 const hasConcept = computed(() => {
   const p = project.value
   if (!p) return false
   return Boolean((p.synopsis || '').trim() || (p.conceptNotes || '').trim())
 })
+
+watch(hasConcept, (has) => {
+  showGeneratorForm.value = !has
+}, { immediate: true })
 
 const canGenerate = computed(() => {
   if (generating.value) return false
@@ -231,6 +261,32 @@ const canGenerate = computed(() => {
 
 function modelLabel (modelId: string) {
   return modelOptions.value.find(m => m.id === modelId)?.label ?? modelId
+}
+
+function openGeneratorAgain () {
+  showGeneratorForm.value = true
+  nextTick(() => promptTextareaRef.value?.focus())
+}
+
+function cancelGeneratorPanel () {
+  showGeneratorForm.value = false
+}
+
+async function deleteConcept () {
+  if (!confirm('Remove this concept? Synopsis and concept notes will be cleared.')) return
+  const id = projectId.value
+  if (!id) return
+  deletingConcept.value = true
+  try {
+    await updateProject(id, { synopsis: '', conceptNotes: '', genre: '', tone: '' })
+    conceptResults.value = null
+    showGeneratorForm.value = true
+    toast.showToast('Concept removed.', 'success')
+  } catch {
+    toast.showToast('Could not remove concept.', 'error')
+  } finally {
+    deletingConcept.value = false
+  }
 }
 
 async function loadModelOptions () {
@@ -311,14 +367,12 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
   applyingModel.value = item.model
   try {
     const label = modelLabel(item.model)
-    const header = formatStoredConceptNotes({
+    const conceptNotes = formatStoredConceptNotes({
       title: item.title,
       logline: item.logline,
       modelId: item.model,
       modelLabel: label
     })
-    const rest = (conceptLocal.value || '').trim()
-    const conceptNotes = rest ? `${header}\n${rest}` : header
     await updateProject(id, {
       name: item.title.slice(0, 500),
       synopsis: item.summary,
@@ -326,26 +380,14 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
       tone: item.tone || undefined,
       conceptNotes
     })
-    conceptLocal.value = conceptNotes
-    synopsisLocal.value = item.summary
+    conceptResults.value = null
+    showGeneratorForm.value = false
     toast.showToast('Concept applied to project.', 'success')
   } catch {
     toast.showToast('Could not save concept.', 'error')
   } finally {
     applyingModel.value = null
   }
-}
-
-async function saveSynopsis () {
-  const id = projectId.value
-  if (!id) return
-  await updateProject(id, { synopsis: synopsisLocal.value })
-}
-
-async function saveConcept () {
-  const id = projectId.value
-  if (!id) return
-  await updateProject(id, { conceptNotes: conceptLocal.value })
 }
 
 function runPlaceholder (label: string) {

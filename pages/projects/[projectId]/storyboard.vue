@@ -114,7 +114,10 @@
                 >
               </div>
               <div>
-                <label class="block text-xs font-medium text-gray-500 mb-1">Description</label>
+                <div class="flex justify-between items-start gap-2 mb-1">
+                  <label class="text-xs font-medium text-gray-500">Description</label>
+                  <PromptEnhanceButton v-model="shot.description" context="story" />
+                </div>
                 <textarea
                   v-model="shot.description"
                   rows="2"
@@ -156,7 +159,10 @@
                 </summary>
                 <div class="mt-3 space-y-3 pt-1">
                   <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Image prompt</label>
+                    <div class="flex justify-between items-center gap-2 mb-1">
+                      <label class="text-xs font-medium text-gray-500">Image prompt</label>
+                      <PromptEnhanceButton v-model="shot.imagePrompt" context="shot_image" />
+                    </div>
                     <textarea
                       v-model="shot.imagePrompt"
                       rows="3"
@@ -164,7 +170,10 @@
                     />
                   </div>
                   <div>
-                    <label class="block text-xs font-medium text-gray-500 mb-1">Video prompt</label>
+                    <div class="flex justify-between items-center gap-2 mb-1">
+                      <label class="text-xs font-medium text-gray-500">Video prompt</label>
+                      <PromptEnhanceButton v-model="shot.videoPrompt" context="shot_video" />
+                    </div>
                     <textarea
                       v-model="shot.videoPrompt"
                       rows="3"

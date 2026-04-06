@@ -1,3 +1,4 @@
+import { getCurrentInstance, onMounted } from 'vue'
 import { defaultDirector } from '~/lib/director-presets'
 import type { CreativeProject, ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 
@@ -232,14 +233,21 @@ export function useCreativeProject () {
   }
 
   if (import.meta.client) {
-    onMounted(async () => {
+    const runClientHydrate = async () => {
       if (auth.isAuthenticated.value) {
         await loadServerProjects()
       } else {
         hydrateLocalOnly()
       }
       clientReady.value = true
-    })
+    }
+    if (getCurrentInstance()) {
+      onMounted(() => {
+        void runClientHydrate()
+      })
+    } else {
+      void runClientHydrate()
+    }
 
     watch(
       () => auth.isAuthenticated.value,

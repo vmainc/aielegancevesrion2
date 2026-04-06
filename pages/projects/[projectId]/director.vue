@@ -38,7 +38,10 @@
         >
       </div>
       <div>
-        <label for="dir-style" class="block text-sm text-gray-600 mb-1">Style</label>
+        <div class="flex justify-between items-center gap-2 mb-1">
+          <label for="dir-style" class="text-sm text-gray-600">Style</label>
+          <PromptEnhanceButton v-model="directorForm.style" context="director" field-hint="Style" />
+        </div>
         <textarea
           id="dir-style"
           v-model="directorForm.style"
@@ -47,7 +50,10 @@
         />
       </div>
       <div>
-        <label for="dir-tone" class="block text-sm text-gray-600 mb-1">Tone</label>
+        <div class="flex justify-between items-center gap-2 mb-1">
+          <label for="dir-tone" class="text-sm text-gray-600">Tone</label>
+          <PromptEnhanceButton v-model="directorForm.tone" context="director" field-hint="Tone" />
+        </div>
         <textarea
           id="dir-tone"
           v-model="directorForm.tone"
@@ -56,7 +62,10 @@
         />
       </div>
       <div>
-        <label for="dir-cam" class="block text-sm text-gray-600 mb-1">Camera preferences</label>
+        <div class="flex justify-between items-center gap-2 mb-1">
+          <label for="dir-cam" class="text-sm text-gray-600">Camera preferences</label>
+          <PromptEnhanceButton v-model="directorForm.camera_preferences" context="director" field-hint="Camera preferences" />
+        </div>
         <textarea
           id="dir-cam"
           v-model="directorForm.camera_preferences"
@@ -65,7 +74,10 @@
         />
       </div>
       <div>
-        <label for="dir-light" class="block text-sm text-gray-600 mb-1">Lighting style</label>
+        <div class="flex justify-between items-center gap-2 mb-1">
+          <label for="dir-light" class="text-sm text-gray-600">Lighting style</label>
+          <PromptEnhanceButton v-model="directorForm.lighting_style" context="director" field-hint="Lighting style" />
+        </div>
         <textarea
           id="dir-light"
           v-model="directorForm.lighting_style"
@@ -74,7 +86,10 @@
         />
       </div>
       <div>
-        <label for="dir-pace" class="block text-sm text-gray-600 mb-1">Pacing</label>
+        <div class="flex justify-between items-center gap-2 mb-1">
+          <label for="dir-pace" class="text-sm text-gray-600">Pacing</label>
+          <PromptEnhanceButton v-model="directorForm.pacing" context="director" field-hint="Pacing" />
+        </div>
         <textarea
           id="dir-pace"
           v-model="directorForm.pacing"
@@ -83,7 +98,10 @@
         />
       </div>
       <div>
-        <label for="continuity-mem" class="block text-sm text-gray-600 mb-1">Continuity memory</label>
+        <div class="flex justify-between items-start gap-2 mb-1">
+          <label for="continuity-mem" class="text-sm text-gray-600">Continuity memory</label>
+          <PromptEnhanceButton v-model="continuityMemLocal" context="continuity" field-hint="Continuity memory" />
+        </div>
         <p class="text-xs text-gray-600 mb-2">Character traits, key events, tone rules. AI may append notes after shot generation.</p>
         <textarea
           id="continuity-mem"

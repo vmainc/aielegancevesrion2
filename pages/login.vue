@@ -6,7 +6,7 @@
           <img
             :src="logo"
             alt="AI Elegance"
-            class="h-16 w-auto mx-auto"
+            class="h-16 w-auto mx-auto rounded-md shadow-sm"
           />
         </NuxtLink>
         <h1 class="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h1>
@@ -68,7 +68,10 @@
         <div class="mt-6 space-y-3 text-center">
           <p class="text-sm text-gray-600">
             Don't have an account?
-            <NuxtLink to="/signup" class="text-primary hover:text-primary/80 font-semibold transition-colors">
+            <NuxtLink
+              :to="{ path: '/signup', query: route.query }"
+              class="text-primary hover:text-primary/80 font-semibold transition-colors"
+            >
               Sign up
             </NuxtLink>
           </p>
@@ -84,7 +87,8 @@
 </template>
 
 <script setup>
-import logo from '~/assets/img/logo.svg'
+import logo from '~/assets/img/logo.png'
+import { safeInternalPath } from '~/lib/safe-internal-path'
 
 definePageMeta({
   layout: false
@@ -92,6 +96,7 @@ definePageMeta({
 
 const { login } = useAuth()
 const router = useRouter()
+const route = useRoute()
 
 const formData = ref({
   email: '',
@@ -109,9 +114,8 @@ const handleLogin = async () => {
     const result = await login(formData.value.email, formData.value.password)
     
     if (result.success) {
-      // Redirect to home page or return URL
-      const returnTo = router.options.history.state.back || '/'
-      await router.push(returnTo)
+      const dest = safeInternalPath(route.query.redirect, '/projects')
+      await router.push(dest)
     } else {
       error.value = result.error || 'Login failed. Please check your credentials.'
     }
@@ -127,7 +131,7 @@ const handleLogin = async () => {
 onMounted(async () => {
   const { isAuthenticated } = useAuth()
   if (isAuthenticated.value) {
-    await router.push('/')
+    await router.push(safeInternalPath(route.query.redirect, '/projects'))
   }
 })
 </script>

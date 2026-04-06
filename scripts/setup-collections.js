@@ -32,6 +32,62 @@ async function getCollectionIdByName(pb, name) {
   return col.id;
 }
 
+/** PocketBase 0.22+ expects field props on the field object; legacy `options` is merged in. */
+function flattenPb036Fields(fields) {
+  if (!fields || !Array.isArray(fields)) return fields;
+  return fields.map((f) => {
+    if (!f || typeof f !== 'object' || f.options == null) return f;
+    const { options, ...rest } = f
+    const opt = { ...options }
+    if (f.type === 'select' && Array.isArray(opt.values)) {
+      opt.values = opt.values.map((v) =>
+        typeof v === 'object' && v !== null && 'value' in v ? v.value : v
+      )
+    }
+    const merged = { ...rest, ...opt }
+    return Object.fromEntries(Object.entries(merged).filter(([, v]) => v !== undefined))
+  })
+}
+
+/** PocketBase validates rules after fields exist; create collection first, then apply rules (Admin API). */
+async function createCollectionThenRules(pb, body) {
+  const {
+    listRule,
+    viewRule,
+    updateRule,
+    deleteRule,
+    createRule,
+    ...rest
+  } = body;
+  const col = await pb.collections.create({
+    ...rest,
+    fields: flattenPb036Fields(rest.fields)
+  });
+  await pb.collections.getOne(col.id);
+  await new Promise((r) => setTimeout(r, 800));
+  const rulePatch = {};
+  if (listRule !== undefined) rulePatch.listRule = listRule;
+  if (viewRule !== undefined) rulePatch.viewRule = viewRule;
+  if (updateRule !== undefined) rulePatch.updateRule = updateRule;
+  if (deleteRule !== undefined) rulePatch.deleteRule = deleteRule;
+  if (createRule !== undefined) rulePatch.createRule = createRule;
+  if (Object.keys(rulePatch).length) {
+    let lastErr;
+    for (let attempt = 0; attempt < 5; attempt++) {
+      try {
+        await pb.collections.update(col.id, rulePatch);
+        lastErr = null;
+        break;
+      } catch (e) {
+        lastErr = e;
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
+      }
+    }
+    if (lastErr) throw lastErr;
+  }
+  return col;
+}
+
 function logAuthFailure(error, baseUrl) {
   const status = error.status ?? error.statusCode ?? 0
   const body = error.response ?? error.data ?? {}
@@ -75,180 +131,6 @@ async function createCollections(adminEmail, adminPassword) {
     const usersCollectionId = await getUsersCollectionId(pb);
     console.log(`✅ Found users collection (ID: ${usersCollectionId})\n`);
 
-    // Create questions collection
-    console.log('📝 Creating "questions" collection...');
-    try {
-      const existing = await pb.collections.getFirstListItem('name="questions"');
-      console.log('⚠️  "questions" collection already exists, skipping...\n');
-    } catch (error) {
-      const questionsData = {
-        name: 'questions',
-        type: 'base',
-        schema: [
-          {
-            name: 'question',
-            type: 'text',
-            required: true,
-            options: { min: 1, max: 5000 }
-          },
-          {
-            name: 'responses',
-            type: 'json',
-            required: false
-          },
-          {
-            name: 'user',
-            type: 'relation',
-            required: true,
-            options: {
-              collectionId: usersCollectionId,
-              cascadeDelete: false,
-              minSelect: null,
-              maxSelect: 1,
-              displayFields: ['email']
-            }
-          }
-        ]
-      };
-
-      const questionsCollection = await pb.collections.create(questionsData);
-      console.log('✅ "questions" collection created successfully\n');
-    }
-
-    // Create user_points collection
-    console.log('🎯 Creating "user_points" collection...');
-    try {
-      const existing = await pb.collections.getFirstListItem('name="user_points"');
-      console.log('⚠️  "user_points" collection already exists, skipping...\n');
-    } catch (error) {
-      const userPointsData = {
-        name: 'user_points',
-        type: 'base',
-        schema: [
-          {
-            name: 'user',
-            type: 'relation',
-            required: true,
-            unique: true,
-            options: {
-              collectionId: usersCollectionId,
-              cascadeDelete: true,
-              minSelect: null,
-              maxSelect: 1,
-              displayFields: ['email']
-            }
-          },
-          {
-            name: 'points',
-            type: 'number',
-            required: true,
-            options: { min: 0 }
-          }
-        ]
-      };
-
-      await pb.collections.create(userPointsData);
-      console.log('✅ "user_points" collection created successfully\n');
-    }
-
-    const questionsCollectionId = await getCollectionIdByName(pb, 'questions');
-
-    // Create ratings collection (per-user, per-model ratings on a question)
-    console.log('⭐ Creating "ratings" collection...');
-    try {
-      await pb.collections.getFirstListItem('name="ratings"');
-      console.log('⚠️  "ratings" collection already exists, skipping...\n');
-    } catch (error) {
-      await pb.collections.create({
-        name: 'ratings',
-        type: 'base',
-        schema: [
-          {
-            name: 'question',
-            type: 'relation',
-            required: true,
-            options: {
-              collectionId: questionsCollectionId,
-              cascadeDelete: true,
-              minSelect: null,
-              maxSelect: 1,
-              displayFields: ['question']
-            }
-          },
-          {
-            name: 'user',
-            type: 'relation',
-            required: true,
-            options: {
-              collectionId: usersCollectionId,
-              cascadeDelete: false,
-              minSelect: null,
-              maxSelect: 1,
-              displayFields: ['email']
-            }
-          },
-          {
-            name: 'model',
-            type: 'text',
-            required: true,
-            options: { min: 1, max: 200 }
-          },
-          {
-            name: 'rating',
-            type: 'number',
-            required: true,
-            options: { min: 0 }
-          }
-        ]
-      });
-      console.log('✅ "ratings" collection created successfully\n');
-    }
-
-    // Create comments collection
-    console.log('💬 Creating "comments" collection...');
-    try {
-      await pb.collections.getFirstListItem('name="comments"');
-      console.log('⚠️  "comments" collection already exists, skipping...\n');
-    } catch (error) {
-      await pb.collections.create({
-        name: 'comments',
-        type: 'base',
-        schema: [
-          {
-            name: 'question',
-            type: 'relation',
-            required: true,
-            options: {
-              collectionId: questionsCollectionId,
-              cascadeDelete: true,
-              minSelect: null,
-              maxSelect: 1,
-              displayFields: ['question']
-            }
-          },
-          {
-            name: 'user',
-            type: 'relation',
-            required: true,
-            options: {
-              collectionId: usersCollectionId,
-              cascadeDelete: false,
-              minSelect: null,
-              maxSelect: 1,
-              displayFields: ['email']
-            }
-          },
-          {
-            name: 'comment',
-            type: 'text',
-            required: true,
-            options: { min: 1, max: 10000 }
-          }
-        ]
-      });
-      console.log('✅ "comments" collection created successfully\n');
-    }
-
     // Creative workspace (script import → PocketBase)
     console.log('🎬 Creating creative workspace collections...');
     try {
@@ -258,14 +140,13 @@ async function createCollections(adminEmail, adminPassword) {
       const creativeProjectsData = {
         name: 'creative_projects',
         type: 'base',
-        listRule: '@request.auth.id != "" && user = @request.auth.id',
-        viewRule: '@request.auth.id != "" && user = @request.auth.id',
-        updateRule: '@request.auth.id != "" && user = @request.auth.id',
-        deleteRule: '@request.auth.id != "" && user = @request.auth.id',
-        schema: [
-          { name: 'name', type: 'text', required: true, options: { min: 1, max: 500 } },
+        listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        fields: [
           {
-            name: 'user',
+            name: 'owned_by',
             type: 'relation',
             required: true,
             options: {
@@ -276,6 +157,7 @@ async function createCollections(adminEmail, adminPassword) {
               displayFields: ['email']
             }
           },
+          { name: 'name', type: 'text', required: true, options: { min: 1, max: 500 } },
           {
             name: 'aspect_ratio',
             type: 'select',
@@ -330,18 +212,30 @@ async function createCollections(adminEmail, adminPassword) {
         ]
       };
 
-      const creativeProjectsCol = await pb.collections.create(creativeProjectsData);
+      const creativeProjectsCol = await createCollectionThenRules(pb, creativeProjectsData);
       const creativeProjectsId = creativeProjectsCol.id;
       console.log('✅ "creative_projects" created\n');
 
-      await pb.collections.create({
+      await createCollectionThenRules(pb, {
         name: 'creative_scenes',
         type: 'base',
-        listRule: '@request.auth.id != "" && user = @request.auth.id',
-        viewRule: '@request.auth.id != "" && user = @request.auth.id',
-        updateRule: '@request.auth.id != "" && user = @request.auth.id',
-        deleteRule: '@request.auth.id != "" && user = @request.auth.id',
-        schema: [
+        listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        fields: [
+          {
+            name: 'owned_by',
+            type: 'relation',
+            required: true,
+            options: {
+              collectionId: usersCollectionId,
+              cascadeDelete: false,
+              minSelect: null,
+              maxSelect: 1,
+              displayFields: ['email']
+            }
+          },
           {
             name: 'project',
             type: 'relation',
@@ -352,18 +246,6 @@ async function createCollections(adminEmail, adminPassword) {
               minSelect: null,
               maxSelect: 1,
               displayFields: ['name']
-            }
-          },
-          {
-            name: 'user',
-            type: 'relation',
-            required: true,
-            options: {
-              collectionId: usersCollectionId,
-              cascadeDelete: false,
-              minSelect: null,
-              maxSelect: 1,
-              displayFields: ['email']
             }
           },
           {
@@ -379,14 +261,26 @@ async function createCollections(adminEmail, adminPassword) {
       });
       console.log('✅ "creative_scenes" created\n');
 
-      await pb.collections.create({
+      await createCollectionThenRules(pb, {
         name: 'creative_characters',
         type: 'base',
-        listRule: '@request.auth.id != "" && user = @request.auth.id',
-        viewRule: '@request.auth.id != "" && user = @request.auth.id',
-        updateRule: '@request.auth.id != "" && user = @request.auth.id',
-        deleteRule: '@request.auth.id != "" && user = @request.auth.id',
-        schema: [
+        listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        fields: [
+          {
+            name: 'owned_by',
+            type: 'relation',
+            required: true,
+            options: {
+              collectionId: usersCollectionId,
+              cascadeDelete: false,
+              minSelect: null,
+              maxSelect: 1,
+              displayFields: ['email']
+            }
+          },
           {
             name: 'project',
             type: 'relation',
@@ -397,18 +291,6 @@ async function createCollections(adminEmail, adminPassword) {
               minSelect: null,
               maxSelect: 1,
               displayFields: ['name']
-            }
-          },
-          {
-            name: 'user',
-            type: 'relation',
-            required: true,
-            options: {
-              collectionId: usersCollectionId,
-              cascadeDelete: false,
-              minSelect: null,
-              maxSelect: 1,
-              displayFields: ['email']
             }
           },
           { name: 'name', type: 'text', required: true, options: { max: 200 } },
@@ -427,14 +309,26 @@ async function createCollections(adminEmail, adminPassword) {
       try {
         const creativeProjectsId = await getCollectionIdByName(pb, 'creative_projects');
         const creativeScenesId = await getCollectionIdByName(pb, 'creative_scenes');
-        await pb.collections.create({
+        await createCollectionThenRules(pb, {
           name: 'creative_shots',
           type: 'base',
-          listRule: '@request.auth.id != "" && user = @request.auth.id',
-          viewRule: '@request.auth.id != "" && user = @request.auth.id',
-          updateRule: '@request.auth.id != "" && user = @request.auth.id',
-          deleteRule: '@request.auth.id != "" && user = @request.auth.id',
-          schema: [
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
             {
               name: 'project',
               type: 'relation',
@@ -460,18 +354,6 @@ async function createCollections(adminEmail, adminPassword) {
               }
             },
             {
-              name: 'user',
-              type: 'relation',
-              required: true,
-              options: {
-                collectionId: usersCollectionId,
-                cascadeDelete: false,
-                minSelect: null,
-                maxSelect: 1,
-                displayFields: ['email']
-              }
-            },
-            {
               name: 'sort_order',
               type: 'number',
               required: true,
@@ -492,14 +374,93 @@ async function createCollections(adminEmail, adminPassword) {
       }
     }
 
+    // Library: scripts, character refs, storyboard exports, video renders (per project)
+    console.log('📦 Ensuring "project_assets" collection...');
+    try {
+      await pb.collections.getFirstListItem('name="project_assets"');
+      console.log('⚠️  "project_assets" already exists, skipping...\n');
+    } catch (_missing) {
+      try {
+        const creativeProjectsId = await getCollectionIdByName(pb, 'creative_projects');
+        await createCollectionThenRules(pb, {
+          name: 'project_assets',
+          type: 'base',
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'project',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: creativeProjectsId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            {
+              name: 'kind',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [
+                  { value: 'script' },
+                  { value: 'character' },
+                  { value: 'storyboard' },
+                  { value: 'video' },
+                  { value: 'other' }
+                ]
+              }
+            },
+            { name: 'title', type: 'text', required: true, options: { min: 1, max: 500 } },
+            { name: 'notes', type: 'text', required: false, options: { max: 20000 } },
+            { name: 'metadata', type: 'json', required: false },
+            {
+              name: 'sort_order',
+              type: 'number',
+              required: false,
+              options: { min: 0, onlyInt: true }
+            },
+            {
+              name: 'file',
+              type: 'file',
+              required: false,
+              options: {
+                maxSelect: 1,
+                maxSize: 52428800
+              }
+            }
+          ]
+        });
+        console.log('✅ "project_assets" created\n');
+      } catch (e) {
+        console.log('⚠️  Could not create project_assets (is creative_projects missing?):', e.message || e, '\n');
+      }
+    }
+
     console.log('🎉 All collections have been set up successfully!');
     console.log('\nCollections created:');
-    console.log('  ✓ questions - Stores questions and AI model responses');
-    console.log('  ✓ user_points - Tracks user points for leaderboard');
-    console.log('  ✓ ratings - Per-user ratings per model answer');
-    console.log('  ✓ comments - Comments on questions');
     console.log('  ✓ creative_projects / creative_scenes / creative_characters - Script import workspace (if created this run)');
     console.log('  ✓ creative_shots - Storyboard shots per scene (if created this run)');
+    console.log('  ✓ project_assets - Per-project assets (scripts, characters, storyboards, video, files)');
     console.log('  ✓ users - Created automatically by PocketBase');
     console.log('\n✨ You can now use the application!');
 

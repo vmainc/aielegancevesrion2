@@ -4,7 +4,10 @@
 
     <form @submit.prevent="generate" class="mb-8">
       <div class="mb-4">
-        <label for="prompt" class="block text-sm font-medium text-gray-700 mb-2">Describe your image</label>
+        <div class="flex justify-between items-center gap-2 mb-2">
+          <label for="prompt" class="text-sm font-medium text-gray-700">Describe your image</label>
+          <PromptEnhanceButton v-model="prompt" context="image" />
+        </div>
         <textarea
           id="prompt"
           v-model="prompt"

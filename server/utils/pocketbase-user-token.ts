@@ -32,6 +32,14 @@ export async function getPocketBaseUserIdFromRequest (event: H3Event): Promise<s
     })
     if (!res.ok) {
       const t = await res.text()
+      const trimmed = t.trimStart()
+      if (trimmed.startsWith('<')) {
+        throw createError({
+          statusCode: 502,
+          message:
+            `PocketBase at ${base} returned HTML (${res.status}). Server routes cannot use a browser-only /pb URL — set POCKETBASE_INTERNAL_URL to the real PocketBase HTTP URL (e.g. http://127.0.0.1:8090 on the machine running PB).`
+        })
+      }
       throw new Error(t || res.statusText)
     }
     const data = (await res.json()) as { record?: { id?: string } }

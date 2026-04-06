@@ -13,41 +13,32 @@ Create these **collection names and field names** exactly as below. The Nuxt ser
 
 Usually created by PocketBase. The app uses email/password auth and optional `name`. Ensure **Email/password** auth is enabled. If sign-up fails, disable “Confirm email” in the collection settings or complete the verification flow.
 
-### `questions`
+### Creative workspace
 
-| Field       | Type     | Required | Notes |
-|------------|----------|----------|--------|
-| `question` | **Text** | Yes      | The user’s prompt |
-| `responses`| **JSON** | Yes      | Object keyed by model name, e.g. `{ "ChatGPT": { "answer": "...", "rating": null } }` |
-| `user`     | **Relation** | Yes  | Single record → collection **users** |
+The setup script creates **`creative_projects`**, **`creative_scenes`**, **`creative_characters`**, and **`creative_shots`** with the fields used by script import, overview, storyboard, and related APIs. See `scripts/setup-collections.js` for the full schema.
 
-Do not rename these fields; `POST /api/questions` sends exactly `question`, `responses`, and `user` (user id string).
+Each of these collections has an **`owned_by`** relation to **`users`**. The setup script applies API rules in a second request so PocketBase can resolve the field (rules are validated after the schema exists).
 
-### `ratings`
+### `project_assets`
 
-| Field      | Type        | Required | Notes |
-|-----------|-------------|----------|--------|
-| `question`| **Relation** | Yes     | → **questions** |
-| `user`    | **Relation** | Yes     | → **users** |
-| `model`   | **Text**     | Yes     | Same label as UI: `ChatGPT`, `Claude`, etc. |
-| `rating`  | **Number**   | Yes     | 0 = unrated; filters use `rating > 0` |
+Per-project library rows for **scripts**, **character** references, **storyboard** exports, **video** outputs, and **other** files or metadata. Tied to `creative_projects` and `users`; deleting a project cascades to its assets.
 
-### `user_points` (leaderboard)
+| Field        | Type        | Required | Notes |
+|-------------|-------------|----------|--------|
+| `project`   | **Relation** | Yes     | → **creative_projects**, cascade delete |
+| `owned_by`  | **Relation** | Yes     | → **users** (owner) |
+| `kind`      | **Select**   | Yes     | `script`, `character`, `storyboard`, `video`, `other` |
+| `title`     | **Text**     | Yes     | Short label |
+| `notes`     | **Text**     | No      | Longer description |
+| `metadata`  | **JSON**     | No      | Extra fields (URLs, model ids, dimensions, etc.) |
+| `sort_order`| **Number**   | No      | Integer ≥ 0 for sorting within a project |
+| `file`      | **File**     | No      | Optional attachment (max 1, 50MB default in setup script) |
 
-| Field    | Type        | Required | Notes |
-|----------|-------------|----------|--------|
-| `user`   | **Relation** | Yes     | → **users**, **one row per user** |
-| `points` | **Number**   | Yes     | Integer; API increments on save/rate/comment |
+API (Bearer user token): `GET /api/assets/my`, `GET /api/projects/:id/assets`, `POST /api/projects/:id/assets`, `PATCH /api/projects/:id/assets/:assetId`, `DELETE ...`.
 
-The app expects this collection to be named **`user_points`**, not `leaderboard`.
+### Legacy Q&A collections (removed from the app)
 
-### `comments` (optional, for question comments)
-
-| Field     | Type        | Required | Notes |
-|----------|-------------|----------|--------|
-| `question` | **Relation** | Yes   | → **questions** |
-| `user`    | **Relation** | Yes     | → **users** |
-| `comment` | **Text**     | Yes     | Body text |
+Older installs may still have **`questions`**, **`ratings`**, **`comments`**, or **`user_points`**. They are no longer created by `setup-collections.js` and are not used by the Nuxt app. You can delete those collections in the PocketBase admin when you no longer need the data.
 
 ## Server environment (VPS)
 
@@ -60,7 +51,7 @@ These are read by **Node** (Nuxt/Nitro), not the browser:
 | `NUXT_PUBLIC_POCKETBASE_URL` or `VITE_POCKETBASE_URL` | Public API URL (e.g. `https://your-domain/pb`) for the **browser** |
 | `POCKETBASE_INTERNAL_URL` or `NUXT_POCKETBASE_INTERNAL_URL` | Optional. Direct URL for **server-only** calls (e.g. `http://127.0.0.1:8090`) when the public URL is reverse-proxied and not ideal from localhost |
 
-**OpenRouter** (model answers) is separate from PocketBase: set `OPENROUTER_API_KEY` or `NUXT_OPENROUTER_API_KEY` on the same Node process. If those are missing, `POST /api/query/...` returns 500 with “OpenRouter API key not configured”.
+**OpenRouter** (model calls) is separate from PocketBase: set `OPENROUTER_API_KEY` or `NUXT_OPENROUTER_API_KEY` on the same Node process.
 
 Restart the Node process after changing env vars.
 

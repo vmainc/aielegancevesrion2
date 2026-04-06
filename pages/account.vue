@@ -725,7 +725,14 @@ const updateProfile = async () => {
     showSuccess('Profile updated successfully!')
   } catch (error: any) {
     console.error('Error updating profile:', error)
-    showError(error.response?.message || error.message || 'Failed to update profile')
+    const status = error?.status ?? error?.response?.status
+    if (status === 401 || status === 404) {
+      showError(
+        'Your session does not match this site’s database (common after a deploy or URL change). Log out, then log in again.'
+      )
+    } else {
+      showError(error.response?.message || error.message || 'Failed to update profile')
+    }
   } finally {
     loading.value = false
   }
