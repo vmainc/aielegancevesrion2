@@ -32,20 +32,19 @@
 
     <div class="pt-8 border-t border-gray-200">
       <NuxtLink
-        :to="`/projects/${projectId}/analysis`"
+        to="/tools/script-wizard"
         class="text-sm text-primary font-medium hover:underline"
       >
-        Continue to Analysis →
+        Open Script Wizard →
       </NuxtLink>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-const { activeProject, activeProjectId } = useCreativeProject()
+const { activeProject } = useCreativeProject()
 const toast = useToast()
 
-const projectId = activeProjectId
 const project = activeProject
 
 function runPlaceholder (label: string) {

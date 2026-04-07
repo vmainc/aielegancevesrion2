@@ -66,18 +66,20 @@
         >
           {{ item.label }}
         </NuxtLink>
-        <div class="mt-4 px-3 text-[11px] uppercase tracking-wide text-gray-500">Tools</div>
-        <NuxtLink
-          v-for="item in toolSections"
-          :key="item.path"
-          :to="`/projects/${projectId}/${item.path}`"
-          class="block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
-          :class="isActive(item.path)
-            ? 'bg-primary/15 text-primary border border-primary/30'
-            : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'"
-        >
-          {{ item.label }}
-        </NuxtLink>
+        <template v-if="toolSections.length">
+          <div class="mt-4 px-3 text-[11px] uppercase tracking-wide text-gray-500">Tools</div>
+          <NuxtLink
+            v-for="item in toolSections"
+            :key="item.path"
+            :to="`/projects/${projectId}/${item.path}`"
+            class="block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+            :class="isActive(item.path)
+              ? 'bg-primary/15 text-primary border border-primary/30'
+              : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'"
+          >
+            {{ item.label }}
+          </NuxtLink>
+        </template>
       </nav>
     </aside>
 
@@ -150,12 +152,11 @@ const sections = [
   { path: 'characters', label: 'Characters' },
   { path: 'scenes', label: 'Scenes' },
   { path: 'storyboard', label: 'Storyboard' },
-  { path: 'video', label: 'Video' },
-  { path: 'analysis', label: 'Script Wizard' }
+  { path: 'video', label: 'Video' }
 ] as const
 
-const workflowSections = sections.filter(s => s.path !== 'analysis')
-const toolSections = sections.filter(s => s.path === 'analysis')
+const workflowSections = sections
+const toolSections: Array<{ path: string; label: string }> = []
 
 const isActive = (path: string) => {
   const tail = route.path.split('/').pop() || ''

@@ -25,6 +25,11 @@
 <script setup>
 const cards = [
   {
+    to: '/tools/script-wizard',
+    title: 'Script Wizard',
+    blurb: 'Standalone script workspace: upload, analyze, and reuse scripts across projects.',
+  },
+  {
     to: '/character-creator',
     title: 'Character Creator',
     blurb: 'Generate character portraits and references with image models.',

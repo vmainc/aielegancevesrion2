@@ -297,6 +297,104 @@ export function enrichmentToProjectFields (e: ScriptAiEnrichment): {
   return { synopsis, treatment }
 }
 
+/**
+ * Optional Script Wizard pass: map the story into a practical three-act thematic lens.
+ * Returns markdown-like plain text section suitable for appending to treatment notes.
+ */
+export async function inferThreeActThemeBreakdown (input: {
+  projectName: string
+  logline: string
+  onePageSynopsis: string
+  themeExploration: string
+  sceneOutline: string
+}): Promise<string> {
+  const config = useRuntimeConfig()
+  const apiKey = resolveOpenRouterApiKey(config)
+  if (!apiKey) return ''
+
+  const system = `You are a film story consultant focused on thematic analysis.
+Reply with ONLY valid JSON:
+{
+  "act_1": "3-6 bullet-style lines: setup, world, thematic question posed.",
+  "act_2": "4-8 bullet-style lines: escalation, midpoint pressure, theme under stress.",
+  "act_3": "3-6 bullet-style lines: climax/resolution and thematic payoff.",
+  "theme_arc": "1 short paragraph on how the core theme evolves across all three acts."
+}
+Rules:
+- Keep each act practical and specific to this script.
+- Avoid screenplay formatting jargon where possible.
+- Escape quotes in JSON strings.`
+
+  const user = `Project: ${input.projectName}
+
+Logline:
+${input.logline.slice(0, 1200)}
+
+Synopsis:
+${input.onePageSynopsis.slice(0, 5000)}
+
+Theme exploration notes:
+${input.themeExploration.slice(0, 4000)}
+
+Scene outline:
+${input.sceneOutline.slice(0, 10000)}`
+
+  const model = OPENROUTER_TEXT_MODEL_MAP.Claude
+  const body = buildOpenRouterChatCompletionBody({
+    model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user }
+    ],
+    temperature: 0.4,
+    max_tokens: 2200
+  })
+
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://aielegance.com',
+        'X-Title': 'AI Elegance Script Wizard Acts'
+      },
+      body: JSON.stringify(body)
+    })
+    const raw = await res.text()
+    if (!res.ok) return ''
+    const parsedOuter = JSON.parse(raw) as { choices?: Array<{ message?: { content?: string } }> }
+    const content = parsedOuter.choices?.[0]?.message?.content || ''
+    const parsed = extractJsonObject(content)
+    if (!parsed) return ''
+
+    const act1 = asStr(parsed.act_1).trim()
+    const act2 = asStr(parsed.act_2).trim()
+    const act3 = asStr(parsed.act_3).trim()
+    const arc = asStr(parsed.theme_arc).trim()
+    if (!act1 && !act2 && !act3 && !arc) return ''
+
+    const lines: string[] = [
+      'Three-act thematic breakdown',
+      '',
+      'Act I',
+      act1 || '(No details returned.)',
+      '',
+      'Act II',
+      act2 || '(No details returned.)',
+      '',
+      'Act III',
+      act3 || '(No details returned.)'
+    ]
+    if (arc) {
+      lines.push('', 'Theme arc', arc)
+    }
+    return lines.join('\n').trim()
+  } catch {
+    return ''
+  }
+}
+
 function mergeDirectorParsed (raw: Record<string, unknown> | null): ProjectDirector {
   const d = defaultDirector()
   if (!raw) return d

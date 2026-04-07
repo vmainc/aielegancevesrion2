@@ -332,14 +332,21 @@ async function submitAdd () {
 
 async function removeAsset (a: ProjectAsset) {
   const token = getAuthToken()
-  if (!token || !a.projectId) return
+  if (!token) return
   if (!confirm(`Remove “${a.title}” from this library?`)) return
   deletingId.value = a.id
   try {
-    await $fetch(`/api/projects/${a.projectId}/assets/${a.id}`, {
-      method: 'DELETE',
-      headers: { Authorization: `Bearer ${token}` }
-    })
+    if (a.projectId) {
+      await $fetch(`/api/projects/${a.projectId}/assets/${a.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    } else {
+      await $fetch(`/api/assets/${a.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+    }
     toast.showToast('Removed.', 'success')
     await fetchItems()
   } catch {

@@ -102,7 +102,7 @@
                       Overview
                     </NuxtLink>
                     <NuxtLink
-                      to="/projects"
+                      to="/tools/script-wizard"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                       @click="closeToolsDropdown"
                     >
@@ -376,7 +376,7 @@
                     Character Creator
                   </NuxtLink>
                   <NuxtLink
-                    to="/projects"
+                    to="/tools/script-wizard"
                     @click="closeMobileMenu"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
                   >

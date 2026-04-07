@@ -347,7 +347,7 @@ async function createCollections(adminEmail, adminPassword) {
             {
               name: 'project',
               type: 'relation',
-              required: true,
+              required: false,
               options: {
                 collectionId: creativeProjectsId,
                 cascadeDelete: true,
@@ -471,11 +471,75 @@ async function createCollections(adminEmail, adminPassword) {
       }
     }
 
+    // Standalone script workspace (not project-bound)
+    console.log('🧠 Ensuring "creative_scripts" collection...');
+    try {
+      await pb.collections.getFirstListItem('name="creative_scripts"');
+      console.log('⚠️  "creative_scripts" already exists, skipping...\n');
+    } catch (_missing) {
+      try {
+        await createCollectionThenRules(pb, {
+          name: 'creative_scripts',
+          type: 'base',
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            { name: 'title', type: 'text', required: true, options: { min: 1, max: 500 } },
+            {
+              name: 'status',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [{ value: 'draft' }, { value: 'in_progress' }, { value: 'final' }]
+              }
+            },
+            { name: 'source_filename', type: 'text', required: false, options: { max: 500 } },
+            { name: 'script_text', type: 'text', required: false, options: { max: 300000 } },
+            { name: 'synopsis', type: 'text', required: false, options: { max: 20000 } },
+            { name: 'treatment', type: 'text', required: false, options: { max: 50000 } },
+            { name: 'genre', type: 'text', required: false, options: { max: 200 } },
+            { name: 'tone', type: 'text', required: false, options: { max: 500 } },
+            { name: 'themes', type: 'json', required: false },
+            { name: 'comparable_titles', type: 'json', required: false },
+            {
+              name: 'file',
+              type: 'file',
+              required: false,
+              options: {
+                maxSelect: 1,
+                maxSize: 52428800
+              }
+            }
+          ]
+        });
+        console.log('✅ "creative_scripts" created\n');
+      } catch (e) {
+        console.log('⚠️  Could not create creative_scripts:', e.message || e, '\n');
+      }
+    }
+
     console.log('🎉 All collections have been set up successfully!');
     console.log('\nCollections created:');
     console.log('  ✓ creative_projects / creative_scenes / creative_characters - Script import workspace (if created this run)');
     console.log('  ✓ creative_shots - Storyboard shots per scene (if created this run)');
     console.log('  ✓ project_assets - Per-project assets (scripts, characters, storyboards, video, files)');
+    console.log('  ✓ creative_scripts - Standalone Script Wizard library');
     console.log('  ✓ users - Created automatically by PocketBase');
     console.log('\n✨ You can now use the application!');
 

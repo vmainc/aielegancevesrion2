@@ -24,14 +24,17 @@ export const useAuth = () => {
   
   // Initialize with null, will be set by initAuth
   const user = useState('auth_user', () => null)
-  const isAuthenticated = computed(() => !!user.value)
+  const authToken = useState<string | null>('auth_token', () => null)
+  const isAuthenticated = computed(() => !!user.value || !!authToken.value)
 
   if (import.meta.client && !authStoreListenerAttached) {
     authStoreListenerAttached = true
     const syncFromPb = () => {
       user.value = pb.authStore.model || null
+      authToken.value = pb.authStore.token || null
       pb.authStore.onChange((_token, model) => {
         user.value = model
+        authToken.value = _token || null
       })
     }
     // Plugins and route middleware call useAuth() with no active component — onMounted would warn.
@@ -53,6 +56,7 @@ export const useAuth = () => {
       // PocketBase automatically loads auth from localStorage when instance is created
       // Set user value from authStore (which has loaded from localStorage)
       user.value = pb.authStore.model || null
+      authToken.value = pb.authStore.token || null
 
       if (!pb.authStore.token) {
         return
@@ -70,10 +74,12 @@ export const useAuth = () => {
           if (pb.authStore.isValid && pb.authStore.model) {
             // Token still valid, use existing model
             user.value = pb.authStore.model
+            authToken.value = pb.authStore.token || null
           } else {
             // Token is invalid/expired, clear it
             pb.authStore.clear()
             user.value = null
+            authToken.value = null
           }
         }
       } else if (pb.authStore.model && !pb.authStore.isValid && pb.authStore.token) {
@@ -86,6 +92,7 @@ export const useAuth = () => {
           // Can't refresh, token is truly invalid
           pb.authStore.clear()
           user.value = null
+          authToken.value = null
         }
       }
     } catch (error) {
@@ -93,9 +100,11 @@ export const useAuth = () => {
       // On error, preserve auth if it's still valid, otherwise clear
       if (pb.authStore.model && pb.authStore.isValid) {
         user.value = pb.authStore.model
+        authToken.value = pb.authStore.token || null
       } else {
         pb.authStore.clear()
         user.value = null
+        authToken.value = null
       }
     }
   }
@@ -130,6 +139,7 @@ export const useAuth = () => {
     try {
       const authData = await pb.collection('users').authWithPassword(email, password)
       user.value = authData.record
+      authToken.value = pb.authStore.token || null
       return { success: true, error: null }
     } catch (error: any) {
       return {
@@ -164,6 +174,7 @@ export const useAuth = () => {
 
       const authData = await pb.collection('users').authWithPassword(email.trim(), password)
       user.value = authData.record
+      authToken.value = pb.authStore.token || null
 
       return { success: true, error: null }
     } catch (error: any) {
@@ -178,6 +189,7 @@ export const useAuth = () => {
   const logout = () => {
     pb.authStore.clear()
     user.value = null
+    authToken.value = null
     navigateTo('/login')
   }
 
@@ -270,7 +282,7 @@ export const useAuth = () => {
   /** Bearer token for Nuxt server routes that validate the session (client only). */
   const getAuthToken = () => {
     if (process.server) return null
-    return pb.authStore.token || null
+    return authToken.value || pb.authStore.token || null
   }
 
   return {

@@ -94,8 +94,7 @@ const cards = [
   },
 ]
 
-const { isAuthenticated, initAuth } = useAuth()
-const pb = usePocketBase()
+const { isAuthenticated, initAuth, getAuthToken } = useAuth()
 
 const loading = ref(true)
 const loadError = ref('')
@@ -104,24 +103,41 @@ const items = ref<ProjectAsset[]>([])
 const recentItems = computed(() => items.value.slice(0, 12))
 
 async function loadAssets () {
-  if (!import.meta.client || !isAuthenticated.value) {
+  if (!import.meta.client) {
     loading.value = false
     return
   }
-  const token = pb.authStore.token
+  // Ensure auth state is hydrated before reading the bearer token.
+  await initAuth()
+  if (!isAuthenticated.value) {
+    loading.value = false
+    items.value = []
+    loadError.value = ''
+    return
+  }
+  const token = getAuthToken()
   if (!token) {
     loading.value = false
+    items.value = []
+    loadError.value = 'Please sign in again to load your library items.'
     return
   }
   loading.value = true
   loadError.value = ''
   try {
-    await initAuth()
     const res = await $fetch<{ items: ProjectAsset[] }>('/api/assets/my', {
       headers: { Authorization: `Bearer ${token}` }
     })
     items.value = res.items ?? []
-  } catch (e) {
+  } catch (e: unknown) {
+    const status = e && typeof e === 'object' && 'statusCode' in e
+      ? Number((e as { statusCode?: number }).statusCode)
+      : NaN
+    if (status === 401) {
+      loadError.value = 'Session expired. Please sign in again.'
+      items.value = []
+      return
+    }
     loadError.value =
       e && typeof e === 'object' && 'data' in e
         ? String((e as { data?: { message?: string } }).data?.message ?? 'Could not load assets')

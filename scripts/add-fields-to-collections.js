@@ -132,6 +132,86 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
       console.log('⚠️  creative_characters not found. Skipping...\n');
     }
 
+    // creative_scripts — standalone Script Wizard library
+    console.log('🧠 Checking "creative_scripts" collection...');
+    try {
+      const col = await pb.collections.getFirstListItem('name="creative_scripts"');
+      const currentSchema = col.fields || col.schema || [];
+      const fieldsToAdd = [];
+
+      if (!fieldExists(col, 'status')) {
+        fieldsToAdd.push(flattenField({
+          name: 'status',
+          type: 'select',
+          required: true,
+          options: {
+            maxSelect: 1,
+            values: ['draft', 'in_progress', 'final']
+          }
+        }));
+        console.log('  ➕ Will add: status');
+      } else {
+        console.log('  ✓ status exists');
+      }
+      if (!fieldExists(col, 'script_text')) {
+        fieldsToAdd.push(flattenField({ name: 'script_text', type: 'text', required: false, options: { max: 300000 } }));
+        console.log('  ➕ Will add: script_text');
+      } else {
+        console.log('  ✓ script_text exists');
+      }
+      if (!fieldExists(col, 'comparable_titles')) {
+        fieldsToAdd.push(flattenField({ name: 'comparable_titles', type: 'json', required: false }));
+        console.log('  ➕ Will add: comparable_titles');
+      } else {
+        console.log('  ✓ comparable_titles exists');
+      }
+      if (!fieldExists(col, 'file')) {
+        fieldsToAdd.push(flattenField({
+          name: 'file',
+          type: 'file',
+          required: false,
+          options: { maxSelect: 1, maxSize: 52428800 }
+        }));
+        console.log('  ➕ Will add: file');
+      } else {
+        console.log('  ✓ file exists');
+      }
+
+      if (fieldsToAdd.length > 0) {
+        await pb.collections.update(col.id, {
+          fields: [...currentSchema, ...fieldsToAdd]
+        });
+        console.log('✅ creative_scripts updated\n');
+      } else {
+        console.log('✅ creative_scripts already up to date\n');
+      }
+    } catch (_e) {
+      console.log('⚠️  creative_scripts not found. Skipping...\n');
+    }
+
+    // project_assets — allow standalone script assets (project optional)
+    console.log('📦 Checking "project_assets" collection...');
+    try {
+      const col = await pb.collections.getFirstListItem('name="project_assets"');
+      const currentSchema = col.fields || col.schema || [];
+      const projectField = currentSchema.find(f => f?.name === 'project');
+      if (projectField && projectField.required) {
+        const updatedFields = currentSchema.map((f) => {
+          if (f?.name !== 'project') return flattenField(f);
+          return flattenField({
+            ...f,
+            required: false
+          });
+        });
+        await pb.collections.update(col.id, { fields: updatedFields });
+        console.log('  ➕ Updated: project relation is now optional\n');
+      } else {
+        console.log('  ✓ project relation already optional (or field missing)\n');
+      }
+    } catch (_e) {
+      console.log('⚠️  project_assets not found. Skipping...\n');
+    }
+
     console.log('🎉 Field addition complete!');
     console.log('\nYour collections now have all required fields.');
     console.log('You can verify this in the PocketBase admin UI by checking the collection schemas.');
