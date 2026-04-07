@@ -75,7 +75,7 @@ const cards = [
   {
     to: '/assets/scripts',
     title: 'Scripts',
-    blurb: 'Imported and working script files, drafts, and text tied to your projects.',
+    blurb: 'Screenplays from Project → Overview and Script Wizard—one list, newest first, with project names and downloads.',
   },
   {
     to: '/assets/characters',

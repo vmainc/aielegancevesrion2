@@ -2,9 +2,16 @@
   "name": "ai-elegance",
   "version": "1.0.0",
   "private": true,
+  "imports": {
+    "#internal/nuxt/paths": "./scripts/nuxt-internal-paths-shim.mjs"
+  },
   "scripts": {
     "build": "nuxt build && node scripts/sync-nitro-public.mjs && node scripts/verify-output.mjs && node scripts/verify-production-bundle.mjs",
-    "dev": "nuxt dev",
+    "predev": "node scripts/ensure-nuxt-build-dir.mjs && rm -rf .nuxt/dist node_modules/.cache/jiti",
+    "pb:serve": "cd pocketbase && exec ./pocketbase serve --http=127.0.0.1:8090",
+    "dev": "nuxt dev --port 3000",
+    "dev:pb": "bash scripts/dev-with-pb.sh",
+    "dev:fix": "bash scripts/dev-fix.sh",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
     "start": "node -r dotenv/config .output/server/index.mjs",
@@ -15,6 +22,7 @@
   },
   "devDependencies": {
     "@nuxt/devtools": "latest",
+    "@nuxtjs/tailwindcss": "^6.14.0",
     "autoprefixer": "^10.4.16",
     "nuxt": "^3.12.0",
     "postcss": "^8.4.35",

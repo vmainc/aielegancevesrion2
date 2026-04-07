@@ -7,19 +7,15 @@ import { extractTextFromPdfBuffer } from '~/server/utils/extract-pdf-text'
 import {
   enrichScriptWithAi,
   enrichmentToProjectFields,
-  inferThreeActThemeBreakdown
+  comparableTitlesFromEnrichment
 } from '~/server/utils/script-import-ai'
-import { extractComparableTitlesFromTreatment } from '~/server/utils/script-wizard-omdb'
 import { pbRecordToCreativeScript } from '~/server/utils/creative-script-map'
+import { getOrCreateScriptLibraryProjectId } from '~/server/utils/get-or-create-script-library-project'
+import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
 import type { CreativeScriptStatus } from '~/types/creative-script'
 import type { CreativeScript } from '~/types/creative-script'
 
 const VALID_STATUS = new Set<CreativeScriptStatus>(['draft', 'in_progress', 'final'])
-function isMissingCollectionError (e: unknown): boolean {
-  const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message?: string }).message || '') : String(e)
-  const status = e && typeof e === 'object' && 'status' in e ? Number((e as { status?: number }).status || 0) : 0
-  return status === 404 || /missing collection context|wasn't found|not found|missing collection/i.test(msg)
-}
 
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
@@ -67,7 +63,18 @@ export default defineEventHandler(async (event) => {
   let parsed: ReturnType<typeof parseFdxXml> | ReturnType<typeof parsePlainScriptText>
   let sourceText = ''
   if (isPdf) {
-    sourceText = await extractTextFromPdfBuffer(fileBuf)
+    try {
+      sourceText = await extractTextFromPdfBuffer(fileBuf)
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : String(e)
+      if (/DOMMatrix|ImageData|Path2D|canvas|pdfjs/i.test(msg)) {
+        throw createError({
+          statusCode: 400,
+          message: 'PDF parsing is not available on this server build yet. Please upload the script as .fdx or .txt.'
+        })
+      }
+      throw createError({ statusCode: 400, message: msg || 'Could not extract text from PDF' })
+    }
     parsed = parsePlainScriptText(sourceText)
   } else {
     sourceText = fileBuf.toString('utf8')
@@ -94,17 +101,9 @@ export default defineEventHandler(async (event) => {
     characterNames: parsed.characterNames
   })
   const prose = enrichmentToProjectFields(enrichment)
-  const threeAct = await inferThreeActThemeBreakdown({
-    projectName: scriptTitle,
-    logline: enrichment.logline,
-    onePageSynopsis: enrichment.onePageSynopsis,
-    themeExploration: enrichment.themeExploration,
-    sceneOutline
-  })
-  const treatmentWithActs = threeAct
-    ? `${prose.treatment}\n\n${threeAct}`
-    : prose.treatment
-  const comparableTitles = extractComparableTitlesFromTreatment(prose.treatment)
+  /** Phase 1: synopsis + comps metadata only; treatment + three-act are optional follow-up actions. */
+  const treatmentStored = ''
+  const comparableTitles = comparableTitlesFromEnrichment(enrichment)
 
   const pb = await getAuthenticatedPocketBase()
   const fileSafe = filename.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 180) || 'script.txt'
@@ -115,7 +114,7 @@ export default defineEventHandler(async (event) => {
   formData.append('source_filename', filename.slice(0, 500))
   formData.append('script_text', fullScriptText.slice(0, 300000))
   formData.append('synopsis', prose.synopsis.slice(0, 20000))
-  formData.append('treatment', treatmentWithActs.slice(0, 50000))
+  formData.append('treatment', treatmentStored.slice(0, 50000))
   formData.append('genre', String(enrichment.genre || '').slice(0, 200))
   formData.append('tone', String(enrichment.tone || '').slice(0, 500))
   formData.append('themes', JSON.stringify(enrichment.themes.slice(0, 20)))
@@ -123,9 +122,12 @@ export default defineEventHandler(async (event) => {
   const blob = new Blob([fileBuf instanceof Uint8Array ? fileBuf : new Uint8Array(fileBuf)])
   formData.append('file', blob, fileSafe)
 
-  async function createScriptAsset (creativeScriptId: string | null) {
+  async function createScriptAsset (creativeScriptId: string | null, projectId?: string) {
     const assetForm = new FormData()
     assetForm.append('owned_by', userId)
+    if (projectId) {
+      assetForm.append('project', projectId)
+    }
     assetForm.append('kind', 'script')
     assetForm.append('title', scriptTitle)
     assetForm.append('notes', `Script Wizard upload (${status.replace('_', ' ')}).`)
@@ -137,7 +139,7 @@ export default defineEventHandler(async (event) => {
         script_title: scriptTitle,
         source_filename: filename.slice(0, 500),
         synopsis: prose.synopsis.slice(0, 20000),
-        treatment: treatmentWithActs.slice(0, 50000),
+        treatment: treatmentStored.slice(0, 50000),
         genre: String(enrichment.genre || '').slice(0, 200),
         tone: String(enrichment.tone || '').slice(0, 500),
         themes: enrichment.themes.slice(0, 20),
@@ -150,39 +152,74 @@ export default defineEventHandler(async (event) => {
     return pb.collection('project_assets').create(assetForm)
   }
 
+  function shouldRetryAssetWithLibraryProject (e: unknown): boolean {
+    if (isPocketBaseMissingCollectionError(e)) return false
+    const msg = e instanceof Error ? e.message : String(e)
+    if (/wasn't found|not found|404/i.test(msg)) return false
+    return /project/i.test(msg) && /required|validation|must|empty|Missing/i.test(msg)
+  }
+
+  async function createScriptAssetReliable (creativeScriptId: string | null): Promise<{
+    usedLibraryProject: boolean
+    record: Record<string, unknown>
+  }> {
+    try {
+      const record = await createScriptAsset(creativeScriptId)
+      return { usedLibraryProject: false, record: record as Record<string, unknown> }
+    } catch (eFirst: unknown) {
+      if (!shouldRetryAssetWithLibraryProject(eFirst)) throw eFirst
+      const libId = await getOrCreateScriptLibraryProjectId(pb, userId)
+      const record = await createScriptAsset(creativeScriptId, libId)
+      return { usedLibraryProject: true, record: record as Record<string, unknown> }
+    }
+  }
+
   try {
     const created = await pb.collection('creative_scripts').create(formData)
     const createdScript = pbRecordToCreativeScript(created as Record<string, unknown>)
-    await createScriptAsset(createdScript.id)
+    const { usedLibraryProject } = await createScriptAssetReliable(createdScript.id)
 
-    return { script: createdScript }
+    return {
+      script: createdScript,
+      ...(usedLibraryProject
+        ? {
+            notice:
+              'Also saved under Assets → Scripts (linked to project "Script library" because your database requires a project on each asset).'
+          }
+        : {})
+    }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    if (isMissingCollectionError(e) && (/creative_scripts/i.test(msg) || /missing collection context/i.test(msg))) {
-      const asset = await createScriptAsset(null)
-      const now = new Date().toISOString()
-      const fallbackScript: CreativeScript = {
-        id: String(asset.id || `asset-${Date.now()}`),
-        title: scriptTitle,
-        status,
-        sourceFilename: filename.slice(0, 500),
-        scriptText: fullScriptText.slice(0, 300000),
-        synopsis: prose.synopsis.slice(0, 20000),
-        treatment: treatmentWithActs.slice(0, 50000),
-        genre: String(enrichment.genre || '').slice(0, 200),
-        tone: String(enrichment.tone || '').slice(0, 500),
-        themes: enrichment.themes.slice(0, 20),
-        comparableTitles,
-        created: String((asset as Record<string, unknown>).created || now),
-        updated: String((asset as Record<string, unknown>).updated || now)
+    if (isPocketBaseMissingCollectionError(e)) {
+      try {
+        const { record } = await createScriptAssetReliable(null)
+        const now = new Date().toISOString()
+        const fallbackScript: CreativeScript = {
+          id: String(record.id || `asset-${Date.now()}`),
+          title: scriptTitle,
+          status,
+          sourceFilename: filename.slice(0, 500),
+          scriptText: fullScriptText.slice(0, 300000),
+          synopsis: prose.synopsis.slice(0, 20000),
+          treatment: treatmentStored.slice(0, 50000),
+          genre: String(enrichment.genre || '').slice(0, 200),
+          tone: String(enrichment.tone || '').slice(0, 500),
+          themes: enrichment.themes.slice(0, 20),
+          comparableTitles,
+          created: String(record.created || now),
+          updated: String(record.updated || now)
+        }
+        return { script: fallbackScript, warning: 'creative_scripts collection missing; stored as script asset fallback' }
+      } catch (assetErr: unknown) {
+        const assetMsg = assetErr instanceof Error ? assetErr.message : String(assetErr)
+        if (isPocketBaseMissingCollectionError(assetErr)) {
+          throw createError({
+            statusCode: 503,
+            message: 'Cannot save scripts yet because creative_scripts and project_assets collections are missing. Run: node scripts/setup-collections.js'
+          })
+        }
+        throw createError({ statusCode: 500, message: assetMsg })
       }
-      return { script: fallbackScript, warning: 'creative_scripts collection missing; stored as script asset fallback' }
-    }
-    if (/project_assets/i.test(msg) && /validation|required|project/i.test(msg)) {
-      throw createError({
-        statusCode: 500,
-        message: 'Script saved, but script asset could not be created because project_assets.project is still required. Run: node scripts/add-fields-to-collections.js'
-      })
     }
     throw createError({ statusCode: 500, message: msg })
   }

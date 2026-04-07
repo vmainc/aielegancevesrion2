@@ -2,13 +2,8 @@ import { createError, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
 import { extractComparableTitlesFromTreatment, fetchOmdbMovie } from '~/server/utils/script-wizard-omdb'
-
-function isMissingCollectionError (e: unknown): boolean {
-  const msg = e instanceof Error ? e.message : String(e)
-  const status = e && typeof e === 'object' && 'status' in e ? Number((e as { status?: number }).status || 0) : 0
-  return status === 404 || /missing collection context|wasn't found|not found|missing collection/i.test(msg)
-}
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -27,8 +22,24 @@ export default defineEventHandler(async (event) => {
     }
     const treatment = String((script as { treatment?: unknown }).treatment || '')
     candidates = extractComparableTitlesFromTreatment(treatment)
+    if (!candidates.length) {
+      const raw = (script as { comparable_titles?: unknown }).comparable_titles
+      if (Array.isArray(raw)) {
+        candidates = raw
+          .map((c) => {
+            if (!c || typeof c !== 'object') return null
+            const o = c as Record<string, unknown>
+            const t = String(o.title || '').trim()
+            if (!t) return null
+            const y = String(o.year || '').trim()
+            return { title: t, year: y || undefined }
+          })
+          .filter((x): x is { title: string; year?: string } => Boolean(x))
+          .slice(0, 8)
+      }
+    }
   } catch (e: unknown) {
-    if (!isMissingCollectionError(e)) {
+    if (!isPocketBaseMissingCollectionError(e)) {
       throw e
     }
     const asset = await pb.collection('project_assets').getOne(id)

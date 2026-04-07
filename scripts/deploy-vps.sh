@@ -29,7 +29,25 @@ else
   # Always clean full Nuxt/Nitro artifacts before production build.
   # Partial cleanup can leave a stale SSR server entry and cause runtime 500:
   # "TypeError: _createApp is not a function".
-  rm -rf .nuxt .output
+  # chmod first: Docker/sudo builds sometimes leave root-owned files and `rm` fails with Permission denied.
+  _me="$(id -un)"
+  for _d in .nuxt .output; do
+    if [ -d "$_d" ] && { [ ! -O "$_d" ] || find "$_d" -not -user "$_me" -print -quit 2>/dev/null | grep -q .; }; then
+      echo "WARN: $_d is not fully owned by $_me (often from sudo npm run build or Docker)."
+      echo "      Fix from the project root, then rerun deploy:"
+      echo "        sudo chown -R \"$_me\" .nuxt .output && rm -rf .nuxt .output"
+      exit 1
+    fi
+  done
+  for _d in .nuxt .output; do
+    [ -d "$_d" ] && chmod -R u+w "$_d" 2>/dev/null || true
+  done
+  if ! rm -rf .nuxt .output; then
+    echo "ERROR: Could not remove .nuxt or .output (permission denied)."
+    echo "Fix ownership on your Mac from the project root, then rerun deploy:"
+    echo "  sudo chown -R \"\$(whoami)\" .nuxt .output && rm -rf .nuxt .output"
+    exit 1
+  fi
   export NUXT_PUBLIC_POCKETBASE_URL
   npm run build
 fi

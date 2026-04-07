@@ -5,7 +5,11 @@
  * 
  * Usage:
  *   node scripts/add-fields-to-collections.js [adminEmail] [adminPassword] [pocketbaseUrlOverride]
+ *
+ * Credentials default from `.env`: POCKETBASE_ADMIN_EMAIL / POCKETBASE_ADMIN_PASSWORD (or NUXT_POCKETBASE_ADMIN_*).
  */
+
+require('dotenv').config()
 
 const PocketBase = require('pocketbase/cjs');
 const { resolvePocketBaseUrlFromEnv } = require('./lib/resolve-pocketbase-url');
@@ -256,8 +260,16 @@ async function main() {
   console.log('🚀 PocketBase Add Fields to Collections\n');
   console.log(`Connecting to PocketBase at: ${POCKETBASE_URL}\n`);
 
-  let adminEmail = process.argv[2];
-  let adminPassword = process.argv[3];
+  let adminEmail =
+    process.argv[2] ||
+    process.env.POCKETBASE_ADMIN_EMAIL ||
+    process.env.NUXT_POCKETBASE_ADMIN_EMAIL ||
+    ''
+  let adminPassword =
+    process.argv[3] ||
+    process.env.POCKETBASE_ADMIN_PASSWORD ||
+    process.env.NUXT_POCKETBASE_ADMIN_PASSWORD ||
+    ''
 
   if (!adminEmail) {
     adminEmail = await question('Admin Email: ');

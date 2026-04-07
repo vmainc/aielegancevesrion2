@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
-      <span class="text-primary font-medium">Step 3 of 5</span>
+      <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
       · Script, treatment, and writing — separate from the Director bible tab.
     </p>
 
@@ -80,7 +80,7 @@
         <template v-if="activeProject.treatment">
           <p class="text-xs text-gray-500 mb-2">
             {{
-              activeProject.treatment.includes('Imported script — creative development')
+              projectStorySatisfiedByScriptImport(activeProject)
                 ? 'Import analysis (comparable films + themes) — full text below'
                 : 'Treatment preview'
             }}
@@ -132,10 +132,24 @@
 </template>
 
 <script setup lang="ts">
+import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
 import { TARGET_LENGTH_OPTIONS } from '~/lib/target-length'
 import type { CreativeProject, ProjectTargetLength } from '~/types/creative-project'
 
 const { activeProjectId, activeProject, updateProject, registerImportedProject } = useCreativeProject()
+const { stepBadge } = useProjectWorkflowStep()
+
+watch(
+  () => activeProject.value,
+  (p) => {
+    if (!import.meta.client || !p) return
+    if (projectStorySatisfiedByScriptImport(p)) {
+      const id = activeProjectId.value
+      if (id) void navigateTo(`/projects/${id}/characters`, { replace: true })
+    }
+  },
+  { immediate: true }
+)
 const { getAuthToken, isAuthenticated } = useAuth()
 const toast = useToast()
 

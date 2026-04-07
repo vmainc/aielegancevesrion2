@@ -45,13 +45,9 @@
         </NuxtLink>
         <p class="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Workflow</p>
         <ol class="space-y-1 text-xs text-gray-500">
-          <li>1. Overview</li>
-          <li>2. Director</li>
-          <li>3. Story</li>
-          <li>4. Characters</li>
-          <li>5. Scenes</li>
-          <li>6. Storyboard</li>
-          <li>7. Video</li>
+          <li v-for="(item, i) in sections" :key="item.path">
+            {{ i + 1 }}. {{ item.label }}
+          </li>
         </ol>
       </div>
       <nav class="flex-1 p-3 space-y-0.5">
@@ -131,9 +127,10 @@
 </template>
 
 <script setup lang="ts">
+import { workflowPathsForProject } from '~/lib/project-workflow'
 import type { CreativeProject, ProjectGoal } from '~/types/creative-project'
 
-withDefaults(
+const props = withDefaults(
   defineProps<{
     project: CreativeProject | null
     projectId: string
@@ -145,15 +142,23 @@ withDefaults(
 const settingsOpen = ref(false)
 const route = useRoute()
 
-const sections = [
-  { path: 'overview', label: 'Overview' },
-  { path: 'director', label: 'Director' },
-  { path: 'story', label: 'Story' },
-  { path: 'characters', label: 'Characters' },
-  { path: 'scenes', label: 'Scenes' },
-  { path: 'storyboard', label: 'Storyboard' },
-  { path: 'video', label: 'Video' }
-] as const
+const sectionLabels: Record<string, string> = {
+  overview: 'Overview',
+  director: 'Director',
+  story: 'Story',
+  characters: 'Characters',
+  scenes: 'Scenes',
+  storyboard: 'Storyboard',
+  video: 'Video'
+}
+
+const sections = computed(() => {
+  const paths = workflowPathsForProject(props.project)
+  return paths.map(path => ({
+    path,
+    label: sectionLabels[path] ?? path
+  }))
+})
 
 const workflowSections = sections
 const toolSections: Array<{ path: string; label: string }> = []
@@ -165,7 +170,7 @@ const isActive = (path: string) => {
 
 const sectionSubtitle = computed(() => {
   const tail = route.path.split('/').pop() || ''
-  const found = sections.find(s => s.path === tail)
+  const found = sections.value.find(s => s.path === tail)
   return found ? `${found.label} · project workspace` : 'Project workspace'
 })
 

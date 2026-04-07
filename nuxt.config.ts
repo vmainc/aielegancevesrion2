@@ -1,4 +1,5 @@
 import { resolvePocketBaseUrlFromEnv } from './lib/resolve-pocketbase-url'
+import { NODE_HTTP_LONG_MS } from './lib/script-wizard-timeouts'
 
 /** Nitro proxies browser /pb → PocketBase so :3000 and /pb share one origin (fixes CORS on login). */
 const pocketbaseProxyTarget = (
@@ -8,22 +9,38 @@ const pocketbaseProxyTarget = (
 ).replace(/\/+$/, '')
 
 export default defineNuxtConfig({
+  modules: ['@nuxtjs/tailwindcss'],
+  tailwindcss: {
+    // PostCSS/Tailwind config only — global CSS is imported from app.vue so the client bundle
+    // includes utilities (see nuxt + Vite 6: nuxt.options.css alone can omit them from emitted CSS).
+    cssPath: false,
+  },
+  // Default bind is often IPv6-only (::1); browsers using http://127.0.0.1:3000 then miss the
+  // dev server and static assets/CSS appear "broken". Listen on all interfaces in dev.
+  devServer: {
+    host: process.env.NUXT_DEV_HOST || '0.0.0.0',
+    ...(process.env.NUXT_DEV_PORT
+      ? { port: Number(process.env.NUXT_DEV_PORT) }
+      : {})
+  },
+  hooks: {
+    // Dev + production Node: default request timeout (~5 min) can kill large PDF uploads + LLM before save.
+    listen (server: import('http').Server) {
+      server.requestTimeout = NODE_HTTP_LONG_MS
+      server.headersTimeout = NODE_HTTP_LONG_MS
+      server.setTimeout(NODE_HTTP_LONG_MS)
+    }
+  },
   // Only when running `npm run dev` — never during `npm run build` / deploy (avoids dev client in .output).
   devtools: { enabled: process.env.npm_lifecycle_event === 'dev' },
   app: {
     head: {
+      htmlAttrs: { lang: 'en' },
       link: [
         { rel: 'icon', type: 'image/png', href: '/favicon.png' },
         { rel: 'apple-touch-icon', href: '/apple-touch-icon.png' },
       ],
     }
-  },
-  css: ['~/assets/css/main.css'],
-  postcss: {
-    plugins: {
-      tailwindcss: {},
-      autoprefixer: {},
-    },
   },
   runtimeConfig: {
     // Server-side only (private)

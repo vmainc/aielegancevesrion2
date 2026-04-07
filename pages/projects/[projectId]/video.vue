@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
-      <span class="text-primary font-medium">Step 5 of 5</span>
+      <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
       · Rendering and assembly (structure only for now).
     </p>
 
@@ -43,6 +43,7 @@
 
 <script setup lang="ts">
 const { activeProject } = useCreativeProject()
+const { stepBadge } = useProjectWorkflowStep()
 const toast = useToast()
 
 const project = activeProject

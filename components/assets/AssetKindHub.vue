@@ -53,6 +53,9 @@
           >
             <div class="min-w-0 flex-1">
               <p class="font-medium text-gray-900">{{ a.title }}</p>
+              <p v-if="scriptSourceLine(a)" class="text-xs font-medium text-primary mt-1">
+                {{ scriptSourceLine(a) }}
+              </p>
               <p v-if="a.projectName" class="text-xs text-gray-500 mt-0.5">Project: {{ a.projectName }}</p>
               <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
               <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
@@ -180,6 +183,7 @@
 </template>
 
 <script setup lang="ts">
+import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import type { ProjectAsset, ProjectAssetKind } from '~/types/project-asset'
 import type { CreativeProject } from '~/types/creative-project'
 
@@ -241,6 +245,29 @@ function formatDate (iso: string) {
   }
 }
 
+/** Where a script file came from + whether AI import was run (scripts hub only). */
+function scriptSourceLine (a: ProjectAsset): string {
+  if (props.kind !== 'script') return ''
+  const meta = a.metadata
+  if (!meta || typeof meta !== 'object') return ''
+  const source = typeof meta.source === 'string' ? meta.source : ''
+  const analysisStatus = typeof meta.analysis_status === 'string' ? meta.analysis_status : ''
+
+  if (source === 'script_import') {
+    if (analysisStatus === 'pending') {
+      return 'Saved from a project · run “treatment & scene import” on Overview when ready'
+    }
+    if (analysisStatus === 'complete') {
+      return 'Saved from a project · AI import complete'
+    }
+    return 'Saved from a project'
+  }
+  if (source === 'script_wizard_upload') {
+    return 'Script Wizard'
+  }
+  return ''
+}
+
 async function fetchItems () {
   if (!import.meta.client || !isAuthenticated.value) {
     loading.value = false
@@ -260,10 +287,7 @@ async function fetchItems () {
     })
     items.value = res.items ?? []
   } catch (e) {
-    loadError.value =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? 'Could not load assets')
-        : 'Could not load assets'
+    loadError.value = formatApiFetchError(e, 'Could not load assets')
   } finally {
     loading.value = false
   }

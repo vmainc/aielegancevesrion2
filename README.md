@@ -10,12 +10,36 @@ A minimal, high-performance AI comparison web application built with Nuxt 3, Vue
 npm install
 ```
 
-2. Start PocketBase server (default: http://127.0.0.1:8090)
-   ```bash
-   ./pocketbase/pocketbase serve
-   ```
+2. **PocketBase executable (local dev)**  
+   The file `pocketbase/pocketbase` is **not committed** (see `.gitignore`). You need the official binary in that folder.
 
-3. Create PocketBase collections:
+   - **macOS (Intel or Apple Silicon):** download the matching zip from [PocketBase releases](https://github.com/pocketbase/pocketbase/releases), unzip, and move the `pocketbase` binary into this project’s `pocketbase/` directory.  
+   - Or from the repo root (adjust version / architecture: **Intel Mac** = `darwin_amd64`, **Apple Silicon** = `darwin_arm64`):
+     ```bash
+     cd pocketbase
+     curl -fsSL -o pb.zip "https://github.com/pocketbase/pocketbase/releases/download/v0.36.7/pocketbase_0.36.7_darwin_amd64.zip"
+     unzip -o pb.zip && chmod +x pocketbase && rm -f pb.zip
+     cd ..
+     ```
+
+3. **Run two processes (required for local dev)**  
+   The **browser** talks to Nuxt on `:3000`. **Server API routes** talk to PocketBase on **`http://127.0.0.1:8090`** — that must be running, or you will see errors like “Cannot reach PocketBase”.
+
+   - **Terminal A — PocketBase**
+     ```bash
+     npm run pb:serve
+     ```
+     Admin UI: [http://127.0.0.1:8090/_/](http://127.0.0.1:8090/_/) · API: [http://127.0.0.1:8090](http://127.0.0.1:8090)
+
+   - **Terminal B — Nuxt**
+     ```bash
+     npm run dev
+     ```
+     App: [http://localhost:3000](http://localhost:3000)
+
+   If your public PocketBase URL is proxied (e.g. `/pb` in production), still set **`NUXT_POCKETBASE_INTERNAL_URL=http://127.0.0.1:8090`** (or **`POCKETBASE_INTERNAL_URL`**) in `.env` so Nitro can reach PocketBase directly on the machine where Node runs.
+
+4. Create PocketBase collections:
 
    **Option A: Automated Setup (Recommended)**
    ```bash
@@ -28,7 +52,7 @@ npm install
 
    The collections needed include the creative workspace (`creative_projects`, scenes, characters, shots), **`project_assets`**, and **`users`** (built-in). See [COLLECTIONS_SETUP.md](./COLLECTIONS_SETUP.md).
 
-4. Set environment variables:
+5. Set environment variables:
    
    Create a `.env` file in the root directory:
    ```bash
@@ -36,6 +60,8 @@ npm install
    # Production (HTTPS): VITE_POCKETBASE_URL=https://aielegance.com/pb
    VITE_POCKETBASE_URL=http://127.0.0.1:8090
    # (Aliases: NUXT_PUBLIC_POCKETBASE_URL or POCKETBASE_URL)
+   # Same machine as dev: point Node at PocketBase directly (avoids /pb-only URLs for API routes)
+   NUXT_POCKETBASE_INTERNAL_URL=http://127.0.0.1:8090
    POCKETBASE_ADMIN_EMAIL=your-admin-email@example.com
    POCKETBASE_ADMIN_PASSWORD=your-admin-password
    
@@ -48,7 +74,7 @@ npm install
    
    See [ENV_SETUP.md](./ENV_SETUP.md) for detailed instructions.
 
-5. Run development server:
+6. Run development server (if not already running from step 3):
 ```bash
 npm run dev
 ```

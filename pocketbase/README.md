@@ -1,6 +1,8 @@
 # PocketBase directory
 
-Place the PocketBase executable in this folder. Data lives under `pb_data/`.
+Place the **PocketBase executable** (`pocketbase`) in this folder — it is **not stored in git** (see root `.gitignore`). Download a release from [pocketbase/pocketbase releases](https://github.com/pocketbase/pocketbase/releases) for your OS/arch, unzip, and put the binary here. From the repo root you can run `npm run pb:serve` once the binary exists.
+
+Data lives under `pb_data/` (also gitignored).
 
 - Admin UI: `http://127.0.0.1:8090/_/`
 - API base (local): `http://127.0.0.1:8090`

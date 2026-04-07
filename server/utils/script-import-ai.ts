@@ -1,4 +1,6 @@
+import { OPENROUTER_ENRICH_MS, OPENROUTER_THREE_ACT_MS } from '~/lib/script-wizard-timeouts'
 import { defaultDirector } from '~/lib/director-presets'
+import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import type { ProjectDirector } from '~/types/creative-project'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
@@ -132,6 +134,7 @@ export async function enrichScriptWithAi (input: {
     return fallbackEnrichment(input)
   }
 
+  try {
   const system = `You are a senior film development executive and story analyst. Reply with ONLY valid JSON (no markdown code fences), shape:
 {
   "logline": "2–4 sentence pitch: who wants what, obstacle, stakes.",
@@ -168,16 +171,20 @@ ${input.sceneOutline.slice(0, 12000)}`
     max_tokens: 8192
   })
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey.trim()}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://aielegance.com',
-      'X-Title': 'AI Elegance Script Import'
+  const res = await fetchWithTimeout(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://aielegance.com',
+        'X-Title': 'AI Elegance Script Import'
+      },
+      body: JSON.stringify(body)
     },
-    body: JSON.stringify(body)
-  })
+    OPENROUTER_ENRICH_MS
+  )
 
   const raw = await res.text()
   if (!res.ok) {
@@ -284,6 +291,10 @@ ${input.sceneOutline.slice(0, 12000)}`
     sceneSummaries,
     characterRoles
   }
+  } catch (err: unknown) {
+    console.warn('[script-import-ai] enrichScriptWithAi failed:', err)
+    return fallbackEnrichment(input)
+  }
 }
 
 /** Map AI enrichment to DB fields (synopsis + treatment prose). */
@@ -295,6 +306,14 @@ export function enrichmentToProjectFields (e: ScriptAiEnrichment): {
     buildSynopsisField(e.logline, e.onePageSynopsis) || e.summary
   const treatment = buildTreatmentFromCreative(e.comparableFilms, e.themeExploration)
   return { synopsis, treatment }
+}
+
+/** For Script Wizard phase 1 + OMDb: structured comps before treatment prose exists. */
+export function comparableTitlesFromEnrichment (e: ScriptAiEnrichment): Array<{ title: string; year?: string }> {
+  return e.comparableFilms.slice(0, 8).map(f => ({
+    title: f.title,
+    year: f.year?.trim() ? f.year.trim() : undefined
+  }))
 }
 
 /**
@@ -351,16 +370,20 @@ ${input.sceneOutline.slice(0, 10000)}`
   })
 
   try {
-    const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey.trim()}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://aielegance.com',
-        'X-Title': 'AI Elegance Script Wizard Acts'
+    const res = await fetchWithTimeout(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${apiKey.trim()}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://aielegance.com',
+          'X-Title': 'AI Elegance Script Wizard Acts'
+        },
+        body: JSON.stringify(body)
       },
-      body: JSON.stringify(body)
-    })
+      OPENROUTER_THREE_ACT_MS
+    )
     const raw = await res.text()
     if (!res.ok) return ''
     const parsedOuter = JSON.parse(raw) as { choices?: Array<{ message?: { content?: string } }> }

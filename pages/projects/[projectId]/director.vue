@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
-      <span class="text-primary font-medium">Step 2 of 5</span>
+      <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
       · Creative bible and continuity — separate from story drafting.
     </p>
 
@@ -156,10 +156,10 @@
         ← Overview
       </NuxtLink>
       <NuxtLink
-        :to="`/projects/${projectId}/story`"
+        :to="`/projects/${projectId}/${storySatisfiedByImport ? 'characters' : 'story'}`"
         class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
       >
-        Continue to Story →
+        {{ storySatisfiedByImport ? 'Continue to Characters →' : 'Continue to Story →' }}
       </NuxtLink>
     </div>
   </div>
@@ -167,13 +167,17 @@
 
 <script setup lang="ts">
 import { DIRECTOR_PRESETS, defaultDirector, presetToDirector } from '~/lib/director-presets'
+import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
 import type { ProjectDirector } from '~/types/creative-project'
 
 const { activeProject, activeProjectId, updateProject } = useCreativeProject()
+const { stepBadge } = useProjectWorkflowStep()
 const toast = useToast()
 
 const projectId = activeProjectId
 const project = activeProject
+
+const storySatisfiedByImport = computed(() => projectStorySatisfiedByScriptImport(project.value))
 
 const continuityMemLocal = ref('')
 const directorForm = reactive<ProjectDirector>(defaultDirector())

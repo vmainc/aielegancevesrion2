@@ -2,7 +2,7 @@
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">Scenes</span>
-      · On import, Claude reads your screenplay and breaks it into shootable scenes (slug, summary, script excerpt). Refine the board on the Storyboard tab — including image prompts per shot.
+      · Build your scene list manually (title + description below) or import a screenplay so Claude can split it into slugs, summaries, and excerpts. Refine shots on the Storyboard tab.
     </p>
 
     <div
@@ -19,6 +19,52 @@
     </template>
 
     <template v-else>
+      <div
+        class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-6 shadow-sm"
+      >
+        <h2 class="text-base font-semibold text-gray-900 mb-1">Add a scene</h2>
+        <p class="text-sm text-gray-600 mb-4">
+          You don’t need a script — give each beat a title and a short description. They appear in order below and on Storyboard.
+        </p>
+        <div class="space-y-3 max-w-lg">
+          <div>
+            <label for="scene-title" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+            <input
+              id="scene-title"
+              v-model="newSceneTitle"
+              type="text"
+              maxlength="2000"
+              placeholder="e.g. INT. COFFEE SHOP — DAY"
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+              :disabled="addingScene"
+            >
+          </div>
+          <div>
+            <label for="scene-desc" class="block text-sm font-medium text-gray-700 mb-1">Description</label>
+            <textarea
+              id="scene-desc"
+              v-model="newSceneDescription"
+              rows="3"
+              maxlength="5000"
+              placeholder="What happens in this scene — beats, tone, or dialogue you care about."
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+              :disabled="addingScene"
+            />
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+              :disabled="addingScene || !newSceneTitle.trim()"
+              @click="addScene"
+            >
+              {{ addingScene ? 'Adding…' : 'Add scene' }}
+            </button>
+          </div>
+          <p v-if="addSceneError" class="text-sm text-red-700">{{ addSceneError }}</p>
+        </div>
+      </div>
+
       <div v-if="pending" class="text-sm text-gray-500 py-6">Loading scenes…</div>
       <div
         v-else-if="loadError"
@@ -71,7 +117,7 @@
         </ul>
       </template>
       <div v-else class="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-600">
-        No scenes yet. Import a script into this project to populate the scene list.
+        No scenes in the list yet. Add one with the form above, or import a script from the project Overview.
       </div>
     </template>
 
@@ -93,6 +139,8 @@
 </template>
 
 <script setup lang="ts">
+import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+
 const PB_ID = /^[a-z0-9]{15}$/
 
 type SceneListRow = {
@@ -105,12 +153,18 @@ type SceneListRow = {
 
 const { activeProjectId, activeProject } = useCreativeProject()
 const { getAuthToken, isAuthenticated } = useAuth()
+const toast = useToast()
 
 const projectId = activeProjectId
 
 const scenes = ref<SceneListRow[]>([])
 const loadError = ref<string | null>(null)
 const pending = ref(false)
+
+const newSceneTitle = ref('')
+const newSceneDescription = ref('')
+const addingScene = ref(false)
+const addSceneError = ref<string | null>(null)
 
 const expandedId = ref<string | null>(null)
 const detailBody = ref('')
@@ -136,14 +190,40 @@ async function loadScenes () {
     })
     scenes.value = res.scenes || []
   } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message || 'Could not load scenes')
-        : 'Could not load scenes'
-    loadError.value = msg
+    loadError.value = formatApiFetchError(e, 'Could not load scenes')
     scenes.value = []
   } finally {
     pending.value = false
+  }
+}
+
+async function addScene () {
+  const title = newSceneTitle.value.trim()
+  if (!title || !canLoadCloud.value) return
+  const token = getAuthToken()
+  if (!token) {
+    addSceneError.value = 'Please sign in again.'
+    return
+  }
+  addingScene.value = true
+  addSceneError.value = null
+  try {
+    await $fetch(`/api/projects/${projectId.value}/scenes`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        heading: title,
+        description: newSceneDescription.value.trim()
+      }
+    })
+    newSceneTitle.value = ''
+    newSceneDescription.value = ''
+    toast.showToast('Scene added.', 'success')
+    await loadScenes()
+  } catch (e: unknown) {
+    addSceneError.value = formatApiFetchError(e, 'Could not add scene')
+  } finally {
+    addingScene.value = false
   }
 }
 
@@ -184,6 +264,9 @@ async function toggleExpand (id: string) {
 watch(
   [canLoadCloud, projectId],
   ([ok]) => {
+    newSceneTitle.value = ''
+    newSceneDescription.value = ''
+    addSceneError.value = null
     if (ok) void loadScenes()
     else {
       scenes.value = []

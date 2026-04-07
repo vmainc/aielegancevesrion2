@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
-      <span class="text-primary font-medium">Step 1 of 5</span>
+      <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
       · Your synopsis lives here; director bible and continuity are on the Director tab.
     </p>
 
@@ -39,14 +39,108 @@
       >
         {{ project?.synopsis || project?.conceptNotes }}
       </div>
-      <p
-        v-if="project?.treatment?.includes('Imported script — creative development')"
-        class="text-sm text-gray-500 mt-6 pt-6 border-t border-gray-100"
-      >
-        Comparable films and theme notes:
-        <NuxtLink :to="`/projects/${projectId}/story`" class="text-primary font-medium hover:underline">Story → Treatment</NuxtLink>
-      </p>
+
+      <template v-if="showImportedScriptOverview">
+        <div class="border-t border-gray-100 pt-6 mt-6">
+          <h2 class="text-lg font-semibold text-gray-900 mb-2">Three-act thematic breakdown</h2>
+          <p class="text-sm text-gray-600 mb-3">
+            Same structure as Script Wizard: how the theme moves across acts after import.
+          </p>
+          <pre
+            v-if="threeActBreakdown"
+            class="whitespace-pre-wrap font-sans text-gray-800 text-sm leading-relaxed rounded-lg border border-gray-200 bg-gray-50 p-4"
+          >{{ threeActBreakdown }}</pre>
+          <p v-else class="text-sm text-gray-500">
+            No act breakdown stored yet. Re-import the script from Overview (screenplay upload) to regenerate analysis.
+          </p>
+        </div>
+
+        <div class="border-t border-gray-100 pt-6 mt-6">
+          <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
+            <h2 class="text-lg font-semibold text-gray-900">Comparable films</h2>
+            <button
+              v-if="canLoadImportedMovies"
+              type="button"
+              class="px-3 py-1.5 text-sm rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-900 disabled:opacity-50"
+              :disabled="loadingOverviewMovies"
+              @click="loadOverviewMovies"
+            >
+              {{ loadingOverviewMovies ? 'Refreshing…' : 'Refresh' }}
+            </button>
+          </div>
+          <p class="text-sm text-gray-600 mb-4">
+            Posters and ratings from OMDb, using titles extracted from your treatment — mirrors Script Wizard.
+          </p>
+          <p
+            v-if="!canLoadImportedMovies"
+            class="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4"
+          >
+            Sign in with a cloud-saved project to load film metadata.
+          </p>
+          <div v-else-if="loadingOverviewMovies" class="py-4">
+            <FilmReelLoader
+              size="sm"
+              label="Cueing comparable films"
+              sub-label="Looking up titles from your analysis…"
+            />
+          </div>
+          <p v-else-if="overviewMoviesError" class="text-sm text-red-700">{{ overviewMoviesError }}</p>
+          <ul v-else-if="overviewMovies.length" class="grid sm:grid-cols-2 gap-4">
+            <li
+              v-for="m in overviewMovies"
+              :key="m.imdbId || `${m.title}-${m.year}`"
+              class="rounded-xl border border-gray-200 bg-gray-50 p-4"
+            >
+              <div class="flex gap-3">
+                <img
+                  v-if="m.poster && m.poster !== 'N/A'"
+                  :src="m.poster"
+                  alt=""
+                  class="w-16 h-24 object-cover rounded border border-gray-200 shrink-0"
+                >
+                <div class="min-w-0">
+                  <p class="font-semibold text-gray-900 truncate">{{ m.title }}</p>
+                  <p class="text-xs text-gray-500 mb-1">{{ m.year || '—' }} · {{ m.genre || '—' }}</p>
+                  <p class="text-xs text-gray-600 line-clamp-2 mb-1">{{ m.plot || 'No plot from OMDb.' }}</p>
+                  <p class="text-xs text-gray-500">IMDb: {{ m.imdbRating || '—' }} · RT: {{ m.rottenTomatoes || '—' }}</p>
+                </div>
+              </div>
+            </li>
+          </ul>
+          <p v-else class="text-sm text-gray-500">No comparable films resolved yet. Set OMDb in env, or tap Refresh after import.</p>
+          <p v-if="overviewCandidates.length && !overviewMovies.length && !loadingOverviewMovies" class="text-xs text-gray-500 mt-3">
+            Extracted titles: {{ overviewCandidates.map(c => c.title).join(', ') }}
+          </p>
+        </div>
+
+        <p class="text-sm text-gray-500 mt-6 pt-6 border-t border-gray-100">
+          <template v-if="showImportedScriptOverview">
+            Synopsis and treatment came from your screenplay import — the Story step is skipped in the sidebar. Continue with
+            <NuxtLink :to="`/projects/${projectId}/characters`" class="text-primary font-medium hover:underline">Characters</NuxtLink>.
+          </template>
+          <template v-else>
+            Full treatment text and AI regeneration:
+            <NuxtLink :to="`/projects/${projectId}/story`" class="text-primary font-medium hover:underline">Story</NuxtLink>
+          </template>
+        </p>
+      </template>
     </section>
+
+    <ProjectOverviewScriptImportPanel
+      v-if="canCloudImport && hasConcept && !showGeneratorForm"
+      v-model:aspect="overviewAspect"
+      v-model:goal="overviewGoal"
+      :show-aspect-goal="false"
+      :importing="overviewImporting"
+      :analyzing="overviewAnalyzing"
+      :analyze-enabled="Boolean(scriptWorkflowAssetId)"
+      :error="overviewImportError"
+      :has-file="Boolean(overviewImportFile)"
+      heading="Screenplay"
+      @file-change="onOverviewImportFile"
+      @import-click="importScriptFromOverview"
+      @analyze-click="runScriptAnalyzeFromOverview"
+    />
 
     <!-- Saved concept: actions (generator hidden until they choose "different AI") -->
     <div
@@ -90,7 +184,7 @@
             {{
               hasConcept
                 ? 'Your saved concept stays below until you pick a new one.'
-                : 'Describe your idea, pick one or more models, and compare results.'
+                : 'Describe your idea, pick one or more models, compare results — or import a screenplay below.'
             }}
           </p>
         </div>
@@ -113,10 +207,42 @@
         </p>
       </ClientOnly>
 
+      <ProjectOverviewScriptImportPanel
+        v-if="canCloudImport"
+        v-model:aspect="overviewAspect"
+        v-model:goal="overviewGoal"
+        :show-aspect-goal="false"
+        :importing="overviewImporting"
+        :analyzing="overviewAnalyzing"
+        :analyze-enabled="Boolean(scriptWorkflowAssetId)"
+        :error="overviewImportError"
+        :has-file="Boolean(overviewImportFile)"
+        heading="Or import a screenplay"
+        @file-change="onOverviewImportFile"
+        @import-click="importScriptFromOverview"
+        @analyze-click="runScriptAnalyzeFromOverview"
+      />
+      <ClientOnly>
+        <p
+          v-if="isAuthenticated && !canCloudImport"
+          class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4"
+        >
+          Sign in and use a project from
+          <NuxtLink to="/projects" class="font-medium text-primary hover:underline">Projects</NuxtLink>
+          to import a screenplay into this workspace.
+        </p>
+      </ClientOnly>
+
       <div v-if="modelsLoadError" class="text-sm text-red-700 mb-4">
         {{ modelsLoadError }}
       </div>
 
+      <p
+        v-if="canCloudImport"
+        class="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-3"
+      >
+        Generate from a prompt
+      </p>
       <div class="flex justify-between items-center gap-2 mb-2">
         <label class="text-sm font-medium text-gray-700">Your idea</label>
         <PromptEnhanceButton v-model="conceptPrompt" context="concept" />
@@ -219,13 +345,12 @@
 
     <h2 class="text-lg font-semibold text-gray-900 mb-3">Quick actions</h2>
     <div class="flex flex-wrap gap-3">
-      <button
-        type="button"
-        class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg text-sm font-medium transition-colors"
-        @click="runPlaceholder('Add Scene')"
+      <NuxtLink
+        :to="`/projects/${projectId}/scenes`"
+        class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
       >
         Add Scene
-      </button>
+      </NuxtLink>
       <NuxtLink
         :to="`/projects/${projectId}/director`"
         class="px-4 py-2 border border-gray-200 text-gray-800 hover:border-primary/50 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
@@ -233,21 +358,48 @@
         Director →
       </NuxtLink>
       <NuxtLink
+        v-if="!showImportedScriptOverview"
         :to="`/projects/${projectId}/story`"
         class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
       >
         Story →
+      </NuxtLink>
+      <NuxtLink
+        v-else
+        :to="`/projects/${projectId}/characters`"
+        class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
+      >
+        Characters →
       </NuxtLink>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
+import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-from-treatment'
+import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { formatStoredConceptNotes } from '~/lib/format-stored-concept'
+import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { ConceptGeneratorResultItem, GeneratedConceptItem } from '~/types/concept-generator'
+import type { CreativeProject } from '~/types/creative-project'
+import type { ProjectAsset } from '~/types/project-asset'
 
-const { activeProject, activeProjectId, updateProject } = useCreativeProject()
+type OverviewComparableCandidate = { title: string; year?: string }
+type OverviewOmdbMovie = {
+  title: string
+  year?: string
+  imdbId?: string
+  genre?: string
+  plot?: string
+  poster?: string
+  imdbRating?: string
+  rottenTomatoes?: string
+}
+
+const { activeProject, activeProjectId, updateProject, registerImportedProject } = useCreativeProject()
 const { isAuthenticated, getAuthToken } = useAuth()
+const { stepBadge } = useProjectWorkflowStep()
 const toast = useToast()
 
 const PB_ID = /^[a-z0-9]{15}$/
@@ -255,7 +407,162 @@ const PB_ID = /^[a-z0-9]{15}$/
 const projectId = activeProjectId
 const project = activeProject
 
+const overviewCandidates = ref<OverviewComparableCandidate[]>([])
+const overviewMovies = ref<OverviewOmdbMovie[]>([])
+const loadingOverviewMovies = ref(false)
+const overviewMoviesError = ref('')
+
+const showImportedScriptOverview = computed(() => projectStorySatisfiedByScriptImport(project.value))
+
+const threeActBreakdown = computed(() =>
+  extractThreeActBreakdownFromTreatment(project.value?.treatment || '')
+)
+
+const canLoadImportedMovies = computed(
+  () =>
+    isAuthenticated.value &&
+    PB_ID.test(projectId.value) &&
+    showImportedScriptOverview.value
+)
+
 const isLocalProject = computed(() => !PB_ID.test(projectId.value))
+
+const canCloudImport = computed(() => isAuthenticated.value && PB_ID.test(projectId.value))
+
+const overviewImportFile = ref<File | null>(null)
+const overviewImporting = ref(false)
+const overviewAnalyzing = ref(false)
+const overviewImportError = ref('')
+const scriptWorkflowAssetId = ref('')
+const overviewAspect = ref<'16:9' | '9:16' | '1:1'>('16:9')
+const overviewGoal = ref<'film' | 'social' | 'commercial' | 'other'>('film')
+
+async function syncScriptWorkflowAssetFromServer () {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token || !PB_ID.test(id)) {
+    scriptWorkflowAssetId.value = ''
+    return
+  }
+  try {
+    const res = await $fetch<{ items: ProjectAsset[] }>(`/api/projects/${id}/assets`, {
+      params: { kind: 'script' },
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    let best = ''
+    let bestCreated = ''
+    for (const a of res.items || []) {
+      const src =
+        a.metadata && typeof a.metadata === 'object' && a.metadata !== null && 'source' in a.metadata
+          ? String((a.metadata as { source?: string }).source)
+          : ''
+      if (src !== 'script_import') continue
+      const c = a.created || ''
+      if (!bestCreated || c >= bestCreated) {
+        bestCreated = c
+        best = a.id
+      }
+    }
+    scriptWorkflowAssetId.value = best
+  } catch {
+    /* ignore */
+  }
+}
+
+watch(
+  () => projectId.value,
+  () => {
+    void syncScriptWorkflowAssetFromServer()
+  },
+  { immediate: true }
+)
+
+function onOverviewImportFile (e: Event) {
+  const input = e.target as HTMLInputElement
+  overviewImportFile.value = input.files?.[0] || null
+}
+
+async function importScriptFromOverview () {
+  const id = projectId.value
+  const token = getAuthToken()
+  const file = overviewImportFile.value
+  if (!id || !token || !file) return
+  overviewImporting.value = true
+  overviewImportError.value = ''
+  try {
+    const form = new FormData()
+    form.append('file', file)
+    const res = await $fetch<{
+      project: CreativeProject
+      scriptAsset: { ok: boolean; message?: string; id?: string }
+      upload?: { previewSceneCount: number; parseWarning?: string }
+    }>(`/api/projects/${id}/import-script`, {
+      method: 'POST',
+      body: form,
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    })
+    registerImportedProject(res.project)
+    overviewImportFile.value = null
+    if (res.scriptAsset?.ok && res.scriptAsset.id) {
+      scriptWorkflowAssetId.value = res.scriptAsset.id
+    } else {
+      await syncScriptWorkflowAssetFromServer()
+    }
+    toast.showToast(
+      'Screenplay saved. It appears under Assets → Scripts (sidebar). Run “Run treatment & scene import” on Overview when you want AI synopsis, scenes, and characters.',
+      'success'
+    )
+    if (res.upload?.parseWarning) {
+      toast.showToast(`Parse preview: ${res.upload.parseWarning}`, 'info')
+    }
+    if (res.scriptAsset && !res.scriptAsset.ok) {
+      toast.showToast(
+        `Could not save file to Assets: ${res.scriptAsset.message || 'unknown error'}`,
+        'error'
+      )
+    }
+  } catch (e: unknown) {
+    overviewImportError.value = formatApiFetchError(e, 'Save failed')
+    toast.showToast(overviewImportError.value, 'error')
+  } finally {
+    overviewImporting.value = false
+  }
+}
+
+async function runScriptAnalyzeFromOverview () {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  overviewAnalyzing.value = true
+  overviewImportError.value = ''
+  try {
+    const body = scriptWorkflowAssetId.value ? { assetId: scriptWorkflowAssetId.value } : {}
+    const res = await $fetch<{
+      project: CreativeProject
+      scriptAsset: { ok: boolean; message?: string; id?: string }
+    }>(`/api/projects/${id}/script/analyze`, {
+      method: 'POST',
+      body,
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    })
+    registerImportedProject(res.project)
+    if (res.scriptAsset?.ok && res.scriptAsset.id) {
+      scriptWorkflowAssetId.value = res.scriptAsset.id
+    }
+    toast.showToast('AI import finished — opening Characters.', 'success')
+    if (res.scriptAsset && !res.scriptAsset.ok) {
+      toast.showToast(res.scriptAsset.message || 'Project updated; asset notes may be incomplete.', 'info')
+    }
+    await navigateTo(`/projects/${id}/characters`)
+  } catch (e: unknown) {
+    overviewImportError.value = formatApiFetchError(e, 'AI import failed')
+    toast.showToast(overviewImportError.value, 'error')
+  } finally {
+    overviewAnalyzing.value = false
+  }
+}
 
 const modelOptions = ref<Array<{ id: string; label: string }>>([])
 const modelsLoadError = ref('')
@@ -277,6 +584,44 @@ const hasConcept = computed(() => {
 watch(hasConcept, (has) => {
   showGeneratorForm.value = !has
 }, { immediate: true })
+
+async function loadOverviewMovies () {
+  const id = projectId.value
+  const token = getAuthToken()
+  overviewMoviesError.value = ''
+  if (!id || !token || !PB_ID.test(id) || !showImportedScriptOverview.value) {
+    overviewCandidates.value = []
+    overviewMovies.value = []
+    return
+  }
+  loadingOverviewMovies.value = true
+  try {
+    const res = await $fetch<{ candidates: OverviewComparableCandidate[]; movies: OverviewOmdbMovie[] }>(
+      `/api/projects/${id}/script-wizard/movies`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    overviewCandidates.value = res.candidates || []
+    overviewMovies.value = res.movies || []
+  } catch (e: unknown) {
+    overviewMoviesError.value = formatApiFetchError(e, 'Could not load comparable films')
+  } finally {
+    loadingOverviewMovies.value = false
+  }
+}
+
+watch(
+  () => [projectId.value, project.value?.treatment, canLoadImportedMovies.value] as const,
+  () => {
+    if (canLoadImportedMovies.value) {
+      void loadOverviewMovies()
+    } else {
+      overviewCandidates.value = []
+      overviewMovies.value = []
+      overviewMoviesError.value = ''
+    }
+  },
+  { immediate: true }
+)
 
 const canGenerate = computed(() => {
   if (generating.value) return false
@@ -417,7 +762,4 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
   }
 }
 
-function runPlaceholder (label: string) {
-  toast.showToast(`${label} is not wired yet — coming soon.`, 'info')
-}
 </script>

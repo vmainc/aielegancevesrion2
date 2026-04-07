@@ -9,9 +9,12 @@
  * Or run interactively (it will prompt for credentials):
  *   node scripts/setup-collections.js
  * 
- * Environment variables:
- *   VITE_POCKETBASE_URL, NUXT_PUBLIC_POCKETBASE_URL, or POCKETBASE_URL (default: http://127.0.0.1:8090)
+ * Environment variables (loaded from `.env` in project root via dotenv):
+ *   POCKETBASE_URL / NUXT_PUBLIC_POCKETBASE_URL / VITE_POCKETBASE_URL — PocketBase API base (no trailing slash)
+ *   POCKETBASE_ADMIN_EMAIL, POCKETBASE_ADMIN_PASSWORD (or NUXT_POCKETBASE_ADMIN_*)
  */
+
+require('dotenv').config()
 
 const PocketBase = require('pocketbase/cjs');
 const { resolvePocketBaseUrlFromEnv } = require('./lib/resolve-pocketbase-url');
@@ -421,7 +424,7 @@ async function createCollections(adminEmail, adminPassword) {
             {
               name: 'project',
               type: 'relation',
-              required: true,
+              required: false,
               options: {
                 collectionId: creativeProjectsId,
                 cascadeDelete: true,
@@ -569,8 +572,16 @@ async function main() {
   console.log('🚀 PocketBase Collection Setup\n');
   console.log(`Connecting to PocketBase at: ${POCKETBASE_URL}\n`);
 
-  let adminEmail = process.argv[2];
-  let adminPassword = process.argv[3];
+  let adminEmail =
+    process.argv[2] ||
+    process.env.POCKETBASE_ADMIN_EMAIL ||
+    process.env.NUXT_POCKETBASE_ADMIN_EMAIL ||
+    ''
+  let adminPassword =
+    process.argv[3] ||
+    process.env.POCKETBASE_ADMIN_PASSWORD ||
+    process.env.NUXT_POCKETBASE_ADMIN_PASSWORD ||
+    ''
 
   if (!adminEmail) {
     adminEmail = await question('Admin Email: ');

@@ -1,7 +1,7 @@
 <template>
-  <div class="max-w-3xl">
+  <div class="max-w-4xl">
     <p class="text-sm text-gray-500 mb-6">
-      <span class="text-primary font-medium">Step 4 of 5</span>
+      <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
       · Characters from script import; attach reference art under Assets.
     </p>
 
@@ -46,30 +46,46 @@
           </p>
         </div>
 
-        <div class="rounded-xl border border-gray-200 bg-gray-50/80 p-5 sm:p-6 mb-8">
-          <h3 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-4">
-            Cast ({{ characters.length }})
-          </h3>
-          <ul class="space-y-5">
-            <li
-              v-for="c in characters"
-              :key="c.id"
-              class="border-b border-gray-200 last:border-0 last:pb-0 pb-5 last:mb-0"
+        <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden mb-8">
+          <div class="px-4 sm:px-5 py-4 border-b border-gray-200 bg-gray-50/90">
+            <h3 class="text-sm font-semibold text-gray-900">
+              Characters ({{ characters.length }})
+            </h3>
+            <p class="text-xs text-gray-500 mt-0.5">
+              Name and role description from script import (editable in PocketBase if needed).
+            </p>
+          </div>
+          <div class="overflow-x-auto">
+            <table
+              class="w-full text-sm text-left border-collapse"
+              aria-label="Characters in this project"
             >
-              <div class="flex flex-wrap items-baseline gap-x-2 gap-y-1 mb-1">
-                <span class="font-semibold text-gray-900">{{ c.name }}</span>
-                <span
-                  v-if="c.screenSharePercent != null"
-                  class="text-xs font-medium text-primary tabular-nums"
+              <thead>
+                <tr class="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600">
+                  <th scope="col" class="px-4 sm:px-5 py-3 align-bottom w-[min(11rem,26%)]">
+                    Name
+                  </th>
+                  <th scope="col" class="px-4 sm:px-5 py-3 align-bottom">
+                    Description
+                  </th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-gray-100">
+                <tr
+                  v-for="c in characters"
+                  :key="c.id"
+                  class="hover:bg-gray-50/70 transition-colors"
                 >
-                  {{ c.screenSharePercent.toFixed(1) }}% share
-                </span>
-              </div>
-              <p class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                {{ c.roleDescription || '—' }}
-              </p>
-            </li>
-          </ul>
+                  <td class="px-4 sm:px-5 py-3 align-top font-semibold text-gray-900">
+                    {{ c.name }}
+                  </td>
+                  <td class="px-4 sm:px-5 py-3 align-top text-gray-700 leading-relaxed">
+                    <span class="whitespace-pre-wrap break-words">{{ c.roleDescription || '—' }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </template>
       <div
@@ -114,6 +130,7 @@ const PB_ID = /^[a-z0-9]{15}$/
 
 const { activeProjectId, activeProject, withProjectQuery } = useCreativeProject()
 const { getAuthToken, isAuthenticated } = useAuth()
+const { stepBadge } = useProjectWorkflowStep()
 
 const projectId = activeProjectId
 

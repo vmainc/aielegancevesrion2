@@ -2,6 +2,7 @@ import { createError, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
+import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
 import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 
 const ASPECT = new Set<ProjectAspectRatio>(['16:9', '9:16', '1:1'])
@@ -47,8 +48,7 @@ export default defineEventHandler(async (event) => {
     }
   } catch (e: unknown) {
     const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : String(e)
-    const status = e && typeof e === 'object' && 'status' in e ? Number((e as { status?: number }).status || 0) : 0
-    if (status === 404 || /missing collection context|wasn't found|not found|missing collection/i.test(msg)) {
+    if (isPocketBaseMissingCollectionError(e)) {
       throw createError({
         statusCode: 503,
         message: 'creative_projects collection is missing. Run: node scripts/setup-collections.js'

@@ -39,10 +39,19 @@ export function pbRecordToProjectAsset (
   }
 
   const meta = record.metadata
-  const metadata =
-    meta && typeof meta === 'object' && !Array.isArray(meta)
-      ? (meta as Record<string, unknown>)
-      : null
+  let metadata: Record<string, unknown> | null = null
+  if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+    metadata = meta as Record<string, unknown>
+  } else if (typeof meta === 'string' && meta.trim()) {
+    try {
+      const parsed = JSON.parse(meta) as unknown
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        metadata = parsed as Record<string, unknown>
+      }
+    } catch {
+      metadata = null
+    }
+  }
 
   return {
     id: String(record.id ?? ''),

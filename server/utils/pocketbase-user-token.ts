@@ -23,6 +23,8 @@ export async function getPocketBaseUserIdFromRequest (event: H3Event): Promise<s
     throw createError({ statusCode: 500, message: 'PocketBase URL not configured' })
   }
 
+  const unreachableMessage = `Cannot reach PocketBase at ${base}. Start PocketBase (e.g. \`./pocketbase/pocketbase serve\`) or set NUXT_POCKETBASE_INTERNAL_URL / POCKETBASE_INTERNAL_URL to its HTTP URL (usually http://127.0.0.1:8090). The Nuxt app can use a /pb proxy in the browser, but API routes must reach PocketBase directly.`
+
   try {
     const res = await fetch(`${base}/api/collections/users/auth-refresh`, {
       method: 'POST',
@@ -48,10 +50,21 @@ export async function getPocketBaseUserIdFromRequest (event: H3Event): Promise<s
       throw new Error('No user id in auth response')
     }
     return id
-  } catch (e: any) {
+  } catch (e: unknown) {
+    if (e && typeof e === 'object' && 'statusCode' in e) {
+      throw e
+    }
+    const msg = e instanceof Error ? e.message : String(e)
+    if (isNodeFetchUnreachableError(msg)) {
+      throw createError({ statusCode: 503, message: unreachableMessage })
+    }
     throw createError({
       statusCode: 401,
-      message: e?.message || 'Invalid or expired session'
+      message: msg || 'Invalid or expired session'
     })
   }
+}
+
+function isNodeFetchUnreachableError (msg: string): boolean {
+  return /fetch failed|failed to fetch|econnrefused|econnreset|enotfound|network|socket|connect/i.test(msg)
 }
