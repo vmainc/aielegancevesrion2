@@ -30,6 +30,7 @@ export default defineNuxtConfig({
     openrouterApiKey:
       process.env.NUXT_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY,
     openaiApiKey: process.env.OPENAI_API_KEY,
+    omdbApiKey: process.env.OMDB_API_KEY || '7d5b2e8e',
     pocketbaseAdminEmail:
       process.env.NUXT_POCKETBASE_ADMIN_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL,
     pocketbaseAdminPassword:

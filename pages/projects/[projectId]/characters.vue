@@ -14,8 +14,8 @@
 
     <template v-else-if="!canLoadCloud">
       <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 mb-6">
-        Character breakdown and screen-share charts are available for cloud-saved projects after you sign in.
-        Local-only projects keep using Assets for references.
+        Character breakdown and screen-share charts are available for account projects.
+        Sign in and open a cloud project to load this data.
       </div>
     </template>
 
@@ -124,10 +124,8 @@ const pending = ref(false)
 const canLoadCloud = computed(
   () =>
     !!activeProject.value &&
-    activeProject.value.source === 'pocketbase' &&
     PB_ID.test(projectId.value) &&
-    isAuthenticated.value &&
-    !!getAuthToken()
+    isAuthenticated.value
 )
 
 function buildPieSlices (list: CreativeCharacter[]): { label: string; percent: number; color: string }[] {
@@ -178,10 +176,11 @@ const pieSlices = computed(() => buildPieSlices(characters.value))
 
 async function loadCharacters () {
   if (!canLoadCloud.value) return
+  const token = getAuthToken()
+  if (!token) return
   loadError.value = null
   pending.value = true
   try {
-    const token = getAuthToken()
     const res = await $fetch<{ characters: CreativeCharacter[] }>(
       `/api/projects/${projectId.value}/characters`,
       { headers: { Authorization: `Bearer ${token}` } }

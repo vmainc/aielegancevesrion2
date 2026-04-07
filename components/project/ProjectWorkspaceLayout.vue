@@ -56,7 +56,19 @@
       </div>
       <nav class="flex-1 p-3 space-y-0.5">
         <NuxtLink
-          v-for="item in sections"
+          v-for="item in workflowSections"
+          :key="item.path"
+          :to="`/projects/${projectId}/${item.path}`"
+          class="block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+          :class="isActive(item.path)
+            ? 'bg-primary/15 text-primary border border-primary/30'
+            : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'"
+        >
+          {{ item.label }}
+        </NuxtLink>
+        <div class="mt-4 px-3 text-[11px] uppercase tracking-wide text-gray-500">Tools</div>
+        <NuxtLink
+          v-for="item in toolSections"
           :key="item.path"
           :to="`/projects/${projectId}/${item.path}`"
           class="block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
@@ -139,8 +151,11 @@ const sections = [
   { path: 'scenes', label: 'Scenes' },
   { path: 'storyboard', label: 'Storyboard' },
   { path: 'video', label: 'Video' },
-  { path: 'analysis', label: 'Analysis' }
+  { path: 'analysis', label: 'Script Wizard' }
 ] as const
+
+const workflowSections = sections.filter(s => s.path !== 'analysis')
+const toolSections = sections.filter(s => s.path === 'analysis')
 
 const isActive = (path: string) => {
   const tail = route.path.split('/').pop() || ''

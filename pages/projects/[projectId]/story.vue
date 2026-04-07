@@ -37,7 +37,7 @@
           </option>
         </select>
         <p v-if="!canPersist" class="mt-2 text-xs text-amber-800">
-          Sign in with a cloud-saved project to sync length to your account. Local-only projects still use this choice for display until you save online.
+          Sign in and open a cloud project to sync length to your account. Local-only projects still use this choice for display until you save online.
         </p>
       </div>
 
@@ -68,7 +68,7 @@
           </button>
         </div>
         <p v-if="generateDisabled && activeProject" class="mt-3 text-sm text-amber-800">
-          Cloud project required for AI generation. This project is local-only — sign in and create or import a project from your account.
+          Cloud project required for AI generation. Sign in and open a project saved to your account.
         </p>
       </div>
 
@@ -149,13 +149,13 @@ const generatingKind = ref<'script' | 'treatment' | null>(null)
 const PB_ID = /^[a-z0-9]{15}$/
 
 const canPersist = computed(
-  () => isAuthenticated.value && activeProject.value?.source === 'pocketbase' && PB_ID.test(activeProject.value?.id || '')
+  () => isAuthenticated.value && PB_ID.test(activeProject.value?.id || '')
 )
 
 const generateDisabled = computed(() => {
   const p = activeProject.value
   if (!p) return true
-  if (!isAuthenticated.value || !getAuthToken()) return true
+  if (!isAuthenticated.value) return true
   if (!PB_ID.test(p.id)) return true
   return false
 })

@@ -102,6 +102,13 @@
                       Overview
                     </NuxtLink>
                     <NuxtLink
+                      to="/projects"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
+                      @click="closeToolsDropdown"
+                    >
+                      Script Wizard
+                    </NuxtLink>
+                    <NuxtLink
                       to="/character-creator"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                       @click="closeToolsDropdown"
@@ -367,6 +374,13 @@
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
                   >
                     Character Creator
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/projects"
+                    @click="closeMobileMenu"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                  >
+                    Script Wizard
                   </NuxtLink>
                   <NuxtLink
                     to="/tools/video-generation"

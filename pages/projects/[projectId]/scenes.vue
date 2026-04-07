@@ -14,7 +14,7 @@
 
     <template v-else-if="!canLoadCloud">
       <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 mb-6">
-        Scene lists are stored with cloud projects. Sign in and open a project you imported or created online.
+        Scene lists are stored with account projects. Sign in and open a cloud project to load this data.
       </div>
     </template>
 
@@ -120,19 +120,19 @@ const detailError = ref<string | null>(null)
 const canLoadCloud = computed(
   () =>
     !!activeProject.value &&
-    activeProject.value.source === 'pocketbase' &&
     PB_ID.test(projectId.value) &&
-    isAuthenticated.value &&
-    !!getAuthToken()
+    isAuthenticated.value
 )
 
 async function loadScenes () {
   if (!canLoadCloud.value) return
+  const token = getAuthToken()
+  if (!token) return
   loadError.value = null
   pending.value = true
   try {
     const res = await $fetch<{ scenes: SceneListRow[] }>(`/api/projects/${projectId.value}/scenes`, {
-      headers: { Authorization: `Bearer ${getAuthToken()!}` }
+      headers: { Authorization: `Bearer ${token}` }
     })
     scenes.value = res.scenes || []
   } catch (e: unknown) {
@@ -158,10 +158,16 @@ async function toggleExpand (id: string) {
   detailBody.value = ''
   detailError.value = null
   detailLoading.value = true
+  const token = getAuthToken()
+  if (!token) {
+    detailLoading.value = false
+    detailError.value = 'Please sign in again to load scene details.'
+    return
+  }
   try {
     const res = await $fetch<{ scene: { body: string } }>(
       `/api/projects/${projectId.value}/scenes/${id}`,
-      { headers: { Authorization: `Bearer ${getAuthToken()!}` } }
+      { headers: { Authorization: `Bearer ${token}` } }
     )
     detailBody.value = res.scene?.body || ''
   } catch (e: unknown) {
