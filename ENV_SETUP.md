@@ -1,5 +1,23 @@
 # Environment Variables Setup
 
+## Local development — quick start
+
+1. **Install:** `npm install`
+2. **`.env`** in the project root (see [Required Environment Variables](#required-environment-variables)). For local PocketBase use `VITE_POCKETBASE_URL=http://127.0.0.1:8090` (no trailing slash).
+3. **Start PocketBase + Nuxt in one terminal:**
+   ```bash
+   npm run dev:pb
+   ```
+   This runs PocketBase on **http://127.0.0.1:8090** and Nuxt on **http://127.0.0.1:3000** (admin UI: http://127.0.0.1:8090/_/ ).
+4. **Or two terminals:** `npm run pb:serve` then `npm run dev`.
+5. **First-time schema** (collections missing): with PocketBase running, `npm run setup-db` (uses `.env` for URL + superuser login).
+
+If the app won’t start, styles look wrong, or ports are stuck: `npm run dev:fix` clears Nuxt/Vite caches and frees **3000** and **3001**, then starts Nuxt only — start PocketBase separately (`npm run pb:serve`) if you use it.
+
+**Shell noise:** If your terminal prints `no such file or directory: /opt/homebrew/bin/brew`, fix or remove the `brew` line at the top of `~/.zshrc` (Homebrew path wrong or not installed).
+
+---
+
 To enable server-side operations that create or update PocketBase records (projects, assets, etc.), configure PocketBase admin credentials.
 
 ## Required Environment Variables
