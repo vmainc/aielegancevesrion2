@@ -5,6 +5,7 @@
  * 
  * Usage:
  *   node scripts/setup-collections.js [adminEmail] [adminPassword] [pocketbaseUrl]
+ *   (pocketbaseUrl is process.argv[4] — same API base as the app, no trailing slash.)
  * 
  * Or run interactively (it will prompt for credentials):
  *   node scripts/setup-collections.js
@@ -145,6 +146,7 @@ async function createCollections(adminEmail, adminPassword) {
         type: 'base',
         listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         fields: [
@@ -233,6 +235,7 @@ async function createCollections(adminEmail, adminPassword) {
         type: 'base',
         listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         fields: [
@@ -278,6 +281,7 @@ async function createCollections(adminEmail, adminPassword) {
         type: 'base',
         listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+        createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
         fields: [
@@ -332,6 +336,7 @@ async function createCollections(adminEmail, adminPassword) {
           type: 'base',
           listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
           viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
           updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
           deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
           fields: [

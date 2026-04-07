@@ -51,7 +51,8 @@ export default defineEventHandler(async (event) => {
     if (isPocketBaseMissingCollectionError(e)) {
       throw createError({
         statusCode: 503,
-        message: 'creative_projects collection is missing. Run: node scripts/setup-collections.js'
+        message:
+          'creative_projects collection is missing in PocketBase. From your machine run: npm run setup-db (or node scripts/setup-collections.js) with POCKETBASE_URL pointing at this environment’s PocketBase API (e.g. https://yourdomain.com/pb) and superuser credentials in POCKETBASE_ADMIN_EMAIL / POCKETBASE_ADMIN_PASSWORD.'
       })
     }
     throw createError({ statusCode: 500, message: msg })

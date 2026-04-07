@@ -48,7 +48,25 @@ node scripts/add-fields-to-collections.js
 
 Optional CLI overrides: `node scripts/setup-collections.js <email> <password> [pocketbaseUrl]`
 
-For **production** PocketBase, pass the URL as the third argument or set `POCKETBASE_URL` in `.env` for that run.
+For **production** PocketBase, pass the URL as the **fourth** argument (after email and password), or set `POCKETBASE_URL` for that shell only. Use the **same API base** the app uses (no trailing slash), e.g. `https://aielegance.com/pb` if PocketBase is served behind that path.
+
+```bash
+# Example: create missing collections on live PocketBase (run from project root)
+export POCKETBASE_URL='https://YOUR_DOMAIN/pb'
+export POCKETBASE_ADMIN_EMAIL='your-superuser@email'
+export POCKETBASE_ADMIN_PASSWORD='your-superuser-password'
+npm run setup-db
+```
+
+Or in one line:
+
+```bash
+POCKETBASE_URL='https://YOUR_DOMAIN/pb' POCKETBASE_ADMIN_EMAIL='...' POCKETBASE_ADMIN_PASSWORD='...' npm run setup-db
+```
+
+The script is idempotent: existing collections are skipped. It creates `creative_projects`, `creative_scenes`, `creative_characters` together, then ensures `creative_shots`, `project_assets`, and `creative_scripts` exist.
+
+**VPS note:** If PocketBase only listens on `127.0.0.1:8090`, run the script **on the server** (SSH) with `POCKETBASE_URL=http://127.0.0.1:8090`, or tunnel that port to your laptop and point `POCKETBASE_URL` at the tunnel.
 
 ## Testing
 
