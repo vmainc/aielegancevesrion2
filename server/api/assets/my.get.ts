@@ -36,12 +36,10 @@ export default defineEventHandler(async (event) => {
     }
   } catch (e: unknown) {
     const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : String(e)
-    if (/wasn't found|not found|404|Missing collection/i.test(msg)) {
-      throw createError({
-        statusCode: 503,
-        message:
-          'project_assets collection is missing. Run: node scripts/setup-collections.js (adds project_assets).'
-      })
+    const status = e && typeof e === 'object' && 'status' in e ? Number((e as { status?: number }).status || 0) : 0
+    if (status === 404 || /wasn't found|not found|Missing collection|missing collection context/i.test(msg)) {
+      // Graceful fallback so Assets pages remain usable while PB schema is being provisioned.
+      return { items: [], warning: 'project_assets collection missing' }
     }
     throw createError({ statusCode: 500, message: msg })
   }

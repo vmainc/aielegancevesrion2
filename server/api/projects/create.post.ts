@@ -47,6 +47,13 @@ export default defineEventHandler(async (event) => {
     }
   } catch (e: unknown) {
     const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : String(e)
+    const status = e && typeof e === 'object' && 'status' in e ? Number((e as { status?: number }).status || 0) : 0
+    if (status === 404 || /missing collection context|wasn't found|not found|missing collection/i.test(msg)) {
+      throw createError({
+        statusCode: 503,
+        message: 'creative_projects collection is missing. Run: node scripts/setup-collections.js'
+      })
+    }
     throw createError({ statusCode: 500, message: msg })
   }
 })

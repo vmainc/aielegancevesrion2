@@ -12,8 +12,14 @@ import {
 import { extractComparableTitlesFromTreatment } from '~/server/utils/script-wizard-omdb'
 import { pbRecordToCreativeScript } from '~/server/utils/creative-script-map'
 import type { CreativeScriptStatus } from '~/types/creative-script'
+import type { CreativeScript } from '~/types/creative-script'
 
 const VALID_STATUS = new Set<CreativeScriptStatus>(['draft', 'in_progress', 'final'])
+function isMissingCollectionError (e: unknown): boolean {
+  const msg = e && typeof e === 'object' && 'message' in e ? String((e as { message?: string }).message || '') : String(e)
+  const status = e && typeof e === 'object' && 'status' in e ? Number((e as { status?: number }).status || 0) : 0
+  return status === 404 || /missing collection context|wasn't found|not found|missing collection/i.test(msg)
+}
 
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
@@ -59,23 +65,28 @@ export default defineEventHandler(async (event) => {
   }
 
   let parsed: ReturnType<typeof parseFdxXml> | ReturnType<typeof parsePlainScriptText>
+  let sourceText = ''
   if (isPdf) {
-    const text = await extractTextFromPdfBuffer(fileBuf)
-    parsed = parsePlainScriptText(text)
+    sourceText = await extractTextFromPdfBuffer(fileBuf)
+    parsed = parsePlainScriptText(sourceText)
   } else {
-    const source = fileBuf.toString('utf8')
-    parsed = isFdx ? parseFdxXml(source) : parsePlainScriptText(source)
+    sourceText = fileBuf.toString('utf8')
+    parsed = isFdx ? parseFdxXml(sourceText) : parsePlainScriptText(sourceText)
   }
-  if (!parsed.scenes.length) {
-    throw createError({ statusCode: 400, message: 'No scenes found in file' })
-  }
+  const fallbackBody = sourceText.trim().slice(0, 100000)
+  const parsedScenes = parsed.scenes.length
+    ? parsed.scenes
+    : [{
+        heading: 'Imported Draft',
+        body: fallbackBody || 'Draft uploaded without screenplay scene markers.'
+      }]
 
   const stemTitle = filename.replace(/\.(fdx|txt|pdf)$/i, '').replace(/[_-]+/g, ' ').trim()
   const scriptTitle = (title || stemTitle || 'Untitled script').slice(0, 500)
-  const sceneOutline = parsed.scenes
+  const sceneOutline = parsedScenes
     .map((s, i) => `## Scene ${i}\nHeading: ${s.heading}\n---\n${s.body.slice(0, 2000)}`)
     .join('\n\n')
-  const fullScriptText = parsed.scenes.map(s => `${s.heading}\n\n${s.body}`).join('\n\n---\n\n')
+  const fullScriptText = parsedScenes.map(s => `${s.heading}\n\n${s.body}`).join('\n\n---\n\n')
 
   const enrichment = await enrichScriptWithAi({
     projectName: scriptTitle,
@@ -112,37 +123,60 @@ export default defineEventHandler(async (event) => {
   const blob = new Blob([fileBuf instanceof Uint8Array ? fileBuf : new Uint8Array(fileBuf)])
   formData.append('file', blob, fileSafe)
 
-  try {
-    const created = await pb.collection('creative_scripts').create(formData)
-    const createdScript = pbRecordToCreativeScript(created as Record<string, unknown>)
-
+  async function createScriptAsset (creativeScriptId: string | null) {
     const assetForm = new FormData()
     assetForm.append('owned_by', userId)
     assetForm.append('kind', 'script')
     assetForm.append('title', scriptTitle)
-    assetForm.append(
-      'notes',
-      `Script Wizard upload (${status.replace('_', ' ')}).`
-    )
+    assetForm.append('notes', `Script Wizard upload (${status.replace('_', ' ')}).`)
     assetForm.append(
       'metadata',
       JSON.stringify({
         source: 'script_wizard_upload',
-        creative_script_id: createdScript.id
+        creative_script_id: creativeScriptId || undefined,
+        script_title: scriptTitle,
+        source_filename: filename.slice(0, 500),
+        synopsis: prose.synopsis.slice(0, 20000),
+        treatment: treatmentWithActs.slice(0, 50000),
+        genre: String(enrichment.genre || '').slice(0, 200),
+        tone: String(enrichment.tone || '').slice(0, 500),
+        themes: enrichment.themes.slice(0, 20),
+        comparable_titles: comparableTitles,
+        status
       })
     )
     assetForm.append('sort_order', '0')
     assetForm.append('file', blob, fileSafe)
-    await pb.collection('project_assets').create(assetForm)
+    return pb.collection('project_assets').create(assetForm)
+  }
+
+  try {
+    const created = await pb.collection('creative_scripts').create(formData)
+    const createdScript = pbRecordToCreativeScript(created as Record<string, unknown>)
+    await createScriptAsset(createdScript.id)
 
     return { script: createdScript }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
-    if (/creative_scripts/i.test(msg) && /wasn't found|not found|404|Missing collection/i.test(msg)) {
-      throw createError({
-        statusCode: 503,
-        message: 'creative_scripts collection is missing. Run: node scripts/setup-collections.js'
-      })
+    if (isMissingCollectionError(e) && (/creative_scripts/i.test(msg) || /missing collection context/i.test(msg))) {
+      const asset = await createScriptAsset(null)
+      const now = new Date().toISOString()
+      const fallbackScript: CreativeScript = {
+        id: String(asset.id || `asset-${Date.now()}`),
+        title: scriptTitle,
+        status,
+        sourceFilename: filename.slice(0, 500),
+        scriptText: fullScriptText.slice(0, 300000),
+        synopsis: prose.synopsis.slice(0, 20000),
+        treatment: treatmentWithActs.slice(0, 50000),
+        genre: String(enrichment.genre || '').slice(0, 200),
+        tone: String(enrichment.tone || '').slice(0, 500),
+        themes: enrichment.themes.slice(0, 20),
+        comparableTitles,
+        created: String((asset as Record<string, unknown>).created || now),
+        updated: String((asset as Record<string, unknown>).updated || now)
+      }
+      return { script: fallbackScript, warning: 'creative_scripts collection missing; stored as script asset fallback' }
     }
     if (/project_assets/i.test(msg) && /validation|required|project/i.test(msg)) {
       throw createError({

@@ -7,11 +7,12 @@
       </p>
     </div>
 
-    <div v-if="!isAuthenticated" class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
-      Sign in to use Script Wizard.
-    </div>
+    <ClientOnly>
+      <div v-if="!isAuthenticated" class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700">
+        Sign in to use Script Wizard.
+      </div>
 
-    <template v-else>
+      <template v-else>
       <div class="rounded-xl border border-gray-200 bg-gray-50 p-5 sm:p-6 mb-8">
         <h2 class="text-lg font-semibold text-gray-900 mb-2">Upload script</h2>
         <p class="text-sm text-gray-600 mb-4">
@@ -144,7 +145,13 @@
           </template>
         </div>
       </div>
-    </template>
+      </template>
+      <template #fallback>
+        <div class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+          Loading Script Wizard…
+        </div>
+      </template>
+    </ClientOnly>
   </div>
 </template>
 
