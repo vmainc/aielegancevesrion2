@@ -8,7 +8,8 @@ const pocketbaseProxyTarget = (
 ).replace(/\/+$/, '')
 
 export default defineNuxtConfig({
-  devtools: { enabled: true },
+  // Only when running `npm run dev` — never during `npm run build` / deploy (avoids dev client in .output).
+  devtools: { enabled: process.env.npm_lifecycle_event === 'dev' },
   app: {
     head: {
       link: [
