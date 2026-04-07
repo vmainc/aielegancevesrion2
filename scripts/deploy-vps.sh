@@ -26,8 +26,10 @@ if [ "${DEPLOY_SKIP_BUILD:-0}" = "1" ]; then
   echo "==> Skipping build (DEPLOY_SKIP_BUILD=1). Using existing .output/"
 else
   echo "==> Building with NUXT_PUBLIC_POCKETBASE_URL=$NUXT_PUBLIC_POCKETBASE_URL"
-  # Drop dev client output only (avoids stale chunks). Stop `npm run dev` first — parallel dev + this rm can race Nuxt’s mkdir.
-  rm -rf .nuxt/dist
+  # Always clean full Nuxt/Nitro artifacts before production build.
+  # Partial cleanup can leave a stale SSR server entry and cause runtime 500:
+  # "TypeError: _createApp is not a function".
+  rm -rf .nuxt .output
   export NUXT_PUBLIC_POCKETBASE_URL
   npm run build
 fi
