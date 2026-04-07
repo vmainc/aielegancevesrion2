@@ -25,7 +25,7 @@
             Get started
           </NuxtLink>
           <NuxtLink
-            :to="{ path: '/login', query: { redirect: '/projects?import=1' } }"
+            :to="{ path: '/login', query: { redirect: '/projects' } }"
             class="inline-flex justify-center items-center px-8 py-3.5 rounded-xl border border-gray-300 text-gray-800 font-semibold text-base hover:bg-gray-50 hover:border-gray-400 transition-all"
           >
             Import script
@@ -131,7 +131,7 @@
               Upload your screenplay and instantly generate scenes, characters, and storyboard structure — ready for your AI filmmaking pipeline.
             </p>
             <NuxtLink
-              :to="{ path: '/login', query: { redirect: '/projects?import=1' } }"
+              :to="{ path: '/login', query: { redirect: '/projects' } }"
               class="inline-flex items-center justify-center px-8 py-3.5 rounded-xl bg-primary text-gray-950 font-semibold hover:bg-primary/90 transition-colors"
             >
               Import script

@@ -1,6 +1,7 @@
 import type { ProjectDirector } from '~/types/creative-project'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
+import { OPENROUTER_TEXT_MODEL_MAP } from '~/server/utils/openrouter-text-models'
 
 export interface GeneratedShot {
   order: number
@@ -162,15 +163,17 @@ ${mem.slice(0, 8000)}
 `
     : ''
 
-  const system = `You are a director of photography and storyboard artist. Output ONLY valid JSON (no markdown), exactly this shape:
+  const system = `You are a professional storyboard artist and director of photography. You break each scene into a clear SEQUENCE OF PANELS — like a printed storyboard: each row is one beat the audience sees, in strict story order (establish geography → develop action → emotional turn → cut point).
+
+Output ONLY valid JSON (no markdown), exactly this shape:
 {"shots":[{"order":1,"title":"short label","description":"what we see and story beat","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static | crane up","duration_seconds":4,"image_prompt":"single clean visual prompt: lighting, environment, subject, mood, lens feel","video_prompt":"cinematic motion description: camera move, subject motion, lighting shifts, atmosphere"}]}
 Rules:
-- Produce between 5 and 12 shots in "shots" array.
-- Mix establishing, medium, close-up, and detail/insert shots intentionally.
-- order must be 1..N in story order.
+- Think in panels: coverage that an editor could cut together — vary shot scale on purpose (establish, re-establish, tighten, insert, reaction).
+- Produce between 5 and 12 shots in "shots" array for THIS scene only; do not merge adjacent screenplay scenes.
+- order must be 1..N in story order within the scene.
 - image_prompt: concise, production-ready still description (no camera jargon overload).
 - video_prompt: expand with motion, camera behavior, lighting, atmosphere; may repeat and elaborate image_prompt.
-- When named characters appear, keep their described traits and visual continuity across shots.
+- When named characters appear, keep their described traits and visual continuity across shots (wardrobe, age, eyelines).
 - Interpret scene meaning from summary and script; imperfect script formatting is OK.
 - duration_seconds: realistic float (e.g. 2.5), aligned with goal rules below.`
 
@@ -195,12 +198,12 @@ CHARACTERS
 ${charBlock}`
 
   const body = buildOpenRouterChatCompletionBody({
-    model: 'openai/gpt-4o',
+    model: OPENROUTER_TEXT_MODEL_MAP.Claude,
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: user }
     ],
-    temperature: 0.55,
+    temperature: 0.45,
     max_tokens: 8192
   })
 
@@ -210,7 +213,7 @@ ${charBlock}`
       Authorization: `Bearer ${apiKey.trim()}`,
       'Content-Type': 'application/json',
       'HTTP-Referer': 'https://aielegance.com',
-      'X-Title': 'AI Elegance Shot Generator'
+      'X-Title': 'AI Elegance Storyboard (Claude)'
     },
     body: JSON.stringify(body)
   })

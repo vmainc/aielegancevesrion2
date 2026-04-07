@@ -185,6 +185,15 @@ async function createCollections(adminEmail, adminPassword) {
               ]
             }
           },
+          {
+            name: 'target_length',
+            type: 'select',
+            required: false,
+            options: {
+              maxSelect: 1,
+              values: ['spot', 'short', 'episode', 'feature']
+            }
+          },
           { name: 'synopsis', type: 'text', required: false, options: { max: 20000 } },
           { name: 'treatment', type: 'text', required: false, options: { max: 50000 } },
           { name: 'concept_notes', type: 'text', required: false, options: { max: 50000 } },
@@ -294,7 +303,13 @@ async function createCollections(adminEmail, adminPassword) {
             }
           },
           { name: 'name', type: 'text', required: true, options: { max: 200 } },
-          { name: 'role_description', type: 'text', required: false, options: { max: 10000 } }
+          { name: 'role_description', type: 'text', required: false, options: { max: 10000 } },
+          {
+            name: 'screen_share_percent',
+            type: 'number',
+            required: false,
+            options: { min: 0, max: 100 }
+          }
         ]
       });
       console.log('✅ "creative_characters" created\n');

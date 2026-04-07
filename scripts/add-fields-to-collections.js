@@ -78,6 +78,23 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
         console.log('  ✓ continuity_last_issues exists');
       }
 
+      if (!fieldExists(col, 'target_length')) {
+        fieldsToAdd.push(
+          flattenField({
+            name: 'target_length',
+            type: 'select',
+            required: false,
+            options: {
+              maxSelect: 1,
+              values: ['spot', 'short', 'episode', 'feature']
+            }
+          })
+        );
+        console.log('  ➕ Will add: target_length (select)');
+      } else {
+        console.log('  ✓ target_length exists');
+      }
+
       if (fieldsToAdd.length > 0) {
         await pb.collections.update(col.id, {
           fields: [...currentSchema, ...fieldsToAdd.map(flattenField)]
@@ -88,6 +105,31 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
       }
     } catch (e) {
       console.log('⚠️  creative_projects not found. Skipping...\n');
+    }
+
+    // creative_characters — estimated dialogue / presence share (script import + pie chart)
+    console.log('👤 Checking "creative_characters" collection...');
+    try {
+      const col = await pb.collections.getFirstListItem('name="creative_characters"');
+      const currentSchema = col.fields || col.schema || [];
+      if (!fieldExists(col, 'screen_share_percent')) {
+        await pb.collections.update(col.id, {
+          fields: [
+            ...currentSchema,
+            flattenField({
+              name: 'screen_share_percent',
+              type: 'number',
+              required: false,
+              options: { min: 0, max: 100 }
+            })
+          ]
+        });
+        console.log('  ➕ Added screen_share_percent (number 0–100)\n');
+      } else {
+        console.log('  ✓ screen_share_percent exists\n');
+      }
+    } catch (_e) {
+      console.log('⚠️  creative_characters not found. Skipping...\n');
     }
 
     console.log('🎉 Field addition complete!');

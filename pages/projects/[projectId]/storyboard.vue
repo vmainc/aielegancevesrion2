@@ -1,8 +1,12 @@
 <template>
   <div class="max-w-4xl">
     <p class="text-sm text-gray-500 mb-6">
-      <span class="text-primary font-medium">Step 4 of 5</span>
-      · Turn each scene into a cinematic shot list for boards and motion.
+      <span class="text-primary font-medium">Storyboard</span>
+      · Scenes (from the Scenes tab) hold Claude’s script breakdown; import also pre-builds shot lists per scene (up to 28, two at a time). Pick a scene, use
+      <span class="text-gray-700">Generate Shots</span>
+      to refresh a board (runs continuity), then
+      <span class="text-gray-700">Generate frame</span>
+      from each shot’s image prompt.
     </p>
 
     <div
@@ -42,7 +46,7 @@
       >
         <h2 class="text-lg font-semibold text-gray-800 mb-2">No scenes yet</h2>
         <p class="text-sm text-gray-500 mb-6">
-          Import a script from Projects to create scenes, then return here to generate shots.
+          Import a script from Projects to create scenes and auto storyboard panels, then return here.
         </p>
         <NuxtLink
           to="/projects"
@@ -91,7 +95,9 @@
         </div>
 
         <div v-else-if="!shots.length && !generating" class="text-sm text-gray-500">
-          No shots for this scene yet. Click <span class="text-gray-700">Generate Shots</span> to build a list (replaces any previous shots for this scene).
+          No shots for this scene yet — it may be past the import auto-board limit, or generation failed. Click
+          <span class="text-gray-700">Generate Shots</span>
+          to build a list (replaces any previous shots for this scene).
         </div>
 
         <ul v-else class="space-y-5">
@@ -168,6 +174,29 @@
                       rows="3"
                       class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
                     />
+                    <div class="flex flex-wrap items-center gap-2 mt-2">
+                      <button
+                        type="button"
+                        class="px-3 py-1.5 text-sm font-medium rounded-lg bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+                        :disabled="
+                          imageGenId === shot.id ||
+                          !((shot.imagePrompt || shot.description || '').trim())
+                        "
+                        @click="generateFrame(shot)"
+                      >
+                        {{ imageGenId === shot.id ? 'Generating…' : 'Generate frame' }}
+                      </button>
+                    </div>
+                    <div
+                      v-if="framePreview[shot.id]"
+                      class="mt-3 rounded-lg border border-gray-200 overflow-hidden bg-gray-100"
+                    >
+                      <img
+                        :src="framePreview[shot.id]"
+                        alt=""
+                        class="w-full max-h-80 object-contain"
+                      >
+                    </div>
                   </div>
                   <div>
                     <div class="flex justify-between items-center gap-2 mb-1">
@@ -197,7 +226,13 @@
         </ul>
       </div>
 
-      <div class="pt-8 border-t border-gray-200">
+      <div class="pt-8 border-t border-gray-200 flex flex-wrap gap-4">
+        <NuxtLink
+          :to="`/projects/${projectId}/scenes`"
+          class="text-sm text-gray-600 hover:text-gray-900 font-medium"
+        >
+          ← Scenes
+        </NuxtLink>
         <NuxtLink
           :to="`/projects/${projectId}/video`"
           class="text-sm text-primary font-medium hover:underline"
@@ -240,8 +275,51 @@ const shotsLoading = ref(false)
 const generating = ref(false)
 const generateError = ref('')
 const savingId = ref<string | null>(null)
+const imageGenId = ref<string | null>(null)
+const framePreview = reactive<Record<string, string>>({})
 
 const activeScene = computed(() => scenes.value.find(s => s.id === selectedSceneId.value))
+
+function firstImageUrl (urls: unknown[]): string {
+  for (const u of urls) {
+    if (typeof u === 'string' && u.trim()) return u.trim()
+    if (u && typeof u === 'object' && u !== null && 'url' in u) {
+      const url = (u as { url: unknown }).url
+      if (typeof url === 'string' && url.trim()) return url.trim()
+    }
+  }
+  return ''
+}
+
+async function generateFrame (shot: CreativeShot) {
+  const prompt = (shot.imagePrompt || shot.description || '').trim()
+  if (!prompt) {
+    toast.showToast('Add an image prompt or description first.', 'info')
+    return
+  }
+  imageGenId.value = shot.id
+  try {
+    const res = await $fetch<{ urls?: unknown[] }>('/api/generate/image', {
+      method: 'POST',
+      body: { prompt }
+    })
+    const url = firstImageUrl(res.urls || [])
+    if (url) {
+      framePreview[shot.id] = url
+      toast.showToast('Frame generated.', 'success')
+    } else {
+      toast.showToast('No image returned.', 'error')
+    }
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message || 'Image generation failed')
+        : 'Image generation failed'
+    toast.showToast(msg, 'error')
+  } finally {
+    imageGenId.value = null
+  }
+}
 
 async function authHeaders () {
   const token = getAuthToken()

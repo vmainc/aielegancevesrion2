@@ -137,22 +137,134 @@
             <button
               type="button"
               class="px-3 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-gray-950 rounded-lg transition-colors"
-              @click="saveToLibrary(m.id, m.label, imageSrc(slotByModel[m.id]!.url)!)"
+              @click="openSaveModal(m.id, m.label, imageSrc(slotByModel[m.id]!.url)!)"
             >
               Save to Library
             </button>
-            <button
-              type="button"
-              disabled
-              class="px-3 py-2 text-sm font-medium border border-gray-200 text-gray-400 rounded-lg cursor-not-allowed"
-              title="Coming soon"
+            <NuxtLink
+              v-if="slotByModel[m.id]?.savedProjectId"
+              :to="`/projects/${slotByModel[m.id]!.savedProjectId}/overview`"
+              class="px-3 py-2 text-sm font-medium border border-gray-300 text-gray-800 hover:bg-gray-50 rounded-lg transition-colors text-center"
             >
               Use in Project
-            </button>
+            </NuxtLink>
+            <NuxtLink
+              v-else
+              to="/projects"
+              class="px-3 py-2 text-sm font-medium border border-gray-300 text-gray-800 hover:bg-gray-50 rounded-lg transition-colors text-center"
+            >
+              Open projects
+            </NuxtLink>
           </div>
         </article>
       </div>
     </section>
+
+    <Teleport to="body">
+      <div
+        v-if="saveModalOpen"
+        class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/50"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="cc-save-dialog-title"
+        @click.self="closeSaveModal"
+      >
+        <div
+          class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
+          @click.stop
+        >
+          <h2 id="cc-save-dialog-title" class="text-lg font-semibold text-gray-900 mb-2">
+            Save to library
+          </h2>
+          <p class="text-sm text-gray-600 mb-4">
+            Character images are stored per project in your account. You’ll see them under
+            <NuxtLink to="/assets/characters" class="text-primary font-medium hover:underline">Assets → Characters</NuxtLink>
+            and in the chosen project’s asset library.
+          </p>
+
+          <template v-if="!isAuthenticated">
+            <p class="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+              <NuxtLink to="/login" class="font-medium text-primary hover:underline">Sign in</NuxtLink>
+              to save to your cloud library.
+            </p>
+            <button
+              type="button"
+              class="w-full px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 mb-2"
+              @click="saveToDeviceOnly(); closeSaveModal()"
+            >
+              Save on this device only
+            </button>
+          </template>
+
+          <template v-else-if="!pbProjects.length">
+            <p class="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+              Create or import a project first so we know where to attach this image.
+            </p>
+            <NuxtLink
+              to="/projects"
+              class="block w-full text-center px-4 py-2 text-sm font-semibold bg-primary text-gray-950 rounded-lg hover:bg-primary/90 mb-2"
+              @click="closeSaveModal"
+            >
+              Go to Projects
+            </NuxtLink>
+          </template>
+
+          <form v-else class="space-y-4" @submit.prevent="confirmCloudSave">
+            <div>
+              <label for="cc-save-project" class="block text-sm font-medium text-gray-700 mb-1">Project</label>
+              <select
+                id="cc-save-project"
+                v-model="saveProjectId"
+                required
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm"
+              >
+                <option value="" disabled>Select project</option>
+                <option v-for="p in pbProjects" :key="p.id" :value="p.id">
+                  {{ p.name }}
+                </option>
+              </select>
+            </div>
+            <div>
+              <label for="cc-save-asset-title" class="block text-sm font-medium text-gray-700 mb-1">Title</label>
+              <input
+                id="cc-save-asset-title"
+                v-model="saveTitle"
+                type="text"
+                required
+                maxlength="500"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm"
+              >
+            </div>
+            <p v-if="saveError" class="text-sm text-red-700">{{ saveError }}</p>
+            <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
+              <button
+                type="button"
+                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+                :disabled="cloudSaving"
+                @click="closeSaveModal"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                class="px-4 py-2 text-sm font-medium border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                :disabled="cloudSaving"
+                @click="saveToDeviceOnly(); closeSaveModal()"
+              >
+                This device only
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm disabled:opacity-50"
+                :disabled="cloudSaving || !saveProjectId"
+              >
+                {{ cloudSaving ? 'Saving…' : 'Save to account' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -162,8 +274,10 @@ import {
 } from '~/lib/character-creator-models'
 import { buildCharacterImagePrompt, CHARACTER_STYLE_PRESETS } from '~/lib/character-image-prompt'
 import type { CharacterLibraryEntry } from '~/types/character-creator'
+import type { CreativeProject } from '~/types/creative-project'
 
 const LIBRARY_STORAGE_KEY = 'aielegance-character-library'
+const PB_ID = /^[a-z0-9]{15}$/
 
 useHead({
   title: 'Character Creator — AI Elegance',
@@ -171,6 +285,9 @@ useHead({
 })
 
 const toast = useToast()
+const { isAuthenticated, initAuth, getAuthToken } = useAuth()
+const { projects, loadServerProjects, clientReady } = useCreativeProject()
+
 const name = ref('')
 const description = ref('')
 const stylePreset = ref<string>(CHARACTER_STYLE_PRESETS[0]!.value)
@@ -179,8 +296,38 @@ const loading = ref(false)
 const formError = ref('')
 const lastPromptUsed = ref('')
 
-type Slot = { status: 'loading' | 'done' | 'error'; url?: string; error?: string; prompt_used?: string }
+type Slot = {
+  status: 'loading' | 'done' | 'error'
+  url?: string
+  error?: string
+  prompt_used?: string
+  /** Set after a successful cloud save — enables “Use in Project”. */
+  savedProjectId?: string
+}
 const slotByModel = ref<Record<string, Slot>>({})
+
+const saveModalOpen = ref(false)
+const pendingSave = ref<{ modelId: string; modelLabel: string; imageUrl: string } | null>(null)
+const saveProjectId = ref('')
+const saveTitle = ref('')
+const saveError = ref('')
+const cloudSaving = ref(false)
+
+const pbProjects = computed(() =>
+  projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
+)
+
+watch([isAuthenticated, clientReady], () => {
+  if (isAuthenticated.value && clientReady.value) {
+    void loadServerProjects()
+  }
+})
+
+onMounted(() => {
+  if (isAuthenticated.value && clientReady.value) {
+    void loadServerProjects()
+  }
+})
 
 function imageSrc (url: unknown): string {
   if (typeof url !== 'string') return ''
@@ -261,14 +408,117 @@ async function runGenerate () {
   loading.value = false
 }
 
-function saveToLibrary (modelId: string, modelLabel: string, imageUrl: string) {
-  if (typeof localStorage === 'undefined') return
+function openSaveModal (modelId: string, modelLabel: string, imageUrl: string) {
+  pendingSave.value = { modelId, modelLabel, imageUrl }
+  const charName = name.value.trim() || 'Character'
+  saveTitle.value = `${charName} — ${modelLabel}`.slice(0, 500)
+  saveError.value = ''
+  saveProjectId.value = pbProjects.value[0]?.id ?? ''
+  saveModalOpen.value = true
+  if (isAuthenticated.value && clientReady.value) {
+    void loadServerProjects()
+  }
+  void initAuth()
+}
+
+function closeSaveModal () {
+  if (cloudSaving.value) return
+  saveModalOpen.value = false
+  pendingSave.value = null
+  saveError.value = ''
+}
+
+async function imageUrlToFile (imageUrl: string, baseName: string): Promise<File> {
+  const res = await fetch(imageUrl)
+  if (!res.ok) {
+    throw new Error('Could not read image (try another model or regenerate).')
+  }
+  const blob = await res.blob()
+  if (!blob.type.startsWith('image/')) {
+    throw new Error('Response was not an image.')
+  }
+  const ext =
+    blob.type.includes('png')
+      ? 'png'
+      : blob.type.includes('jpeg') || blob.type.includes('jpg')
+        ? 'jpg'
+        : blob.type.includes('webp')
+          ? 'webp'
+          : blob.type.includes('gif')
+            ? 'gif'
+            : 'png'
+  const safe = baseName.replace(/[^\w\s-]/g, '').trim().slice(0, 80) || 'character'
+  return new File([blob], `${safe}.${ext}`, { type: blob.type || 'image/png' })
+}
+
+async function confirmCloudSave () {
+  const pending = pendingSave.value
+  if (!pending || !saveProjectId.value) return
+  const token = getAuthToken()
+  if (!token) {
+    saveError.value = 'Session expired — sign in again.'
+    return
+  }
+  cloudSaving.value = true
+  saveError.value = ''
+  try {
+    const charName = name.value.trim() || 'Character'
+    const file = await imageUrlToFile(
+      pending.imageUrl,
+      `${charName}-${pending.modelId}`.replace(/\s+/g, '-')
+    )
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('kind', 'character')
+    fd.append('title', saveTitle.value.trim().slice(0, 500))
+    fd.append('notes', description.value.trim().slice(0, 20_000))
+    fd.append(
+      'metadata',
+      JSON.stringify({
+        source: 'character_creator',
+        model: pending.modelId,
+        model_label: pending.modelLabel,
+        character_name: charName,
+        prompt_used: slotByModel.value[pending.modelId]?.prompt_used ?? lastPromptUsed.value
+      })
+    )
+    await $fetch(`/api/projects/${saveProjectId.value}/assets/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd
+    })
+    const pid = saveProjectId.value
+    slotByModel.value = {
+      ...slotByModel.value,
+      [pending.modelId]: {
+        ...slotByModel.value[pending.modelId]!,
+        savedProjectId: pid
+      }
+    }
+    toast.showToast('Saved to your library — Assets → Characters and this project.', 'success')
+    closeSaveModal()
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message ?? '')
+        : e instanceof Error
+          ? e.message
+          : ''
+    saveError.value = msg.slice(0, 240) || 'Could not save. Try again.'
+  } finally {
+    cloudSaving.value = false
+  }
+}
+
+function saveToDeviceOnly () {
+  const pending = pendingSave.value
+  if (!pending || typeof localStorage === 'undefined') return
   const prompt_used =
-    slotByModel.value[modelId]?.prompt_used ?? lastPromptUsed.value
+    slotByModel.value[pending.modelId]?.prompt_used ?? lastPromptUsed.value
   const entry: CharacterLibraryEntry = {
-    model: modelId,
-    modelLabel,
-    image_url: imageUrl,
+    model: pending.modelId,
+    modelLabel: pending.modelLabel,
+    image_url: pending.imageUrl,
     prompt_used,
     characterName: name.value.trim() || 'Unnamed',
     savedAt: new Date().toISOString()
@@ -278,9 +528,9 @@ function saveToLibrary (modelId: string, modelLabel: string, imageUrl: string) {
     const list: CharacterLibraryEntry[] = raw ? JSON.parse(raw) : []
     list.unshift(entry)
     localStorage.setItem(LIBRARY_STORAGE_KEY, JSON.stringify(list.slice(0, 80)))
-    toast.showToast('Saved to library (this device).', 'success')
+    toast.showToast('Saved on this device only.', 'success')
   } catch {
-    toast.showToast('Could not save to library.', 'error')
+    toast.showToast('Could not save on this device.', 'error')
   }
 }
 </script>

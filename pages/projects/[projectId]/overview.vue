@@ -2,8 +2,51 @@
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">Step 1 of 5</span>
-      · Shape the idea; director bible and continuity live on the Director tab.
+      · Your synopsis lives here; director bible and continuity are on the Director tab.
     </p>
+
+    <p
+      v-if="isLocalProject"
+      class="mb-8 text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3"
+    >
+      This project is saved on this device only. Sign in and create a project from
+      <NuxtLink to="/projects" class="font-medium text-primary hover:underline">Projects</NuxtLink>
+      to sync with your account.
+    </p>
+
+    <section
+      v-if="hasConcept"
+      class="rounded-xl border border-gray-200 bg-white shadow-sm p-6 sm:p-8 mb-10"
+    >
+      <p class="text-xs font-semibold uppercase tracking-wide text-primary mb-3">Synopsis</p>
+      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-6">
+        {{ project?.name }}
+      </h1>
+      <div
+        v-if="project?.genre || project?.tone || (project?.themes && project.themes.length)"
+        class="flex flex-wrap gap-2 mb-6"
+      >
+        <span v-if="project?.genre" class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-800 capitalize">{{ project.genre }}</span>
+        <span v-if="project?.tone" class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">{{ project.tone }}</span>
+        <span
+          v-for="t in (project?.themes ?? [])"
+          :key="t"
+          class="text-xs px-2.5 py-1 rounded-full border border-gray-200 text-gray-600"
+        >{{ t }}</span>
+      </div>
+      <div
+        class="text-gray-800 text-base sm:text-lg leading-relaxed whitespace-pre-wrap border-t border-gray-100 pt-6"
+      >
+        {{ project?.synopsis || project?.conceptNotes }}
+      </div>
+      <p
+        v-if="project?.treatment?.includes('Imported script — creative development')"
+        class="text-sm text-gray-500 mt-6 pt-6 border-t border-gray-100"
+      >
+        Comparable films and theme notes:
+        <NuxtLink :to="`/projects/${projectId}/story`" class="text-primary font-medium hover:underline">Story → Treatment</NuxtLink>
+      </p>
+    </section>
 
     <!-- Saved concept: actions (generator hidden until they choose "different AI") -->
     <div
@@ -159,26 +202,6 @@
       </div>
     </section>
 
-    <div v-if="hasConcept" class="rounded-xl border border-gray-200 bg-gray-50 p-6 mb-8 space-y-4">
-      <div
-        v-if="project?.genre || project?.tone || (project?.themes && project.themes.length)"
-        class="flex flex-wrap gap-2"
-      >
-        <span v-if="project?.genre" class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-800 capitalize">{{ project.genre }}</span>
-        <span v-if="project?.tone" class="text-xs px-2 py-1 rounded bg-gray-200 text-gray-700">{{ project.tone }}</span>
-        <span
-          v-for="t in (project?.themes ?? [])"
-          :key="t"
-          class="text-xs px-2 py-1 rounded border border-gray-200 text-gray-600"
-        >{{ t }}</span>
-      </div>
-      <div>
-        <h2 class="text-sm font-medium text-gray-600 uppercase tracking-wide mb-2">Current concept</h2>
-        <p class="text-lg font-semibold text-gray-900 mb-2">{{ project?.name }}</p>
-        <p class="text-gray-800 whitespace-pre-wrap">{{ project?.synopsis || project?.conceptNotes }}</p>
-      </div>
-    </div>
-
     <div class="rounded-xl border border-gray-200 bg-white p-4 mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
       <div>
         <h2 class="text-sm font-semibold text-gray-900">Director & continuity</h2>
@@ -227,8 +250,12 @@ const { activeProject, activeProjectId, updateProject } = useCreativeProject()
 const { isAuthenticated, getAuthToken } = useAuth()
 const toast = useToast()
 
+const PB_ID = /^[a-z0-9]{15}$/
+
 const projectId = activeProjectId
 const project = activeProject
+
+const isLocalProject = computed(() => !PB_ID.test(projectId.value))
 
 const modelOptions = ref<Array<{ id: string; label: string }>>([])
 const modelsLoadError = ref('')

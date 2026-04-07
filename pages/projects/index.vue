@@ -4,15 +4,16 @@
       <div>
         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Projects</h1>
         <p class="text-gray-600 text-sm sm:text-base max-w-xl">
-          Start a guided workflow: overview, director bible, story, characters, storyboard, then video. Import a Final Draft (.fdx), plain text (.txt), or text-based PDF to seed scenes and characters in PocketBase.
+          Create a project in one step, then work through overview, director, story, characters, scenes, storyboard, and video.
+          Signed-in users can import a script from the project’s Overview after the project exists.
         </p>
       </div>
       <button
         type="button"
         class="shrink-0 px-5 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors"
-        @click="openCreateModal('blank')"
+        @click="openCreateModal"
       >
-        Create New Project
+        New project
       </button>
     </div>
 
@@ -20,13 +21,15 @@
 
     <div v-else-if="projects.length === 0" class="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-10 text-center">
       <p class="text-gray-700 mb-2 font-medium">No projects yet</p>
-      <p class="text-sm text-gray-500 mb-6">Create a blank project or import a script (.fdx, .txt, or .pdf). Script import requires an account.</p>
+      <p class="text-sm text-gray-500 mb-6">
+        Start with a single click — you can tune aspect ratio and goal under “More options” if you want.
+      </p>
       <button
         type="button"
         class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors"
-        @click="openCreateModal('blank')"
+        @click="openCreateModal"
       >
-        Get started
+        Create your first project
       </button>
     </div>
 
@@ -61,30 +64,10 @@
           class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
           @click.stop
         >
-          <h2 id="create-project-title" class="text-lg font-semibold text-gray-900 mb-4">New project</h2>
-
-          <div class="flex rounded-lg border border-gray-200 p-0.5 mb-4">
-            <button
-              type="button"
-              class="flex-1 py-2 text-sm font-medium rounded-md transition-colors"
-              :class="createMode === 'blank' ? 'bg-primary text-gray-950' : 'text-gray-600 hover:text-gray-800'"
-              @click="createMode = 'blank'"
-            >
-              Blank
-            </button>
-            <button
-              type="button"
-              class="flex-1 py-2 text-sm font-medium rounded-md transition-colors"
-              :class="createMode === 'import' ? 'bg-primary text-gray-950' : 'text-gray-600 hover:text-gray-800'"
-              @click="createMode = 'import'"
-            >
-              Import script
-            </button>
-          </div>
-
-          <div v-if="createMode === 'import' && !isAuthenticated" class="mb-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-900">
-            <NuxtLink to="/login" class="underline font-medium">Log in</NuxtLink> to import a script — files are parsed on the server and saved to your account.
-          </div>
+          <h2 id="create-project-title" class="text-lg font-semibold text-gray-900 mb-1">New project</h2>
+          <p class="text-sm text-gray-500 mb-5">
+            Name it (optional). We’ll use “New project” if you leave it blank.
+          </p>
 
           <form class="space-y-4" @submit.prevent="submitCreate">
             <div>
@@ -93,68 +76,68 @@
                 id="proj-name"
                 v-model="form.name"
                 type="text"
-                :required="createMode === 'blank'"
                 class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
-                placeholder="e.g. My screenplay"
+                placeholder="New project"
+                autocomplete="off"
               >
             </div>
 
-            <div v-if="createMode === 'import'" class="space-y-2">
-              <label for="script-file" class="block text-sm font-medium text-gray-700">Script file</label>
-              <input
-                id="script-file"
-                ref="fileInput"
-                type="file"
-                accept=".fdx,.txt,.pdf,application/xml,text/xml,text/plain,application/pdf"
-                class="block w-full text-sm text-gray-600 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:bg-gray-200 file:text-gray-900"
-                @change="onFileChange"
-              >
-              <p class="text-xs text-gray-500">Final Draft (.fdx), plain text (.txt), or text-based PDF. Scanned image-only PDFs are not supported.</p>
+            <button
+              type="button"
+              class="text-sm font-medium text-primary hover:underline"
+              @click="showOptions = !showOptions"
+            >
+              {{ showOptions ? 'Hide options' : 'More options (aspect ratio & goal)' }}
+            </button>
+
+            <div v-show="showOptions" class="space-y-4 pt-1 border-t border-gray-100">
+              <div>
+                <label for="proj-aspect" class="block text-sm font-medium text-gray-700 mb-1">Aspect ratio</label>
+                <select
+                  id="proj-aspect"
+                  v-model="form.aspectRatio"
+                  class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
+                >
+                  <option value="16:9">16:9 (landscape)</option>
+                  <option value="9:16">9:16 (vertical)</option>
+                  <option value="1:1">1:1 (square)</option>
+                </select>
+              </div>
+              <div>
+                <label for="proj-goal" class="block text-sm font-medium text-gray-700 mb-1">Goal</label>
+                <select
+                  id="proj-goal"
+                  v-model="form.goal"
+                  class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
+                >
+                  <option value="film">Film</option>
+                  <option value="social">Social</option>
+                  <option value="commercial">Commercial</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
             </div>
 
-            <div>
-              <label for="proj-aspect" class="block text-sm font-medium text-gray-700 mb-1">Aspect ratio</label>
-              <select
-                id="proj-aspect"
-                v-model="form.aspectRatio"
-                class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
-              >
-                <option value="16:9">16:9 (landscape)</option>
-                <option value="9:16">9:16 (vertical)</option>
-                <option value="1:1">1:1 (square)</option>
-              </select>
-            </div>
-            <div>
-              <label for="proj-goal" class="block text-sm font-medium text-gray-700 mb-1">Goal</label>
-              <select
-                id="proj-goal"
-                v-model="form.goal"
-                class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
-              >
-                <option value="film">Film</option>
-                <option value="social">Social</option>
-                <option value="commercial">Commercial</option>
-                <option value="other">Other</option>
-              </select>
-            </div>
-
-            <p v-if="importError" class="text-sm text-red-400">{{ importError }}</p>
+            <p v-if="createError" class="text-sm text-red-600">{{ createError }}</p>
+            <p v-if="!isAuthenticated" class="text-xs text-gray-500">
+              You’re not signed in — this project will be saved on this device only. Sign in later to sync to your account.
+            </p>
 
             <div class="flex gap-2 justify-end pt-2">
               <button
                 type="button"
                 class="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
-                :disabled="importing"
+                :disabled="creating"
                 @click="closeModal"
               >
                 Cancel
               </button>
               <button
                 type="submit"
-                :disabled="importing"
+                :disabled="creating"
                 class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-w-[8rem]"
               >
-                {{ importing ? 'Analyzing script…' : submitLabel }}
+                {{ creating ? 'Creating…' : 'Create & open' }}
               </button>
             </div>
           </form>
@@ -170,16 +153,11 @@ import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 const { projects, createProject, clientReady, registerImportedProject } = useCreativeProject()
 const { isAuthenticated, getAuthToken } = useAuth()
 const toast = useToast()
-const route = useRoute()
-const router = useRouter()
 
 const openCreate = ref(false)
-const createMode = ref<'blank' | 'import'>('blank')
-const createModalIntent = ref<'blank' | 'import'>('blank')
-const scriptFile = ref<File | null>(null)
-const fileInput = ref<HTMLInputElement | null>(null)
-const importing = ref(false)
-const importError = ref('')
+const showOptions = ref(false)
+const creating = ref(false)
+const createError = ref('')
 
 const form = reactive({
   name: '',
@@ -187,106 +165,69 @@ const form = reactive({
   goal: 'film' as ProjectGoal
 })
 
-const submitLabel = computed(() =>
-  createMode.value === 'import' ? 'Import & open' : 'Create & open'
-)
-
-function openCreateModal (mode: 'blank' | 'import') {
-  createModalIntent.value = mode
+function openCreateModal () {
   openCreate.value = true
 }
 
 function closeModal () {
-  if (importing.value) return
+  if (creating.value) return
   openCreate.value = false
-}
-
-function onFileChange (e: Event) {
-  const input = e.target as HTMLInputElement
-  const f = input.files?.[0]
-  scriptFile.value = f || null
-  importError.value = ''
 }
 
 watch(openCreate, (v) => {
   if (!v) return
-  const fromQuery = route.query.import === '1' || route.query.import === 'true'
-  createMode.value = fromQuery ? 'import' : createModalIntent.value
   form.name = ''
   form.aspectRatio = '16:9'
   form.goal = 'film'
-  scriptFile.value = null
-  importError.value = ''
-  if (fileInput.value) fileInput.value.value = ''
-  if (fromQuery) {
-    router.replace({ path: '/projects', query: {} })
-  }
-})
-
-onMounted(() => {
-  if (route.query.import === '1' || route.query.import === 'true') {
-    createModalIntent.value = 'import'
-    openCreate.value = true
-  }
+  showOptions.value = false
+  createError.value = ''
 })
 
 async function submitCreate () {
-  importError.value = ''
-  if (createMode.value === 'blank') {
-    if (!form.name.trim()) {
-      importError.value = 'Enter a project name.'
+  createError.value = ''
+  const displayName = form.name.trim() || 'New project'
+
+  if (isAuthenticated.value) {
+    const token = getAuthToken()
+    if (!token) {
+      createError.value = 'Session expired — sign in again.'
       return
     }
-    const p = createProject({
-      name: form.name,
-      aspectRatio: form.aspectRatio,
-      goal: form.goal
-    })
-    openCreate.value = false
-    await navigateTo(`/projects/${p.id}/overview`)
+    creating.value = true
+    try {
+      const res = await $fetch<{ project: import('~/types/creative-project').CreativeProject }>(
+        '/api/projects/create',
+        {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` },
+          body: {
+            name: displayName,
+            aspectRatio: form.aspectRatio,
+            goal: form.goal
+          }
+        }
+      )
+      registerImportedProject(res.project)
+      openCreate.value = false
+      toast.showToast('Project created.', 'success')
+      await navigateTo(`/projects/${res.project.id}/overview`)
+    } catch (e: unknown) {
+      createError.value =
+        (e as { data?: { message?: string } })?.data?.message ||
+        (e instanceof Error ? e.message : '') ||
+        'Could not create project.'
+    } finally {
+      creating.value = false
+    }
     return
   }
 
-  if (!isAuthenticated.value) {
-    importError.value = 'Log in to import a script.'
-    return
-  }
-  if (!scriptFile.value) {
-    importError.value = 'Choose a .fdx, .txt, or .pdf file.'
-    return
-  }
-
-  const token = getAuthToken()
-  if (!token) {
-    importError.value = 'Session expired — log in again.'
-    return
-  }
-
-  importing.value = true
-  try {
-    const fd = new FormData()
-    fd.append('file', scriptFile.value)
-    fd.append('name', form.name.trim())
-    fd.append('aspectRatio', form.aspectRatio)
-    fd.append('goal', form.goal)
-
-    const res = await $fetch<{ project: import('~/types/creative-project').CreativeProject }>(
-      '/api/projects/import-script',
-      {
-        method: 'POST',
-        body: fd,
-        headers: { Authorization: `Bearer ${token}` }
-      }
-    )
-    registerImportedProject(res.project)
-    openCreate.value = false
-    toast.showToast('Script imported — opening overview.', 'success')
-    await navigateTo(`/projects/${res.project.id}/overview`)
-  } catch (e: any) {
-    importError.value =
-      e?.data?.message || e?.data?.statusMessage || e?.message || 'Import failed. Try again.'
-  } finally {
-    importing.value = false
-  }
+  const p = createProject({
+    name: displayName,
+    aspectRatio: form.aspectRatio,
+    goal: form.goal
+  })
+  openCreate.value = false
+  await navigateTo(`/projects/${p.id}/overview`)
 }
 </script>

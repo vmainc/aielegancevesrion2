@@ -21,6 +21,7 @@ export default defineEventHandler(async (event) => {
 
   const ASPECT = new Set(['16:9', '9:16', '1:1'])
   const GOALS = new Set(['film', 'social', 'commercial', 'other'])
+  const LENGTHS = new Set(['spot', 'short', 'episode', 'feature'])
 
   const patch: Record<string, unknown> = {}
   if (typeof body.synopsis === 'string') patch.synopsis = body.synopsis
@@ -32,6 +33,9 @@ export default defineEventHandler(async (event) => {
   }
   if (typeof body.goal === 'string' && GOALS.has(body.goal)) {
     patch.goal = body.goal
+  }
+  if (typeof body.targetLength === 'string' && LENGTHS.has(body.targetLength)) {
+    patch.target_length = body.targetLength
   }
 
   if (body.director !== undefined && body.director !== null) {

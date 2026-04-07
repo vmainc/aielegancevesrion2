@@ -126,6 +126,7 @@ export function useCreativeProject () {
       name: input.name.trim() || 'Untitled project',
       aspectRatio: input.aspectRatio,
       goal: input.goal,
+      targetLength: 'short',
       synopsis: '',
       treatment: '',
       conceptNotes: '',
@@ -168,6 +169,7 @@ export function useCreativeProject () {
           genre: patch.genre,
           tone: patch.tone
         }
+        if (patch.targetLength !== undefined) body.targetLength = patch.targetLength
         if (patch.director !== undefined) body.director = patch.director
         if (patch.continuityMemory !== undefined) body.continuityMemory = patch.continuityMemory
         if (patch.continuityLastIssues !== undefined) body.continuityLastIssues = patch.continuityLastIssues

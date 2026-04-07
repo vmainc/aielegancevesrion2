@@ -1,4 +1,4 @@
-import { readMultipartFormData, createError, getHeader } from 'h3'
+import { readMultipartFormData, createError, getHeader, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { importScriptIntoPocketBase } from '~/server/utils/import-script-core'
@@ -7,10 +7,14 @@ const ASPECT = new Set(['16:9', '9:16', '1:1'])
 const GOALS = new Set(['film', 'social', 'commercial', 'other'])
 
 /**
- * Create a **new** PocketBase project from an uploaded script (legacy path).
- * Prefer: create a project first, then POST /api/projects/:id/import-script
+ * Import a script into an **existing** project (clears previous scenes & characters for that project).
  */
 export default defineEventHandler(async (event) => {
+  const projectId = getRouterParam(event, 'id')
+  if (!projectId) {
+    throw createError({ statusCode: 400, message: 'Missing project id' })
+  }
+
   const userId = await getPocketBaseUserIdFromRequest(event)
 
   const parts = await readMultipartFormData(event)
@@ -26,7 +30,6 @@ export default defineEventHandler(async (event) => {
 
   let fileBuf: Buffer | null = null
   let filename = 'script'
-  let projectName = ''
   let aspectRatio = '16:9'
   let goal = 'film'
 
@@ -35,9 +38,6 @@ export default defineEventHandler(async (event) => {
     if (part.name === 'file' && part.data?.length) {
       fileBuf = part.data
       filename = (part.filename && part.filename.trim()) || 'script.upload'
-    }
-    if (part.name === 'name' && part.data) {
-      projectName = part.data.toString('utf8').trim()
     }
     if (part.name === 'aspectRatio' && part.data) {
       const v = part.data.toString('utf8').trim()
@@ -62,6 +62,6 @@ export default defineEventHandler(async (event) => {
     filename,
     aspectRatio: aspectRatio as '16:9' | '9:16' | '1:1',
     goal: goal as 'film' | 'social' | 'commercial' | 'other',
-    newProjectName: projectName || undefined
+    existingProjectId: projectId
   })
 })

@@ -60,7 +60,9 @@ export default defineNuxtConfig({
       '/meet-the-models': { redirect: { to: '/', statusCode: 301 } },
       '/my-questions': { redirect: { to: '/projects', statusCode: 301 } },
       '/my-questions/**': { redirect: { to: '/projects', statusCode: 301 } },
-      '/questions/**': { redirect: { to: '/', statusCode: 301 } }
+      '/questions/**': { redirect: { to: '/', statusCode: 301 } },
+      '/dashboard': { redirect: { to: '/projects', statusCode: 301 } },
+      '/dashboard/**': { redirect: { to: '/projects', statusCode: 301 } }
     }
   }
 })

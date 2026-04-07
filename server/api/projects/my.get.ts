@@ -9,7 +9,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     const items = await pb.collection('creative_projects').getFullList({
-      filter: `owned_by = "${userId}" || owner = "${userId}" || user = "${userId}"`,
+      // Only `owned_by` exists on schema from setup-collections — OR on missing fields returns 400 from PB.
+      filter: `owned_by = "${userId}"`,
       sort: '-created',
       requestKey: `creative_my_${userId}`
     })

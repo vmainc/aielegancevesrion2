@@ -5,6 +5,7 @@ import { checkShotsContinuity } from '~/server/utils/continuity-check-ai'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
+import { replaceSceneShots } from '~/server/utils/persist-scene-shots'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 export default defineEventHandler(async (event) => {
@@ -98,52 +99,17 @@ export default defineEventHandler(async (event) => {
     console.warn('[generate-shots] continuity fields update skipped:', e)
   }
 
-  let existing: { id: string }[] = []
+  let created: ReturnType<typeof pbRecordToCreativeShot>[] = []
   try {
-    existing = await pb.collection('creative_shots').getFullList({
-      filter: `scene="${sceneId}"`,
-      batch: 200
-    })
+    created = await replaceSceneShots(pb, userId, projectId, sceneId, finalShots)
   } catch {
     throw createError({
       statusCode: 503,
       message:
-        'creative_shots collection missing. Run: node scripts/setup-collections.js on PocketBase admin.'
+        'Could not save shots — ensure creative_shots collection exists (setup-collections.js).'
     })
   }
-  for (const row of existing) {
-    await pb.collection('creative_shots').delete(row.id)
-  }
 
-  const created: ReturnType<typeof pbRecordToCreativeShot>[] = []
-  for (let i = 0; i < finalShots.length; i++) {
-    const g = finalShots[i]
-    let rec
-    try {
-      rec = await pb.collection('creative_shots').create({
-        owned_by: userId,
-        project: projectId,
-        scene: sceneId,
-        sort_order: g.order - 1,
-        title: g.title,
-        description: g.description,
-        shot_type: g.shot_type,
-        camera_move: g.camera_move,
-        duration_seconds: g.duration_seconds,
-        image_prompt: g.image_prompt,
-        video_prompt: g.video_prompt
-      })
-    } catch {
-      throw createError({
-        statusCode: 503,
-        message:
-          'Could not save shots — ensure creative_shots collection exists (setup-collections.js).'
-      })
-    }
-    created.push(pbRecordToCreativeShot(rec as Parameters<typeof pbRecordToCreativeShot>[0]))
-  }
-
-  created.sort((a, b) => a.sortOrder - b.sortOrder)
   return {
     shots: created,
     continuity: {

@@ -2,7 +2,8 @@ import type {
   CreativeProject,
   ProjectAspectRatio,
   ProjectDirector,
-  ProjectGoal
+  ProjectGoal,
+  ProjectTargetLength
 } from '~/types/creative-project'
 
 type PbProjectRecord = {
@@ -19,6 +20,7 @@ type PbProjectRecord = {
   director?: unknown
   continuity_memory?: string
   continuity_last_issues?: string
+  target_length?: string
   created?: string
   updated?: string
 }
@@ -54,11 +56,16 @@ export function pbRecordToCreativeProject (r: PbProjectRecord): CreativeProject 
 
   const director = parseDirectorField(r.director)
 
+  const tl = r.target_length as ProjectTargetLength | undefined
+  const targetLength: ProjectTargetLength | undefined =
+    tl === 'spot' || tl === 'short' || tl === 'episode' || tl === 'feature' ? tl : undefined
+
   return {
     id: r.id,
     name: r.name,
     aspectRatio: (r.aspect_ratio || '16:9') as ProjectAspectRatio,
     goal: (r.goal || 'film') as ProjectGoal,
+    targetLength,
     synopsis: r.synopsis || '',
     treatment: r.treatment || '',
     conceptNotes: r.concept_notes || '',

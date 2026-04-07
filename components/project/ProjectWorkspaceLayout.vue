@@ -48,8 +48,10 @@
           <li>1. Overview</li>
           <li>2. Director</li>
           <li>3. Story</li>
-          <li>4. Storyboard</li>
-          <li>5. Video</li>
+          <li>4. Characters</li>
+          <li>5. Scenes</li>
+          <li>6. Storyboard</li>
+          <li>7. Video</li>
         </ol>
       </div>
       <nav class="flex-1 p-3 space-y-0.5">
@@ -134,6 +136,7 @@ const sections = [
   { path: 'director', label: 'Director' },
   { path: 'story', label: 'Story' },
   { path: 'characters', label: 'Characters' },
+  { path: 'scenes', label: 'Scenes' },
   { path: 'storyboard', label: 'Storyboard' },
   { path: 'video', label: 'Video' },
   { path: 'analysis', label: 'Analysis' }

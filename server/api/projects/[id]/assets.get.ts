@@ -21,7 +21,7 @@ export default defineEventHandler(async (event) => {
   const q = getQuery(event)
   const kind = typeof q.kind === 'string' ? q.kind.trim() : ''
 
-  let filter = `project = "${projectId}" && (owned_by = "${userId}" || owner = "${userId}" || user = "${userId}")`
+  let filter = `project = "${projectId}" && owned_by = "${userId}"`
   if (kind && ['script', 'character', 'storyboard', 'video', 'other'].includes(kind)) {
     filter += ` && kind = "${kind}"`
   }
