@@ -83,7 +83,7 @@
         :disabled="importing || analyzing"
         @click="emit('analyzeClick')"
       >
-        {{ analyzing ? 'Running director analysis…' : 'Run director analysis' }}
+        {{ analyzing ? 'Analyzing script…' : analyzeButtonLabel }}
       </button>
     </div>
     <div
@@ -114,6 +114,7 @@ withDefaults(
     heading?: string
     intro?: string
     saveButtonLabel?: string
+    analyzeButtonLabel?: string
     showAspectGoal?: boolean
     /** After save: show only import CTA (no file row). */
     hideUploadStep?: boolean
@@ -130,6 +131,7 @@ withDefaults(
     intro:
       'Step 1: choose a file and save it to this project\'s assets (no AI yet). Step 2: run director analysis when you are ready — then refine notes and generate cast, scenes, and storyboard from their tabs.',
     saveButtonLabel: 'Save screenplay to project',
+    analyzeButtonLabel: 'Run director analysis',
     showAspectGoal: true,
     hideUploadStep: false,
     prominentAnalyze: false

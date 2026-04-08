@@ -24,7 +24,7 @@
           {{ project?.name }}
         </h1>
         <p class="text-base text-gray-700 mb-6 max-w-xl leading-relaxed">
-          Your script file is saved. Run director analysis when you are ready — synopsis, treatment, and director bible only; cast and scenes are separate steps. Large scripts can take many minutes; keep this page open.
+          Your script file is saved. Click <span class="font-semibold text-gray-900">Analyze script</span> to generate a clear synopsis, treatment, director notes, and comparable movies. Cast, scenes, and storyboard are separate steps after this run.
         </p>
         <ProjectOverviewScriptImportPanel
           v-model:aspect="overviewAspect"
@@ -34,7 +34,8 @@
           :show-aspect-goal="false"
           :importing="overviewImporting"
           :analyzing="overviewAnalyzing"
-          :analyze-enabled="Boolean(scriptWorkflowAssetId)"
+          :analyze-enabled="true"
+          analyze-button-label="Analyze script"
           :error="overviewImportError"
           :has-file="Boolean(overviewImportFile)"
           heading="Director analysis"
