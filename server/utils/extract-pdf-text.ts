@@ -51,6 +51,53 @@ function extractTextNaiveFromPdfBytes (buffer: Buffer): string {
     .trim()
 }
 
+async function extractTextWithPdf2Json (buffer: Buffer): Promise<string> {
+  type Pdf2JsonModule = {
+    default?: new () => {
+      on: (event: string, cb: (arg: unknown) => void) => void
+      parseBuffer: (buf: Buffer) => void
+    }
+  }
+  const mod = await import('pdf2json') as Pdf2JsonModule
+  const PDFParserCtor = mod.default
+  if (!PDFParserCtor) return ''
+
+  const parser = new PDFParserCtor()
+  return await new Promise<string>((resolve) => {
+    parser.on('pdfParser_dataError', () => resolve(''))
+    parser.on('pdfParser_dataReady', (raw: unknown) => {
+      const rows: string[] = []
+      const pages = raw && typeof raw === 'object' && 'Pages' in (raw as Record<string, unknown>)
+        ? ((raw as { Pages?: Array<{ Texts?: Array<{ R?: Array<{ T?: string }> }> }> }).Pages || [])
+        : []
+      for (const p of pages) {
+        const texts = p.Texts || []
+        for (const t of texts) {
+          const runs = t.R || []
+          for (const r of runs) {
+            const token = typeof r.T === 'string' ? r.T : ''
+            if (!token) continue
+            try {
+              rows.push(decodeURIComponent(token))
+            } catch {
+              rows.push(token)
+            }
+          }
+        }
+      }
+      resolve(
+        rows
+          .join('\n')
+          .replace(/\u0000/g, '')
+          .replace(/[ \t]+\n/g, '\n')
+          .replace(/\n{3,}/g, '\n\n')
+          .trim()
+      )
+    })
+    parser.parseBuffer(buffer)
+  })
+}
+
 /**
  * Extract plain text from a PDF buffer for screenplay parsing.
  * Image-only (scanned) PDFs return empty text — caller should surface a clear error.
@@ -89,6 +136,12 @@ export async function extractTextFromPdfBuffer (buffer: Buffer): Promise<string>
     }
     return text
   } catch (_e: unknown) {
+    try {
+      const pdf2jsonText = await extractTextWithPdf2Json(buffer)
+      if (pdf2jsonText.length >= MIN_CHARS) return pdf2jsonText
+    } catch {
+      // ignore and keep falling back
+    }
     const fallback = extractTextNaiveFromPdfBytes(buffer)
     if (fallback.length >= MIN_CHARS) return fallback
     throw new Error('PDF parsing failed on this server for this file. Upload .fdx or .txt, or try another text-based PDF export.')
