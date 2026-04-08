@@ -56,7 +56,7 @@ function extractTextNaiveFromPdfBytes (buffer: Buffer): string {
  * Image-only (scanned) PDFs return empty text — caller should surface a clear error.
  */
 export async function extractTextFromPdfBuffer (buffer: Buffer): Promise<string> {
-  let PDFParseCtor: undefined | (new (input: { data: Uint8Array }) => {
+  let PDFParseCtor: undefined | (new (input: { data: Uint8Array; disableWorker?: boolean }) => {
     getText: () => Promise<{ text?: string }>
     destroy: () => Promise<void>
   })
@@ -73,7 +73,12 @@ export async function extractTextFromPdfBuffer (buffer: Buffer): Promise<string>
     throw new Error('PDF parser is unavailable on this server. Upload .fdx or .txt instead.')
   }
 
-  const parser = new PDFParseCtor({ data: new Uint8Array(buffer) })
+  // Force a worker-free path in server runtimes where pdf.worker.mjs resolution is flaky.
+  const PDFParseAny = PDFParseCtor as unknown as { setWorker?: (src?: string) => string }
+  if (typeof PDFParseAny.setWorker === 'function') {
+    PDFParseAny.setWorker('')
+  }
+  const parser = new PDFParseCtor({ data: new Uint8Array(buffer), disableWorker: true })
   try {
     const result = await parser.getText()
     const text = (result.text || '').replace(/\r\n/g, '\n').trim()
