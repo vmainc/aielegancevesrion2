@@ -1,4 +1,5 @@
-import { createError, getRouterParam } from 'h3'
+import { createError, getHeader, getRouterParam, type H3Event } from 'h3'
+import PocketBase from 'pocketbase'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import {
@@ -15,6 +16,13 @@ import {
   isPocketBaseMissingCollectionError
 } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { resolvePocketBaseAdmin } from '~/server/utils/server-env'
+
+function bearerTokenFromEvent (event: H3Event): string {
+  const raw = getHeader(event, 'authorization') || getHeader(event, 'Authorization') || ''
+  const m = raw.match(/^Bearer\s+(.+)$/i)
+  return m?.[1]?.trim() || ''
+}
 
 function isScriptImportWorkflowRow (row: { notes?: string; metadata?: unknown }): boolean {
   const notes = String(row.notes || '')
@@ -51,7 +59,22 @@ export default defineEventHandler(async (event) => {
   }
 
   const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
+  const token = bearerTokenFromEvent(event)
+  let pb: PocketBase
+  try {
+    pb = await getAuthenticatedPocketBase()
+  } catch (adminErr: unknown) {
+    const config = useRuntimeConfig()
+    const admin = resolvePocketBaseAdmin(config)
+    const base =
+      admin.internalUrl ||
+      String(config.pocketbaseInternalUrl || '').replace(/\/+$/, '') ||
+      String(config.public.pocketbaseUrl || '').replace(/\/+$/, '')
+    if (!base || !token) throw adminErr
+    // Fallback for production env drift: use the caller's validated users token.
+    pb = new PocketBase(base)
+    pb.authStore.save(token, { id: userId } as never)
+  }
 
   try {
     const projectRow = await pb.collection('creative_projects').getOne(projectId)
