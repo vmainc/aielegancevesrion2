@@ -89,6 +89,99 @@ export type ScriptAssetAttachResult =
   | { ok: true; id: string }
   | { ok: false; message: string }
 
+function shouldRetryProjectAssetCreateWithoutOptionalFields (msg: string): boolean {
+  const m = msg.toLowerCase()
+  return (
+    m.includes('sort_order') ||
+    m.includes('metadata') ||
+    m.includes('validation_unknown_keys') ||
+    m.includes('unknown field') ||
+    m.includes('field not found')
+  )
+}
+
+async function createProjectScriptAssetRow (params: {
+  pb: PocketBase
+  userId: string
+  projectId: string
+  title: string
+  notes: string
+  metadata: Record<string, unknown>
+  safeFilename: string
+  fileBuf: Buffer
+  logPrefix: string
+}): Promise<{ ok: true; id: string } | { ok: false; message: string }> {
+  const {
+    pb,
+    userId,
+    projectId,
+    title,
+    notes,
+    metadata,
+    safeFilename,
+    fileBuf,
+    logPrefix
+  } = params
+
+  const appendFile = (fd: FormData) => {
+    const uint8 = fileBuf instanceof Uint8Array ? fileBuf : new Uint8Array(fileBuf)
+    const blob = new Blob([uint8])
+    fd.append('file', blob, safeFilename)
+  }
+
+  const withOptional = new FormData()
+  withOptional.append('owned_by', userId)
+  withOptional.append('project', projectId)
+  withOptional.append('kind', 'script')
+  withOptional.append('title', title.slice(0, 500))
+  withOptional.append('notes', notes.slice(0, 8000))
+  withOptional.append('sort_order', '0')
+  withOptional.append('metadata', JSON.stringify(metadata))
+  appendFile(withOptional)
+
+  try {
+    const created = await pb.collection('project_assets').create(withOptional)
+    const id = String((created as { id?: string }).id || '').trim()
+    if (!id) return { ok: false, message: 'project_assets row created without an id.' }
+    return { ok: true, id }
+  } catch (assetErr: unknown) {
+    const firstMsg = formatPocketBaseRecordError(assetErr)
+    if (!shouldRetryProjectAssetCreateWithoutOptionalFields(firstMsg)) {
+      console.warn(`[import-script] ${logPrefix} project_assets create failed:`, firstMsg)
+      return {
+        ok: false,
+        message: firstMsg || 'Could not save the script file to project assets.'
+      }
+    }
+
+    // Legacy production schemas may not include optional fields yet.
+    const legacySafe = new FormData()
+    legacySafe.append('owned_by', userId)
+    legacySafe.append('project', projectId)
+    legacySafe.append('kind', 'script')
+    legacySafe.append('title', title.slice(0, 500))
+    legacySafe.append('notes', notes.slice(0, 8000))
+    appendFile(legacySafe)
+
+    try {
+      const created = await pb.collection('project_assets').create(legacySafe)
+      const id = String((created as { id?: string }).id || '').trim()
+      if (!id) return { ok: false, message: 'project_assets row created without an id.' }
+      console.warn(
+        `[import-script] ${logPrefix} project_assets created via legacy fallback (missing optional fields: metadata/sort_order).`
+      )
+      return { ok: true, id }
+    } catch (legacyErr: unknown) {
+      const secondMsg = formatPocketBaseRecordError(legacyErr)
+      console.warn(`[import-script] ${logPrefix} project_assets fallback failed:`, secondMsg)
+      return {
+        ok: false,
+        message: secondMsg || firstMsg || 'Could not save the script file to project assets.'
+      }
+    }
+  }
+}
+
 async function deleteProjectScenesOnly (pb: PocketBase, projectId: string) {
   const scenes = await pb.collection('creative_scenes').getFullList({
     filter: `project = "${projectId}"`,
@@ -242,41 +335,23 @@ async function attachPendingScriptAsset (params: {
     ? `Screenplay file saved for “${noteTitle}”. Run analysis to extract scenes, characters, and treatment. (${parseWarning})`
     : `Screenplay file saved for “${noteTitle}”. ${previewSceneCount} scene block(s) in a quick parse — run analysis to generate synopsis, treatment, scenes, and characters.`
 
-  try {
-    const formData = new FormData()
-    formData.append('owned_by', userId)
-    formData.append('project', projectId)
-    formData.append('kind', 'script')
-    formData.append('title', titleFromFile.slice(0, 500))
-    formData.append('notes', notes.slice(0, 8000))
-    formData.append('sort_order', '0')
-    formData.append(
-      'metadata',
-      JSON.stringify({
-        source: 'script_import',
-        analysis_status: 'pending',
-        preview_scene_count: previewSceneCount,
-        original_filename: filename.slice(0, 500),
-        ...(parseWarning ? { parse_warning: parseWarning.slice(0, 500) } : {})
-      })
-    )
-    const uint8 = fileBuf instanceof Uint8Array ? fileBuf : new Uint8Array(fileBuf)
-    const blob = new Blob([uint8])
-    formData.append('file', blob, safeFilename)
-    const created = await pb.collection('project_assets').create(formData)
-    const id = String((created as { id?: string }).id || '').trim()
-    if (!id) {
-      return { ok: false, message: 'project_assets row created without an id.' }
-    }
-    return { ok: true, id }
-  } catch (assetErr: unknown) {
-    const msg = formatPocketBaseRecordError(assetErr)
-    console.warn('[import-script] pending project_assets create failed:', msg)
-    return {
-      ok: false,
-      message: msg || 'Could not save the script file to project assets.'
-    }
-  }
+  return createProjectScriptAssetRow({
+    pb,
+    userId,
+    projectId,
+    title: titleFromFile,
+    notes,
+    metadata: {
+      source: 'script_import',
+      analysis_status: 'pending',
+      preview_scene_count: previewSceneCount,
+      original_filename: filename.slice(0, 500),
+      ...(parseWarning ? { parse_warning: parseWarning.slice(0, 500) } : {})
+    },
+    safeFilename,
+    fileBuf,
+    logPrefix: 'pending'
+  })
 }
 
 async function attachScriptAsset (params: {
@@ -300,45 +375,22 @@ async function attachScriptAsset (params: {
     }
   }
 
-  try {
-    const formData = new FormData()
-    formData.append('owned_by', userId)
-    formData.append('project', projectId)
-    formData.append('kind', 'script')
-    formData.append('title', titleFromFile.slice(0, 500))
-    formData.append(
-      'notes',
-      `Imported script for “${noteTitle}”. ${sceneCount} scene(s).`
-    )
-    formData.append('sort_order', '0')
-    formData.append(
-      'metadata',
-      JSON.stringify({
-        source: 'script_import',
-        analysis_status: 'complete',
-        scene_count: sceneCount,
-        original_filename: filename.slice(0, 500)
-      })
-    )
-    const uint8 = fileBuf instanceof Uint8Array ? fileBuf : new Uint8Array(fileBuf)
-    const blob = new Blob([uint8])
-    formData.append('file', blob, safeFilename)
-    const created = await pb.collection('project_assets').create(formData)
-    const id = String((created as { id?: string }).id || '').trim()
-    if (!id) {
-      return { ok: false, message: 'project_assets row created without an id.' }
-    }
-    return { ok: true, id }
-  } catch (assetErr: unknown) {
-    const msg = formatPocketBaseRecordError(assetErr)
-    console.warn('[import-script] project_assets create failed:', msg)
-    return {
-      ok: false,
-      message:
-        msg ||
-        'Could not save the script file to project assets. Check project_assets rules and file size limits.'
-    }
-  }
+  return createProjectScriptAssetRow({
+    pb,
+    userId,
+    projectId,
+    title: titleFromFile,
+    notes: `Imported script for “${noteTitle}”. ${sceneCount} scene(s).`,
+    metadata: {
+      source: 'script_import',
+      analysis_status: 'complete',
+      scene_count: sceneCount,
+      original_filename: filename.slice(0, 500)
+    },
+    safeFilename,
+    fileBuf,
+    logPrefix: 'complete'
+  })
 }
 
 async function updateScriptAssetAfterAnalysis (
