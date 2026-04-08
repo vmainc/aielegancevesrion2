@@ -51,6 +51,25 @@
       v-else-if="hasConcept"
       class="rounded-xl border border-gray-200 bg-white shadow-sm p-6 sm:p-8 mb-10"
     >
+      <div
+        v-if="canCloudImport && hasWorkflowScreenplaySaved"
+        class="mb-6 rounded-xl border-2 border-primary/40 bg-primary/10 p-4 sm:p-5"
+      >
+        <p class="text-xs font-bold uppercase tracking-wide text-primary mb-2">
+          Screenplay ready
+        </p>
+        <p class="text-sm text-gray-700 mb-3">
+          Run analysis to generate a clear synopsis refresh, director notes, and comparable movies from the saved screenplay.
+        </p>
+        <button
+          type="button"
+          class="w-full sm:w-auto px-6 py-3.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-xl text-base font-bold transition-colors disabled:opacity-50 shadow-md"
+          :disabled="overviewImporting || overviewAnalyzing"
+          @click="runScriptAnalyzeFromOverview"
+        >
+          {{ overviewAnalyzing ? 'Analyzing script…' : 'Analyze script' }}
+        </button>
+      </div>
       <p class="text-xs font-semibold uppercase tracking-wide text-primary mb-3">Synopsis</p>
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-6">
         {{ project?.name }}
