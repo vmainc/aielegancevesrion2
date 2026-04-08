@@ -11,6 +11,7 @@
 #   DEPLOY_SKIP_BUILD=1            (skip npm run build — use after a fresh local `NUXT_PUBLIC_POCKETBASE_URL=... npm run build`)
 #   DEPLOY_SYSTEMD_UNIT=foo        (use systemd instead of pm2)
 #   DEPLOY_SSH_CMD='ssh ...'       (custom command after rsync)
+#   DEPLOY_SSH_DISABLE_MUX=1       (disable SSH connection sharing; default reuses one login prompt)
 #
 # PocketBase parity with local: on the VPS, /var/www/aielegance/.env must define
 # NUXT_PUBLIC_POCKETBASE_URL, POCKETBASE_INTERNAL_URL, POCKETBASE_ADMIN_* (and OPENROUTER_*).
@@ -26,6 +27,17 @@ cd "$ROOT"
 : "${DEPLOY_PM2_NAME:=aielegance}"
 # Browser-facing PocketBase (HTTPS on live site — avoids mixed-content on https://aielegance.com/)
 : "${NUXT_PUBLIC_POCKETBASE_URL:=https://aielegance.com/pb}"
+
+SSH_BASE_OPTS="-o ServerAliveInterval=30 -o ServerAliveCountMax=6"
+if [ "${DEPLOY_SSH_DISABLE_MUX:-0}" = "1" ]; then
+  SSH_CMD="ssh $SSH_BASE_OPTS"
+  RSYNC_SSH="ssh $SSH_BASE_OPTS"
+else
+  SSH_CONTROL_PATH="/tmp/aielegance-deploy-ctrl-%r@%h:%p"
+  SSH_MUX_OPTS="-o ControlMaster=auto -o ControlPersist=10m -o ControlPath=$SSH_CONTROL_PATH"
+  SSH_CMD="ssh $SSH_BASE_OPTS $SSH_MUX_OPTS"
+  RSYNC_SSH="ssh $SSH_BASE_OPTS $SSH_MUX_OPTS"
+fi
 
 if [ "${DEPLOY_SKIP_BUILD:-0}" = "1" ]; then
   echo "==> Skipping build (DEPLOY_SKIP_BUILD=1). Using existing .output/"
@@ -58,21 +70,21 @@ else
 fi
 
 echo "==> Rsync .output/ → $VPS_HOST:$VPS_PATH/.output/"
-rsync -avz --delete -e ssh "$ROOT/.output/" "$VPS_HOST:$VPS_PATH/.output/"
+rsync -avz --delete -e "$RSYNC_SSH" "$ROOT/.output/" "$VPS_HOST:$VPS_PATH/.output/"
 
 # Nitro keeps the old _nuxt manifest in memory until the Node process restarts.
 if [ "${DEPLOY_SKIP_RESTART:-0}" = "1" ]; then
   echo "==> Skipping restart (DEPLOY_SKIP_RESTART=1). Run on VPS: pm2 restart $DEPLOY_PM2_NAME"
 elif [ -n "${DEPLOY_SYSTEMD_UNIT:-}" ]; then
   echo "==> Restarting systemd: $DEPLOY_SYSTEMD_UNIT"
-  ssh "$VPS_HOST" "sudo systemctl restart $DEPLOY_SYSTEMD_UNIT"
+  $SSH_CMD "$VPS_HOST" "sudo systemctl restart $DEPLOY_SYSTEMD_UNIT"
 elif [ -n "${DEPLOY_SSH_CMD:-}" ]; then
   echo "==> Running: $DEPLOY_SSH_CMD"
   eval "$DEPLOY_SSH_CMD"
 else
   echo "==> Restarting PM2 on server: $DEPLOY_PM2_NAME"
-  if ssh "$VPS_HOST" "command -v pm2 >/dev/null 2>&1 && pm2 restart $DEPLOY_PM2_NAME" \
-    || ssh "$VPS_HOST" "bash -lc 'pm2 restart $DEPLOY_PM2_NAME'"; then
+  if $SSH_CMD "$VPS_HOST" "command -v pm2 >/dev/null 2>&1 && pm2 restart $DEPLOY_PM2_NAME" \
+    || $SSH_CMD "$VPS_HOST" "bash -lc 'pm2 restart $DEPLOY_PM2_NAME'"; then
     echo "==> PM2 restart OK — hard-refresh https://aielegance.com (private window if needed)."
   else
     echo "WARN: Could not pm2 restart over SSH. On the VPS run:"
