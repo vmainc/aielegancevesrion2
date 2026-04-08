@@ -348,6 +348,19 @@
               }}
             </template>
           </p>
+          <div
+            v-if="hasWorkflowScreenplaySaved && canCloudImport"
+            class="mt-4"
+          >
+            <button
+              type="button"
+              class="w-full sm:w-auto px-6 py-3.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-xl text-base font-bold transition-colors disabled:opacity-50 shadow-md"
+              :disabled="overviewImporting || overviewAnalyzing"
+              @click="runScriptAnalyzeFromOverview"
+            >
+              {{ overviewAnalyzing ? 'Analyzing script…' : 'Analyze script' }}
+            </button>
+          </div>
         </div>
         <button
           v-if="hasConcept"
