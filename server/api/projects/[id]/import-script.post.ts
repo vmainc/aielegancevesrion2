@@ -2,6 +2,10 @@ import { readMultipartFormData, createError, getHeader, getRouterParam } from 'h
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { uploadScriptFileToProject } from '~/server/utils/import-script-core'
+import {
+  formatPocketBaseRecordError,
+  isPocketBaseMissingCollectionError
+} from '~/server/utils/pb-missing-collection-error'
 
 /**
  * Save a screenplay file to project assets only. Run POST .../script/analyze for AI treatment / scenes / characters.
@@ -40,13 +44,33 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing script file' })
   }
 
-  const pb = await getAuthenticatedPocketBase()
-
-  return uploadScriptFileToProject({
-    userId,
-    pb,
-    projectId,
-    fileBuf,
-    filename
-  })
+  try {
+    const pb = await getAuthenticatedPocketBase()
+    return await uploadScriptFileToProject({
+      userId,
+      pb,
+      projectId,
+      fileBuf,
+      filename
+    })
+  } catch (e: unknown) {
+    if (isPocketBaseMissingCollectionError(e)) {
+      throw createError({
+        statusCode: 503,
+        message:
+          'PocketBase schema is incomplete for script save. Run setup-db against production PocketBase and retry.'
+      })
+    }
+    const msg = formatPocketBaseRecordError(e)
+    const status =
+      e && typeof e === 'object' && 'statusCode' in e
+        ? Number((e as { statusCode?: number }).statusCode || 500)
+        : e && typeof e === 'object' && 'status' in e
+          ? Number((e as { status?: number }).status || 500)
+          : 500
+    throw createError({
+      statusCode: status >= 400 && status < 600 ? status : 500,
+      message: msg || 'Could not save screenplay to project assets.'
+    })
+  }
 })
