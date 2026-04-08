@@ -18,6 +18,7 @@
     "start": "node -r dotenv/config .output/server/index.mjs",
     "postinstall": "nuxt prepare",
     "setup-db": "node scripts/setup-collections.js",
+    "setup-db:remote": "bash scripts/setup-pocketbase-remote.sh",
     "add-fields": "node scripts/add-fields-to-collections.js",
     "deploy": "bash scripts/deploy-vps.sh"
   },
