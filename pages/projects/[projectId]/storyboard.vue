@@ -2,18 +2,22 @@
   <div class="max-w-4xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">Storyboard</span>
-      · Scenes (from the Scenes tab) hold Claude’s script breakdown; import also pre-builds shot lists per scene (up to 28, two at a time). Pick a scene, use
+      · After scenes exist, use <span class="font-medium text-gray-700">Generate panels from scenes</span> for an import-style batch (first 28 scenes, two at a time), or pick a scene and use
       <span class="text-gray-700">Generate Shots</span>
-      to refresh a board (runs continuity), then
+      for a continuity-aware refresh. Then
       <span class="text-gray-700">Generate frame</span>
       from each shot’s image prompt.
     </p>
 
     <div
       v-if="!clientReady"
-      class="text-gray-600 py-8"
+      class="rounded-xl border border-primary/20 bg-primary/5 px-6 py-10"
     >
-      Loading…
+      <FilmReelLoader
+        size="md"
+        label="Loading storyboard"
+        sub-label="Preparing your workspace…"
+      />
     </div>
 
     <template v-else>
@@ -46,7 +50,7 @@
       >
         <h2 class="text-lg font-semibold text-gray-800 mb-2">No scenes yet</h2>
         <p class="text-sm text-gray-500 mb-6">
-          Import a script from Projects to create scenes and auto storyboard panels, then return here.
+          Run director analysis on Overview, generate scenes on the Scenes tab, then return here to batch panels or generate shots per scene.
         </p>
         <NuxtLink
           to="/projects"
@@ -57,6 +61,35 @@
       </div>
 
       <div v-else class="space-y-8 mb-10">
+        <div class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm">
+          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
+            <div class="min-w-0">
+              <h2 class="text-base font-semibold text-gray-900 mb-1">Generate panels from scenes</h2>
+              <p class="text-sm text-gray-600">
+                Import-style batch: shot lists for the first {{ storyboardSceneCap }} scenes using your Director notes and cast (two scenes at a time). For a continuity pass on one beat, use <span class="font-medium text-gray-800">Generate Shots</span> below.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="shrink-0 px-4 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+              :disabled="seedingStoryboard || generating"
+              @click="seedStoryboardBatch"
+            >
+              {{ seedingStoryboard ? 'Working…' : 'Generate panels from scenes' }}
+            </button>
+          </div>
+          <div
+            v-if="seedingStoryboard"
+            class="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-5"
+          >
+            <FilmReelLoader
+              size="sm"
+              label="Building shot lists"
+              sub-label="Claude is working through your scenes — large projects can take several minutes."
+            />
+          </div>
+        </div>
+
         <div class="rounded-xl border border-gray-200 bg-gray-50 p-5 sm:p-6">
           <div class="flex flex-col sm:flex-row sm:items-end gap-4 sm:justify-between">
             <div class="flex-1 min-w-0">
@@ -67,11 +100,11 @@
                 class="w-full max-w-md px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary text-sm"
               >
                 <option
-                  v-for="s in scenes"
+                  v-for="(s, idx) in scenes"
                   :key="s.id"
                   :value="s.id"
                 >
-                  {{ s.sortOrder + 1 }}. {{ s.heading }}
+                  SCENE {{ idx + 1 }} — {{ s.heading }}
                 </option>
               </select>
               <p v-if="activeScene?.summary" class="mt-2 text-xs text-gray-500 line-clamp-2">
@@ -88,10 +121,27 @@
             </button>
           </div>
           <p v-if="generateError" class="mt-3 text-sm text-red-600">{{ generateError }}</p>
+          <div
+            v-if="generating"
+            class="mt-4 rounded-xl border border-primary/20 bg-white p-5"
+          >
+            <FilmReelLoader
+              size="sm"
+              label="Generating shots"
+              sub-label="Continuity-aware pass for this scene…"
+            />
+          </div>
         </div>
 
-        <div v-if="shotsLoading" class="text-sm text-gray-600 py-4">
-          Loading shots…
+        <div
+          v-if="shotsLoading"
+          class="rounded-xl border border-primary/15 bg-gray-50 p-5"
+        >
+          <FilmReelLoader
+            size="sm"
+            label="Loading shots"
+            sub-label="Fetching panels for the selected scene…"
+          />
         </div>
 
         <div v-else-if="!shots.length && !generating" class="text-sm text-gray-500">
@@ -245,7 +295,11 @@
 </template>
 
 <script setup lang="ts">
+import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { CreativeShot } from '~/types/creative-shot'
+
+/** Keep in sync with `IMPORT_STORYBOARD_MAX_SCENES` in server import-storyboard-seed. */
+const storyboardSceneCap = 28
 
 const {
   activeProject,
@@ -274,6 +328,7 @@ const shots = ref<CreativeShot[]>([])
 const shotsLoading = ref(false)
 const generating = ref(false)
 const generateError = ref('')
+const seedingStoryboard = ref(false)
 const savingId = ref<string | null>(null)
 const imageGenId = ref<string | null>(null)
 const framePreview = reactive<Record<string, string>>({})
@@ -381,6 +436,40 @@ async function loadShots () {
     shots.value = []
   } finally {
     shotsLoading.value = false
+  }
+}
+
+async function seedStoryboardBatch () {
+  const id = projectId.value
+  const headers = await authHeaders()
+  if (!id || !headers) {
+    toast.showToast('Log in to generate panels.', 'error')
+    return
+  }
+  seedingStoryboard.value = true
+  try {
+    const res = await $fetch<{
+      result: { ok: number; failed: number; capSkipped: number; emptySkipped: number }
+    }>(`/api/projects/${id}/script/seed-storyboard`, {
+      method: 'POST',
+      headers,
+      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    })
+    const r = res.result
+    const parts: string[] = [`Seeded ${r.ok} scene(s).`]
+    if (r.failed > 0) parts.push(`${r.failed} failed.`)
+    if (r.capSkipped > 0) parts.push(`${r.capSkipped} past the first ${storyboardSceneCap}.`)
+    if (r.emptySkipped > 0) parts.push(`${r.emptySkipped} skipped (empty).`)
+    toast.showToast(parts.join(' '), r.ok > 0 ? 'success' : 'info')
+    await loadShots()
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message || 'Storyboard seed failed.')
+        : 'Storyboard seed failed.'
+    toast.showToast(msg, 'error')
+  } finally {
+    seedingStoryboard.value = false
   }
 }
 

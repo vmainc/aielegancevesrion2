@@ -6,8 +6,12 @@ import {
   enrichmentToProjectFields,
   inferThreeActThemeBreakdown
 } from '~/server/utils/script-import-ai'
-import { pbRecordToCreativeScript } from '~/server/utils/creative-script-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { pbProjectAssetToCreativeScript, pbRecordToCreativeScript } from '~/server/utils/creative-script-map'
+import {
+  mergeProjectAssetTreatment,
+  resolveScriptWizardSource,
+  updateCreativeScriptTreatmentOnly
+} from '~/server/utils/resolve-script-wizard-source'
 import { sceneOutlineAndCharactersFromScriptText } from '~/server/utils/script-wizard-stored-outline'
 
 export default defineEventHandler(async (event) => {
@@ -18,27 +22,31 @@ export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
   const pb = await getAuthenticatedPocketBase()
 
-  const row = await pb.collection('creative_scripts').getOne(id)
-  const owner = pbRecordOwnerId(row as { owned_by?: unknown; owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
+  const resolved = await resolveScriptWizardSource(pb, userId, id)
+  if (!resolved.scriptText.trim()) {
+    throw createError({
+      statusCode: 400,
+      message:
+        resolved.kind === 'project_asset'
+          ? 'Could not read script text from the uploaded file. Re-upload the screenplay or check file access.'
+          : 'No script text stored for this row'
+    })
   }
 
-  const title = String((row as { title?: string }).title || 'Untitled script').slice(0, 500)
-  const scriptText = String((row as { script_text?: string }).script_text || '')
-  if (!scriptText.trim()) {
-    throw createError({ statusCode: 400, message: 'No script text stored for this row' })
-  }
-
-  const existing = String((row as { treatment?: string }).treatment || '').trim()
+  const existing = resolved.existingTreatment.trim()
   if (existing && /Three-act thematic breakdown/i.test(existing)) {
+    const script =
+      resolved.kind === 'creative_script'
+        ? pbRecordToCreativeScript(resolved.row)
+        : pbProjectAssetToCreativeScript(resolved.row)
     return {
-      script: pbRecordToCreativeScript(row as Record<string, unknown>),
+      script,
       notice: 'This script already has a three-act thematic breakdown.'
     }
   }
 
-  const { sceneOutline, characterNames } = sceneOutlineAndCharactersFromScriptText(scriptText)
+  const title = resolved.title
+  const { sceneOutline, characterNames } = sceneOutlineAndCharactersFromScriptText(resolved.scriptText)
   const enrichment = await enrichScriptWithAi({
     projectName: title,
     sceneOutline,
@@ -60,12 +68,18 @@ export default defineEventHandler(async (event) => {
     newTreatment = threeAct ? `${existing}\n\n${threeAct}` : existing
   }
 
-  const updated = await pb.collection('creative_scripts').update(id, {
-    treatment: newTreatment.slice(0, 50_000)
-  })
+  const updated =
+    resolved.kind === 'creative_script'
+      ? await updateCreativeScriptTreatmentOnly(pb, id, newTreatment)
+      : await mergeProjectAssetTreatment(pb, id, newTreatment.slice(0, 50_000))
+
+  const script =
+    resolved.kind === 'creative_script'
+      ? pbRecordToCreativeScript(updated)
+      : pbProjectAssetToCreativeScript(updated)
 
   return {
-    script: pbRecordToCreativeScript(updated as Record<string, unknown>),
+    script,
     ...(!threeAct
       ? { notice: 'Breakdown pass returned empty (check OpenRouter / model). Treatment text was still updated if needed.' }
       : {})

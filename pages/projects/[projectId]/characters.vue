@@ -2,7 +2,7 @@
   <div class="max-w-4xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Characters from script import; attach reference art under Assets.
+      · Cast list: name and Claude-written description. After you run director analysis and tweak the Director tab, use the button below so descriptions and dialogue-share % follow your <span class="font-medium text-gray-700">newest</span> synopsis, treatment, and director bible. The chart matches table swatches. Reference art lives under Assets.
     </p>
 
     <div
@@ -20,8 +20,15 @@
     </template>
 
     <template v-else>
-      <div v-if="pending" class="rounded-xl border border-gray-200 bg-white p-8 text-center text-sm text-gray-500">
-        Loading characters…
+      <div
+        v-if="pending"
+        class="rounded-xl border border-primary/20 bg-primary/5 p-8"
+      >
+        <FilmReelLoader
+          size="sm"
+          label="Loading cast"
+          sub-label="Fetching your project’s characters…"
+        />
       </div>
       <div
         v-else-if="loadError"
@@ -29,74 +36,66 @@
       >
         {{ loadError }}
       </div>
-      <template v-else-if="characters.length">
-        <div class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-8 shadow-sm">
+      <template v-else>
+        <div
+          class="flex flex-wrap items-center justify-between gap-3 mb-4"
+        >
+          <p class="text-sm text-gray-600 max-w-xl">
+            <span class="font-medium text-gray-800">Build / refresh cast from script (Claude)</span>
+            uses your saved screenplay plus the project’s current synopsis, treatment, and Director-tab notes. If the table is empty it seeds names from the file, then writes a description and dialogue-share % for every row.
+          </p>
+          <button
+            type="button"
+            class="px-4 py-2 text-sm font-medium rounded-lg bg-primary text-white hover:bg-primary-hover disabled:opacity-50 shrink-0"
+            :disabled="enrichingCast || characterMutating"
+            @click="enrichCastFromScript"
+          >
+            {{ enrichingCast ? 'Working…' : 'Build / refresh cast from script' }}
+          </button>
+        </div>
+
+        <div
+          v-if="enrichingCast"
+          class="rounded-xl border border-primary/20 bg-primary/5 p-6 mb-6"
+        >
+          <FilmReelLoader
+            size="sm"
+            label="Claude is reading your script"
+            sub-label="Creating or updating cast rows, descriptions, and dialogue share for the chart…"
+          />
+        </div>
+
+        <ProjectCharactersDescriptionTable
+          class="mb-8"
+          :characters="characters"
+          :editable="true"
+          :busy="characterMutating || enrichingCast"
+          :show-chart-swatches="characters.length > 0"
+          :chart-color-by-name="chartSwatchColors"
+          heading="Characters"
+          subheading="Square colors match the dialogue-share chart. Use the button above to pull names from the screenplay and have Claude describe each role."
+          empty-hint="No characters yet. Click “Build / refresh cast from script” (needs a saved screenplay on Overview), or add a row manually."
+          @create="onCreateCharacter"
+          @update="onUpdateCharacter"
+          @delete="onDeleteCharacter"
+        />
+
+        <div
+          v-if="characters.length"
+          class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-8 shadow-sm"
+        >
           <h2 class="text-lg font-semibold text-gray-900 mb-1">
-            Screen share (import estimate)
+            Dialogue share in the script
           </h2>
           <p class="text-sm text-gray-600 mb-6">
-            From your last script import, Claude estimates how much each character drives dialogue and presence in the text.
+            Each slice is this character’s estimated share of <span class="font-medium text-gray-800">dialogue (and notable presence)</span> in the screenplay vs. the whole cast — same numbers as <span class="font-medium text-gray-800">Screen share %</span> in the table. Run <span class="font-medium text-gray-700">Build / refresh cast from script</span> to refresh from the screenplay; if the model returns flat numbers, we fall back to counting name mentions in the script excerpt so the pie isn’t all equal slices.
           </p>
           <CharacterScreenSharePie v-if="pieSlices.length" :slices="pieSlices" />
           <p v-else class="text-sm text-gray-500">
-            No percentage data yet — re-import the script, or add the
-            <span class="font-mono text-xs">screen_share_percent</span>
-            number field to <span class="font-mono text-xs">creative_characters</span>
-            (e.g. <span class="font-mono text-xs">node scripts/add-fields-to-collections.js</span>).
+            No chart yet — add characters or run <span class="font-medium text-gray-700">Build / refresh cast from script</span>.
           </p>
         </div>
-
-        <div class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden mb-8">
-          <div class="px-4 sm:px-5 py-4 border-b border-gray-200 bg-gray-50/90">
-            <h3 class="text-sm font-semibold text-gray-900">
-              Characters ({{ characters.length }})
-            </h3>
-            <p class="text-xs text-gray-500 mt-0.5">
-              Name and role description from script import (editable in PocketBase if needed).
-            </p>
-          </div>
-          <div class="overflow-x-auto">
-            <table
-              class="w-full text-sm text-left border-collapse"
-              aria-label="Characters in this project"
-            >
-              <thead>
-                <tr class="border-b border-gray-200 bg-gray-50 text-xs font-semibold uppercase tracking-wide text-gray-600">
-                  <th scope="col" class="px-4 sm:px-5 py-3 align-bottom w-[min(11rem,26%)]">
-                    Name
-                  </th>
-                  <th scope="col" class="px-4 sm:px-5 py-3 align-bottom">
-                    Description
-                  </th>
-                </tr>
-              </thead>
-              <tbody class="divide-y divide-gray-100">
-                <tr
-                  v-for="c in characters"
-                  :key="c.id"
-                  class="hover:bg-gray-50/70 transition-colors"
-                >
-                  <td class="px-4 sm:px-5 py-3 align-top font-semibold text-gray-900">
-                    {{ c.name }}
-                  </td>
-                  <td class="px-4 sm:px-5 py-3 align-top text-gray-700 leading-relaxed">
-                    <span class="whitespace-pre-wrap break-words">{{ c.roleDescription || '—' }}</span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
       </template>
-      <div
-        v-else
-        class="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 mb-8 text-center"
-      >
-        <h2 class="text-lg font-semibold text-gray-800 mb-2">No characters yet</h2>
-        <p class="text-sm text-gray-500 mb-4">
-          Import a screenplay into this project to auto-populate the cast, descriptions, and screen-share estimates.
-        </p>
-      </div>
     </template>
 
     <div class="rounded-xl border border-gray-200 bg-gray-50 p-5 mb-8">
@@ -124,19 +123,31 @@
 </template>
 
 <script setup lang="ts">
+import { onActivated } from 'vue'
+import {
+  buildCharacterPieModel,
+  pieModelToSwatchRecord
+} from '~/lib/character-screen-share-chart'
+import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { CreativeCharacter } from '~/types/creative-project'
 
 const PB_ID = /^[a-z0-9]{15}$/
 
+const route = useRoute()
 const { activeProjectId, activeProject, withProjectQuery } = useCreativeProject()
 const { getAuthToken, isAuthenticated } = useAuth()
 const { stepBadge } = useProjectWorkflowStep()
+const toast = useToast()
 
 const projectId = activeProjectId
 
 const characters = ref<CreativeCharacter[]>([])
 const loadError = ref<string | null>(null)
 const pending = ref(false)
+
+const characterMutating = ref(false)
+const enrichingCast = ref(false)
 
 const canLoadCloud = computed(
   () =>
@@ -145,51 +156,23 @@ const canLoadCloud = computed(
     isAuthenticated.value
 )
 
-function buildPieSlices (list: CreativeCharacter[]): { label: string; percent: number; color: string }[] {
-  const withPct = list
-    .map(c => ({
-      label: c.name,
-      percent: c.screenSharePercent ?? 0
-    }))
-    .filter(s => s.percent > 0)
+const characterPieModel = computed(() => buildCharacterPieModel(characters.value))
+const pieSlices = computed(() => characterPieModel.value.slices)
+const chartSwatchColors = computed(() => pieModelToSwatchRecord(characterPieModel.value))
 
-  if (!list.length) return []
-
-  if (!withPct.length) {
-    const eq = 100 / list.length
-    return list.map((c, i) => ({
-      label: c.name,
-      percent: Math.round((i === list.length - 1 ? 100 - eq * (list.length - 1) : eq) * 10) / 10,
-      color: ''
-    }))
+async function refreshCharactersList () {
+  const token = getAuthToken()
+  if (!canLoadCloud.value || !token) return
+  try {
+    const res = await $fetch<{ characters: CreativeCharacter[] }>(
+      `/api/projects/${projectId.value}/characters`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    characters.value = res.characters || []
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not refresh characters'), 'error')
   }
-
-  if (withPct.length <= 10) {
-    return withPct.map(s => ({ ...s, color: '' }))
-  }
-
-  const sorted = [...withPct].sort((a, b) => b.percent - a.percent)
-  const main: { label: string; percent: number; color: string }[] = []
-  let other = 0
-  const threshold = 2
-  for (const s of sorted) {
-    if (s.percent < threshold && sorted.length > 6) {
-      other += s.percent
-    } else {
-      main.push({ ...s, color: '' })
-    }
-  }
-  if (other > 0) {
-    main.push({
-      label: 'Other (smaller roles)',
-      percent: Math.round(other * 10) / 10,
-      color: ''
-    })
-  }
-  return main
 }
-
-const pieSlices = computed(() => buildPieSlices(characters.value))
 
 async function loadCharacters () {
   if (!canLoadCloud.value) return
@@ -215,15 +198,134 @@ async function loadCharacters () {
   }
 }
 
+async function enrichCastFromScript () {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  enrichingCast.value = true
+  try {
+    const res = await $fetch<{ updated: number; seeded?: number; characters: CreativeCharacter[] }>(
+      `/api/projects/${id}/characters/enrich-from-script`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: {},
+        timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+      }
+    )
+    if (res.characters?.length) {
+      characters.value = res.characters
+    } else {
+      await refreshCharactersList()
+    }
+    const bits: string[] = []
+    if (res.seeded && res.seeded > 0) {
+      bits.push(res.seeded === 1 ? 'Added 1 character from the screenplay' : `Added ${res.seeded} characters from the screenplay`)
+    }
+    bits.push(
+      res.updated === 1 ? 'Claude updated 1 description & dialogue %' : `Claude updated ${res.updated} descriptions & dialogue %`
+    )
+    toast.showToast(bits.join(' · '), 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not build cast from script'), 'error')
+  } finally {
+    enrichingCast.value = false
+  }
+}
+
+async function onCreateCharacter (payload: {
+  name: string
+  roleDescription: string
+  screenSharePercent: number | null
+}) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  characterMutating.value = true
+  try {
+    await $fetch(`/api/projects/${id}/characters`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        name: payload.name,
+        roleDescription: payload.roleDescription,
+        screenSharePercent: payload.screenSharePercent
+      }
+    })
+    toast.showToast('Character added.', 'success')
+    await refreshCharactersList()
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not add character'), 'error')
+  } finally {
+    characterMutating.value = false
+  }
+}
+
+async function onUpdateCharacter (
+  characterId: string,
+  payload: { name: string; roleDescription: string; screenSharePercent: number | null }
+) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  characterMutating.value = true
+  try {
+    await $fetch(`/api/projects/${id}/characters/${characterId}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        name: payload.name,
+        roleDescription: payload.roleDescription,
+        screenSharePercent: payload.screenSharePercent
+      }
+    })
+    toast.showToast('Character updated.', 'success')
+    await refreshCharactersList()
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not update character'), 'error')
+  } finally {
+    characterMutating.value = false
+  }
+}
+
+async function onDeleteCharacter (characterId: string) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  characterMutating.value = true
+  try {
+    await $fetch(`/api/projects/${id}/characters/${characterId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    toast.showToast('Character removed.', 'success')
+    await refreshCharactersList()
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not delete character'), 'error')
+  } finally {
+    characterMutating.value = false
+  }
+}
+
 watch(
-  [canLoadCloud, projectId],
-  ([ok]) => {
-    if (ok) void loadCharacters()
-    else {
+  () => ({
+    ok: canLoadCloud.value,
+    pid: projectId.value,
+    path: route.fullPath,
+    updated: activeProject.value?.updatedAt ?? ''
+  }),
+  (cur) => {
+    if (!cur.ok) {
       characters.value = []
       loadError.value = null
+      return
     }
+    void loadCharacters()
   },
   { immediate: true }
 )
+
+onActivated(() => {
+  if (canLoadCloud.value) void loadCharacters()
+})
 </script>

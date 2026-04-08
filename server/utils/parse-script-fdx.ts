@@ -1,4 +1,8 @@
 import { XMLParser } from 'fast-xml-parser'
+import {
+  filterLikelyCharacterNames,
+  isExcludedScreenplayCharacterLabel
+} from '~/server/utils/parse-script-txt'
 
 export interface ParsedScene {
   heading: string
@@ -87,7 +91,16 @@ export function parseFdxXml (xml: string): ParsedScript {
     const t = p.type
     const text = p.text
     if (t === 'Character') {
-      if (text) characterNames.add(text.replace(/\s*\(.*\)\s*$/, '').trim())
+      if (text) {
+        const cleaned = text.replace(/\s*\(.*\)\s*$/, '').trim()
+        if (
+          cleaned &&
+          !isExcludedScreenplayCharacterLabel(text) &&
+          !isExcludedScreenplayCharacterLabel(cleaned)
+        ) {
+          characterNames.add(cleaned)
+        }
+      }
       bodyLines.push(text ? `${text}:` : '')
       continue
     }
@@ -110,14 +123,16 @@ export function parseFdxXml (xml: string): ParsedScript {
 
   if (scenes.length === 0 && paragraphs.some(p => p.text)) {
     const blob = paragraphs.map(x => x.text).filter(Boolean).join('\n')
+    const names = filterLikelyCharacterNames([...characterNames])
     return {
       scenes: [{ heading: 'FULL SCRIPT', body: blob.trim() }],
-      characterNames: [...characterNames]
+      characterNames: names.sort((a, b) => a.localeCompare(b))
     }
   }
 
+  const names = filterLikelyCharacterNames([...characterNames])
   return {
     scenes,
-    characterNames: [...characterNames].sort()
+    characterNames: names.sort((a, b) => a.localeCompare(b))
   }
 }

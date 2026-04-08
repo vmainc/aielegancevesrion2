@@ -25,12 +25,15 @@ export default defineEventHandler(async (event) => {
   })
 
   return {
-    scenes: list.map(s => ({
-      id: s.id,
-      sortOrder: s.sort_order,
-      heading: s.heading,
-      summary: s.summary || '',
-      bodyLength: String(s.body || '').length
-    }))
+    scenes: list.map(s => {
+      const so = Number(s.sort_order)
+      return {
+        id: s.id,
+        sortOrder: Number.isFinite(so) ? so : 0,
+        heading: s.heading,
+        summary: s.summary || '',
+        bodyLength: String(s.body || '').length
+      }
+    })
   }
 })

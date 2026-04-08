@@ -46,3 +46,50 @@ export function pbRecordToCreativeScript (raw: Record<string, unknown>): Creativ
   }
 }
 
+function parseJsonObject (raw: unknown): Record<string, unknown> {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>
+  }
+  if (typeof raw === 'string') {
+    try {
+      const o = JSON.parse(raw) as unknown
+      return o && typeof o === 'object' && !Array.isArray(o) ? (o as Record<string, unknown>) : {}
+    } catch {
+      return {}
+    }
+  }
+  return {}
+}
+
+/** `project_assets` row (kind script) with analysis in `metadata` — Script Wizard fallback listing. */
+export function pbProjectAssetToCreativeScript (raw: Record<string, unknown>): CreativeScript {
+  const meta = parseJsonObject(raw.metadata)
+  const themes = Array.isArray(meta.themes)
+    ? meta.themes.map(t => String(t || '')).filter(Boolean)
+    : []
+  const comparableTitles = Array.isArray(meta.comparable_titles)
+    ? meta.comparable_titles
+        .filter(x => x && typeof x === 'object')
+        .map((x) => {
+          const o = x as Record<string, unknown>
+          return { title: String(o.title || ''), year: String(o.year || '') || undefined }
+        })
+        .filter(x => x.title)
+    : []
+  return {
+    id: String(raw.id),
+    title: String(raw.title || meta.script_title || 'Script'),
+    status: parseStatus(meta.status),
+    sourceFilename: String(meta.source_filename || ''),
+    scriptText: '',
+    synopsis: String(meta.synopsis || ''),
+    treatment: String(meta.treatment || ''),
+    genre: String(meta.genre || ''),
+    tone: String(meta.tone || ''),
+    themes,
+    comparableTitles,
+    created: String(raw.created || ''),
+    updated: String(raw.updated || '')
+  }
+}
+

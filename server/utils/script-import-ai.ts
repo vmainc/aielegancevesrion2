@@ -391,10 +391,10 @@ ${input.sceneOutline.slice(0, 10000)}`
     const parsed = extractJsonObject(content)
     if (!parsed) return ''
 
-    const act1 = asStr(parsed.act_1).trim()
-    const act2 = asStr(parsed.act_2).trim()
-    const act3 = asStr(parsed.act_3).trim()
-    const arc = asStr(parsed.theme_arc).trim()
+    const act1 = asStr(parsed.act_1 || parsed.act1 || parsed['Act I']).trim()
+    const act2 = asStr(parsed.act_2 || parsed.act2 || parsed['Act II']).trim()
+    const act3 = asStr(parsed.act_3 || parsed.act3 || parsed['Act III']).trim()
+    const arc = asStr(parsed.theme_arc || parsed.themeArc).trim()
     if (!act1 && !act2 && !act3 && !arc) return ''
 
     const lines: string[] = [
@@ -550,6 +550,45 @@ export interface CharacterWithShare {
 
 function escapeRegExp (s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+/**
+ * True when stored shares are all zero, or every row is ~the same % (useless for the pie).
+ */
+function shouldReplaceFlatDistribution (rows: CharacterWithShare[]): boolean {
+  if (rows.length < 2) return false
+  const vals = rows.map((r) => {
+    const p = r.screen_share_percent
+    const n = typeof p === 'number' ? p : Number(p)
+    return Number.isFinite(n) ? Math.max(0, n) : 0
+  })
+  const sum = vals.reduce((a, b) => a + b, 0)
+  if (sum <= 0) return true
+  const mean = sum / vals.length
+  return vals.every(v => Math.abs(v - mean) < 1)
+}
+
+/**
+ * Rough dialogue/presence proxy: count case-insensitive whole-word mentions in the script excerpt.
+ */
+function applyMentionBasedSharesFromScript (
+  scriptText: string,
+  rows: CharacterWithShare[]
+): CharacterWithShare[] {
+  if (!rows.length || !scriptText.trim()) return rows
+  const counts = rows.map((r) => {
+    const n = r.name.trim()
+    if (!n) return { row: r, count: 0 }
+    const re = new RegExp(`\\b${escapeRegExp(n)}\\b`, 'gi')
+    const m = scriptText.match(re)
+    return { row: r, count: m ? m.length : 0 }
+  })
+  const total = counts.reduce((s, x) => s + x.count, 0)
+  if (total <= 0) return rows
+  return counts.map(({ row, count }) => ({
+    ...row,
+    screen_share_percent: (100 * count) / total
+  }))
 }
 
 /**
@@ -739,7 +778,136 @@ ${input.sceneOutline.slice(0, 14000)}`
       if (r) out.push(r)
     }
   }
-  return normalizeCharacterShares(out)
+  let withShares = out
+  if (shouldReplaceFlatDistribution(withShares)) {
+    withShares = applyMentionBasedSharesFromScript(input.sceneOutline, withShares)
+  }
+  return normalizeCharacterShares(withShares)
+}
+
+/**
+ * Claude: fill descriptions + screen-share estimates for an existing cast table (fixed names).
+ * Used from the Characters tab without re-running full script import.
+ */
+export async function enrichFixedCharacterRosterWithAi (input: {
+  projectName: string
+  synopsis: string
+  treatment: string
+  genre: string
+  tone: string
+  sceneOutline: string
+  characterNames: string[]
+  /** Latest Director-tab bible (optional). */
+  directorContext?: string
+}): Promise<CharacterWithShare[]> {
+  const names = input.characterNames.map(n => n.trim()).filter(Boolean)
+  if (!names.length) return []
+
+  const config = useRuntimeConfig()
+  const apiKey = resolveOpenRouterApiKey(config)
+  if (!apiKey) return []
+
+  const system = `You are a screenplay analyst. The project already has a fixed cast list (exact names below). For EACH name you must return exactly one JSON object.
+
+Reply with ONLY valid JSON (no markdown fences), shape:
+{
+  "characters": [
+    {
+      "name": "EXACT name from the list",
+      "role_description": "2–4 sentences: who they are in this story, relationships, dramatic function — grounded in the script excerpt and synopsis.",
+      "screen_share_percent": 0
+    }
+  ]
+}
+
+Rules:
+- Include every name from the provided list exactly once. Use the same spelling as in the list (preserve capitalization from the list).
+- screen_share_percent: estimate this character’s share of all dialogue in the script excerpt (lines/cues), plus meaningful on-page presence where relevant; across the list these should sum to about 100.
+- Do not add characters not in the list. Do not omit any list name.
+- Escape quotes inside JSON strings properly.`
+
+  const dir = (input.directorContext || '').trim()
+  const user = `Project title: ${input.projectName}
+
+Genre: ${input.genre || '(unspecified)'}
+Tone: ${input.tone || '(unspecified)'}
+
+${dir ? `Director bible (honor this when describing roles and presence):\n${dir.slice(0, 4000)}\n\n` : ''}Synopsis and treatment (context):
+${[input.synopsis, input.treatment].filter(Boolean).join('\n\n').slice(0, 8000)}
+
+Fixed cast — return exactly one row per line (same name strings):
+${names.map((n, i) => `${i + 1}. ${n}`).join('\n')}
+
+Script excerpt (scene headings + action and dialogue — use for descriptions and percentages):
+${input.sceneOutline.slice(0, 14000)}`
+
+  const model = OPENROUTER_TEXT_MODEL_MAP.Claude
+  const body = buildOpenRouterChatCompletionBody({
+    model,
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: user }
+    ],
+    temperature: 0.35,
+    max_tokens: 8192
+  })
+
+  const res = await fetchWithTimeout(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://aielegance.com',
+        'X-Title': 'AI Elegance Cast Table Enrich'
+      },
+      body: JSON.stringify(body)
+    },
+    OPENROUTER_ENRICH_MS
+  )
+
+  const raw = await res.text()
+  if (!res.ok) {
+    console.warn('[script-import-ai] Cast enrich OpenRouter error:', res.status, raw.slice(0, 400))
+    return []
+  }
+
+  let content = ''
+  try {
+    const j = JSON.parse(raw) as {
+      choices?: Array<{ message?: { content?: string } }>
+    }
+    content = j.choices?.[0]?.message?.content || ''
+  } catch {
+    return []
+  }
+
+  const arr = parseCharactersArrayFromModel(content)
+  const byNorm = new Map<string, CharacterWithShare>()
+  for (const row of arr) {
+    if (row && typeof row === 'object') {
+      const r = rowFromUnknownChar(row as Record<string, unknown>)
+      if (r) byNorm.set(r.name.trim().toLowerCase(), r)
+    }
+  }
+
+  const ordered: CharacterWithShare[] = []
+  for (const n of names) {
+    const hit = byNorm.get(n.trim().toLowerCase())
+    if (hit) {
+      ordered.push({
+        name: n.slice(0, 200),
+        role_description: hit.role_description.slice(0, 5000),
+        screen_share_percent: hit.screen_share_percent
+      })
+    }
+  }
+  let finalRows = ordered
+  if (shouldReplaceFlatDistribution(finalRows)) {
+    finalRows = applyMentionBasedSharesFromScript(input.sceneOutline, finalRows)
+  }
+  return normalizeCharacterShares(finalRows)
 }
 
 export function buildCharacterRowsFromFallback (input: {
@@ -855,6 +1023,8 @@ export async function inferScenesFromScriptWithClaude (input: {
   tone: string
   characterNames: string[]
   fullScriptText: string
+  /** Director-tab notes — influences scene boundaries and emphasis. */
+  directorContext?: string
 }): Promise<InferredImportScene[]> {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -886,11 +1056,12 @@ Rules:
 - Hard maximum ${MAX_INFERRED_SCENES} scenes.
 - Escape quotes inside JSON strings properly.`
 
+  const dir = (input.directorContext || '').trim()
   const user = `Project: ${input.projectName}
 Genre hint: ${input.genre}
 Tone hint: ${input.tone}
 
-Character names (hints): ${input.characterNames.join(', ') || '(none)'}
+${dir ? `Director priorities (use when choosing scene splits and emphasis):\n${dir.slice(0, 4000)}\n\n` : ''}Character names (hints): ${input.characterNames.join(', ') || '(none)'}
 
 FULL SCREENPLAY:
 ${script}`

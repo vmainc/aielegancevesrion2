@@ -1,6 +1,7 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 export default defineEventHandler(async (event) => {
@@ -46,7 +47,13 @@ export default defineEventHandler(async (event) => {
     sort: '-sort_order',
     batch: 1
   })
-  const nextOrder = top.length ? (Number(top[0].sort_order) || 0) + 1 : 0
+  /** 1-based sequence; PocketBase rejects blank/ambiguous sort_order — never use 0 for first row. */
+  let nextOrder = 1
+  if (top.length) {
+    const prev = Number(top[0].sort_order)
+    const base = Number.isFinite(prev) ? Math.max(0, Math.floor(prev)) : 0
+    nextOrder = base + 1
+  }
 
   try {
     const created = await pb.collection('creative_scenes').create({
@@ -67,7 +74,10 @@ export default defineEventHandler(async (event) => {
       }
     }
   } catch (e: unknown) {
-    const msg = e instanceof Error ? e.message : String(e)
-    throw createError({ statusCode: 500, message: msg || 'Could not create scene' })
+    const detail = formatPocketBaseRecordError(e)
+    throw createError({
+      statusCode: 400,
+      message: detail && detail !== 'Failed to create record.' ? detail : 'Could not create scene. Check PocketBase creative_scenes rules and field limits.'
+    })
   }
 })

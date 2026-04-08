@@ -255,10 +255,13 @@ function scriptSourceLine (a: ProjectAsset): string {
 
   if (source === 'script_import') {
     if (analysisStatus === 'pending') {
-      return 'Saved from a project · run “treatment & scene import” on Overview when ready'
+      return 'Saved from a project · run director analysis on Overview when ready'
+    }
+    if (analysisStatus === 'director_ready') {
+      return 'Director analysis done · generate scenes on Scenes, cast on Characters, panels on Storyboard'
     }
     if (analysisStatus === 'complete') {
-      return 'Saved from a project · AI import complete'
+      return 'Saved from a project · scene breakdown saved (full workflow)'
     }
     return 'Saved from a project'
   }

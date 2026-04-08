@@ -11,6 +11,7 @@
     "pb:serve": "cd pocketbase && exec ./pocketbase serve --http=127.0.0.1:8090",
     "dev": "nuxt dev --port 3000",
     "dev:pb": "bash scripts/dev-with-pb.sh",
+    "dev:pb:watch": "bash scripts/dev-with-pb-watch.sh",
     "dev:fix": "bash scripts/dev-fix.sh",
     "generate": "nuxt generate",
     "preview": "nuxt preview",

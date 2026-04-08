@@ -1,11 +1,11 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import { analyzeScriptImportForProject } from '~/server/utils/import-script-core'
+import { generateScenesFromScriptForProject } from '~/server/utils/import-script-core'
 
 /**
- * Director pass: synopsis, treatment, three-act notes, director bible — from the saved screenplay asset.
- * Scenes, cast, and storyboard are generated from the Characters / Scenes / Storyboard tabs.
+ * Replace all creative_scenes with a Claude breakdown from the saved screenplay,
+ * using the project’s current Director notes and genre/tone.
  */
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -20,7 +20,7 @@ export default defineEventHandler(async (event) => {
   const raw = body && typeof body.assetId === 'string' ? body.assetId.trim() : ''
   const assetId = raw || undefined
 
-  return analyzeScriptImportForProject({
+  return generateScenesFromScriptForProject({
     userId,
     pb,
     projectId,

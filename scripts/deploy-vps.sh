@@ -11,6 +11,11 @@
 #   DEPLOY_SKIP_BUILD=1            (skip npm run build — use after a fresh local `NUXT_PUBLIC_POCKETBASE_URL=... npm run build`)
 #   DEPLOY_SYSTEMD_UNIT=foo        (use systemd instead of pm2)
 #   DEPLOY_SSH_CMD='ssh ...'       (custom command after rsync)
+#
+# PocketBase parity with local: on the VPS, /var/www/aielegance/.env must define
+# NUXT_PUBLIC_POCKETBASE_URL, POCKETBASE_INTERNAL_URL, POCKETBASE_ADMIN_* (and OPENROUTER_*).
+# Template: deploy/vps.env.example — run setup-db against prod PB when collections change:
+#   POCKETBASE_URL=https://aielegance.com/pb node scripts/setup-collections.js 'email' 'pass'
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -75,3 +80,7 @@ else
     echo "    Only one process should listen on 3000:  ss -tlnp | grep 3000"
   fi
 fi
+
+echo ""
+echo "==> Reminder: VPS .env should mirror deploy/vps.env.example (PB URL, INTERNAL_URL, admin, OpenRouter)."
+echo "    PocketBase admin UI allowed origins: include https://aielegance.com (see pocketbase/README.md)."

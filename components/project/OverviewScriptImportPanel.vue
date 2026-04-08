@@ -1,10 +1,15 @@
 <template>
   <div class="rounded-xl border border-gray-200 bg-white shadow-sm p-5 sm:p-6 mb-5 last:mb-0">
-    <h2 class="text-lg font-semibold text-gray-900 mb-1">{{ heading }}</h2>
-    <p class="text-sm text-gray-600 mb-4">
+    <template v-if="!hideUploadStep">
+      <h2 class="text-lg font-semibold text-gray-900 mb-1">{{ heading }}</h2>
+      <p class="text-sm text-gray-600 mb-4">
+        {{ intro }}
+      </p>
+    </template>
+    <p v-else class="text-sm text-gray-700 mb-4">
       {{ intro }}
     </p>
-    <div class="flex flex-wrap items-center gap-3 mb-3">
+    <div v-if="!hideUploadStep" class="flex flex-wrap items-center gap-3 mb-3">
       <input
         type="file"
         accept=".fdx,.pdf,.txt,text/plain,application/pdf,application/xml,text/xml"
@@ -50,17 +55,35 @@
         {{ importing ? 'Saving…' : saveButtonLabel }}
       </button>
     </div>
-    <div v-if="analyzeEnabled" class="border-t border-gray-100 pt-4 mt-2">
+    <div
+      v-if="analyzeEnabled"
+      :class="[
+        hideUploadStep ? 'pt-0' : 'border-t border-gray-100 pt-4 mt-2',
+        prominentAnalyze && 'rounded-xl p-4 sm:p-5 bg-primary/10 ring-2 ring-primary/55 ring-offset-2 ring-offset-white'
+      ]"
+    >
+      <p
+        v-if="prominentAnalyze"
+        class="text-xs font-bold uppercase tracking-wide text-primary mb-2"
+      >
+        Next step — press this button
+      </p>
       <p class="text-sm text-gray-600 mb-3">
-        When you are ready, run AI on the saved file: synopsis, treatment, three-act notes, scenes, characters, and storyboard seed (same as Script Wizard analysis). Large scripts can take many minutes.
+        {{
+          hideUploadStep
+            ? 'Synopsis, treatment, three-act notes, and director bible (Overview + Director tab). Cast, scenes, and storyboard are separate steps — tweak director notes, then use those tabs. Large scripts can take many minutes — stay on this page.'
+            : 'When you are ready, run AI on the saved file: synopsis, treatment, three-act notes, and director bible. Generate cast, scene breakdown, and storyboard panels from the Characters, Scenes, and Storyboard tabs after you refine notes.'
+        }}
       </p>
       <button
         type="button"
-        class="px-4 py-2 border border-primary/50 text-primary hover:bg-primary/10 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+        :class="prominentAnalyze
+          ? 'w-full sm:w-auto px-6 py-3.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-xl text-base font-bold transition-colors disabled:opacity-50 shadow-md'
+          : 'px-4 py-2 border border-primary/50 text-primary hover:bg-primary/10 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50'"
         :disabled="importing || analyzing"
         @click="emit('analyzeClick')"
       >
-        {{ analyzing ? 'Running AI import…' : 'Run treatment & scene import' }}
+        {{ analyzing ? 'Running director analysis…' : 'Run director analysis' }}
       </button>
     </div>
     <div
@@ -69,9 +92,9 @@
     >
       <FilmReelLoader
         size="md"
-        :label="analyzing ? 'Running AI import' : 'Saving screenplay'"
+        :label="analyzing ? 'Running director analysis' : 'Saving screenplay'"
         :sub-label="analyzing
-          ? 'Enrichment, scenes, characters, treatment — stay on this page.'
+          ? 'Synopsis, treatment, three-act notes, director bible — stay on this page.'
           : 'Uploading file to project assets…'"
       />
     </div>
@@ -92,6 +115,10 @@ withDefaults(
     intro?: string
     saveButtonLabel?: string
     showAspectGoal?: boolean
+    /** After save: show only import CTA (no file row). */
+    hideUploadStep?: boolean
+    /** Larger primary button for the analyze action. */
+    prominentAnalyze?: boolean
     importing: boolean
     analyzing: boolean
     analyzeEnabled: boolean
@@ -101,9 +128,11 @@ withDefaults(
   {
     heading: 'Screenplay',
     intro:
-      'Step 1: choose a file and save it to this project\'s assets (no AI yet). Step 2: run treatment & scene import when you are ready.',
+      'Step 1: choose a file and save it to this project\'s assets (no AI yet). Step 2: run director analysis when you are ready — then refine notes and generate cast, scenes, and storyboard from their tabs.',
     saveButtonLabel: 'Save screenplay to project',
-    showAspectGoal: true
+    showAspectGoal: true,
+    hideUploadStep: false,
+    prominentAnalyze: false
   }
 )
 

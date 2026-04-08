@@ -25,6 +25,18 @@ type PbProjectRecord = {
   updated?: string
 }
 
+/** Flatten director bible for AI prompts (synopsis / scene / cast enrichment). */
+export function formatDirectorForAiPrompt (d: ProjectDirector | undefined): string {
+  if (!d) return ''
+  const chunks: string[] = []
+  if (d.style?.trim()) chunks.push(`Visual style: ${d.style.trim()}`)
+  if (d.tone?.trim()) chunks.push(`Directorial tone: ${d.tone.trim()}`)
+  if (d.camera_preferences?.trim()) chunks.push(`Camera preferences: ${d.camera_preferences.trim()}`)
+  if (d.lighting_style?.trim()) chunks.push(`Lighting: ${d.lighting_style.trim()}`)
+  if (d.pacing?.trim()) chunks.push(`Pacing: ${d.pacing.trim()}`)
+  return chunks.join('\n').slice(0, 6000)
+}
+
 export function parseDirectorField (raw: unknown): ProjectDirector | undefined {
   if (raw == null) return undefined
   if (typeof raw === 'string') {

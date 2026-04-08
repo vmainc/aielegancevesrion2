@@ -2,7 +2,7 @@
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">Scenes</span>
-      · Build your scene list manually (title + description below) or import a screenplay so Claude can split it into slugs, summaries, and excerpts. Refine shots on the Storyboard tab.
+      · Add scenes manually below, or run <span class="font-medium text-gray-700">Generate scenes from screenplay</span> after director analysis — Claude uses your current Director notes and replaces the whole scene list. Refine shots on the Storyboard tab.
     </p>
 
     <div
@@ -19,6 +19,38 @@
     </template>
 
     <template v-else>
+      <div
+        class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-6 shadow-sm"
+      >
+        <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
+          <div class="min-w-0">
+            <h2 class="text-base font-semibold text-gray-900 mb-1">Generate from screenplay</h2>
+            <p class="text-sm text-gray-600">
+              Rebuilds the entire scene list from your saved Overview screenplay, using your latest genre, tone, and Director-tab bible. Manual scenes below will be removed when you run this.
+            </p>
+          </div>
+          <button
+            type="button"
+            class="shrink-0 px-4 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+            :disabled="generatingScenes || addingScene || pending"
+            @click="generateScenesFromScript"
+          >
+            {{ generatingScenes ? 'Working…' : 'Generate scenes from screenplay' }}
+          </button>
+        </div>
+        <div
+          v-if="generatingScenes"
+          class="rounded-xl border border-primary/20 bg-primary/5 p-6 mb-6"
+        >
+          <FilmReelLoader
+            size="sm"
+            label="Breaking down the screenplay"
+            :sub-label="generateScenesHint"
+          />
+        </div>
+        <p v-if="generateScenesError" class="text-sm text-red-700 mb-4">{{ generateScenesError }}</p>
+      </div>
+
       <div
         class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-6 shadow-sm"
       >
@@ -65,7 +97,16 @@
         </div>
       </div>
 
-      <div v-if="pending" class="text-sm text-gray-500 py-6">Loading scenes…</div>
+      <div
+        v-if="pending"
+        class="rounded-xl border border-primary/20 bg-primary/5 p-6 mb-4"
+      >
+        <FilmReelLoader
+          size="sm"
+          label="Loading scenes"
+          sub-label="Fetching your scene list…"
+        />
+      </div>
       <div
         v-else-if="loadError"
         class="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900"
@@ -74,50 +115,65 @@
       </div>
       <template v-else-if="scenes.length">
         <p class="text-sm text-gray-600 mb-4">
-          {{ scenes.length }} scene(s). Expand a row to read the excerpt Claude (or the parser) stored for storyboarding.
+          {{ scenes.length }} scene(s) in order. Each row is an accordion: the header is the slug line; open it for full dialogue and action (same text the Storyboard step uses for shots).
         </p>
         <ul class="space-y-3">
           <li
-            v-for="s in scenes"
+            v-for="(s, idx) in scenes"
             :key="s.id"
             class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
           >
             <button
               type="button"
               class="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors"
+              :aria-expanded="expandedId === s.id"
               @click="toggleExpand(s.id)"
             >
-              <span class="text-xs font-mono text-primary tabular-nums mt-0.5 shrink-0">
-                {{ s.sortOrder + 1 }}
-              </span>
               <span class="min-w-0 flex-1">
-                <span class="font-semibold text-gray-900 block">{{ s.heading }}</span>
-                <span class="text-sm text-gray-600 line-clamp-2 mt-0.5">{{ s.summary || '—' }}</span>
+                <span class="font-semibold text-gray-900 block leading-snug">
+                  <span class="text-primary font-mono text-xs tracking-wide uppercase">Scene {{ idx + 1 }}</span>
+                  <span class="text-gray-400 font-normal mx-1.5" aria-hidden="true">—</span>
+                  <span>{{ s.heading }}</span>
+                </span>
+                <span class="text-sm text-gray-600 line-clamp-2 mt-1 block">{{ s.summary || '—' }}</span>
               </span>
-              <span class="text-xs text-gray-400 shrink-0">{{ expandedId === s.id ? '▼' : '▶' }}</span>
+              <span class="text-xs text-gray-400 shrink-0 mt-0.5">{{ expandedId === s.id ? '▼' : '▶' }}</span>
             </button>
             <div
               v-if="expandedId === s.id"
               class="border-t border-gray-100 px-4 py-3 bg-gray-50/80 text-sm"
             >
               <p v-if="detailError" class="text-red-700 text-sm mb-2">{{ detailError }}</p>
-              <div v-else-if="detailLoading" class="text-gray-500">Loading script excerpt…</div>
-              <pre
-                v-else
-                class="whitespace-pre-wrap font-sans text-gray-800 text-sm leading-relaxed max-h-[min(70vh,28rem)] overflow-y-auto"
-              >{{ detailBody || '—' }}</pre>
+              <div
+                v-else-if="detailLoading"
+                class="py-2"
+              >
+                <FilmReelLoader
+                  size="sm"
+                  label="Loading excerpt"
+                  sub-label="Fetching scene body from the server…"
+                />
+              </div>
+              <template v-else>
+                <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
+                  Script for this scene
+                </p>
+                <pre
+                  class="whitespace-pre-wrap font-sans text-gray-800 text-sm leading-relaxed max-h-[min(70vh,28rem)] overflow-y-auto"
+                >{{ detailBody || '—' }}</pre>
+              </template>
               <NuxtLink
                 :to="`/projects/${projectId}/storyboard`"
                 class="inline-block mt-3 text-sm text-primary font-medium hover:underline"
               >
-                Open Storyboard for this project →
+                Storyboard → build shots for this project
               </NuxtLink>
             </div>
           </li>
         </ul>
       </template>
       <div v-else class="rounded-xl border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-600">
-        No scenes in the list yet. Add one with the form above, or import a script from the project Overview.
+        No scenes yet. Run <span class="font-medium text-gray-800">Generate scenes from screenplay</span> above (after director analysis), or add a scene manually.
       </div>
     </template>
 
@@ -140,6 +196,7 @@
 
 <script setup lang="ts">
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 
 const PB_ID = /^[a-z0-9]{15}$/
 
@@ -171,6 +228,11 @@ const detailBody = ref('')
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
 
+const generatingScenes = ref(false)
+const generateScenesError = ref('')
+const generateScenesHint =
+  'Claude is splitting your screenplay into scenes — large scripts can take many minutes. Stay on this page.'
+
 const canLoadCloud = computed(
   () =>
     !!activeProject.value &&
@@ -194,6 +256,32 @@ async function loadScenes () {
     scenes.value = []
   } finally {
     pending.value = false
+  }
+}
+
+async function generateScenesFromScript () {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token || !canLoadCloud.value) return
+  generatingScenes.value = true
+  generateScenesError.value = ''
+  try {
+    await $fetch(`/api/projects/${id}/script/generate-scenes`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {},
+      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    })
+    toast.showToast('Scenes generated from screenplay.', 'success')
+    expandedId.value = null
+    detailBody.value = ''
+    await loadScenes()
+  } catch (e: unknown) {
+    const msg = formatApiFetchError(e, 'Could not generate scenes')
+    generateScenesError.value = msg
+    toast.showToast(msg, 'error')
+  } finally {
+    generatingScenes.value = false
   }
 }
 

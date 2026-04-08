@@ -1,6 +1,11 @@
 import { createError, getQuery, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { listProjectAssetsForProject } from '~/server/utils/list-project-assets-pb'
+import {
+  isPocketBaseMissingCollectionError,
+  pocketBaseErrorStatus
+} from '~/server/utils/pb-missing-collection-error'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
 
@@ -20,30 +25,29 @@ export default defineEventHandler(async (event) => {
 
   const q = getQuery(event)
   const kind = typeof q.kind === 'string' ? q.kind.trim() : ''
+  const kindOk = kind && ['script', 'character', 'storyboard', 'video', 'other'].includes(kind)
 
-  let filter = `project = "${projectId}" && owned_by = "${userId}"`
-  if (kind && ['script', 'character', 'storyboard', 'video', 'other'].includes(kind)) {
-    filter += ` && kind = "${kind}"`
-  }
+  const mapRows = (rows: unknown[]) =>
+    rows.map((r) => pbRecordToProjectAsset(r as Record<string, unknown>, pb))
 
   try {
-    const items = await pb.collection('project_assets').getFullList({
-      filter,
-      sort: 'sort_order,created',
-      requestKey: `assets_${projectId}_${kind}`
-    })
-    return {
-      items: items.map((r) => pbRecordToProjectAsset(r as Record<string, unknown>, pb))
-    }
+    const items = await listProjectAssetsForProject(
+      pb,
+      projectId,
+      userId,
+      kindOk ? { kind } : undefined
+    )
+    return { items: mapRows(items) }
   } catch (e: unknown) {
-    const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : String(e)
-    if (/wasn't found|not found|404|Missing collection/i.test(msg)) {
+    if (isPocketBaseMissingCollectionError(e)) {
       throw createError({
         statusCode: 503,
         message:
           'project_assets collection is missing. Run: node scripts/setup-collections.js (adds project_assets).'
       })
     }
-    throw createError({ statusCode: 500, message: msg })
+    const st = pocketBaseErrorStatus(e)
+    const msg = e instanceof Error ? e.message : String(e)
+    throw createError({ statusCode: st || 500, message: msg || 'Could not list project assets' })
   }
 })

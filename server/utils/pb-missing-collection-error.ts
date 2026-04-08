@@ -24,3 +24,43 @@ export function isPocketBaseMissingCollectionError (e: unknown): boolean {
   const status = pocketBaseErrorStatus(e)
   return status === 404 || POCKETBASE_MISSING_COLLECTION_MESSAGE_RE.test(msg)
 }
+
+function fieldErrorsFromMap (fieldMap: Record<string, unknown>): string {
+  const parts = Object.entries(fieldMap).map(([k, v]) => {
+    if (v && typeof v === 'object' && v !== null && 'message' in v) {
+      return `${k}: ${String((v as { message?: string }).message)}`
+    }
+    return `${k}: ${JSON.stringify(v)}`
+  })
+  return parts.length ? parts.join('; ') : ''
+}
+
+/** Prefer PocketBase validation payload over the generic "Failed to create record." */
+export function formatPocketBaseRecordError (e: unknown): string {
+  if (!e || typeof e !== 'object') {
+    return typeof e === 'string' ? e : String(e)
+  }
+  const o = e as {
+    data?: { data?: Record<string, unknown>; message?: string }
+    message?: string
+    response?: { data?: { data?: Record<string, unknown>; message?: string } }
+  }
+  const candidates: Array<Record<string, unknown> | undefined> = [
+    o.data?.data,
+    o.response?.data?.data
+  ]
+  for (const fieldMap of candidates) {
+    if (fieldMap && typeof fieldMap === 'object' && !Array.isArray(fieldMap)) {
+      const line = fieldErrorsFromMap(fieldMap as Record<string, unknown>)
+      if (line) return line
+    }
+  }
+  const msgFromData =
+    (typeof o.data?.message === 'string' && o.data.message.trim() && o.data.message) ||
+    (typeof o.response?.data?.message === 'string' && o.response.data.message.trim() && o.response.data.message)
+  if (msgFromData) return msgFromData.trim()
+  if (typeof o.message === 'string' && o.message.trim()) {
+    return o.message.trim()
+  }
+  return String(e)
+}

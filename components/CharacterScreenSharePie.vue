@@ -27,7 +27,7 @@
         />
       </svg>
       <p class="mt-2 text-xs text-gray-500 text-center max-w-[13rem]">
-        Estimated share of dialogue + notable on-page presence from the imported script (not final runtime).
+        Estimated share of this character’s dialogue relative to the whole script (plus notable on-page presence in the excerpt — not final runtime).
       </p>
     </div>
     <ul class="flex-1 space-y-2 min-w-0" aria-hidden="true">
@@ -51,25 +51,13 @@
 
 <script setup lang="ts">
 import { computed } from 'vue'
+import { SCREEN_SHARE_PIE_PALETTE } from '~/lib/character-screen-share-chart'
 
 const props = defineProps<{
   slices: { label: string; percent: number; color: string }[]
 }>()
 
-const palette = [
-  '#41aaa8',
-  '#2d7d7a',
-  '#5fb3b0',
-  '#1a5c59',
-  '#7fc4c1',
-  '#0d3d3b',
-  '#9dd5d2',
-  '#3a8f8c',
-  '#6a9e9c',
-  '#4a9491',
-  '#2a6865',
-  '#8cc9c6'
-]
+const palette = [...SCREEN_SHARE_PIE_PALETTE]
 
 function segmentPath (startAngle: number, angleSize: number): string {
   const r = 0.92

@@ -1,6 +1,11 @@
 import { createError, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import {
+  pbRecordToCreativeCharacter,
+  projectIdOnCharacterRow
+} from '~/server/utils/creative-character-map'
+import { pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import type { CreativeCharacter } from '~/types/creative-project'
 
@@ -18,10 +23,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 
-  const rows = await pb.collection('creative_characters').getFullList({
-    filter: `project="${id}"`,
-    batch: 200
-  })
+  let rows: unknown[]
+  try {
+    rows = await pb.collection('creative_characters').getFullList({
+      filter: `project="${id}"`,
+      batch: 200
+    })
+  } catch (e: unknown) {
+    const st = pocketBaseErrorStatus(e)
+    if (st !== 400) throw e
+    const all = await pb.collection('creative_characters').getFullList({
+      filter: `owned_by="${userId}"`,
+      batch: 400
+    })
+    rows = all.filter((r) => projectIdOnCharacterRow(r as Record<string, unknown>) === id)
+  }
 
   rows.sort((a, b) => {
     const ra = a as Record<string, unknown>
@@ -34,17 +50,9 @@ export default defineEventHandler(async (event) => {
     return String(ra.name || '').localeCompare(String(rb.name || ''))
   })
 
-  const characters: CreativeCharacter[] = rows.map((r) => {
-    const raw = r as Record<string, unknown>
-    const pct = raw.screen_share_percent
-    const n = typeof pct === 'number' ? pct : Number(pct)
-    return {
-      id: String(raw.id),
-      name: String(raw.name || ''),
-      roleDescription: String(raw.role_description || ''),
-      screenSharePercent: Number.isFinite(n) ? Math.round(n * 100) / 100 : null
-    }
-  })
+  const characters: CreativeCharacter[] = rows.map((r) =>
+    pbRecordToCreativeCharacter(r as Record<string, unknown>)
+  )
 
   return { characters }
 })

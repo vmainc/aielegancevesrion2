@@ -2,22 +2,27 @@
   <div class="min-h-screen flex flex-col bg-white">
     <nav class="shrink-0 bg-white border-b border-gray-200">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div class="flex justify-between items-center h-20">
+        <div
+          class="flex justify-between items-center gap-4 min-h-[5rem] sm:min-h-[5.5rem] py-2.5 sm:py-3"
+        >
           <!-- Logo -->
-          <div class="flex items-center space-x-4 lg:space-x-10">
-            <NuxtLink to="/" class="flex items-center">
+          <div class="flex items-center min-h-0 space-x-4 lg:space-x-10">
+            <NuxtLink
+              to="/"
+              class="flex items-center shrink-0 self-center"
+            >
               <img
                 :src="logo"
                 alt="AI Elegance"
-                class="h-12 sm:h-14 w-auto rounded-md shadow-sm"
+                class="h-14 sm:h-16 w-auto max-h-[4.5rem] rounded-md shadow-sm object-contain object-center block"
               />
             </NuxtLink>
             <!-- Desktop: workspace nav (logged in) or marketing anchors (guest) -->
             <ClientOnly>
-              <div v-if="isAuthenticated" class="hidden lg:flex items-center space-x-8">
+              <div v-if="isAuthenticated" class="hidden lg:flex items-center self-center space-x-8">
                 <NuxtLink
                   to="/projects"
-                  class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                 >
                   Workflow
                 </NuxtLink>
@@ -25,7 +30,7 @@
                   <button
                     type="button"
                     @click.stop="toggleAssetsDropdown"
-                    class="flex items-center gap-1 text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                    class="inline-flex items-center gap-1 text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                     :aria-expanded="assetsDropdownOpen"
                     aria-haspopup="true"
                     aria-label="Assets menu"
@@ -80,7 +85,7 @@
                   <button
                     type="button"
                     @click.stop="toggleToolsDropdown"
-                    class="flex items-center gap-1 text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                    class="inline-flex items-center gap-1 text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                     :aria-expanded="toolsDropdownOpen"
                     aria-haspopup="true"
                     aria-label="Tools menu"
@@ -125,55 +130,55 @@
                   </div>
                 </div>
               </div>
-              <div v-else class="hidden lg:flex items-center space-x-8">
+              <div v-else class="hidden lg:flex items-center self-center space-x-8">
                 <NuxtLink
                   to="/#capabilities"
-                  class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                 >
                   Capabilities
                 </NuxtLink>
                 <NuxtLink
                   to="/#how-it-works"
-                  class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                 >
                   How it works
                 </NuxtLink>
                 <NuxtLink
                   to="/#compare"
-                  class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                 >
                   Compare AI
                 </NuxtLink>
                 <NuxtLink
                   to="/#workflow"
-                  class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                 >
                   Workflow
                 </NuxtLink>
               </div>
               <template #fallback>
-                <div class="hidden lg:flex items-center space-x-8">
+                <div class="hidden lg:flex items-center self-center space-x-8">
                   <NuxtLink
                     to="/#capabilities"
-                    class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                    class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                   >
                     Capabilities
                   </NuxtLink>
                   <NuxtLink
                     to="/#how-it-works"
-                    class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                    class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                   >
                     How it works
                   </NuxtLink>
                   <NuxtLink
                     to="/#compare"
-                    class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                    class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                   >
                     Compare AI
                   </NuxtLink>
                   <NuxtLink
                     to="/#workflow"
-                    class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                    class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                   >
                     Workflow
                   </NuxtLink>
@@ -182,10 +187,10 @@
             </ClientOnly>
           </div>
           <!-- Mobile menu + auth -->
-          <div class="flex items-center space-x-2 sm:space-x-4">
+          <div class="flex items-center justify-end self-center space-x-2 sm:space-x-4 shrink-0">
             <button
               @click.stop="toggleMobileMenu"
-              class="lg:hidden p-2 text-gray-700 hover:text-primary transition-colors rounded-lg hover:bg-gray-100"
+              class="lg:hidden inline-flex items-center justify-center p-2 text-gray-700 hover:text-primary transition-colors rounded-lg hover:bg-gray-100"
               aria-label="Toggle menu"
             >
               <svg
@@ -211,10 +216,10 @@
             <ClientOnly>
               <div class="flex items-center space-x-2 sm:space-x-4">
                 <template v-if="isAuthenticated">
-                  <div class="relative">
+                  <div class="relative flex items-center">
                     <button
                       @click="toggleDropdown"
-                      class="flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-gray-700 hover:text-primary transition-colors rounded-lg hover:bg-gray-100"
+                      class="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-gray-700 hover:text-primary transition-colors rounded-lg hover:bg-gray-100 leading-none"
                       aria-label="Account"
                     >
                       <svg
@@ -266,13 +271,13 @@
                 <template v-else>
                   <NuxtLink
                     to="/login"
-                    class="hidden sm:block text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                    class="hidden sm:inline-flex sm:items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                   >
                     Login
                   </NuxtLink>
                   <NuxtLink
                     to="/signup"
-                    class="px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-sm sm:text-base"
+                    class="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-sm sm:text-base leading-none"
                   >
                     Sign Up
                   </NuxtLink>
@@ -282,13 +287,13 @@
                 <div class="flex items-center space-x-4">
                   <NuxtLink
                     to="/login"
-                    class="text-gray-700 hover:text-primary transition-colors text-base font-medium"
+                    class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                   >
                     Login
                   </NuxtLink>
                   <NuxtLink
                     to="/signup"
-                    class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors"
+                    class="inline-flex items-center justify-center px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors leading-none"
                   >
                     Sign Up
                   </NuxtLink>

@@ -419,7 +419,16 @@ async function runWizardBreakdown () {
     await loadScripts()
     selectedScriptId.value = id
     await loadMovies(id)
-    toast.showToast(res.notice || 'Breakdown saved.', res.notice ? 'info' : 'success')
+    const n = res.notice || ''
+    if (!n) {
+      toast.showToast('Breakdown saved.', 'success')
+    } else if (/returned empty/i.test(n)) {
+      toast.showToast(n, 'warning')
+    } else if (/already has a three-act/i.test(n)) {
+      toast.showToast(n, 'info')
+    } else {
+      toast.showToast(n, 'success')
+    }
   } catch (e: unknown) {
     toast.showToast(formatApiFetchError(e, 'Breakdown step failed'), 'error')
   } finally {
