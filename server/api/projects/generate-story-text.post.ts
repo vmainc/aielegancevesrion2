@@ -5,6 +5,7 @@ import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
+import { SCREENPLAY_AI_FORMAT_RULES } from '~/lib/screenplay-format'
 import { targetLengthModelGuidance } from '~/lib/target-length'
 import type { ProjectTargetLength } from '~/types/creative-project'
 
@@ -99,11 +100,13 @@ export default defineEventHandler(async (event) => {
 
   const system =
     kind === 'script'
-      ? `You are an experienced screenwriter. Write in plain text using common screenplay conventions: slug lines (INT./EXT. LOCATION - TIME), action lines, CHARACTER names in caps before dialogue, parentheticals sparingly.
+      ? `You are an experienced screenwriter.
+
+${SCREENPLAY_AI_FORMAT_RULES}
 
 ${lengthGuide}
 
-Do not include markdown code fences. Do not preface with an essay — start with the screenplay. If context is thin, invent specific, cinematic detail that still fits the synopsis.`
+Do not preface with an essay — start with the title and CAST, then scenes. If context is thin, invent specific, cinematic detail that still fits the synopsis.`
       : `You are a film development writer. Write a clear prose story treatment (paragraphs, optional short act labels if helpful). Match depth and subplot count to the runtime target below.
 
 ${lengthGuide}

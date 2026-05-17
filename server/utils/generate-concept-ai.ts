@@ -2,6 +2,7 @@ import {
   buildConceptSystemPrompt,
   buildConceptUserPrompt
 } from '~/lib/story-idea-generator-prompts'
+import { sanitizeCharacterNameList } from '~/lib/screenplay-format'
 import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
@@ -41,6 +42,7 @@ export interface ParsedConceptFields {
   tone: string
   genre: string
   hook?: string
+  characters?: string[]
 }
 
 export function parseConceptJsonFromAssistantText (text: string): ParsedConceptFields | null {
@@ -53,13 +55,15 @@ export function parseConceptJsonFromAssistantText (text: string): ParsedConceptF
   const genre = pickStr(o, ['genre', 'Genre'])
   const hook = pickStr(o, ['hook', 'Hook', 'opening_hook', 'openingHook'])
   if (!title || !summary) return null
+  const characters = sanitizeCharacterNameList(o.characters ?? o.Characters ?? o.cast)
   return {
     title: title.slice(0, 500),
     logline: logline.slice(0, 800),
     summary: summary.slice(0, 12000),
     tone: tone.slice(0, 500),
     genre: genre.slice(0, 200),
-    ...(hook ? { hook: hook.slice(0, 500) } : {})
+    ...(hook ? { hook: hook.slice(0, 500) } : {}),
+    ...(characters.length ? { characters } : {})
   }
 }
 

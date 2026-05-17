@@ -8,6 +8,8 @@ export interface GeneratedConceptItem {
   genre: string
   /** Opening hook (common for social / commercial concepts). */
   hook?: string
+  /** Speaking roles in ALL CAPS for screenplay import / cast. */
+  characters?: string[]
 }
 
 /** Per-model outcome: either fields or an error message. */

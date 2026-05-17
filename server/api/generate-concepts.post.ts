@@ -105,7 +105,8 @@ export default defineEventHandler(async (event) => {
         summary: parsed.summary,
         tone: parsed.tone,
         genre: parsed.genre,
-        ...(parsed.hook ? { hook: parsed.hook } : {})
+        ...(parsed.hook ? { hook: parsed.hook } : {}),
+        ...(parsed.characters?.length ? { characters: parsed.characters } : {})
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Request failed'

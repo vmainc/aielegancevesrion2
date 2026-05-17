@@ -1,4 +1,5 @@
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
+import { sanitizeCharacterNameList } from '~/lib/screenplay-format'
 import {
   parseScriptBufferToParsed,
   runFullImportFromParsed,
@@ -6,6 +7,7 @@ import {
   type ProjectGoal,
   type ScriptImportPrefillEnrichment
 } from '~/server/utils/import-script-core'
+import { parseCastSectionCharacterNames } from '~/server/utils/parse-script-txt'
 import { resolveScriptWizardSource } from '~/server/utils/resolve-script-wizard-source'
 import {
   completeScriptImportJob,
@@ -17,16 +19,28 @@ function parseThemes (raw: unknown): string[] {
   return raw.map(t => String(t || '').trim()).filter(Boolean).slice(0, 20)
 }
 
-function prefillFromWizardRow (row: Record<string, unknown>): ScriptImportPrefillEnrichment | undefined {
+function prefillFromWizardRow (
+  row: Record<string, unknown>,
+  scriptText: string,
+  parsedCharacterNames: string[]
+): ScriptImportPrefillEnrichment | undefined {
   const treatment = String(row.treatment || '').trim()
   const synopsis = String(row.synopsis || '').trim()
-  if (treatment.length < 200 && synopsis.length < 200) return undefined
+  const castFromScript = [
+    ...parseCastSectionCharacterNames(scriptText),
+    ...parsedCharacterNames
+  ]
+  const characterNames = sanitizeCharacterNameList(castFromScript)
+  if (treatment.length < 200 && synopsis.length < 200 && characterNames.length === 0) {
+    return undefined
+  }
   return {
     synopsis: synopsis || treatment.slice(0, 20_000),
     treatment: treatment.slice(0, 50_000),
     genre: String(row.genre || '').slice(0, 200),
     tone: String(row.tone || '').slice(0, 500),
-    themes: parseThemes(row.themes)
+    themes: parseThemes(row.themes),
+    characterNames
   }
 }
 
@@ -55,7 +69,7 @@ export async function runOpenAsProjectImportJob (input: {
       'script-wizard.txt'
     const fileBuf = Buffer.from(scriptText, 'utf8')
     const parsed = await parseScriptBufferToParsed(fileBuf, filename)
-    const prefillEnrichment = prefillFromWizardRow(row)
+    const prefillEnrichment = prefillFromWizardRow(row, scriptText, parsed.characterNames)
 
     const { project, scriptAsset } = await runFullImportFromParsed({
       userId,

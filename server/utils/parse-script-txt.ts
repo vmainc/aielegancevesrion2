@@ -1,6 +1,36 @@
 import type { ParsedScene, ParsedScript } from '~/server/utils/parse-script-fdx'
+import { normalizeScreenplayCharacterName } from '~/lib/screenplay-format'
 
 const SCENE_LINE = /^(INT\.|EXT\.|INT\/EXT\.|I\/E\.|EST\.)\s+/i
+const CAST_HEADER = /^CAST\s*:?\s*$/i
+
+/** Names from a leading CAST block (NAME — description or NAME - description). */
+export function parseCastSectionCharacterNames (raw: string): string[] {
+  const lines = raw.replace(/\r\n/g, '\n').split('\n')
+  const names: string[] = []
+  let inCast = false
+  for (const line of lines) {
+    const t = line.trim()
+    if (!t) {
+      if (inCast && names.length > 0) break
+      continue
+    }
+    if (CAST_HEADER.test(t)) {
+      inCast = true
+      continue
+    }
+    if (inCast) {
+      if (SCENE_LINE.test(t) || /^FADE IN\b/i.test(t) || t === '---') break
+      const m = t.match(/^([A-Z][A-Z0-9 .'\-]{1,40})\s*(?:—|--|-)\s+/u)
+        || t.match(/^([A-Z][A-Z0-9 .'\-]{1,40})$/u)
+      if (m) {
+        const norm = normalizeScreenplayCharacterName(m[1]!)
+        if (norm && !isExcludedScreenplayCharacterLabel(norm)) names.push(norm)
+      }
+    }
+  }
+  return [...new Set(names)]
+}
 
 /**
  * Labels that look like all-caps character names but are transitions, scene grammar, or slug lines.
@@ -75,8 +105,9 @@ export function filterLikelyCharacterNames (names: string[]): string[] {
  * Very simple plain-text screenplay heuristic (not Fountain).
  */
 export function parsePlainScriptText (raw: string): ParsedScript {
+  const castNames = parseCastSectionCharacterNames(raw)
   const lines = raw.replace(/\r\n/g, '\n').split('\n')
-  const characterNames = new Set<string>()
+  const characterNames = new Set<string>(castNames)
   const scenes: ParsedScene[] = []
   let heading = 'OPENING'
   let buf: string[] = []

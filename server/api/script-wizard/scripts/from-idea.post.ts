@@ -2,36 +2,16 @@ import { createError, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { pbRecordToCreativeScript } from '~/server/utils/creative-script-map'
+import { sanitizeCharacterNameList } from '~/lib/screenplay-format'
 import { getOrCreateScriptLibraryProjectId } from '~/server/utils/get-or-create-script-library-project'
+import { generateScreenplayFromStoryIdea } from '~/server/utils/generate-screenplay-from-idea'
 import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
 import type { CreativeScript, CreativeScriptStatus } from '~/types/creative-script'
+import type { ProjectGoal } from '~/types/creative-project'
 
 const VALID_STATUS = new Set<CreativeScriptStatus>(['draft', 'in_progress', 'final'])
 
-function buildDraftScriptText (input: {
-  title: string
-  logline: string
-  summary: string
-  hook?: string
-  modelLabel?: string
-}): string {
-  const lines = [
-    input.title.toUpperCase(),
-    '',
-    input.logline ? `LOGLINE: ${input.logline}` : '',
-    input.hook ? `HOOK: ${input.hook}` : '',
-    '',
-    '---',
-    '',
-    input.summary,
-    '',
-    '---',
-    input.modelLabel
-      ? `Draft generated from AI story idea (${input.modelLabel}). Expand on Story or import into a project.`
-      : 'Draft generated from AI story idea.'
-  ]
-  return lines.filter((l, i, arr) => !(l === '' && arr[i - 1] === '')).join('\n').trim()
-}
+const GOALS = new Set<ProjectGoal>(['film', 'social', 'commercial', 'other'])
 
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
@@ -45,6 +25,8 @@ export default defineEventHandler(async (event) => {
     modelId?: string
     modelLabel?: string
     status?: string
+    characters?: unknown
+    goal?: string
   } | null
 
   const title = String(body?.title || '').trim().slice(0, 500)
@@ -59,12 +41,20 @@ export default defineEventHandler(async (event) => {
     status = body.status as CreativeScriptStatus
   }
 
-  const scriptText = buildDraftScriptText({
+  const goal =
+    typeof body?.goal === 'string' && GOALS.has(body.goal as ProjectGoal)
+      ? (body.goal as ProjectGoal)
+      : 'film'
+  const characters = sanitizeCharacterNameList(body?.characters)
+
+  const scriptText = await generateScreenplayFromStoryIdea({
     title,
     logline,
     summary,
-    hook: body?.hook?.trim() || undefined,
-    modelLabel: body?.modelLabel?.trim() || body?.modelId?.trim()
+    genre: String(body?.genre || '').slice(0, 200),
+    tone: String(body?.tone || '').slice(0, 500),
+    characters,
+    goal
   })
   const synopsis = summary.slice(0, 20000)
   const genre = String(body?.genre || '').slice(0, 200)
@@ -108,7 +98,8 @@ export default defineEventHandler(async (event) => {
         synopsis,
         genre,
         tone,
-        status
+        status,
+        cast_names: characters
       })
     )
     assetForm.append('sort_order', '0')

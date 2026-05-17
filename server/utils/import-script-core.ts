@@ -1144,6 +1144,8 @@ export type ScriptImportPrefillEnrichment = {
   tone: string
   themes: string[]
   logline?: string
+  /** Names from CAST / parser — merged before AI cast inference. */
+  characterNames?: string[]
 }
 
 export async function runFullImportFromParsed (input: {
@@ -1175,6 +1177,7 @@ export async function runFullImportFromParsed (input: {
   const sceneOutline = buildSceneOutlineForAi(parsed)
 
   const mergedCharacterNames = filterLikelyCharacterNames([
+    ...(input.prefillEnrichment?.characterNames || []),
     ...parsed.characterNames,
     ...heuristicCharacterNamesFromScenes(parsed.scenes)
   ])
@@ -1292,6 +1295,20 @@ export async function runFullImportFromParsed (input: {
           enrichmentRoles: enrichment.characterRoles,
           parsed: { scenes: parsed.scenes, characterNames: mergedCharacterNames }
         })
+
+  const onlyExtrasRow =
+    characterRows.length === 1 &&
+    /^OTHER\b/i.test(characterRows[0]?.name || '')
+  if ((characterRows.length === 0 || onlyExtrasRow) && mergedCharacterNames.length > 0) {
+    characterRows = normalizeCharacterShares(
+      mergedCharacterNames.map(name => ({
+        name: name.slice(0, 200),
+        role_description:
+          'Identified from screenplay CAST and dialogue. Use Characters → “Build / refresh cast from script” to refresh AI-written descriptions.',
+        screen_share_percent: 0
+      }))
+    )
+  }
 
   if (characterRows.length === 0) {
     const fromFullText = heuristicCharacterNamesFromScenes([

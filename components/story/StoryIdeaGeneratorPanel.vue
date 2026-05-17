@@ -133,6 +133,12 @@
               <span class="font-semibold text-gray-900">Hook: </span>{{ r.hook }}
             </p>
             <p class="text-sm text-gray-600 whitespace-pre-wrap mb-4">{{ r.summary }}</p>
+            <p
+              v-if="'characters' in r && r.characters?.length"
+              class="text-xs text-gray-700 mb-3"
+            >
+              <span class="font-semibold text-gray-900">Cast: </span>{{ r.characters.join(', ') }}
+            </p>
             <div class="flex flex-wrap gap-2 mb-4">
               <span v-if="r.tone" class="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-800">{{ r.tone }}</span>
               <span v-if="r.genre" class="text-xs px-2 py-1 rounded-md bg-gray-200 text-gray-800 capitalize">{{ r.genre }}</span>

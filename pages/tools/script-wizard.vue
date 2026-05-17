@@ -622,8 +622,11 @@ async function saveGeneratedIdea (payload: StoryIdeaApplyPayload) {
         tone: item.tone,
         modelId: item.model,
         modelLabel: item.model,
-        status: 'in_progress'
-      }
+        status: 'in_progress',
+        characters: item.characters,
+        goal: payload.goal
+      },
+      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
     })
     selectedScriptId.value = res.script.id
     ideaGeneratorRef.value?.clearResults()
