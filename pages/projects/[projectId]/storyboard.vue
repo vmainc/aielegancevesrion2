@@ -438,7 +438,15 @@ async function generateFrame (shot: CreativeShot) {
     return
   }
   const matches = shotCharacterMatches(shot)
-  const prompt = buildStoryboardFramePrompt(basePrompt, matches)
+  const prompt = buildStoryboardFramePrompt(basePrompt, matches, {
+    director: project.value?.director,
+    continuityMemory: project.value?.continuityMemory,
+    scene: activeScene.value
+      ? { heading: activeScene.value.heading, summary: activeScene.value.summary }
+      : undefined,
+    shot,
+    cast: characterRefs.value
+  })
   const referenceImageUrl = pickPrimaryCharacterPortrait(matches) || undefined
   imageGenId.value = shot.id
   try {

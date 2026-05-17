@@ -216,7 +216,7 @@
                 </div>
                 <VideoStartFramePicker
                   :frame-image-url="customFrameByKey[genKey(scene.id, shot.id)] ?? null"
-                  :prompt="finalVideoPrompt(shot)"
+                  :prompt="finalVideoPrompt(shot, scene)"
                   compact
                   @update:frame-image-url="(v) => setCustomStartFrame(genKey(scene.id, shot.id), v)"
                 />
@@ -242,13 +242,16 @@
 
                 <div class="grow">
                   <label class="block text-[11px] font-medium text-gray-500 mb-1">Final prompt</label>
-                  <pre class="text-xs text-gray-800 whitespace-pre-wrap break-words rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 max-h-40 overflow-y-auto">{{ finalVideoPrompt(shot) }}</pre>
+                  <p class="text-[10px] text-gray-500 mb-1 leading-snug">
+                    Includes director, scene, full cast bible, and this panel’s action (sent to the video model).
+                  </p>
+                  <pre class="text-xs text-gray-800 whitespace-pre-wrap break-words rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 max-h-52 overflow-y-auto">{{ finalVideoPrompt(shot, scene) }}</pre>
                 </div>
 
                 <button
                   type="button"
                   class="mt-auto px-3 py-2 text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-gray-950 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
-                  :disabled="!finalVideoPrompt(shot).trim() || !selectedModelId || videoGenKey === genKey(scene.id, shot.id)"
+                  :disabled="!finalVideoPrompt(shot, scene).trim() || !selectedModelId || videoGenKey === genKey(scene.id, shot.id)"
                   @click="generateVideoForPanel(shot, scene.id)"
                 >
                   {{ videoGenKey === genKey(scene.id, shot.id) ? 'Generating…' : 'Generate video' }}
@@ -331,9 +334,10 @@ import {
 } from '~/lib/project-asset-playback-url'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import {
-  buildVideoMotionPrompt,
+  buildFullVideoGenerationPrompt,
   findCharactersInShot,
-  pickPrimaryCharacterPortrait
+  pickPrimaryCharacterPortrait,
+  type ProductionPromptContext
 } from '~/lib/shot-character-continuity'
 import {
   generateOpenRouterVideo,
@@ -541,12 +545,23 @@ function resolveStartFrameForApi (
   return frameUrlFor(sceneId, shotId) || pickPrimaryCharacterPortrait(castMatches) || ''
 }
 
-function finalVideoPrompt (shot: CreativeShot): string {
-  const v = (shot.videoPrompt || '').trim()
-  if (v) return v
-  const i = (shot.imagePrompt || '').trim()
-  if (i) return i
-  return (shot.description || '').trim()
+function productionPromptContext (
+  shot: CreativeShot,
+  scene?: SceneRow
+): ProductionPromptContext {
+  return {
+    director: project.value?.director,
+    continuityMemory: project.value?.continuityMemory,
+    scene: scene
+      ? { heading: scene.heading, summary: scene.summary }
+      : undefined,
+    shot,
+    cast: characterRefs.value
+  }
+}
+
+function finalVideoPrompt (shot: CreativeShot, scene?: SceneRow): string {
+  return buildFullVideoGenerationPrompt(productionPromptContext(shot, scene))
 }
 
 function genKey (sceneId: string, shotId: string) {
@@ -582,8 +597,9 @@ function addClipToTimeline (scene: SceneRow, shot: CreativeShot, url: string) {
 }
 
 async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
-  const basePrompt = finalVideoPrompt(shot).trim()
-  if (!basePrompt) {
+  const scene = scenes.value.find(s => s.id === sceneId)
+  const prompt = finalVideoPrompt(shot, scene).trim()
+  if (!prompt) {
     toast.showToast('This panel has no prompt yet.', 'info')
     return
   }
@@ -591,9 +607,7 @@ async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
     toast.showToast('Pick a video model first.', 'info')
     return
   }
-  const scene = scenes.value.find(s => s.id === sceneId)
   const castMatches = findCharactersInShot(shot, characterRefs.value, scene?.summary)
-  const prompt = buildVideoMotionPrompt(basePrompt, castMatches)
   videoGenKey.value = genKey(sceneId, shot.id)
   try {
     const aspect =
