@@ -436,18 +436,24 @@
         <p class="text-xs text-gray-500 mb-2">
           Scenes and storyboard panels are capped to fit (e.g. 90s ≈ 18 panels at 5s each). Leave blank for no hard cap.
         </p>
-        <input
-          id="target-runtime-seconds"
-          v-model.number="targetDurationSeconds"
-          type="number"
-          min="15"
-          max="3600"
-          step="5"
-          class="w-full max-w-[12rem] px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:border-primary"
-          :disabled="generating || conceptBootstrapRunning"
-          placeholder="e.g. 90"
-          @change="persistTargetDuration"
-        >
+        <ClientOnly>
+          <input
+            id="target-runtime-seconds"
+            v-model="targetDurationSeconds"
+            type="number"
+            min="15"
+            max="3600"
+            step="5"
+            class="w-full max-w-[12rem] px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:border-primary"
+            :disabled="generating || conceptBootstrapRunning"
+            placeholder="e.g. 90"
+            @input="onTargetDurationInput"
+            @change="persistTargetDuration"
+          >
+          <template #fallback>
+            <div class="w-full max-w-[12rem] h-10 rounded-lg bg-gray-100 border border-gray-200" aria-hidden="true" />
+          </template>
+        </ClientOnly>
       </div>
 
       <fieldset class="mb-5" :disabled="generating || !(modelOptions?.length)">
@@ -1151,7 +1157,8 @@ const deletingConcept = ref(false)
 const conceptBootstrapRunning = ref(false)
 const conceptBootstrapError = ref('')
 const pipelineBuilt = ref<boolean | null>(null)
-const targetDurationSeconds = ref<number | ''>('')
+const targetDurationSeconds = ref<string>('')
+const targetDurationTouched = ref(false)
 const promptTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
 const hasConcept = computed(() => {
@@ -1235,37 +1242,61 @@ watch(hasConcept, (has) => {
   showGeneratorForm.value = !has
 }, { immediate: true })
 
-watch(
-  () => [project.value?.targetDurationSeconds, project.value?.goal, project.value?.targetLength] as const,
-  () => {
-    const p = project.value
-    if (!p) {
-      targetDurationSeconds.value = ''
-      return
-    }
-    if (typeof p.targetDurationSeconds === 'number' && p.targetDurationSeconds > 0) {
-      targetDurationSeconds.value = p.targetDurationSeconds
-      return
-    }
+function syncTargetDurationFromProject (forceDefault = false) {
+  const p = project.value
+  if (!p) {
+    targetDurationSeconds.value = ''
+    return
+  }
+  if (typeof p.targetDurationSeconds === 'number' && p.targetDurationSeconds > 0) {
+    targetDurationSeconds.value = String(p.targetDurationSeconds)
+    return
+  }
+  if (!targetDurationTouched.value || forceDefault) {
     const def = defaultDurationSecondsForProject({
       goal: p.goal,
       targetLength: p.targetLength
     })
-    targetDurationSeconds.value = def ?? ''
-  },
-  { immediate: true }
+    targetDurationSeconds.value = def != null ? String(def) : ''
+  }
+}
+
+watch(projectId, () => {
+  targetDurationTouched.value = false
+  syncTargetDurationFromProject(true)
+}, { immediate: true })
+
+watch(
+  () => project.value?.targetDurationSeconds,
+  (v) => {
+    if (targetDurationTouched.value) return
+    if (typeof v === 'number' && v > 0) {
+      targetDurationSeconds.value = String(v)
+    }
+  }
 )
+
+function parsedTargetDurationSeconds (): number | null {
+  const raw = String(targetDurationSeconds.value || '').trim()
+  if (!raw) return null
+  const n = Math.floor(Number(raw))
+  if (!Number.isFinite(n) || n < 15 || n > 3600) return null
+  return n
+}
+
+function onTargetDurationInput () {
+  targetDurationTouched.value = true
+}
 
 async function persistTargetDuration () {
   const id = projectId.value
   if (!id || !canCloudImport.value) return
-  const raw = targetDurationSeconds.value
-  const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : null
+  const n = parsedTargetDurationSeconds()
   try {
     await updateProject(id, {
-      targetDurationSeconds:
-        n && n >= 15 && n <= 3600 ? n : null
+      targetDurationSeconds: n
     })
+    targetDurationTouched.value = true
   } catch {
     toast.showToast('Could not save target runtime.', 'error')
   }

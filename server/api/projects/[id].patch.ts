@@ -4,6 +4,7 @@ import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-t
 import { parseDirectorField, pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { CONCEPT_GENERATOR_MODELS } from '~/lib/concept-generator-models'
+import { upsertDurationInConceptNotes } from '~/lib/format-stored-concept'
 import { stripWorkflowMarker, WORKFLOW_SCRATCH_MARKER } from '~/lib/project-workflow-mode'
 
 export default defineEventHandler(async (event) => {
@@ -53,13 +54,12 @@ export default defineEventHandler(async (event) => {
   if (typeof body.targetLength === 'string' && LENGTHS.has(body.targetLength)) {
     patch.target_length = body.targetLength
   }
-  if (body.targetDurationSeconds === null) {
-    patch.target_duration_seconds = null
-  } else if (body.targetDurationSeconds !== undefined) {
+  if (body.targetDurationSeconds !== undefined) {
     const n = Math.floor(Number(body.targetDurationSeconds))
-    if (Number.isFinite(n) && n >= 15 && n <= 3600) {
-      patch.target_duration_seconds = n
-    }
+    const valid = Number.isFinite(n) && n >= 15 && n <= 3600 ? n : null
+    patch.target_duration_seconds = valid
+    const prevNotes = String((existing as { concept_notes?: string }).concept_notes || '')
+    patch.concept_notes = upsertDurationInConceptNotes(prevNotes, valid).slice(0, 50_000)
   }
 
   if (body.director === null) {

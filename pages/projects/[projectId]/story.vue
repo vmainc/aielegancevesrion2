@@ -49,18 +49,24 @@
           <p class="text-xs text-gray-500 mb-2">
             Optional hard cap — storyboard panels and scenes stay within this total (e.g. 90).
           </p>
-          <input
-            id="target-duration-sec"
-            v-model.number="durationSecondsModel"
-            type="number"
-            min="15"
-            max="3600"
-            step="5"
-            class="w-full max-w-[12rem] px-3 py-2 rounded-lg bg-white border border-gray-300 text-sm"
-            :disabled="savingLength || !canPersist"
-            placeholder="90"
-            @change="onDurationSecondsChange"
-          >
+          <ClientOnly>
+            <input
+              id="target-duration-sec"
+              v-model="durationSecondsModel"
+              type="number"
+              min="15"
+              max="3600"
+              step="5"
+              class="w-full max-w-[12rem] px-3 py-2 rounded-lg bg-white border border-gray-300 text-sm"
+              :disabled="savingLength || !canPersist"
+              placeholder="90"
+              @input="durationSecondsTouched = true"
+              @change="onDurationSecondsChange"
+            >
+            <template #fallback>
+              <div class="w-full max-w-[12rem] h-10 rounded-lg bg-gray-100 border border-gray-200" />
+            </template>
+          </ClientOnly>
         </div>
       </div>
 
@@ -202,7 +208,8 @@ const projectId = activeProjectId
 const lengthOptions = TARGET_LENGTH_OPTIONS
 
 const lengthModel = ref<ProjectTargetLength>('short')
-const durationSecondsModel = ref<number | ''>('')
+const durationSecondsModel = ref<string>('')
+const durationSecondsTouched = ref(false)
 const savingLength = ref(false)
 const generatingKind = ref<'script' | 'treatment' | null>(null)
 
@@ -239,36 +246,52 @@ watch(
   { immediate: true }
 )
 
-watch(
-  () => activeProject.value,
-  (p) => {
-    if (!p) {
-      durationSecondsModel.value = ''
-      return
-    }
-    if (typeof p.targetDurationSeconds === 'number' && p.targetDurationSeconds > 0) {
-      durationSecondsModel.value = p.targetDurationSeconds
-      return
-    }
+function syncDurationSecondsFromProject (forceDefault = false) {
+  const p = activeProject.value
+  if (!p) {
+    durationSecondsModel.value = ''
+    return
+  }
+  if (typeof p.targetDurationSeconds === 'number' && p.targetDurationSeconds > 0) {
+    durationSecondsModel.value = String(p.targetDurationSeconds)
+    return
+  }
+  if (!durationSecondsTouched.value || forceDefault) {
     const def = defaultDurationSecondsForProject({
       goal: p.goal,
       targetLength: p.targetLength
     })
-    durationSecondsModel.value = def ?? ''
-  },
-  { immediate: true }
+    durationSecondsModel.value = def != null ? String(def) : ''
+  }
+}
+
+watch(projectId, () => {
+  durationSecondsTouched.value = false
+  syncDurationSecondsFromProject(true)
+}, { immediate: true })
+
+watch(
+  () => activeProject.value?.targetDurationSeconds,
+  (v) => {
+    if (durationSecondsTouched.value) return
+    if (typeof v === 'number' && v > 0) {
+      durationSecondsModel.value = String(v)
+    }
+  }
 )
 
 async function onDurationSecondsChange () {
   const p = activeProject.value
   if (!p || !canPersist.value) return
-  const raw = durationSecondsModel.value
-  const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : null
+  const raw = String(durationSecondsModel.value || '').trim()
+  const n = raw ? Math.floor(Number(raw)) : null
+  const valid = n != null && Number.isFinite(n) && n >= 15 && n <= 3600 ? n : null
   savingLength.value = true
   try {
     await updateProject(p.id, {
-      targetDurationSeconds: n && n >= 15 && n <= 3600 ? n : null
+      targetDurationSeconds: valid
     })
+    durationSecondsTouched.value = true
     toast.showToast('Runtime saved.', 'success')
   } catch {
     toast.showToast('Could not save runtime.', 'error')

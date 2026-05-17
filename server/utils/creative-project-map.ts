@@ -1,3 +1,4 @@
+import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
 import { workflowModeFromProjectRecord } from '~/lib/project-workflow-mode'
 import type {
   CreativeProject,
@@ -90,7 +91,7 @@ export function pbRecordToCreativeProject (r: PbProjectRecord): CreativeProject 
     targetDurationSeconds:
       typeof r.target_duration_seconds === 'number' && r.target_duration_seconds > 0
         ? Math.floor(r.target_duration_seconds)
-        : undefined,
+        : parseDurationFromConceptNotes(r.concept_notes || ''),
     synopsis: r.synopsis || '',
     treatment: r.treatment || '',
     conceptNotes: r.concept_notes || '',

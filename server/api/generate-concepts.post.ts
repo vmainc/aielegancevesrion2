@@ -2,6 +2,7 @@ import { createError, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { CONCEPT_GENERATOR_MODELS, getConceptGeneratorModelById } from '~/lib/concept-generator-models'
+import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
 import { generateConceptWithOpenRouter } from '~/server/utils/generate-concept-ai'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
@@ -81,6 +82,9 @@ export default defineEventHandler(async (event) => {
       const d = Number(row.target_duration_seconds)
       if (Number.isFinite(d) && d >= 15 && d <= 3600) {
         projectDurationSeconds = Math.floor(d)
+      } else {
+        const fromNotes = parseDurationFromConceptNotes(String(row.concept_notes || ''))
+        if (fromNotes) projectDurationSeconds = fromNotes
       }
     } catch (e: unknown) {
       const err = e as { statusCode?: number; status?: number; response?: { status?: number } }
