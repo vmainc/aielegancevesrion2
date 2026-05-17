@@ -4,7 +4,7 @@
     headline="Video"
     blurb="Rendered clips, references, and video-related files stored per project in your asset library."
     :actions="actions"
-    empty-hint="Clips generated on a project’s Video step are saved to that project automatically. They also appear here under Assets → Video."
+    empty-hint="Generate video from a project’s Video step or from Tools → Video generation (pick a project to save). Clips are grouped by project below."
   />
 </template>
 

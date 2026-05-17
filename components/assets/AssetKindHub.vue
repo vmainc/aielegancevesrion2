@@ -49,7 +49,112 @@
           Showing images for: <span class="font-semibold">{{ characterFilterLabel }}</span>
         </div>
 
-        <template v-if="props.kind === 'character' && characterProjectGroups.length">
+        <template v-if="props.kind === 'video' && videoProjectGroups.length">
+          <div
+            v-for="g in videoProjectGroups"
+            :key="g.key"
+            class="mb-8 rounded-xl border border-gray-200 bg-white overflow-hidden"
+          >
+            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50/90 flex flex-wrap items-baseline justify-between gap-2">
+              <div class="min-w-0">
+                <h2 class="text-sm font-semibold text-gray-900 truncate">
+                  {{ g.title }}
+                </h2>
+                <p v-if="g.subtitle" class="text-xs text-gray-500 mt-0.5">
+                  {{ g.subtitle }}
+                </p>
+              </div>
+              <NuxtLink
+                v-if="g.projectId && PB_ID.test(g.projectId)"
+                :to="`/projects/${g.projectId}/video`"
+                class="text-xs font-medium text-primary hover:underline shrink-0"
+              >
+                Open Video step →
+              </NuxtLink>
+            </div>
+            <ul class="divide-y divide-gray-200">
+              <li
+                v-for="a in g.items"
+                :key="a.id"
+                class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
+              >
+                <div class="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-start gap-3">
+                  <div
+                    v-if="a.fileUrl"
+                    class="w-full max-w-[min(100%,20rem)] sm:max-w-xs rounded-lg border border-gray-200 overflow-hidden bg-black shrink-0"
+                  >
+                    <video
+                      :src="videoAssetPlaybackSrc(a)"
+                      class="w-full aspect-video object-contain"
+                      controls
+                      playsinline
+                      preload="metadata"
+                    />
+                  </div>
+                  <div class="min-w-0 flex-1">
+                    <p class="font-medium text-gray-900">{{ a.title }}</p>
+                    <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
+                    <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
+                  </div>
+                </div>
+                <div class="shrink-0">
+                  <details class="relative">
+                    <summary
+                      class="list-none cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                    >
+                      Actions
+                    </summary>
+                    <div
+                      class="absolute right-0 z-20 mt-2 min-w-[13rem] rounded-lg border border-gray-200 bg-white shadow-lg p-1"
+                    >
+                      <a
+                        v-if="a.fileUrl"
+                        :href="videoAssetPlaybackSrc(a)"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                      >
+                        Download file
+                      </a>
+                      <NuxtLink
+                        v-if="a.projectId"
+                        :to="`/projects/${a.projectId}/overview`"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                      >
+                        Open project
+                      </NuxtLink>
+                      <NuxtLink
+                        v-if="a.projectId && PB_ID.test(a.projectId)"
+                        :to="`/projects/${a.projectId}/timeline`"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                      >
+                        Open timeline
+                      </NuxtLink>
+                      <button
+                        v-if="a.projectId && a.fileUrl"
+                        type="button"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                        @click="addVideoAssetToTimeline(a)"
+                      >
+                        Add to timeline
+                      </button>
+                      <button
+                        type="button"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        :disabled="deletingId === a.id"
+                        @click="removeAsset(a)"
+                      >
+                        {{ deletingId === a.id ? 'Removing…' : 'Remove' }}
+                      </button>
+                    </div>
+                  </details>
+                </div>
+              </li>
+            </ul>
+          </div>
+        </template>
+
+        <template v-else-if="props.kind === 'character' && characterProjectGroups.length">
           <div
             v-for="g in characterProjectGroups"
             :key="g.key"
@@ -163,7 +268,7 @@
         </template>
 
         <ul
-          v-else-if="visibleItems.length"
+          v-else-if="visibleItems.length && props.kind !== 'video'"
           class="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white overflow-hidden"
         >
           <li
@@ -565,7 +670,7 @@ const visibleItems = computed(() => {
   return dedupeCharacterAssets(filtered)
 })
 
-type CharacterProjectGroup = {
+type AssetProjectGroup = {
   key: string
   projectId: string
   title: string
@@ -584,17 +689,19 @@ function sortCharacterAssetsForDisplay (list: ProjectAsset[]): ProjectAsset[] {
   })
 }
 
-const characterProjectGroups = computed<CharacterProjectGroup[]>(() => {
-  if (props.kind !== 'character') return []
+function buildProjectAssetGroups (
+  list: ProjectAsset[],
+  sortItems: (rows: ProjectAsset[]) => ProjectAsset[]
+): AssetProjectGroup[] {
   const byPid = new Map<string, ProjectAsset[]>()
-  for (const a of visibleItems.value) {
+  for (const a of list) {
     const pid = (a.projectId && PB_ID.test(a.projectId)) ? a.projectId : ''
     const key = pid || '__unassigned__'
     const cur = byPid.get(key) || []
     cur.push(a)
     byPid.set(key, cur)
   }
-  const groups: CharacterProjectGroup[] = []
+  const groups: AssetProjectGroup[] = []
   for (const [key, raw] of byPid.entries()) {
     const pid = key === '__unassigned__' ? '' : key
     const nameFromAsset = raw.find(a => a.projectName)?.projectName?.trim() || ''
@@ -608,7 +715,7 @@ const characterProjectGroups = computed<CharacterProjectGroup[]>(() => {
       projectId: pid,
       title,
       subtitle,
-      items: sortCharacterAssetsForDisplay(raw)
+      items: sortItems(raw)
     })
   }
   groups.sort((a, b) => {
@@ -617,7 +724,40 @@ const characterProjectGroups = computed<CharacterProjectGroup[]>(() => {
     return a.title.localeCompare(b.title)
   })
   return groups
+}
+
+function sortVideoAssetsForDisplay (list: ProjectAsset[]): ProjectAsset[] {
+  return [...list].sort((a, b) =>
+    String(b.updated || b.created || '').localeCompare(String(a.updated || a.created || ''))
+  )
+}
+
+const characterProjectGroups = computed<AssetProjectGroup[]>(() => {
+  if (props.kind !== 'character') return []
+  return buildProjectAssetGroups(visibleItems.value, sortCharacterAssetsForDisplay)
 })
+
+const videoProjectGroups = computed<AssetProjectGroup[]>(() => {
+  if (props.kind !== 'video') return []
+  return buildProjectAssetGroups(visibleItems.value, sortVideoAssetsForDisplay)
+})
+
+function addVideoAssetToTimeline (a: ProjectAsset) {
+  if (!a.projectId || !PB_ID.test(a.projectId) || !a.id) return
+  const src = videoAssetPlaybackSrc(a)
+  if (!src) return
+  const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
+  const sceneId = typeof meta.scene_id === 'string' ? meta.scene_id : undefined
+  const shotId = typeof meta.shot_id === 'string' ? meta.shot_id : undefined
+  const { addVideoClip } = useProjectTimeline(computed(() => a.projectId))
+  addVideoClip({
+    url: src,
+    label: (a.title || 'Video clip').slice(0, 500),
+    sceneId,
+    shotId
+  })
+  toast.showToast('Added to project timeline.', 'success')
+}
 
 async function fetchItems () {
   if (!import.meta.client || !isAuthenticated.value) {

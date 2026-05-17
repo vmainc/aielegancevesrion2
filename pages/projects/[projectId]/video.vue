@@ -76,7 +76,17 @@
             Each panel is a shot from your storyboard: title, saved frame (if any), the prompt we’ll send to the video model, then
             <span class="font-medium text-gray-800">Generate video</span>.
             Clips are planned as <span class="font-medium text-gray-800">5s or 10s</span> per shot; if the model only allows certain lengths (e.g. 6s), the server picks the closest match.
+            Generated clips are saved to this project automatically and appear under
+            <NuxtLink to="/assets/video" class="text-primary font-medium hover:underline">Assets → Video</NuxtLink>.
           </p>
+          <label class="mt-3 inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+            <input
+              v-model="addToTimelineOnSave"
+              type="checkbox"
+              class="rounded border-gray-300 text-primary focus:ring-primary"
+            >
+            Add each new clip to this project’s timeline
+          </label>
         </div>
         <button
           type="button"
@@ -313,7 +323,12 @@ import {
   appendPlaybackAccessToken,
   projectAssetMediaPath
 } from '~/lib/project-asset-playback-url'
-import { snapDurationToModelSupported, snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
+import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
+import {
+  generateOpenRouterVideo,
+  playbackUrlForProjectVideoAsset,
+  saveVideoToProjectLibrary
+} from '~/composables/useOpenRouterVideoGen'
 import type { CreativeShot } from '~/types/creative-shot'
 import type { ProjectAsset } from '~/types/project-asset'
 
@@ -356,15 +371,8 @@ type SceneRow = {
   shotCount?: number
 }
 
-type VideoJobPostResponse = {
-  async?: boolean
-  jobId?: string
-  status?: string
-  model?: string
-  videoUrl?: string
-}
-
 const scenes = ref<SceneRow[]>([])
+const addToTimelineOnSave = ref(false)
 const boardsError = ref('')
 const boardsLoading = ref(false)
 const storyboardAssets = ref<ProjectAsset[]>([])
@@ -456,9 +464,30 @@ async function loadShotsForScene (sceneId: string) {
   }
 }
 
+async function loadVideoAssetsForPanels () {
+  if (!canLoadBoards.value) return
+  const id = projectId.value
+  const headers = authHeaders()
+  if (!headers) return
+  try {
+    const res = await $fetch<{ items: ProjectAsset[] }>(`/api/projects/${id}/assets?kind=video`, { headers })
+    for (const a of res.items || []) {
+      const meta = a.metadata
+      if (!meta || typeof meta !== 'object') continue
+      const sceneId = typeof meta.scene_id === 'string' ? meta.scene_id : ''
+      const shotId = typeof meta.shot_id === 'string' ? meta.shot_id : ''
+      if (!sceneId || !shotId || !a.id) continue
+      videoPreviewByKey[genKey(sceneId, shotId)] = projectAssetMediaPath(id, a.id)
+    }
+  } catch {
+    // non-fatal
+  }
+}
+
 async function reloadStoryboardBoards () {
   await loadScenesForVideo()
   await loadStoryboardAssetsForVideo()
+  await loadVideoAssetsForPanels()
   await Promise.all(scenes.value.map(s => loadShotsForScene(s.id)))
 }
 
@@ -516,65 +545,6 @@ function addClipToTimeline (scene: SceneRow, shot: CreativeShot, url: string) {
   toast.showToast('Clip added to timeline.', 'success')
 }
 
-async function persistGeneratedVideoToLibrary (args: {
-  projectId: string
-  sceneId: string
-  shot: CreativeShot
-  remoteUrl: string
-  modelId: string
-}): Promise<ProjectAsset | null> {
-  const headers = authHeaders()
-  if (!headers) return null
-  const title = `${args.shot.title || 'Shot'} — video`.slice(0, 500)
-  try {
-    const res = await $fetch<{ asset?: ProjectAsset }>(
-      `/api/projects/${args.projectId}/assets/ingest-from-url`,
-      {
-        method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: {
-          url: args.remoteUrl,
-          kind: 'video',
-          title,
-          notes: 'Generated from this project’s Video step (saved for playback in your library).',
-          metadata: {
-            scene_id: args.sceneId,
-            shot_id: args.shot.id,
-            model_id: args.modelId,
-            source: 'openrouter_video'
-          }
-        }
-      }
-    )
-    return res.asset ?? null
-  } catch (e: unknown) {
-    console.warn('[video] library ingest failed:', formatApiFetchError(e, 'ingest'))
-    return null
-  }
-}
-
-async function pollVideoJobUntilDone (jobId: string): Promise<string> {
-  const deadline = Date.now() + 22 * 60 * 1000
-  let wait = 2200
-  while (Date.now() < deadline) {
-    const s = await $fetch<{
-      jobId: string
-      status: string
-      videoUrl?: string
-      message?: string
-    }>('/api/generate/video/status', { query: { jobId } })
-    if (s.status === 'completed' && s.videoUrl?.trim()) {
-      return s.videoUrl.trim()
-    }
-    if (s.status === 'failed' || s.status === 'cancelled' || s.status === 'expired') {
-      throw new Error((s.message || '').trim() || `Video job ${s.status}`)
-    }
-    await new Promise(r => setTimeout(r, wait))
-    wait = Math.min(14_000, Math.floor(wait * 1.22))
-  }
-  throw new Error('Still rendering — try again in a bit or check OpenRouter.')
-}
-
 async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
   const prompt = finalVideoPrompt(shot).trim()
   if (!prompt) {
@@ -596,46 +566,53 @@ async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
     const frame = frameUrlFor(sceneId, shot.id) || ''
     const baseSec = snapToStoryboardClipSeconds(Number(shot.durationSeconds) || 5)
     const modelRow = videoModels.value.find(m => m.id === selectedModelId.value)
-    const supported = modelRow?.supportedDurations
-    const durationSeconds =
-      supported?.length ? snapDurationToModelSupported(baseSec, supported) : baseSec
-    const res = await $fetch<VideoJobPostResponse>('/api/generate/video', {
-      method: 'POST',
-      body: {
-        prompt,
-        model: selectedModelId.value,
-        aspectRatio: aspect,
-        resolution: '720p',
-        durationSeconds,
-        frameImageUrl: frame || undefined
-      }
+    const headers = authHeaders()
+    toast.showToast('Rendering… you can leave this page; come back to refresh.', 'info')
+    const { videoUrl: url } = await generateOpenRouterVideo({
+      prompt,
+      model: selectedModelId.value,
+      aspectRatio: aspect,
+      resolution: '720p',
+      durationSeconds: baseSec,
+      frameImageUrl: frame || undefined,
+      supportedDurations: modelRow?.supportedDurations
     })
-    let url = typeof res?.videoUrl === 'string' ? res.videoUrl.trim() : ''
-    if (!url && res?.async && res.jobId) {
-      toast.showToast('Rendering… you can leave this page; come back to refresh.', 'info')
-      url = await pollVideoJobUntilDone(res.jobId)
-    }
-    if (!url) {
-      toast.showToast('Video generation finished but no URL was returned.', 'warning')
-      return
-    }
     const key = genKey(sceneId, shot.id)
     videoPreviewByKey[key] = url
 
-    const asset = await persistGeneratedVideoToLibrary({
-      projectId: projectId.value,
-      sceneId,
-      shot,
-      remoteUrl: url,
-      modelId: selectedModelId.value
-    })
-    if (asset?.id) {
-      videoPreviewByKey[key] = projectAssetMediaPath(projectId.value, asset.id)
-      toast.showToast('Video saved — playable from your project and under Assets → Video.', 'success')
-    } else {
-      toast.showToast(
-        'Video render finished, but saving to your library failed (OpenRouter URLs often need auth to play in-browser). Try again or check server logs.',
-        'warning'
+    let playbackUrl = url
+    if (headers) {
+      const asset = await saveVideoToProjectLibrary({
+        projectId: projectId.value,
+        remoteUrl: url,
+        title: `${shot.title || 'Shot'} — video`.slice(0, 500),
+        notes: 'Generated from this project’s Video step (saved for playback in your library).',
+        metadata: {
+          scene_id: sceneId,
+          shot_id: shot.id,
+          model_id: selectedModelId.value,
+          source: 'openrouter_video'
+        },
+        headers
+      })
+      if (asset?.id) {
+        playbackUrl = playbackUrlForProjectVideoAsset(projectId.value, asset.id)
+        videoPreviewByKey[key] = playbackUrl
+        toast.showToast('Video saved — playable from your project and under Assets → Video.', 'success')
+      } else {
+        toast.showToast(
+          'Video render finished, but saving to your library failed. Try again or check server logs.',
+          'warning'
+        )
+      }
+    }
+
+    if (addToTimelineOnSave.value && playbackUrl) {
+      const scene = scenes.value.find(s => s.id === sceneId)
+      addClipToTimeline(
+        scene || { id: sceneId, heading: 'Scene', sortOrder: 0, summary: '', bodyLength: 0 },
+        shot,
+        playbackVideoSrc(playbackUrl)
       )
     }
   } catch (e: unknown) {
