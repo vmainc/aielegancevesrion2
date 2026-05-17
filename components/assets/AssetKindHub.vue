@@ -184,17 +184,20 @@
                 class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
               >
                 <div class="min-w-0 flex-1 flex items-start gap-3">
-                  <div
+                  <button
                     v-if="a.fileUrl"
-                    class="w-14 h-14 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0"
+                    type="button"
+                    class="w-14 h-14 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0 cursor-zoom-in hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
+                    :aria-label="`View full image: ${a.title}`"
+                    @click="openImagePreview(a)"
                   >
                     <img
-                      :src="a.fileUrl"
+                      :src="characterAssetPlaybackSrc(a)"
                       alt=""
-                      class="w-full h-full object-cover"
+                      class="w-full h-full object-cover pointer-events-none"
                       loading="lazy"
                     >
-                  </div>
+                  </button>
                   <div class="min-w-0 flex-1">
                     <p class="font-medium text-gray-900">{{ a.title }}</p>
                     <p
@@ -277,17 +280,20 @@
             class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
           >
             <div class="min-w-0 flex-1 flex items-start gap-3">
-              <div
+              <button
                 v-if="props.kind === 'character' && a.fileUrl"
-                class="w-14 h-14 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0"
+                type="button"
+                class="w-14 h-14 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0 cursor-zoom-in hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
+                :aria-label="`View full image: ${a.title}`"
+                @click="openImagePreview(a)"
               >
                 <img
-                  :src="a.fileUrl"
+                  :src="characterAssetPlaybackSrc(a)"
                   alt=""
-                  class="w-full h-full object-cover"
+                  class="w-full h-full object-cover pointer-events-none"
                   loading="lazy"
                 >
-              </div>
+              </button>
               <div
                 v-else-if="props.kind === 'video' && a.fileUrl"
                 class="w-full max-w-[min(100%,20rem)] sm:max-w-xs rounded-lg border border-gray-200 overflow-hidden bg-black shrink-0"
@@ -385,6 +391,46 @@
     </ClientOnly>
 
     <Teleport to="body">
+      <div
+        v-if="expandedImage"
+        class="fixed inset-0 z-[110] bg-black/92 flex flex-col p-4 sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="expandedImage.title"
+        @click.self="closeImagePreview"
+      >
+        <div class="max-w-6xl w-full mx-auto flex flex-col flex-1 min-h-0">
+          <div class="flex justify-between items-center gap-3 mb-3 text-white shrink-0">
+            <p class="text-sm font-medium truncate">
+              {{ expandedImage.title }}
+            </p>
+            <div class="flex items-center gap-2 shrink-0">
+              <a
+                v-if="expandedImage.downloadUrl"
+                :href="expandedImage.downloadUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
+              >
+                Download
+              </a>
+              <button
+                type="button"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
+                @click="closeImagePreview"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+          <img
+            :src="expandedImage.url"
+            :alt="expandedImage.title"
+            class="w-full flex-1 min-h-[40vh] max-h-[calc(100vh-5rem)] rounded-lg object-contain mx-auto"
+          >
+        </div>
+      </div>
+
       <div
         v-if="openAdd"
         class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/50"
@@ -505,6 +551,7 @@ const loading = ref(true)
 const loadError = ref('')
 const items = ref<ProjectAsset[]>([])
 const openAdd = ref(false)
+const expandedImage = ref<{ url: string; title: string; downloadUrl: string } | null>(null)
 const adding = ref(false)
 const addError = ref('')
 const deletingId = ref('')
@@ -532,12 +579,36 @@ function formatDate (iso: string) {
   }
 }
 
-function videoAssetPlaybackSrc (a: ProjectAsset): string {
+function assetMediaPlaybackSrc (a: ProjectAsset): string {
   void authTokenState.value
-  if (props.kind !== 'video' || !a.id || !a.projectId) {
+  if (!a.id || !a.projectId || !PB_ID.test(a.projectId)) {
     return (a.fileUrl || '').trim()
   }
   return appendPlaybackAccessToken(projectAssetMediaPath(a.projectId, a.id), getAuthToken())
+}
+
+function videoAssetPlaybackSrc (a: ProjectAsset): string {
+  if (props.kind !== 'video') return (a.fileUrl || '').trim()
+  return assetMediaPlaybackSrc(a)
+}
+
+function characterAssetPlaybackSrc (a: ProjectAsset): string {
+  if (props.kind !== 'character') return (a.fileUrl || '').trim()
+  return assetMediaPlaybackSrc(a)
+}
+
+function openImagePreview (a: ProjectAsset) {
+  const url = characterAssetPlaybackSrc(a)
+  if (!url) return
+  expandedImage.value = {
+    url,
+    title: a.title || 'Character image',
+    downloadUrl: url
+  }
+}
+
+function closeImagePreview () {
+  expandedImage.value = null
 }
 
 /** Where a script file came from + whether AI import was run (scripts hub only). */
