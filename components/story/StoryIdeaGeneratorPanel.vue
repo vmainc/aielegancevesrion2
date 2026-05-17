@@ -179,8 +179,14 @@ const props = withDefaults(
   }
 )
 
+export type StoryIdeaApplyPayload = {
+  item: GeneratedConceptItem
+  goal: ProjectGoal
+  aspectRatio: ProjectAspectRatio
+}
+
 const emit = defineEmits<{
-  apply: [item: GeneratedConceptItem]
+  apply: [payload: StoryIdeaApplyPayload]
   cancel: []
 }>()
 
@@ -296,7 +302,11 @@ async function generateConcepts () {
 function onApply (r: ConceptGeneratorResultItem) {
   if (!isSuccessResult(r)) return
   applyingModel.value = r.model
-  emit('apply', r)
+  emit('apply', {
+    item: r,
+    goal: goalModel.value,
+    aspectRatio: aspectModel.value
+  })
 }
 
 function clearApplying () {

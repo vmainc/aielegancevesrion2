@@ -298,12 +298,12 @@
 
         <ul
           v-else-if="visibleItems.length && props.kind !== 'video'"
-          class="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white overflow-hidden"
+          class="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white"
         >
           <li
             v-for="a in visibleItems"
             :key="a.id"
-            class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
+            class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 relative first:rounded-t-xl last:rounded-b-xl hover:z-10 focus-within:z-10"
           >
             <div class="min-w-0 flex-1 flex items-start gap-3">
               <button
@@ -349,14 +349,14 @@
               </div>
             </div>
             <div class="shrink-0">
-              <details class="relative">
+              <details class="relative open:z-30">
                 <summary
-                  class="list-none cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                  class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
                 >
                   Actions
                 </summary>
                 <div
-                  class="absolute right-0 z-20 mt-2 min-w-[13rem] rounded-lg border border-gray-200 bg-white shadow-lg p-1"
+                  class="absolute right-0 z-50 mt-2 min-w-[13rem] max-h-[min(70vh,20rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg p-1"
                 >
                   <a
                     v-if="a.fileUrl"

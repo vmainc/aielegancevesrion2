@@ -17,8 +17,7 @@ export const CONCEPT_GENERATOR_MODELS: ConceptGeneratorModelConfig[] = [
   { id: 'gemini', label: 'Gemini', openrouterModelId: 'google/gemini-2.0-flash-001' },
   { id: 'deepseek', label: 'DeepSeek', openrouterModelId: 'deepseek/deepseek-chat-v3-0324' },
   { id: 'llama', label: 'Llama', openrouterModelId: 'meta-llama/llama-3.1-70b-instruct' },
-  { id: 'mistral', label: 'Mistral', openrouterModelId: 'mistralai/mistral-large-2512' },
-  { id: 'mixtral', label: 'Mixtral', openrouterModelId: 'mistralai/mixtral-8x7b-instruct' }
+  { id: 'mistral', label: 'Mistral', openrouterModelId: 'mistralai/mistral-large-2512' }
 ]
 
 export function getConceptGeneratorModelById (id: string): ConceptGeneratorModelConfig | undefined {

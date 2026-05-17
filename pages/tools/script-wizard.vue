@@ -20,7 +20,7 @@
         :project-id="libraryProjectId"
         heading="Generate a new script"
         subheading="Same tool as project Overview: describe your idea, compare AI models, then add the story to Script Wizard. You can generate treatment and breakdown after."
-        apply-label="Add to Script Wizard"
+        apply-label="Develop this story"
         @apply="saveGeneratedIdea"
       />
 
@@ -136,24 +136,32 @@
             <div class="border-t border-gray-200 pt-5 mb-6">
               <h3 class="text-lg font-semibold text-gray-900 mb-2">Next steps</h3>
               <p class="text-sm text-gray-600 mb-3">
-                After analysis, add comparable-film + theme treatment prose, and/or run the three-act breakdown pass (you can do either order; breakdown can fill both if treatment is still empty).
+                {{
+                  stepAction
+                    ? 'Running Script Wizard — treatment and three-act breakdown. This can take several minutes.'
+                    : wizardReady
+                      ? 'Analysis is ready. Open a new project to continue in the workflow.'
+                      : 'After you pick a story, Script Wizard runs treatment and breakdown automatically.'
+                }}
               </p>
               <div class="flex flex-wrap gap-2">
                 <button
+                  v-if="wizardReady"
                   type="button"
-                  class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-                  :disabled="!!stepAction || uploading"
-                  @click="runGenerateTreatment"
+                  class="px-4 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+                  :disabled="!!stepAction || openingProject"
+                  @click="openAsProject"
                 >
-                  {{ stepAction === 'treatment' ? 'Working…' : 'Generate treatment' }}
+                  {{ openingProject ? 'Opening…' : 'Open as project' }}
                 </button>
                 <button
+                  v-if="!stepAction"
                   type="button"
                   class="px-4 py-2 border border-gray-300 text-gray-900 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors disabled:opacity-50"
-                  :disabled="!!stepAction || uploading"
-                  @click="runWizardBreakdown"
+                  :disabled="!!stepAction || uploading || !selectedScriptId"
+                  @click="runFullWizardPipeline(selectedScriptId)"
                 >
-                  {{ stepAction === 'breakdown' ? 'Working…' : 'Run Script Wizard breakdown' }}
+                  Re-run Script Wizard
                 </button>
               </div>
               <div
@@ -162,10 +170,8 @@
               >
                 <FilmReelLoader
                   size="sm"
-                  :label="stepAction === 'treatment' ? 'Writing treatment' : 'Mapping three-act breakdown'"
-                  :sub-label="stepAction === 'treatment'
-                    ? 'Comparable films + theme exploration (OpenRouter). Large scripts can take many minutes.'
-                    : 'Three-act thematic lens + theme arc (second OpenRouter pass).'"
+                  :label="wizardStepLabel"
+                  :sub-label="wizardStepSubLabel"
                 />
               </div>
             </div>
@@ -271,6 +277,13 @@ import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-f
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { SCRIPT_WIZARD_STEP_CLIENT_MS, SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { GeneratedConceptItem } from '~/types/concept-generator'
+import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
+
+type StoryIdeaApplyPayload = {
+  item: GeneratedConceptItem
+  goal: ProjectGoal
+  aspectRatio: ProjectAspectRatio
+}
 import type { CreativeScript } from '~/types/creative-script'
 import type { ComponentPublicInstance } from 'vue'
 
@@ -305,6 +318,11 @@ const moviesError = ref('')
 const stepAction = ref<null | 'treatment' | 'breakdown'>(null)
 const libraryProjectId = ref('')
 const ideaGeneratorRef = ref<ComponentPublicInstance<{ clearApplying: () => void; clearResults: () => void }> | null>(null)
+const openingProject = ref(false)
+const lastWizardFormat = ref<{ goal: ProjectGoal; aspectRatio: ProjectAspectRatio }>({
+  goal: 'film',
+  aspectRatio: '16:9'
+})
 
 const uploadStatusHint =
   'Extracting text and running AI analysis (synopsis, genre, comparable titles). Long scripts can take 10–30 minutes — stay on this page until it finishes.'
@@ -319,6 +337,24 @@ const threeActBreakdown = computed(() =>
 const hasTreatmentProse = computed(() => {
   const t = selectedScript.value?.treatment?.trim() || ''
   return t.length > 0
+})
+
+const wizardReady = computed(() => hasTreatmentProse.value)
+
+const wizardStepLabel = computed(() => {
+  if (stepAction.value === 'treatment') return 'Writing treatment'
+  if (stepAction.value === 'breakdown') return 'Mapping three-act breakdown'
+  return 'Script Wizard'
+})
+
+const wizardStepSubLabel = computed(() => {
+  if (stepAction.value === 'treatment') {
+    return 'Comparable films + theme exploration (OpenRouter).'
+  }
+  if (stepAction.value === 'breakdown') {
+    return 'Three-act thematic lens + theme arc.'
+  }
+  return ''
 })
 
 function formatDate (iso: string): string {
@@ -491,7 +527,64 @@ async function loadLibraryProject () {
   }
 }
 
-async function saveGeneratedIdea (item: GeneratedConceptItem) {
+async function runFullWizardPipeline (scriptId: string, quiet = false) {
+  const token = getAuthToken()
+  if (!token || !scriptId) return
+  try {
+    stepAction.value = 'treatment'
+    await $fetch<{ script: CreativeScript }>(`/api/script-wizard/scripts/${scriptId}/treatment`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: SCRIPT_WIZARD_STEP_CLIENT_MS
+    })
+    stepAction.value = 'breakdown'
+    await $fetch<{ script: CreativeScript }>(`/api/script-wizard/scripts/${scriptId}/wizard-breakdown`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: SCRIPT_WIZARD_STEP_CLIENT_MS
+    })
+    await loadScripts()
+    selectedScriptId.value = scriptId
+    await loadMovies(scriptId)
+    if (!quiet) {
+      toast.showToast('Script Wizard complete.', 'success')
+    }
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Script Wizard step failed'), 'error')
+  } finally {
+    stepAction.value = null
+  }
+}
+
+async function openAsProject () {
+  const id = selectedScriptId.value
+  const token = getAuthToken()
+  if (!token || !id) return
+  openingProject.value = true
+  try {
+    const res = await $fetch<{ projectId: string }>(`/api/script-wizard/scripts/${id}/open-as-project`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        goal: lastWizardFormat.value.goal,
+        aspectRatio: lastWizardFormat.value.aspectRatio
+      }
+    })
+    toast.showToast('Project created.', 'success')
+    await navigateTo(`/projects/${res.projectId}/overview`)
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not open project'), 'error')
+  } finally {
+    openingProject.value = false
+  }
+}
+
+async function saveGeneratedIdea (payload: StoryIdeaApplyPayload) {
+  const { item } = payload
+  lastWizardFormat.value = {
+    goal: payload.goal,
+    aspectRatio: payload.aspectRatio
+  }
   const token = getAuthToken()
   if (!token) {
     toast.showToast('Log in to save scripts.', 'error')
@@ -515,9 +608,10 @@ async function saveGeneratedIdea (item: GeneratedConceptItem) {
       }
     })
     selectedScriptId.value = res.script.id
-    toast.showToast('Story added to Script Wizard.', 'success')
     ideaGeneratorRef.value?.clearResults()
     await loadScripts()
+    toast.showToast('Running Script Wizard…', 'info')
+    await runFullWizardPipeline(res.script.id, true)
     await loadMovies(res.script.id)
   } catch (e: unknown) {
     toast.showToast(formatApiFetchError(e, 'Could not save story'), 'error')
