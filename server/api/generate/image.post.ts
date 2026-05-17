@@ -39,6 +39,12 @@ export default defineEventHandler(async (event) => {
       : typeof body?.reference_image_url === 'string'
         ? body.reference_image_url.trim()
         : ''
+  const aspectRatio =
+    typeof body?.aspectRatio === 'string'
+      ? body.aspectRatio.trim()
+      : typeof body?.aspect_ratio === 'string'
+        ? body.aspect_ratio.trim()
+        : '16:9'
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
     throw createError({
@@ -80,7 +86,8 @@ export default defineEventHandler(async (event) => {
           prompt,
           modelId: candidate,
           apiKey,
-          referenceImageUrl: resolvedRef || undefined
+          referenceImageUrl: resolvedRef || undefined,
+          aspectRatio
         })
         return { urls, model }
       } catch (err: unknown) {

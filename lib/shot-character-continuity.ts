@@ -6,6 +6,8 @@ import {
   mergeNegativePromptParts,
   trimPromptForImageModel
 } from '~/lib/storyboard-continuity-prompts'
+import { SINGLE_STORYBOARD_FRAME_DIRECTIVE } from '~/lib/storyboard-frame-image'
+import { resolveFrameGenerationPrompt, resolveVideoGenerationPrompt } from '~/lib/unified-shot-prompt'
 import type { ProjectDirector, ProjectTargetLength } from '~/types/creative-project'
 import type { CreativeShot } from '~/types/creative-shot'
 
@@ -112,6 +114,7 @@ export interface ProductionPromptContext {
   director?: ProjectDirector
   continuityMemory?: string
   targetLength?: ProjectTargetLength
+  aspectRatio?: string
   scene?: { heading: string; summary?: string }
   shot: Pick<
     CreativeShot,
@@ -199,31 +202,34 @@ function buildSharedProductionBlocks (
  * Use for video generation and for the “Final prompt” preview on the Video step.
  */
 export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): string {
-  const motion = shotMotionText(ctx.shot)
-  if (!motion) return ''
+  const shotForVideo = {
+    title: ctx.shot.title,
+    description: ctx.shot.description,
+    shotType: ctx.shot.shotType,
+    cameraMove: ctx.shot.cameraMove,
+    imagePrompt: ctx.shot.imagePrompt,
+    videoPrompt: ctx.shot.videoPrompt,
+    negativePrompt:
+      'negativePrompt' in ctx.shot
+        ? String((ctx.shot as CreativeShot).negativePrompt || '')
+        : ''
+  } as CreativeShot
 
-  const parts = buildSharedProductionBlocks(ctx)
-
-  const title = (ctx.shot.title || 'Shot').trim()
-  const shotType = (ctx.shot.shotType || 'shot').trim()
-  const camera = (ctx.shot.cameraMove || '').trim()
-  const musicVideoRules = isMusicVideoTarget(ctx.targetLength)
-    ? 'This is a music video: visuals only — no dialogue, voiceover, or synced soundtrack in the generated clip (music is added in edit). Favor performance, mood, and rhythm.'
-    : ''
-
-  const panelLines = [
-    `THIS PANEL ONLY: "${title}" · ${shotType}`,
-    camera ? `Camera move: ${camera}` : '',
-    '',
-    'MOTION & ACTION (execute only this beat — not the previous or next panel in the sequence):',
-    motion,
-    '',
-    'Rules: Do not repeat the previous panel’s framing or action. If this is a close-up, do not output another wide establishing shot. If this is a medium shot on a character, keep that character’s design identical to the cast bible above. Match the location and lighting from SETTING and VISUAL STYLE.',
-    musicVideoRules
-  ].filter(Boolean)
-
-  parts.push(panelLines.join('\n'))
-  return parts.join('\n\n').trim()
+  let prompt = resolveVideoGenerationPrompt(shotForVideo, {
+    director: ctx.director,
+    continuityMemory: ctx.continuityMemory,
+    aspectRatio: ctx.aspectRatio,
+    sceneTitle: ctx.scene?.heading,
+    sceneSummary: ctx.scene?.summary,
+    cast: ctx.cast.map(c => ({
+      name: c.name,
+      traitsRoleVisual: c.roleDescription
+    }))
+  })
+  if (isMusicVideoTarget(ctx.targetLength)) {
+    prompt += '\n\nMusic video: visuals only — no dialogue or synced soundtrack in the clip.'
+  }
+  return prompt
 }
 
 export function buildStoryboardFramePrompt (
@@ -231,61 +237,42 @@ export function buildStoryboardFramePrompt (
   matches: ProjectCharacterRef[],
   ctx?: ProductionPromptContext
 ): string {
-  const base = basePrompt.trim()
-  const castForNeg = ctx?.cast?.length ? ctx.cast : matches
-  const shotNegative =
-    ctx?.shot && 'negativePrompt' in ctx.shot
-      ? String((ctx.shot as CreativeShot).negativePrompt || '').trim()
-      : ''
-  const negative = mergeNegativePromptParts(
-    shotNegative,
-    buildProjectNegativePrompt({
-      cast: castForNeg.map(c => ({
-        name: c.name,
-        traitsRoleVisual: c.roleDescription
-      }))
-    })
-  )
-  const negSuffix = formatNegativePromptForImageModel(negative)
-
-  if (!ctx) {
+  if (!ctx?.shot) {
     const block = buildContinuityPromptBlock(matches)
     const animalNote = isAnimalOnlyCast(
       matches.map(c => ({ name: c.name, traitsRoleVisual: c.roleDescription }))
     )
       ? 'ANIMAL-ONLY: render only the named animal characters — no humans.'
       : ''
-    const parts = [block, animalNote, `STILL FRAME FOR THIS PANEL:\n${base}`, negSuffix].filter(Boolean)
+    const parts = [
+      SINGLE_STORYBOARD_FRAME_DIRECTIVE,
+      block,
+      animalNote,
+      `STILL FRAME FOR THIS PANEL:\n${basePrompt.trim()}`
+    ].filter(Boolean)
     return trimPromptForImageModel(parts.join('\n\n'))
   }
 
-  const shot = ctx.shot
-  const parts = buildSharedProductionBlocks({
-    ...ctx,
-    shot: {
-      ...shot,
-      imagePrompt: base || shot.imagePrompt,
-      videoPrompt: shot.videoPrompt || ''
-    }
-  })
+  const shot = {
+    ...ctx.shot,
+    imagePrompt: basePrompt.trim() || ctx.shot.imagePrompt,
+    negativePrompt:
+      'negativePrompt' in ctx.shot
+        ? String((ctx.shot as CreativeShot).negativePrompt || '')
+        : ''
+  } as CreativeShot
 
-  const title = (shot.title || 'Shot').trim()
-  const shotType = (shot.shotType || 'shot').trim()
-  if (isAnimalOnlyCast(ctx.cast.map(c => ({ name: c.name, traitsRoleVisual: c.roleDescription })))) {
-    parts.push(
-      'ANIMAL-ONLY STORY: single storyboard still with ONLY the animal/creature cast listed above — never add human figures, human faces, or human hands.'
-    )
-  }
-  parts.push(
-    [
-      `STILL FRAME FOR THIS PANEL: "${title}" · ${shotType}`,
-      '',
-      'Compose a single storyboard image (not motion). Match cast, setting, and lighting above exactly — same character designs as every other panel.',
-      base
-    ].join('\n')
-  )
-  if (negSuffix) parts.push(negSuffix)
-  return trimPromptForImageModel(parts.join('\n\n').trim())
+  return resolveFrameGenerationPrompt(shot, {
+    director: ctx.director,
+    continuityMemory: ctx.continuityMemory,
+    aspectRatio: ctx.aspectRatio,
+    sceneTitle: ctx.scene?.heading,
+    sceneSummary: ctx.scene?.summary,
+    cast: (ctx.cast.length ? ctx.cast : matches).map(c => ({
+      name: c.name,
+      traitsRoleVisual: c.roleDescription
+    }))
+  })
 }
 
 /** @deprecated Use buildFullVideoGenerationPrompt — kept for any legacy imports */

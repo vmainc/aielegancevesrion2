@@ -1,3 +1,4 @@
+import { SINGLE_STORYBOARD_FRAME_DIRECTIVE } from '~/lib/storyboard-frame-image'
 import { resolveOpenRouterImageSlug } from '~/server/utils/openrouter-image-models'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 
@@ -46,8 +47,22 @@ export async function openRouterGenerateImage (options: {
   apiKey: string
   /** Featured character portrait — image-to-image style guidance when the model supports vision input. */
   referenceImageUrl?: string
+  aspectRatio?: string
 }): Promise<OpenRouterGenerateImageResult> {
-  const prompt = options.prompt.trim().slice(0, 4000)
+  const aspectHint =
+    options.aspectRatio === '9:16'
+      ? 'Output one 9:16 vertical frame.'
+      : options.aspectRatio === '1:1'
+        ? 'Output one 1:1 square frame.'
+        : 'Output one 16:9 landscape frame.'
+  const prompt = [
+    SINGLE_STORYBOARD_FRAME_DIRECTIVE,
+    aspectHint,
+    options.prompt.trim()
+  ]
+    .filter(Boolean)
+    .join('\n\n')
+    .slice(0, 4000)
   if (!prompt) {
     throw createError({ statusCode: 400, message: 'Prompt is required' })
   }

@@ -193,12 +193,13 @@
             <div class="p-4 pt-3 sm:p-5 space-y-3 grow">
               <div
                 v-if="framePreview[shot.id]"
-                class="rounded-lg border border-gray-200 overflow-hidden bg-gray-100"
+                class="relative w-full aspect-video rounded-lg border border-gray-200 overflow-hidden bg-gray-900"
               >
                 <img
                   :src="framePreview[shot.id]"
                   alt=""
-                  class="w-full aspect-video object-cover"
+                  class="absolute inset-0 w-full h-full object-cover object-center"
+                  loading="lazy"
                 >
               </div>
               <div
@@ -294,43 +295,25 @@
                 :open="Boolean((shot.imagePrompt || '').trim().length > 120)"
               >
                 <summary class="cursor-pointer text-sm text-primary font-medium hover:underline">
-                  Shot details & prompts (full frame / video prompts)
+                  Production prompt (director, cast, scene, frame, exclusions)
                 </summary>
                 <div class="mt-3 space-y-3 pt-1">
                   <div>
                     <div class="flex justify-between items-center gap-2 mb-1">
-                      <label class="text-xs font-medium text-gray-500">{{ shotImagePromptLabel(shot) }}</label>
+                      <label class="text-xs font-medium text-gray-500">One prompt for this panel</label>
                       <PromptEnhanceButton v-model="shot.imagePrompt" context="shot_image" />
                     </div>
                     <textarea
                       v-model="shot.imagePrompt"
-                      rows="10"
+                      rows="14"
+                      placeholder="Director bible, cast, scene, still-frame description, and exclusions…"
                       class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y font-mono text-[13px] leading-relaxed"
                     />
                   </div>
-                  <div>
-                    <div class="flex justify-between items-center gap-2 mb-1">
-                      <label class="text-xs font-medium text-gray-500">Video prompt</label>
-                      <PromptEnhanceButton v-model="shot.videoPrompt" context="shot_video" />
-                    </div>
-                    <textarea
-                      v-model="shot.videoPrompt"
-                      rows="8"
-                      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y font-mono text-[13px] leading-relaxed"
-                    />
-                  </div>
-                  <div>
-                    <label class="text-xs font-medium text-gray-500 mb-1 block">Negative prompt (exclusions)</label>
-                    <textarea
-                      v-model="shot.negativePrompt"
-                      rows="2"
-                      placeholder="e.g. no humans, no people, no watermark…"
-                      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-                    />
-                    <p class="mt-1 text-[11px] text-gray-500">
-                      Used when generating frames. Click Generate Shots again to rebuild long continuity prompts from your cast.
-                    </p>
-                  </div>
+                  <p class="text-[11px] text-gray-500 leading-snug">
+                    Used for Generate image and the Video step. Run Generate Shots to rebuild from cast and director notes.
+                  </p>
+
                 </div>
               </details>
             </div>
@@ -368,13 +351,18 @@ import type { ProjectAsset } from '~/types/project-asset'
 import { CHARACTER_CREATOR_IMAGE_MODELS } from '~/lib/character-creator-models'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import {
-  buildStoryboardFramePrompt,
   findCharactersInShot,
   pickPrimaryCharacterPortrait
 } from '~/lib/shot-character-continuity'
+import {
+  buildMotionPromptForShot,
+  mergeLegacyShotPromptsToUnified,
+  resolveFrameGenerationPrompt
+} from '~/lib/unified-shot-prompt'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { pollGenerateShotsJob } from '~/lib/poll-generate-shots-job'
+import { normalizeStoryboardFrameImageUrl } from '~/lib/storyboard-frame-image'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 
 const PB_SHOT_ID = /^[a-z0-9]{15}$/
@@ -439,13 +427,6 @@ function shotCharacterMatches (shot: CreativeShot) {
   return findCharactersInShot(shot, characterRefs.value, activeScene.value?.summary)
 }
 
-function shotImagePromptLabel (shot: CreativeShot): string {
-  const matches = shotCharacterMatches(shot)
-  if (matches.length === 1) return `${matches[0].name} prompt`
-  if (matches.length > 1) return 'Cast prompt'
-  return 'Image prompt'
-}
-
 function firstImageUrl (urls: unknown[]): string {
   for (const u of urls) {
     if (typeof u === 'string' && u.trim()) return u.trim()
@@ -457,22 +438,37 @@ function firstImageUrl (urls: unknown[]): string {
   return ''
 }
 
+async function setFramePreviewFromUrl (shotId: string, rawUrl: string) {
+  const aspect = project.value?.aspectRatio || '16:9'
+  try {
+    framePreview[shotId] = await normalizeStoryboardFrameImageUrl(rawUrl, aspect)
+  } catch {
+    framePreview[shotId] = rawUrl
+  }
+}
+
+function unifiedPromptContext () {
+  return {
+    director: project.value?.director,
+    continuityMemory: project.value?.continuityMemory,
+    aspectRatio: project.value?.aspectRatio,
+    sceneTitle: activeScene.value?.heading,
+    sceneSummary: activeScene.value?.summary,
+    cast: characterRefs.value.map(c => ({
+      name: c.name,
+      traitsRoleVisual: c.roleDescription
+    }))
+  }
+}
+
 async function generateFrame (shot: CreativeShot) {
   const basePrompt = (shot.imagePrompt || shot.description || '').trim()
   if (!basePrompt) {
-    toast.showToast('Add an image prompt or description first.', 'info')
+    toast.showToast('Add a production prompt or story beat first.', 'info')
     return
   }
   const matches = shotCharacterMatches(shot)
-  const prompt = buildStoryboardFramePrompt(basePrompt, matches, {
-    director: project.value?.director,
-    continuityMemory: project.value?.continuityMemory,
-    scene: activeScene.value
-      ? { heading: activeScene.value.heading, summary: activeScene.value.summary }
-      : undefined,
-    shot,
-    cast: characterRefs.value
-  })
+  const prompt = resolveFrameGenerationPrompt(shot, unifiedPromptContext())
   const referenceImageUrl = pickPrimaryCharacterPortrait(matches) || undefined
   imageGenId.value = shot.id
   try {
@@ -481,13 +477,14 @@ async function generateFrame (shot: CreativeShot) {
       body: {
         prompt,
         model: selectedImageModelId.value,
-        referenceImageUrl
+        referenceImageUrl,
+        aspectRatio: project.value?.aspectRatio || '16:9'
       }
     })
     const url = firstImageUrl(res.urls || [])
     if (url) {
-      framePreview[shot.id] = url
-      const saveErr = await autoSaveGeneratedFrame(shot, url, matches)
+      await setFramePreviewFromUrl(shot.id, url)
+      const saveErr = await autoSaveGeneratedFrame(shot, framePreview[shot.id] || url, matches)
       if (!saveErr) {
         toast.showToast('Frame generated and saved.', 'success')
       } else {
@@ -515,7 +512,7 @@ function storyboardFramePlaybackUrl (asset: ProjectAsset, projectPbId: string): 
   return asset.fileUrl || ''
 }
 
-function applySavedFramesForCurrentScene () {
+async function applySavedFramesForCurrentScene () {
   const sid = selectedSceneId.value
   const pid = projectId.value
   if (!sid || !pid) return
@@ -531,7 +528,7 @@ function applySavedFramesForCurrentScene () {
     })
     if (hit) {
       const src = storyboardFramePlaybackUrl(hit, pid)
-      if (src) framePreview[s.id] = src
+      if (src) await setFramePreviewFromUrl(s.id, src)
     }
   }
 }
@@ -606,9 +603,9 @@ async function autoSaveGeneratedFrame (
       body: fd
     })
     if (out.asset?.id) {
-      framePreview[shot.id] = storyboardFramePlaybackUrl(out.asset, id)
+      await setFramePreviewFromUrl(shot.id, storyboardFramePlaybackUrl(out.asset, id))
       await loadStoryboardAssets()
-      applySavedFramesForCurrentScene()
+      await applySavedFramesForCurrentScene()
       return null
     }
     return 'upload endpoint returned no file URL'
@@ -719,11 +716,19 @@ async function loadScenes () {
 
 function mapShotsFromApi (list: CreativeShot[] | undefined): CreativeShot[] {
   if (!list?.length) return []
-  return list.map(s => ({
-    ...s,
-    negativePrompt: s.negativePrompt || '',
-    durationSeconds: snapToStoryboardClipSeconds(Number(s.durationSeconds) || 5)
-  }))
+  return list.map((s) => {
+    const merged = mergeLegacyShotPromptsToUnified({
+      ...s,
+      negativePrompt: s.negativePrompt || ''
+    })
+    return {
+      ...s,
+      imagePrompt: merged,
+      videoPrompt: buildMotionPromptForShot({ ...s, imagePrompt: merged }),
+      negativePrompt: s.negativePrompt || '',
+      durationSeconds: snapToStoryboardClipSeconds(Number(s.durationSeconds) || 5)
+    }
+  })
 }
 
 async function loadShots (opts?: { preserveOnError?: boolean }) {
@@ -752,7 +757,7 @@ async function loadShots (opts?: { preserveOnError?: boolean }) {
     shots.value = mapShotsFromApi(res.shots)
     shotsPersisted.value = true
     await loadStoryboardAssets()
-    applySavedFramesForCurrentScene()
+    await applySavedFramesForCurrentScene()
     return true
   } catch (e: unknown) {
     if (!opts?.preserveOnError) {

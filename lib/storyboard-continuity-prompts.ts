@@ -17,7 +17,7 @@ export const ANIMAL_ONLY_NEGATIVE_PROMPT =
   'no humans, no people, no human faces, no human hands, no human bodies, no man, no woman, no child, no crowd, no realistic human silhouettes, no human furniture occupants, only the specified animal characters from the cast bible'
 
 export const STANDARD_STORYBOARD_NEGATIVES =
-  'no watermark, no logo, no text overlay, no caption, no split screen, no collage, no duplicate panels, blurry, deformed, extra limbs, wrong species, inconsistent character design, different art style than established'
+  'no watermark, no logo, no text overlay, no caption, no split screen, no diptych, no comic panels, no stacked scenes, no collage, no duplicate panels, blurry, deformed, extra limbs, wrong species, inconsistent character design, different art style than established'
 
 /** True when the cast reads as non-human characters (e.g. animal story). */
 export function isAnimalOnlyCast (cast: CastMemberForContinuity[]): boolean {
