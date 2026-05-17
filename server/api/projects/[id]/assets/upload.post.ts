@@ -60,7 +60,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing file' })
   }
   if (fileBuf.length > MAX_FILE_BYTES) {
-    throw createError({ statusCode: 413, message: 'File exceeds maximum size' })
+    throw createError({
+      statusCode: 413,
+      message: `Image or file is too large (max ${Math.round(MAX_FILE_BYTES / 1_048_576)}MB). Use a smaller image or re-export at lower resolution.`
+    })
   }
 
   const kind =

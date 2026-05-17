@@ -5,6 +5,7 @@ import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
 import { projectIdOnCharacterRow } from '~/server/utils/creative-character-map'
 import { isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
+import { sortProjectAssetsByProjectThenKind } from '~/lib/project-asset-sort'
 import type { ProjectAsset } from '~/types/project-asset'
 
 const PB_ID = /^[a-z0-9]{15}$/
@@ -49,9 +50,7 @@ function mergeCharacterHubItems (projectAssets: ProjectAsset[], characterRowAsse
     return true
   })
 
-  return [...projectAssets, ...filteredRows].sort((a, b) =>
-    String(b.updated || b.created || '').localeCompare(String(a.updated || a.created || ''))
-  )
+  return sortProjectAssetsByProjectThenKind([...projectAssets, ...filteredRows])
 }
 
 async function listProjectAssetsRecordsForHub (
@@ -242,7 +241,7 @@ export default defineEventHandler(async (event) => {
         const projectAssets = mapProjectAssets(rows)
         if (kind !== 'character') {
           return {
-            items: projectAssets,
+            items: sortProjectAssetsByProjectThenKind(projectAssets),
             warning:
               'project_assets filter query failed (400); listed your assets using an in-memory filter. Run node scripts/add-fields-to-collections.js if the schema is out of date.'
           }

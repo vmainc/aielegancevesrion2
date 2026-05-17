@@ -50,6 +50,18 @@ export async function maybeCompressImageBlob (blob: Blob, maxBytes = 3_500_000):
   return out || blob
 }
 
+/** Compress large photos before multipart upload (nginx default is often 1MB). */
+export async function prepareImageFileForUpload (
+  file: File,
+  maxBytes = 900_000
+): Promise<File> {
+  if (!file.type.startsWith('image/')) return file
+  const compressed = await maybeCompressImageBlob(file, maxBytes)
+  if (compressed === file) return file
+  const base = file.name.replace(/\.[^.]+$/, '') || 'image'
+  return new File([compressed], `${base}.jpg`, { type: compressed.type || 'image/jpeg' })
+}
+
 export function firstImageUrlFromGenerateResponse (urls: unknown[]): string {
   for (const u of urls) {
     if (typeof u === 'string' && u.trim()) return u.trim()

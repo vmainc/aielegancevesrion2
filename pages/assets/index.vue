@@ -13,26 +13,47 @@
         <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">Recent library items</h2>
         <p v-if="loadError" class="text-sm text-red-700">{{ loadError }}</p>
         <p v-else-if="loading" class="text-sm text-gray-600">Loading…</p>
-        <ul v-else-if="recentItems.length" class="divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white overflow-hidden">
-          <li
-            v-for="a in recentItems"
-            :key="a.id"
-            class="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+        <div v-else-if="projectGroups.length" class="space-y-4">
+          <details
+            v-for="g in projectGroups"
+            :key="g.key"
+            class="rounded-lg border border-gray-200 bg-white overflow-hidden group"
+            open
           >
-            <div class="min-w-0">
-              <span class="text-xs font-medium uppercase text-primary">{{ a.kind }}</span>
-              <p class="font-medium text-gray-900 truncate">{{ a.title }}</p>
-              <p v-if="a.projectName" class="text-xs text-gray-500 truncate">Project: {{ a.projectName }}</p>
-            </div>
-            <NuxtLink
-              v-if="a.projectId"
-              :to="`/projects/${a.projectId}/overview`"
-              class="shrink-0 text-sm text-primary font-medium hover:underline"
+            <summary
+              class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80"
             >
-              Open project →
-            </NuxtLink>
-          </li>
-        </ul>
+              <div class="flex items-center gap-2 min-w-0">
+                <span
+                  class="text-gray-400 text-xs shrink-0 transition-transform group-open:rotate-90"
+                  aria-hidden="true"
+                >▶</span>
+                <h3 class="text-sm font-semibold text-gray-900 truncate">{{ g.projectName }}</h3>
+                <span class="text-xs text-gray-500">{{ g.items.length }} item{{ g.items.length === 1 ? '' : 's' }}</span>
+              </div>
+              <NuxtLink
+                v-if="g.projectId"
+                :to="`/projects/${g.projectId}/overview`"
+                class="shrink-0 text-sm text-primary font-medium hover:underline"
+                @click.stop
+              >
+                Open project →
+              </NuxtLink>
+            </summary>
+            <ul class="divide-y divide-gray-200">
+              <li
+                v-for="a in g.items"
+                :key="a.id"
+                class="px-4 py-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2"
+              >
+                <div class="min-w-0">
+                  <span class="text-xs font-medium uppercase text-primary">{{ a.kind }}</span>
+                  <p class="font-medium text-gray-900 truncate">{{ a.title }}</p>
+                </div>
+              </li>
+            </ul>
+          </details>
+        </div>
         <p v-else class="text-sm text-gray-600">
           No assets saved yet. Create entries via the API or future UI from each workflow step.
         </p>
@@ -69,6 +90,7 @@
 </template>
 
 <script setup lang="ts">
+import { groupProjectAssetsByProject } from '~/lib/project-asset-sort'
 import type { ProjectAsset } from '~/types/project-asset'
 
 const cards = [
@@ -100,7 +122,7 @@ const loading = ref(true)
 const loadError = ref('')
 const items = ref<ProjectAsset[]>([])
 
-const recentItems = computed(() => items.value.slice(0, 12))
+const projectGroups = computed(() => groupProjectAssetsByProject(items.value))
 
 async function loadAssets () {
   if (!import.meta.client) {

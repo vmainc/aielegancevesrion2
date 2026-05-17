@@ -127,7 +127,9 @@
                     </option>
                   </select>
                   <p class="mt-2 text-xs text-gray-500">
-                    Generated frames auto-save to this project. Named characters use their featured portrait from Assets → Characters when available.
+                    <strong>Generate Shots</strong> builds the board list (text only).
+                    Use <strong>Generate image</strong> on each board to create frames — they save to Assets → Storyboards.
+                    Cast portraits from Assets → Characters are used when available.
                   </p>
                 </div>
               </div>
@@ -352,6 +354,10 @@ import {
   findCharactersInShot,
   pickPrimaryCharacterPortrait
 } from '~/lib/shot-character-continuity'
+import { prepareImageFileForUpload } from '~/lib/image-blob-client'
+import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
+
+const PB_SHOT_ID = /^[a-z0-9]{15}$/
 
 const {
   activeProject,
@@ -481,21 +487,32 @@ async function generateFrame (shot: CreativeShot) {
   }
 }
 
+function storyboardFramePlaybackUrl (asset: ProjectAsset, projectPbId: string): string {
+  const token = getAuthToken()
+  if (PB_SHOT_ID.test(asset.id) && projectPbId) {
+    return appendPlaybackAccessToken(projectAssetMediaPath(projectPbId, asset.id), token)
+  }
+  return asset.fileUrl || ''
+}
+
 function applySavedFramesForCurrentScene () {
   const sid = selectedSceneId.value
-  if (!sid) return
+  const pid = projectId.value
+  if (!sid || !pid) return
   for (const s of shots.value) {
     const hit = storyboardAssets.value.find((a) => {
+      if (!a.fileUrl && !PB_SHOT_ID.test(a.id)) return false
       const meta = a.metadata || {}
-      return (
-        a.fileUrl &&
-        typeof meta.scene_id === 'string' &&
-        typeof meta.shot_id === 'string' &&
-        meta.scene_id === sid &&
-        meta.shot_id === s.id
-      )
+      if (typeof meta.scene_id !== 'string' || meta.scene_id !== sid) return false
+      if (typeof meta.shot_id === 'string' && meta.shot_id === s.id) return true
+      const sortMeta = Number(meta.sort_order)
+      if (Number.isFinite(sortMeta) && sortMeta === s.sortOrder) return true
+      return false
     })
-    if (hit?.fileUrl) framePreview[s.id] = hit.fileUrl
+    if (hit) {
+      const src = storyboardFramePlaybackUrl(hit, pid)
+      if (src) framePreview[s.id] = src
+    }
   }
 }
 
@@ -512,23 +529,40 @@ async function loadStoryboardAssets () {
   }
 }
 
+async function imageUrlToBlob (url: string): Promise<Blob> {
+  if (url.startsWith('data:image/')) {
+    const res = await fetch(url)
+    if (!res.ok) throw new Error('Could not read generated image data')
+    return res.blob()
+  }
+  const res = await fetch(url)
+  if (!res.ok) throw new Error(`Could not download generated image (HTTP ${res.status})`)
+  return res.blob()
+}
+
 async function autoSaveGeneratedFrame (
   shot: CreativeShot,
   imageUrl: string,
   matches: ReturnType<typeof shotCharacterMatches>
 ): Promise<string | null> {
-  if (!shotsPersisted.value) return 'shots are preview-only right now'
   const id = projectId.value
   const sid = selectedSceneId.value
   if (!id || !sid) return 'missing project or scene id'
   const token = getAuthToken()
   if (!token) return 'not authenticated'
+  if (!shotsPersisted.value && !PB_SHOT_ID.test(shot.id)) {
+    return 'Shot list was not saved to the cloud — run Generate Shots again (fix any warning above), then generate images.'
+  }
   try {
-    const imgRes = await fetch(imageUrl)
-    if (!imgRes.ok) return `could not download generated image (HTTP ${imgRes.status})`
-    const blob = await imgRes.blob()
-    const compressed = await maybeCompressImageBlob(blob)
-    const ext = compressed.type.includes('png') ? 'png' : 'jpg'
+    const blob = await imageUrlToBlob(imageUrl)
+    const compressedBlob = await maybeCompressImageBlob(blob)
+    const uploadFile = await prepareImageFileForUpload(
+      new File(
+        [compressedBlob],
+        `frame_${shot.sortOrder || 0}.${compressedBlob.type.includes('png') ? 'png' : 'jpg'}`,
+        { type: compressedBlob.type || 'image/jpeg' }
+      )
+    )
     const fd = new FormData()
     fd.append('kind', 'storyboard')
     fd.append('title', `${shot.title || 'Storyboard Frame'} (${activeImageModelLabel.value})`)
@@ -537,23 +571,24 @@ async function autoSaveGeneratedFrame (
       'metadata',
       JSON.stringify({
         scene_id: sid,
-        shot_id: shot.id,
+        shot_id: PB_SHOT_ID.test(shot.id) ? shot.id : '',
+        sort_order: shot.sortOrder,
         model_id: selectedImageModelId.value,
         model_label: activeImageModelLabel.value,
         character_ids: matches.map(c => c.id),
         character_names: matches.map(c => c.name)
       })
     )
-    fd.append('file', new File([compressed], `frame_${shot.id}.${ext}`, { type: compressed.type || 'image/jpeg' }))
+    fd.append('file', uploadFile)
     const out = await $fetch<{ asset?: ProjectAsset }>(`/api/projects/${id}/assets/upload`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: fd
     })
-    const fileUrl = out.asset?.fileUrl || ''
-    if (fileUrl) {
-      framePreview[shot.id] = fileUrl
+    if (out.asset?.id) {
+      framePreview[shot.id] = storyboardFramePlaybackUrl(out.asset, id)
       await loadStoryboardAssets()
+      applySavedFramesForCurrentScene()
       return null
     }
     return 'upload endpoint returned no file URL'
@@ -563,6 +598,13 @@ async function autoSaveGeneratedFrame (
       if (msg) return msg
     }
     if (e instanceof Error && e.message.trim()) return e.message.trim()
+    const status =
+      e && typeof e === 'object' && 'statusCode' in e
+        ? Number((e as { statusCode?: number }).statusCode)
+        : 0
+    if (status === 413) {
+      return 'Image file is too large for the server. Try Flux Klein or a smaller export.'
+    }
     return 'unknown upload error'
   }
 }
@@ -716,15 +758,18 @@ async function generateShots () {
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: { project_id: id, scene_id: sid }
     })
-    shots.value = res.shots?.length
-      ? res.shots.map(s => ({
-        ...s,
-        durationSeconds: snapToStoryboardClipSeconds(Number(s.durationSeconds) || 5)
-      }))
-      : []
     shotsPersisted.value = res.persisted !== false
     if (!shotsPersisted.value) {
       persistenceWarning.value = res.warning || 'Shots are preview-only right now and were not saved.'
+      shots.value = res.shots?.length
+        ? res.shots.map(s => ({
+          ...s,
+          durationSeconds: snapToStoryboardClipSeconds(Number(s.durationSeconds) || 5)
+        }))
+        : []
+    } else {
+      persistenceWarning.value = ''
+      await loadShots()
     }
     await loadServerProjects()
     const n = res.continuity?.issueCount ?? 0
