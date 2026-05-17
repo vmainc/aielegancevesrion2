@@ -53,7 +53,7 @@
           <details
             v-for="g in videoProjectGroups"
             :key="g.key"
-            class="mb-4 rounded-xl border border-gray-200 bg-white overflow-hidden group"
+            :class="PROJECT_GROUP_CARD_CLASS"
           >
             <summary
               class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50/90 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80 border-b border-transparent group-open:border-gray-200"
@@ -111,15 +111,13 @@
                   </div>
                 </div>
                 <div class="shrink-0">
-                  <details class="relative">
+                  <details class="relative open:z-30">
                     <summary
-                      class="list-none cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                      class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
                     >
                       Actions
                     </summary>
-                    <div
-                      class="absolute right-0 z-20 mt-2 min-w-[13rem] rounded-lg border border-gray-200 bg-white shadow-lg p-1"
-                    >
+                    <div :class="ACTIONS_MENU_PANEL_CLASS">
                       <a
                         v-if="a.fileUrl"
                         :href="videoAssetPlaybackSrc(a)"
@@ -171,7 +169,7 @@
           <details
             v-for="g in characterProjectGroups"
             :key="g.key"
-            class="mb-4 rounded-xl border border-gray-200 bg-white overflow-hidden group"
+            :class="PROJECT_GROUP_CARD_CLASS"
           >
             <summary
               class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50/90 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80 border-b border-transparent group-open:border-gray-200"
@@ -224,6 +222,15 @@
                       loading="lazy"
                     >
                   </button>
+                  <button
+                    v-else-if="a.projectId"
+                    type="button"
+                    class="w-14 h-14 rounded-lg border border-dashed border-gray-300 bg-gray-50 shrink-0 flex flex-col items-center justify-center text-[10px] leading-tight text-gray-500 hover:border-primary/40 hover:text-primary px-1"
+                    :disabled="uploadingCharacterAssetId === a.id"
+                    @click="triggerCharacterImageUpload(a)"
+                  >
+                    {{ uploadingCharacterAssetId === a.id ? '…' : 'Add image' }}
+                  </button>
                   <div class="min-w-0 flex-1">
                     <p class="font-medium text-gray-900">{{ a.title }}</p>
                     <p
@@ -240,15 +247,22 @@
                   </div>
                 </div>
                 <div class="shrink-0">
-                  <details class="relative">
+                  <details class="relative open:z-30">
                     <summary
-                      class="list-none cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                      class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
                     >
                       Actions
                     </summary>
-                    <div
-                      class="absolute right-0 z-20 mt-2 min-w-[13rem] rounded-lg border border-gray-200 bg-white shadow-lg p-1"
-                    >
+                    <div :class="ACTIONS_MENU_PANEL_CLASS">
+                      <button
+                        v-if="a.projectId"
+                        type="button"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                        :disabled="uploadingCharacterAssetId === a.id"
+                        @click="triggerCharacterImageUpload(a)"
+                      >
+                        {{ uploadingCharacterAssetId === a.id ? 'Uploading…' : 'Upload image' }}
+                      </button>
                       <a
                         v-if="a.fileUrl"
                         :href="a.fileUrl"
@@ -296,8 +310,103 @@
           </details>
         </template>
 
+        <template v-else-if="libraryKindProjectGroups.length">
+          <details
+            v-for="g in libraryKindProjectGroups"
+            :key="g.key"
+            :class="PROJECT_GROUP_CARD_CLASS"
+          >
+            <summary
+              class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50/90 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80 border-b border-transparent group-open:border-gray-200"
+            >
+              <div class="flex items-start gap-2 min-w-0 flex-1">
+                <span
+                  class="text-gray-400 text-xs shrink-0 mt-0.5 transition-transform group-open:rotate-90"
+                  aria-hidden="true"
+                >▶</span>
+                <div class="min-w-0">
+                  <h2 class="text-sm font-semibold text-gray-900 truncate">
+                    {{ g.projectName }}
+                  </h2>
+                  <p class="text-xs text-gray-500 mt-0.5">
+                    {{ g.items.length }} {{ props.kind }}{{ g.items.length === 1 ? '' : 's' }}
+                  </p>
+                </div>
+              </div>
+              <NuxtLink
+                v-if="g.projectId && PB_ID.test(g.projectId)"
+                :to="projectHubStepTo(g.projectId)"
+                class="text-xs font-medium text-primary hover:underline shrink-0"
+                @click.stop
+              >
+                Open project →
+              </NuxtLink>
+            </summary>
+            <ul class="divide-y divide-gray-200">
+              <li
+                v-for="a in g.items"
+                :key="a.id"
+                class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 relative hover:z-10 focus-within:z-10"
+              >
+                <div class="min-w-0 flex-1">
+                  <p class="font-medium text-gray-900">{{ a.title }}</p>
+                  <p v-if="scriptSourceLine(a)" class="text-xs font-medium text-primary mt-1">
+                    {{ scriptSourceLine(a) }}
+                  </p>
+                  <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
+                  <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
+                </div>
+                <div class="shrink-0">
+                  <details class="relative open:z-30">
+                    <summary
+                      class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                    >
+                      Actions
+                    </summary>
+                    <div :class="ACTIONS_MENU_PANEL_CLASS">
+                      <button
+                        v-if="props.kind === 'script'"
+                        type="button"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                        :disabled="readingScriptId === a.id"
+                        @click="readScriptAsset(a)"
+                      >
+                        {{ readingScriptId === a.id ? 'Loading…' : 'Read script' }}
+                      </button>
+                      <a
+                        v-if="a.fileUrl"
+                        :href="a.fileUrl"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                      >
+                        Download file
+                      </a>
+                      <NuxtLink
+                        v-if="a.projectId"
+                        :to="`/projects/${a.projectId}/overview`"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                      >
+                        Open project
+                      </NuxtLink>
+                      <button
+                        type="button"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                        :disabled="deletingId === a.id"
+                        @click="removeAsset(a)"
+                      >
+                        {{ deletingId === a.id ? 'Removing…' : 'Remove' }}
+                      </button>
+                    </div>
+                  </details>
+                </div>
+              </li>
+            </ul>
+          </details>
+        </template>
+
         <ul
-          v-else-if="visibleItems.length && props.kind !== 'video'"
+          v-else-if="visibleItems.length"
           class="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white"
         >
           <li
@@ -319,6 +428,15 @@
                   class="w-full h-full object-cover pointer-events-none"
                   loading="lazy"
                 >
+              </button>
+              <button
+                v-else-if="props.kind === 'character' && a.projectId && !a.fileUrl"
+                type="button"
+                class="w-14 h-14 rounded-lg border border-dashed border-gray-300 bg-gray-50 shrink-0 flex flex-col items-center justify-center text-[10px] leading-tight text-gray-500 hover:border-primary/40 hover:text-primary px-1"
+                :disabled="uploadingCharacterAssetId === a.id"
+                @click="triggerCharacterImageUpload(a)"
+              >
+                {{ uploadingCharacterAssetId === a.id ? '…' : 'Add image' }}
               </button>
               <div
                 v-else-if="props.kind === 'video' && a.fileUrl"
@@ -355,11 +473,16 @@
                 >
                   Actions
                 </summary>
-                <div
-                  :class="props.kind === 'script'
-                    ? 'absolute right-0 bottom-full mb-2 z-50 min-w-[13rem] max-h-[min(70vh,20rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg p-1'
-                    : 'absolute right-0 z-50 mt-2 min-w-[13rem] max-h-[min(70vh,20rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg p-1'"
-                >
+                <div :class="ACTIONS_MENU_PANEL_CLASS">
+                  <button
+                    v-if="props.kind === 'character' && a.projectId"
+                    type="button"
+                    class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                    :disabled="uploadingCharacterAssetId === a.id"
+                    @click="triggerCharacterImageUpload(a)"
+                  >
+                    {{ uploadingCharacterAssetId === a.id ? 'Uploading…' : 'Upload image' }}
+                  </button>
                   <button
                     v-if="props.kind === 'script'"
                     type="button"
@@ -426,6 +549,14 @@
         </div>
       </template>
     </ClientOnly>
+
+    <input
+      ref="characterImageFileInput"
+      type="file"
+      class="hidden"
+      accept="image/jpeg,image/png,image/webp,image/gif,image/*"
+      @change="onCharacterImageFilePicked"
+    >
 
     <Teleport to="body">
       <div
@@ -583,11 +714,19 @@
 
 <script setup lang="ts">
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { groupProjectAssetsByProject, sortProjectAssetsWithinProjectByKind } from '~/lib/project-asset-sort'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import type { ProjectAsset, ProjectAssetKind } from '~/types/project-asset'
 import type { CreativeProject } from '~/types/creative-project'
 
 const PB_ID = /^[a-z0-9]{15}$/
+
+/** Opens upward so menus are not clipped at the bottom of scroll areas / viewport. */
+const ACTIONS_MENU_PANEL_CLASS =
+  'absolute right-0 bottom-full mb-2 z-50 min-w-[13rem] max-w-[calc(100vw-2rem)] max-h-[min(70vh,20rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg p-1'
+
+const PROJECT_GROUP_CARD_CLASS =
+  'mb-4 rounded-xl border border-gray-200 bg-white group overflow-visible'
 
 const props = defineProps<{
   kind: ProjectAssetKind
@@ -628,6 +767,9 @@ const adding = ref(false)
 const addError = ref('')
 const deletingId = ref('')
 const featuringId = ref('')
+const uploadingCharacterAssetId = ref('')
+const characterImageFileInput = ref<HTMLInputElement | null>(null)
+const uploadTargetAsset = ref<ProjectAsset | null>(null)
 
 const addForm = reactive({
   projectId: '',
@@ -935,6 +1077,17 @@ const videoProjectGroups = computed<AssetProjectGroup[]>(() => {
   return buildProjectAssetGroups(visibleItems.value, sortVideoAssetsForDisplay)
 })
 
+const libraryKindProjectGroups = computed(() => {
+  if (props.kind === 'character' || props.kind === 'video') return []
+  return groupProjectAssetsByProject(visibleItems.value, sortProjectAssetsWithinProjectByKind)
+})
+
+function projectHubStepTo (projectId: string): string {
+  if (props.kind === 'storyboard') return `/projects/${projectId}/storyboard`
+  if (props.kind === 'script') return `/projects/${projectId}/overview`
+  return `/projects/${projectId}/overview`
+}
+
 function addVideoAssetToTimeline (a: ProjectAsset) {
   if (!a.projectId || !PB_ID.test(a.projectId) || !a.id) return
   const src = videoAssetPlaybackSrc(a)
@@ -1067,6 +1220,107 @@ async function removeAsset (a: ProjectAsset) {
     toast.showToast('Could not remove.', 'error')
   } finally {
     deletingId.value = ''
+  }
+}
+
+function characterDisplayName (a: ProjectAsset): string {
+  const m = characterMetaFromAsset(a)
+  const fromTitle = (a.title || '').split('—')[0]?.trim() || ''
+  return (m.name || fromTitle || a.title || 'Character').slice(0, 200)
+}
+
+async function resolveOrCreateCharacterForUpload (
+  projectId: string,
+  characterName: string,
+  roleDescription: string,
+  token: string
+): Promise<{ id: string; name: string }> {
+  const targetName = characterName.trim().slice(0, 200) || 'Character'
+  const norm = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ')
+  const existing = await $fetch<{ characters: Array<{ id: string; name: string }> }>(
+    `/api/projects/${projectId}/characters`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  const hit = (existing.characters || []).find(c => norm(c.name || '') === norm(targetName))
+  if (hit?.id) return { id: hit.id, name: hit.name || targetName }
+  const created = await $fetch<{ character?: { id: string; name: string } }>(
+    `/api/projects/${projectId}/characters`,
+    {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        name: targetName,
+        roleDescription: roleDescription.slice(0, 10_000),
+        screenSharePercent: null
+      }
+    }
+  )
+  if (created.character?.id) {
+    return { id: created.character.id, name: created.character.name || targetName }
+  }
+  throw new Error('Could not create character row for this image.')
+}
+
+function triggerCharacterImageUpload (a: ProjectAsset) {
+  if (props.kind !== 'character' || !a.projectId) return
+  uploadTargetAsset.value = a
+  characterImageFileInput.value?.click()
+}
+
+async function onCharacterImageFilePicked (ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  const target = uploadTargetAsset.value
+  uploadTargetAsset.value = null
+  if (!file || !target?.projectId) return
+  if (!file.type.startsWith('image/')) {
+    toast.showToast('Choose an image file (JPEG, PNG, WebP, or GIF).', 'warning')
+    return
+  }
+  const token = getAuthToken()
+  if (!token) return
+  uploadingCharacterAssetId.value = target.id
+  try {
+    const charName = characterDisplayName(target)
+    const linked = await resolveOrCreateCharacterForUpload(
+      target.projectId,
+      charName,
+      target.notes || '',
+      token
+    )
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('kind', 'character')
+    fd.append('title', `${charName} — uploaded`.slice(0, 500))
+    fd.append('notes', (target.notes || '').slice(0, 20_000))
+    fd.append(
+      'metadata',
+      JSON.stringify({
+        source: 'character_upload',
+        character_name: linked.name,
+        character_id: linked.id,
+        featured: true
+      })
+    )
+    const res = await $fetch<{ asset: ProjectAsset }>(
+      `/api/projects/${target.projectId}/assets/upload`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: fd
+      }
+    )
+    if (res.asset) {
+      await setFeaturedCharacterImage(res.asset)
+    } else {
+      toast.showToast('Image uploaded to character library.', 'success')
+      await fetchItems()
+    }
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not upload image'), 'error')
+  } finally {
+    uploadingCharacterAssetId.value = ''
   }
 }
 
