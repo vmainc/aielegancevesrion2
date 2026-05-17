@@ -20,12 +20,14 @@ function maxOutTokens (kind: 'script' | 'treatment', length: ProjectTargetLength
   const scriptCaps: Record<ProjectTargetLength, number> = {
     spot: 2800,
     short: 6500,
+    music_video: 4500,
     episode: 12000,
     feature: 16000
   }
   const treatCaps: Record<ProjectTargetLength, number> = {
     spot: 2000,
     short: 5000,
+    music_video: 3500,
     episode: 9000,
     feature: 14000
   }

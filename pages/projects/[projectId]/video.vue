@@ -29,7 +29,7 @@
             No models loaded
           </option>
           <option
-            v-for="m in videoModels"
+            v-for="m in videoModelsForPicker"
             :key="m.id"
             :value="m.id"
           >
@@ -40,6 +40,12 @@
           <span class="font-medium text-gray-700">Audio:</span>
           labels come from OpenRouter’s video catalog (<code class="text-[11px]">generate_audio</code>).
           “No audio” means the provider does not synthesize a soundtrack in this API (video-only).
+        </p>
+        <p
+          v-if="isMusicVideoTarget(project?.targetLength)"
+          class="mt-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
+        >
+          Music video project: clips render without AI-generated audio. Prefer models labeled “no audio”; add your track on the Timeline.
         </p>
         <p v-if="modelsNotice" class="mt-1 text-xs text-gray-500">
           {{ modelsNotice }}
@@ -332,6 +338,7 @@ import {
   appendPlaybackAccessToken,
   projectAssetMediaPath
 } from '~/lib/project-asset-playback-url'
+import { isMusicVideoTarget, projectWantsGeneratedVideoAudio } from '~/lib/project-video-audio'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import {
   buildFullVideoGenerationPrompt,
@@ -405,7 +412,13 @@ const canLoadBoards = computed(
   () => !!project.value && project.value.source === 'pocketbase' && PB_ID.test(projectId.value) && isAuthenticated.value
 )
 
-watch(videoModels, (rows) => {
+const videoModelsForPicker = computed(() => {
+  if (!isMusicVideoTarget(project.value?.targetLength)) return videoModels.value
+  const silent = videoModels.value.filter(m => m.generateAudio === false)
+  return silent.length ? silent : videoModels.value
+})
+
+watch(videoModelsForPicker, (rows) => {
   if (!rows.length) return
   if (!selectedModelId.value || !rows.some(r => r.id === selectedModelId.value)) {
     selectedModelId.value = rows[0].id
@@ -552,6 +565,7 @@ function productionPromptContext (
   return {
     director: project.value?.director,
     continuityMemory: project.value?.continuityMemory,
+    targetLength: project.value?.targetLength,
     scene: scene
       ? { heading: scene.heading, summary: scene.summary }
       : undefined,
@@ -621,6 +635,7 @@ async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
     const modelRow = videoModels.value.find(m => m.id === selectedModelId.value)
     const headers = authHeaders()
     toast.showToast('Rendering… you can leave this page; come back to refresh.', 'info')
+    const wantsAudio = projectWantsGeneratedVideoAudio(project.value?.targetLength)
     const { videoUrl: url } = await generateOpenRouterVideo({
       prompt,
       model: selectedModelId.value,
@@ -628,7 +643,8 @@ async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
       resolution: '720p',
       durationSeconds: baseSec,
       frameImageUrl: frame || undefined,
-      supportedDurations: modelRow?.supportedDurations
+      supportedDurations: modelRow?.supportedDurations,
+      ...(wantsAudio ? {} : { generateAudio: false })
     })
     const key = genKey(sceneId, shot.id)
     videoPreviewByKey[key] = url

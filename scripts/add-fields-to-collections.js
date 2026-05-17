@@ -90,7 +90,7 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
             required: false,
             options: {
               maxSelect: 1,
-              values: ['spot', 'short', 'episode', 'feature']
+              values: ['spot', 'short', 'music_video', 'episode', 'feature']
             }
           })
         );

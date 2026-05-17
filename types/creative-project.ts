@@ -4,7 +4,7 @@ export type ProjectGoal = 'film' | 'social' | 'commercial' | 'other'
 export type ProjectWorkflowMode = 'import' | 'scratch'
 
 /** How long the finished piece should feel — drives AI script/treatment scale. */
-export type ProjectTargetLength = 'spot' | 'short' | 'episode' | 'feature'
+export type ProjectTargetLength = 'spot' | 'short' | 'music_video' | 'episode' | 'feature'
 
 export type ProjectSource = 'local' | 'pocketbase'
 

@@ -18,7 +18,7 @@
           How long is this piece?
         </h2>
         <p class="text-sm text-gray-600 mb-4">
-          Sets the scale for AI-generated script and treatment (e.g. a three-minute music video vs a full feature).
+          Sets the scale for AI-generated script and treatment (e.g. a music video vs a short film vs a feature).
         </p>
         <label class="block text-sm font-medium text-gray-700 mb-2" for="target-length">Target length</label>
         <select
@@ -41,10 +41,34 @@
         </p>
       </div>
 
+      <div
+        class="rounded-xl border border-primary/25 bg-primary/5 p-5 sm:p-6 mb-8"
+      >
+        <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-2">
+          Story synopsis
+        </h2>
+        <p class="text-xs text-gray-600 mb-3">
+          Used when you generate script or treatment below. Edit on
+          <NuxtLink :to="`/projects/${projectId}/overview`" class="text-primary font-medium hover:underline">Overview</NuxtLink>.
+        </p>
+        <div
+          v-if="storySynopsisDisplay"
+          class="text-sm text-gray-800 whitespace-pre-wrap max-h-[min(50vh,24rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 leading-relaxed"
+        >
+          {{ storySynopsisDisplay }}
+        </div>
+        <p v-else class="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+          No synopsis yet. Add your idea on Overview (or import a script) before generating here.
+        </p>
+        <p v-if="lengthModel === 'music_video'" class="mt-3 text-xs text-gray-600">
+          Music video: generated clips are video-only (no AI soundtrack). Add your track in the timeline.
+        </p>
+      </div>
+
       <div>
         <h2 class="text-lg font-semibold text-gray-900 mb-3">Treatment &amp; script</h2>
         <p class="text-sm text-gray-500 mb-4">
-          Generate a prose treatment or a screenplay draft from your synopsis, director notes, and length above.
+          Generate a prose treatment or a screenplay draft from the synopsis above, director notes, and target length.
           If you imported a script, the Treatment field already holds
           <span class="font-medium text-gray-700">comparable films</span> and
           <span class="font-medium text-gray-700">theme exploration</span> — you can read it below or run “Generate treatment” to replace it.
@@ -107,10 +131,6 @@
           <p class="text-xs text-gray-500 mb-1">Working script / notes (preview)</p>
           <p class="text-sm text-gray-700 line-clamp-4 whitespace-pre-wrap mb-2">{{ activeProject.conceptNotes.slice(0, 360) }}{{ activeProject.conceptNotes.length > 360 ? '…' : '' }}</p>
         </template>
-        <p class="mt-2 text-xs text-gray-500">
-          <NuxtLink :to="`/projects/${projectId}/overview`" class="text-primary font-medium hover:underline">Overview</NuxtLink>
-          for full synopsis.
-        </p>
       </div>
     </template>
 
@@ -132,6 +152,7 @@
 </template>
 
 <script setup lang="ts">
+import { stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
 import { TARGET_LENGTH_OPTIONS } from '~/lib/target-length'
 import type { CreativeProject, ProjectTargetLength } from '~/types/creative-project'
@@ -174,10 +195,19 @@ const generateDisabled = computed(() => {
   return false
 })
 
+const storySynopsisDisplay = computed(() => {
+  const p = activeProject.value
+  if (!p) return ''
+  const syn = (p.synopsis || '').trim()
+  if (syn) return syn
+  const notes = stripWorkflowMarker(p.conceptNotes || '').trim()
+  return notes
+})
+
 watch(
   () => activeProject.value?.targetLength,
   (v) => {
-    if (v && ['spot', 'short', 'episode', 'feature'].includes(v)) {
+    if (v && ['spot', 'short', 'music_video', 'episode', 'feature'].includes(v)) {
       lengthModel.value = v
     }
   },

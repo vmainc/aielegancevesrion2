@@ -3,7 +3,7 @@
     <div class="mb-8">
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Script Wizard</h1>
       <p class="text-sm text-gray-600 max-w-3xl">
-        Same first step as importing a screenplay into a project: upload for AI analysis, then optionally generate the full treatment or run the Script Wizard breakdown (three-act lens). Attach scripts to projects from Assets when you are ready.
+        Start from an AI story idea or upload a screenplay for analysis, then generate treatment and three-act breakdown. Attach scripts to projects from Assets when you are ready.
       </p>
     </div>
 
@@ -13,8 +13,19 @@
       </div>
 
       <template v-else>
+      <StoryIdeaGeneratorPanel
+        v-if="libraryProjectId"
+        ref="ideaGeneratorRef"
+        class="mb-8"
+        :project-id="libraryProjectId"
+        heading="Generate a new script"
+        subheading="Same tool as project Overview: describe your idea, compare AI models, then add the story to Script Wizard. You can generate treatment and breakdown after."
+        apply-label="Add to Script Wizard"
+        @apply="saveGeneratedIdea"
+      />
+
       <div class="rounded-xl border border-gray-200 bg-gray-50 p-5 sm:p-6 mb-8 relative overflow-hidden">
-        <h2 class="text-lg font-semibold text-gray-900 mb-2">Upload script</h2>
+        <h2 class="text-lg font-semibold text-gray-900 mb-2">Or upload a script</h2>
         <p class="text-sm text-gray-600 mb-4">
           Upload Final Draft, PDF, or TXT. This step runs the <span class="font-medium text-gray-800">analysis</span> (synopsis, genre, comps list). Then use the buttons on the right to add the prose treatment and/or the three-act breakdown — large files can take many minutes per step.
         </p>
@@ -259,7 +270,9 @@
 import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-from-treatment'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { SCRIPT_WIZARD_STEP_CLIENT_MS, SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
+import type { GeneratedConceptItem } from '~/types/concept-generator'
 import type { CreativeScript } from '~/types/creative-script'
+import type { ComponentPublicInstance } from 'vue'
 
 type ComparableCandidate = { title: string; year?: string }
 type WizardMovie = {
@@ -290,6 +303,8 @@ const candidates = ref<ComparableCandidate[]>([])
 const loadingMovies = ref(false)
 const moviesError = ref('')
 const stepAction = ref<null | 'treatment' | 'breakdown'>(null)
+const libraryProjectId = ref('')
+const ideaGeneratorRef = ref<ComponentPublicInstance<{ clearApplying: () => void; clearResults: () => void }> | null>(null)
 
 const uploadStatusHint =
   'Extracting text and running AI analysis (synopsis, genre, comparable titles). Long scripts can take 10–30 minutes — stay on this page until it finishes.'
@@ -460,12 +475,65 @@ function selectScript (id: string) {
   void loadMovies(id)
 }
 
+async function loadLibraryProject () {
+  const token = getAuthToken()
+  if (!token || !isAuthenticated.value) {
+    libraryProjectId.value = ''
+    return
+  }
+  try {
+    const res = await $fetch<{ projectId: string }>('/api/script-wizard/library-project', {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    libraryProjectId.value = res.projectId || ''
+  } catch {
+    libraryProjectId.value = ''
+  }
+}
+
+async function saveGeneratedIdea (item: GeneratedConceptItem) {
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Log in to save scripts.', 'error')
+    ideaGeneratorRef.value?.clearApplying()
+    return
+  }
+  try {
+    const res = await $fetch<{ script: CreativeScript }>('/api/script-wizard/scripts/from-idea', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        title: item.title,
+        logline: item.logline,
+        summary: item.summary,
+        hook: item.hook,
+        genre: item.genre,
+        tone: item.tone,
+        modelId: item.model,
+        modelLabel: item.model,
+        status: 'in_progress'
+      }
+    })
+    selectedScriptId.value = res.script.id
+    toast.showToast('Story added to Script Wizard.', 'success')
+    ideaGeneratorRef.value?.clearResults()
+    await loadScripts()
+    await loadMovies(res.script.id)
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not save story'), 'error')
+  } finally {
+    ideaGeneratorRef.value?.clearApplying()
+  }
+}
+
 watch(
   () => isAuthenticated.value,
   (ok) => {
     if (ok) {
+      void loadLibraryProject()
       void loadScripts()
     } else {
+      libraryProjectId.value = ''
       scripts.value = []
       selectedScriptId.value = ''
       movies.value = []

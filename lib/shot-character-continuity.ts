@@ -1,4 +1,5 @@
-import type { ProjectDirector } from '~/types/creative-project'
+import { isMusicVideoTarget } from '~/lib/project-video-audio'
+import type { ProjectDirector, ProjectTargetLength } from '~/types/creative-project'
 import type { CreativeShot } from '~/types/creative-shot'
 
 export interface ProjectCharacterRef {
@@ -103,6 +104,7 @@ function formatDirectorForPrompt (d: ProjectDirector | undefined): string {
 export interface ProductionPromptContext {
   director?: ProjectDirector
   continuityMemory?: string
+  targetLength?: ProjectTargetLength
   scene?: { heading: string; summary?: string }
   shot: Pick<
     CreativeShot,
@@ -198,6 +200,10 @@ export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): s
   const title = (ctx.shot.title || 'Shot').trim()
   const shotType = (ctx.shot.shotType || 'shot').trim()
   const camera = (ctx.shot.cameraMove || '').trim()
+  const musicVideoRules = isMusicVideoTarget(ctx.targetLength)
+    ? 'This is a music video: visuals only — no dialogue, voiceover, or synced soundtrack in the generated clip (music is added in edit). Favor performance, mood, and rhythm.'
+    : ''
+
   const panelLines = [
     `THIS PANEL ONLY: "${title}" · ${shotType}`,
     camera ? `Camera move: ${camera}` : '',
@@ -205,7 +211,8 @@ export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): s
     'MOTION & ACTION (execute only this beat — not the previous or next panel in the sequence):',
     motion,
     '',
-    'Rules: Do not repeat the previous panel’s framing or action. If this is a close-up, do not output another wide establishing shot. If this is a medium shot on a character, keep that character’s design identical to the cast bible above. Match the location and lighting from SETTING and VISUAL STYLE.'
+    'Rules: Do not repeat the previous panel’s framing or action. If this is a close-up, do not output another wide establishing shot. If this is a medium shot on a character, keep that character’s design identical to the cast bible above. Match the location and lighting from SETTING and VISUAL STYLE.',
+    musicVideoRules
   ].filter(Boolean)
 
   parts.push(panelLines.join('\n'))

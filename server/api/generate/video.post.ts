@@ -91,6 +91,14 @@ export default defineEventHandler(async (event) => {
   }
   const durationSeconds = snapVideoDurationToOpenRouterModel(durationRaw, supportedDurations)
 
+  const generateAudio =
+    body?.generateAudio === false ||
+    body?.generate_audio === false ||
+    body?.generateAudio === 'false' ||
+    body?.generate_audio === 'false'
+      ? false
+      : undefined
+
   const jobArgs = {
     prompt,
     model,
@@ -98,7 +106,8 @@ export default defineEventHandler(async (event) => {
     aspectRatio,
     resolution,
     durationSeconds,
-    firstFrameImageUrl: resolvedFrame || undefined
+    firstFrameImageUrl: resolvedFrame || undefined,
+    ...(generateAudio === false ? { generateAudio: false as const } : {})
   }
 
   try {

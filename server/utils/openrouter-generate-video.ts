@@ -20,6 +20,7 @@ export async function openRouterGenerateVideo (options: {
   resolution?: '480p' | '720p' | '1080p' | '1K' | '2K' | '4K'
   durationSeconds?: number
   firstFrameImageUrl?: string
+  generateAudio?: boolean
 }): Promise<OpenRouterGenerateVideoResult> {
   const started = await startOpenRouterVideoJob(options)
   if (started.status === 'completed' && started.videoUrl) {

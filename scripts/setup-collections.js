@@ -206,7 +206,7 @@ async function createCollections(adminEmail, adminPassword) {
             required: false,
             options: {
               maxSelect: 1,
-              values: ['spot', 'short', 'episode', 'feature']
+              values: ['spot', 'short', 'music_video', 'episode', 'feature']
             }
           },
           { name: 'synopsis', type: 'text', required: false, options: { max: 20000 } },

@@ -19,6 +19,8 @@ export type OpenRouterVideoGenerateInput = {
   durationSeconds?: number
   frameImageUrl?: string
   supportedDurations?: number[]
+  /** Pass false for music videos (external audio track). */
+  generateAudio?: boolean
 }
 
 export async function pollOpenRouterVideoJob (jobId: string): Promise<string> {
@@ -60,7 +62,8 @@ export async function generateOpenRouterVideo (
       aspectRatio: input.aspectRatio || '16:9',
       resolution: input.resolution || '720p',
       durationSeconds,
-      frameImageUrl: input.frameImageUrl?.trim() || undefined
+      frameImageUrl: input.frameImageUrl?.trim() || undefined,
+      ...(input.generateAudio === false ? { generateAudio: false } : {})
     }
   })
 

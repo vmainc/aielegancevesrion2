@@ -23,7 +23,7 @@ export default defineEventHandler(async (event) => {
 
   const ASPECT = new Set(['16:9', '9:16', '1:1'])
   const GOALS = new Set(['film', 'social', 'commercial', 'other'])
-  const LENGTHS = new Set(['spot', 'short', 'episode', 'feature'])
+  const LENGTHS = new Set(['spot', 'short', 'music_video', 'episode', 'feature'])
   const MODEL_IDS = new Set(CONCEPT_GENERATOR_MODELS.map(m => m.id))
 
   const patch: Record<string, unknown> = {}

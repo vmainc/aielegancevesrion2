@@ -79,6 +79,8 @@ export async function startOpenRouterVideoJob (options: {
   resolution?: '480p' | '720p' | '1080p' | '1K' | '2K' | '4K'
   durationSeconds?: number
   firstFrameImageUrl?: string
+  /** When false, sets OpenRouter `generate_audio: false` (e.g. music videos with external track). */
+  generateAudio?: boolean
 }): Promise<OpenRouterVideoStartResult> {
   const prompt = options.prompt.trim().slice(0, 8000)
   if (!prompt) {
@@ -108,6 +110,10 @@ export async function startOpenRouterVideoJob (options: {
         image_url: { url: dataUrl }
       }
     ]
+  }
+
+  if (options.generateAudio === false) {
+    body.generate_audio = false
   }
 
   const created = await fetchWithTimeout(

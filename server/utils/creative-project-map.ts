@@ -74,7 +74,9 @@ export function pbRecordToCreativeProject (r: PbProjectRecord): CreativeProject 
 
   const tl = r.target_length as ProjectTargetLength | undefined
   const targetLength: ProjectTargetLength | undefined =
-    tl === 'spot' || tl === 'short' || tl === 'episode' || tl === 'feature' ? tl : undefined
+    tl === 'spot' || tl === 'short' || tl === 'music_video' || tl === 'episode' || tl === 'feature'
+      ? tl
+      : undefined
 
   return {
     id: r.id,
