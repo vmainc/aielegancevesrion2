@@ -326,14 +326,39 @@
         {{ scratchWorkflow ? 'Story saved' : 'Concept saved' }}
       </h2>
       <p class="text-sm text-gray-600 mb-4">
-        {{ scratchWorkflow
-          ? 'Generate more ideas with other models, or remove this story to start fresh.'
-          : 'Try other models or remove this concept to start fresh.' }}
+        <template v-if="scratchWorkflow && showConceptBootstrapCta">
+          Build your screenplay, director bible, cast, scenes, and storyboard shot lists (with continuity prompts) from this story.
+        </template>
+        <template v-else>
+          {{ scratchWorkflow
+            ? 'Generate more ideas with other models, or remove this story to start fresh.'
+            : 'Try other models or remove this concept to start fresh.' }}
+        </template>
       </p>
+      <div
+        v-if="conceptBootstrapRunning"
+        class="mb-4 rounded-xl border border-primary/20 bg-white p-5"
+      >
+        <FilmReelLoader
+          size="sm"
+          label="Building your project"
+          sub-label="Screenplay, director, cast, scenes, and storyboard panels — several minutes."
+        />
+      </div>
+      <p v-if="conceptBootstrapError" class="text-sm text-red-700 mb-3">{{ conceptBootstrapError }}</p>
       <div class="flex flex-wrap gap-2">
         <button
+          v-if="showConceptBootstrapCta"
           type="button"
-          class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors"
+          class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-45"
+          :disabled="conceptBootstrapRunning"
+          @click="runConceptBootstrap()"
+        >
+          {{ conceptBootstrapRunning ? 'Building…' : 'Build cast, scenes & storyboard' }}
+        </button>
+        <button
+          type="button"
+          class="px-4 py-2 border border-gray-200 text-gray-800 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors"
           @click="openGeneratorAgain"
         >
           Generate with different AI
@@ -784,7 +809,11 @@ import { stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
 import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-from-treatment'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
-import { formatStoredConceptNotes } from '~/lib/format-stored-concept'
+import {
+  formatStoredConceptNotes,
+  parseCharactersFromConceptNotes,
+  parseLoglineFromConceptNotes
+} from '~/lib/format-stored-concept'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { ConceptGeneratorResultItem, GeneratedConceptItem } from '~/types/concept-generator'
 import type { CreativeCharacter, CreativeProject } from '~/types/creative-project'
@@ -1093,6 +1122,9 @@ const conceptResults = ref<ConceptGeneratorResultItem[] | null>(null)
 const applyingModel = ref<string | null>(null)
 const showGeneratorForm = ref(true)
 const deletingConcept = ref(false)
+const conceptBootstrapRunning = ref(false)
+const conceptBootstrapError = ref('')
+const pipelineBuilt = ref<boolean | null>(null)
 const promptTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
 const hasConcept = computed(() => {
@@ -1175,6 +1207,103 @@ const highlightRunTreatmentImport = computed(
 watch(hasConcept, (has) => {
   showGeneratorForm.value = !has
 }, { immediate: true })
+
+const showConceptBootstrapCta = computed(
+  () =>
+    scratchWorkflow.value &&
+    canCloudImport.value &&
+    hasConcept.value &&
+    !showImportedScriptOverview.value &&
+    !conceptBootstrapRunning.value &&
+    pipelineBuilt.value === false
+)
+
+async function loadPipelineBuilt () {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!scratchWorkflow.value || !id || !token || !PB_ID.test(id)) {
+    pipelineBuilt.value = null
+    return
+  }
+  if (showImportedScriptOverview.value) {
+    pipelineBuilt.value = true
+    return
+  }
+  try {
+    const res = await $fetch<{ scenes: unknown[] }>(`/api/projects/${id}/scenes`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    pipelineBuilt.value = (res.scenes?.length ?? 0) > 0
+  } catch {
+    pipelineBuilt.value = false
+  }
+}
+
+watch(
+  () =>
+    [
+      projectId.value,
+      scratchWorkflow.value,
+      hasConcept.value,
+      showImportedScriptOverview.value,
+      canCloudImport.value
+    ] as const,
+  () => {
+    void loadPipelineBuilt()
+  },
+  { immediate: true }
+)
+
+async function runConceptBootstrap (opts?: {
+  title?: string
+  logline?: string
+  summary?: string
+  genre?: string
+  tone?: string
+  characters?: string[]
+}) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  conceptBootstrapRunning.value = true
+  conceptBootstrapError.value = ''
+  try {
+    const p = project.value
+    const body = {
+      title: opts?.title || p?.name,
+      logline: opts?.logline || parseLoglineFromConceptNotes(p?.conceptNotes || ''),
+      summary: opts?.summary || p?.synopsis,
+      genre: opts?.genre || p?.genre,
+      tone: opts?.tone || p?.tone,
+      characters: opts?.characters?.length
+        ? opts.characters
+        : parseCharactersFromConceptNotes(p?.conceptNotes || '')
+    }
+    const res = await $fetch<{
+      project: CreativeProject
+      storyboard?: { ok: number; failed: number; capSkipped: number }
+      sceneCount: number
+    }>(`/api/projects/${id}/bootstrap-from-concept`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+      body,
+      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    })
+    registerImportedProject(res.project)
+    pipelineBuilt.value = true
+    const sb = res.storyboard
+    const msg = sb?.ok
+      ? `Built ${res.sceneCount} scene(s) with storyboard shots for ${sb.ok} scene(s). Open Storyboard to review panels.`
+      : `Built ${res.sceneCount} scene(s). Open Storyboard to generate or refresh shots.`
+    toast.showToast(msg, 'success')
+    await navigateTo(withProjectQuery(`/projects/${id}/storyboard`))
+  } catch (e: unknown) {
+    conceptBootstrapError.value = formatApiFetchError(e, 'Could not build project from this story.')
+    toast.showToast(conceptBootstrapError.value, 'error')
+  } finally {
+    conceptBootstrapRunning.value = false
+  }
+}
 
 async function loadOverviewMovies () {
   const id = projectId.value
@@ -1377,7 +1506,8 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
       title: item.title,
       logline: item.logline,
       modelId: item.model,
-      modelLabel: label
+      modelLabel: label,
+      characters: item.characters
     })
     await updateProject(id, {
       name: item.title.slice(0, 500),
@@ -1388,7 +1518,19 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
     })
     conceptResults.value = null
     showGeneratorForm.value = false
-    toast.showToast(scratchWorkflow.value ? 'Story applied to project.' : 'Concept applied to project.', 'success')
+    if (scratchWorkflow.value && canCloudImport.value) {
+      toast.showToast('Story saved — building director, cast, scenes, and storyboard…', 'info')
+      await runConceptBootstrap({
+        title: item.title,
+        logline: item.logline,
+        summary: item.summary,
+        genre: item.genre,
+        tone: item.tone,
+        characters: item.characters
+      })
+      return
+    }
+    toast.showToast('Concept applied to project.', 'success')
   } catch {
     toast.showToast('Could not save concept.', 'error')
   } finally {

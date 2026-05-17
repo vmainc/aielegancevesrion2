@@ -1160,7 +1160,14 @@ export async function runFullImportFromParsed (input: {
   newProjectName?: string
   reuseAssetId: string | null
   prefillEnrichment?: ScriptImportPrefillEnrichment
-}): Promise<{ project: CreativeProject; scriptAsset: ScriptAssetAttachResult }> {
+  /** Cast names from concept generator — merged before screenplay / AI cast inference. */
+  conceptCharacterNames?: string[]
+}): Promise<{
+  project: CreativeProject
+  scriptAsset: ScriptAssetAttachResult
+  storyboardSeed: StoryboardSeedResult
+  sceneCount: number
+}> {
   const {
     userId,
     pb,
@@ -1177,6 +1184,7 @@ export async function runFullImportFromParsed (input: {
   const sceneOutline = buildSceneOutlineForAi(parsed)
 
   const mergedCharacterNames = filterLikelyCharacterNames([
+    ...(input.conceptCharacterNames || []),
     ...(input.prefillEnrichment?.characterNames || []),
     ...parsed.characterNames,
     ...heuristicCharacterNamesFromScenes(parsed.scenes)
@@ -1439,6 +1447,12 @@ export async function runFullImportFromParsed (input: {
     })
   }
 
+  let storyboardSeed: StoryboardSeedResult = {
+    ok: 0,
+    failed: 0,
+    capSkipped: 0,
+    emptySkipped: 0
+  }
   try {
     const projectRow = await pb.collection('creative_projects').getOne(projectId)
     const sb = await seedStoryboardsAfterScriptImport({
@@ -1449,6 +1463,7 @@ export async function runFullImportFromParsed (input: {
       scenes: sceneRecords,
       characters: characterRows
     })
+    storyboardSeed = sb
     const noteParts: string[] = []
     if (sb.ok > 0) {
       noteParts.push(
@@ -1498,7 +1513,9 @@ export async function runFullImportFromParsed (input: {
   const full = await pb.collection('creative_projects').getOne(projectId)
   return {
     project: pbRecordToCreativeProject(full as Parameters<typeof pbRecordToCreativeProject>[0]),
-    scriptAsset
+    scriptAsset,
+    storyboardSeed,
+    sceneCount: sceneRecords.length
   }
 }
 
