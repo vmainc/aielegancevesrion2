@@ -31,15 +31,64 @@ export interface ScriptAiEnrichment {
   characterRoles: { name: string; role_description: string }[]
 }
 
+/** OpenRouter / Anthropic often return `message.content` as a string OR an array of parts. */
+function normalizeOpenRouterAssistantText (raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (!Array.isArray(raw)) return ''
+  const parts: string[] = []
+  for (const part of raw) {
+    if (typeof part === 'string') {
+      parts.push(part)
+      continue
+    }
+    if (!part || typeof part !== 'object') continue
+    const p = part as Record<string, unknown>
+    if (typeof p.text === 'string') parts.push(p.text)
+    else if (typeof p.content === 'string') parts.push(p.content)
+  }
+  return parts.join('')
+}
+
+/** Strip a leading ``` / ```json fence so JSON.parse can run (Claude often wraps JSON). */
+/** Some models prepend reasoning blocks before JSON. */
+function stripThinkingAndToolTags (text: string): string {
+  return text
+    .replace(/<thinking>[\s\S]*?<\/thinking>/gi, '')
+    .replace(/<think>[\s\S]*?<\/think>/gi, '')
+    .trim()
+}
+
+function stripLeadingAssistantCodeFence (text: string): string {
+  const t = text.trim()
+  if (!t.startsWith('```')) return t
+  const lines = t.split('\n')
+  if (lines.length < 2) return t
+  lines.shift()
+  if (lines.length && lines[lines.length - 1].trim() === '```') {
+    lines.pop()
+  } else if (lines.length && lines[lines.length - 1].trim().endsWith('```')) {
+    lines[lines.length - 1] = lines[lines.length - 1].replace(/```\s*$/, '').trimEnd()
+  }
+  return lines.join('\n').trim()
+}
+
 function extractJsonObject (text: string): Record<string, unknown> | null {
-  const start = text.indexOf('{')
-  const end = text.lastIndexOf('}')
-  if (start === -1 || end <= start) return null
-  try {
-    return JSON.parse(text.slice(start, end + 1)) as Record<string, unknown>
-  } catch {
+  const cleaned = stripLeadingAssistantCodeFence(stripThinkingAndToolTags(text)).trim()
+  const tryParseObject = (s: string): Record<string, unknown> | null => {
+    try {
+      const v = JSON.parse(s) as unknown
+      if (v && typeof v === 'object' && !Array.isArray(v)) return v as Record<string, unknown>
+    } catch {
+      /* try next */
+    }
     return null
   }
+  const direct = tryParseObject(cleaned)
+  if (direct) return direct
+  const start = cleaned.indexOf('{')
+  const end = cleaned.lastIndexOf('}')
+  if (start === -1 || end <= start) return null
+  return tryParseObject(cleaned.slice(start, end + 1))
 }
 
 function asStr (v: unknown): string {
@@ -127,6 +176,7 @@ export async function enrichScriptWithAi (input: {
   projectName: string
   sceneOutline: string
   characterNames: string[]
+  openrouterModelId?: string
 }): Promise<ScriptAiEnrichment> {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -162,13 +212,13 @@ Scene list (numbered):
 ${input.sceneOutline.slice(0, 12000)}`
 
   const body = buildOpenRouterChatCompletionBody({
-    model: 'openai/gpt-4o',
+    model: input.openrouterModelId || 'openai/gpt-4o',
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: user }
     ],
     temperature: 0.55,
-    max_tokens: 8192
+    max_tokens: 1800
   })
 
   const res = await fetchWithTimeout(
@@ -189,15 +239,26 @@ ${input.sceneOutline.slice(0, 12000)}`
   const raw = await res.text()
   if (!res.ok) {
     console.warn('[script-import-ai] OpenRouter error:', res.status, raw.slice(0, 500))
-    return fallbackEnrichment(input)
+    let detail = `OpenRouter request failed (${res.status})`
+    try {
+      const parsed = JSON.parse(raw) as { error?: { message?: unknown }; message?: unknown }
+      const msg =
+        (parsed && parsed.error && typeof parsed.error.message === 'string' && parsed.error.message.trim())
+        || (parsed && typeof parsed.message === 'string' && parsed.message.trim())
+        || ''
+      if (msg) detail = msg
+    } catch {
+      if (raw.trim()) detail = `${detail}: ${raw.trim().slice(0, 200)}`
+    }
+    throw new Error(detail)
   }
 
   let content = ''
   try {
     const j = JSON.parse(raw) as {
-      choices?: Array<{ message?: { content?: string } }>
+      choices?: Array<{ message?: { content?: unknown } }>
     }
-    content = j.choices?.[0]?.message?.content || ''
+    content = normalizeOpenRouterAssistantText(j.choices?.[0]?.message?.content)
   } catch {
     return fallbackEnrichment(input)
   }
@@ -205,8 +266,11 @@ ${input.sceneOutline.slice(0, 12000)}`
   const parsed = extractJsonObject(content)
   if (!parsed) {
     const fb = fallbackEnrichment(input)
-    fb.summary = content.slice(0, 500) || fb.summary
-    fb.logline = fb.summary
+    const salvage = content.trim().slice(0, 2000)
+    if (salvage.length > 80) {
+      fb.summary = salvage
+      fb.logline = salvage.split(/\n\n|\n/).find(l => l.trim().length > 0)?.trim().slice(0, 500) || salvage.slice(0, 500)
+    }
     fb.onePageSynopsis = ''
     return fb
   }
@@ -227,7 +291,7 @@ ${input.sceneOutline.slice(0, 12000)}`
   }
 
   const characterRoles: { name: string; role_description: string }[] = []
-  const cr = parsed.characterRoles
+  const cr = parsed.characterRoles ?? parsed.character_roles
   if (Array.isArray(cr)) {
     for (const row of cr) {
       if (row && typeof row === 'object') {
@@ -261,6 +325,13 @@ ${input.sceneOutline.slice(0, 12000)}`
     asStr(parsed.one_page_synopsis) ||
     asStr(parsed.onePageSynopsis) ||
     asStr(parsed.synopsis_page) ||
+    asStr(parsed.synopsis) ||
+    asStr(parsed.full_synopsis) ||
+    asStr(parsed.narrative_synopsis) ||
+    asStr(parsed.story_synopsis) ||
+    asStr(parsed.screenplay_synopsis) ||
+    asStr(parsed.overview) ||
+    asStr(parsed.story) ||
     ''
   if (!onePageSynopsis && legacySummary.length > 200) {
     onePageSynopsis = logline && legacySummary.startsWith(logline) ? legacySummary.slice(logline.length).trim() : legacySummary
@@ -308,6 +379,48 @@ export function enrichmentToProjectFields (e: ScriptAiEnrichment): {
   return { synopsis, treatment }
 }
 
+/**
+ * True if preview/compare should show this model’s result (not only the mapped synopsis string).
+ * Models differ: some put prose in logline + one_page_synopsis, others in theme_exploration only;
+ * checking synopsis length alone rejects valid outputs.
+ */
+export function scriptPreviewEnrichmentIsUsable (
+  enrichment: ScriptAiEnrichment,
+  prose: { synopsis: string; treatment: string }
+): boolean {
+  const g = String(enrichment.genre || '').trim().toLowerCase()
+  const t = String(enrichment.tone || '').trim().toLowerCase()
+  const syn = prose.synopsis.trim()
+  const fromScenes = enrichment.sceneSummaries?.map(s => s.summary).filter(Boolean).join(' ') || ''
+  const fromComps = enrichment.comparableFilms?.map(f => [f.title, f.parallel, f.contrast].filter(Boolean).join(' ')).filter(Boolean).join(' ') || ''
+  const block = [
+    enrichment.logline,
+    enrichment.onePageSynopsis,
+    syn,
+    enrichment.themeExploration,
+    fromScenes,
+    fromComps
+  ]
+    .map(s => String(s || '').trim())
+    .filter(Boolean)
+    .join('\n\n')
+  const flat = block.replace(/\s+/g, ' ').trim()
+  // Accept first: models often leave logline/synopsis empty but fill theme_exploration,
+  // comparable_films, or sceneSummaries. The synopsis field can still be the internal
+  // "Imported project: …" filler — do not treat that as a stub when the rest is substantive.
+  if (flat.length >= 28) return true
+
+  const looksLikeStub =
+    (g === 'unknown' || !g) &&
+    (t === 'unknown' || !t) &&
+    syn.toLowerCase().startsWith('imported project:')
+  if (looksLikeStub) return false
+  if ((g && g !== 'unknown') || (t && t !== 'unknown')) {
+    return flat.length >= 10
+  }
+  return flat.length >= 16
+}
+
 /** For Script Wizard phase 1 + OMDb: structured comps before treatment prose exists. */
 export function comparableTitlesFromEnrichment (e: ScriptAiEnrichment): Array<{ title: string; year?: string }> {
   return e.comparableFilms.slice(0, 8).map(f => ({
@@ -326,6 +439,7 @@ export async function inferThreeActThemeBreakdown (input: {
   onePageSynopsis: string
   themeExploration: string
   sceneOutline: string
+  openrouterModelId?: string
 }): Promise<string> {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -358,7 +472,7 @@ ${input.themeExploration.slice(0, 4000)}
 Scene outline:
 ${input.sceneOutline.slice(0, 10000)}`
 
-  const model = OPENROUTER_TEXT_MODEL_MAP.Claude
+  const model = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
   const body = buildOpenRouterChatCompletionBody({
     model,
     messages: [
@@ -397,20 +511,12 @@ ${input.sceneOutline.slice(0, 10000)}`
     const arc = asStr(parsed.theme_arc || parsed.themeArc).trim()
     if (!act1 && !act2 && !act3 && !arc) return ''
 
-    const lines: string[] = [
-      'Three-act thematic breakdown',
-      '',
-      'Act I',
-      act1 || '(No details returned.)',
-      '',
-      'Act II',
-      act2 || '(No details returned.)',
-      '',
-      'Act III',
-      act3 || '(No details returned.)'
-    ]
+    const lines: string[] = ['Three-act thematic breakdown', '']
+    if (act1) lines.push('Act I', act1, '')
+    if (act2) lines.push('Act II', act2, '')
+    if (act3) lines.push('Act III', act3, '')
     if (arc) {
-      lines.push('', 'Theme arc', arc)
+      lines.push('Theme arc', arc)
     }
     return lines.join('\n').trim()
   } catch {
@@ -452,6 +558,7 @@ export async function inferDirectorFromImportedScript (input: {
   themes: string[]
   sceneOutline: string
   characterNames: string[]
+  openrouterModelId?: string
 }): Promise<ProjectDirector> {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -494,7 +601,7 @@ ${synopsisBlock || '(none)'}
 Excerpted scene structure and dialogue samples (for visual and pacing cues):
 ${input.sceneOutline.slice(0, 12000)}`
 
-  const model = OPENROUTER_TEXT_MODEL_MAP.Claude
+  const model = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
   const body = buildOpenRouterChatCompletionBody({
     model,
     messages: [
@@ -505,16 +612,20 @@ ${input.sceneOutline.slice(0, 12000)}`
     max_tokens: 2048
   })
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey.trim()}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://aielegance.com',
-      'X-Title': 'AI Elegance Script Import Director'
+  const res = await fetchWithTimeout(
+    'https://openrouter.ai/api/v1/chat/completions',
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://aielegance.com',
+        'X-Title': 'AI Elegance Script Import Director'
+      },
+      body: JSON.stringify(body)
     },
-    body: JSON.stringify(body)
-  })
+    OPENROUTER_ENRICH_MS
+  )
 
   const raw = await res.text()
   if (!res.ok) {
@@ -687,6 +798,7 @@ export async function inferCharactersWithScreenShareFromScript (input: {
   sceneOutline: string
   enrichmentHints: { name: string; role_description: string }[]
   parserCharacterNames: string[]
+  openrouterModelId?: string
 }): Promise<CharacterWithShare[]> {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -732,7 +844,7 @@ ${hints}
 Script excerpt (scene headings + dialogue and action — use this to judge presence and lines):
 ${input.sceneOutline.slice(0, 14000)}`
 
-  const model = OPENROUTER_TEXT_MODEL_MAP.Claude
+  const model = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
   const body = buildOpenRouterChatCompletionBody({
     model,
     messages: [
@@ -740,7 +852,7 @@ ${input.sceneOutline.slice(0, 14000)}`
       { role: 'user', content: user }
     ],
     temperature: 0.35,
-    max_tokens: 8192
+    max_tokens: 1200
   })
 
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -799,6 +911,7 @@ export async function enrichFixedCharacterRosterWithAi (input: {
   characterNames: string[]
   /** Latest Director-tab bible (optional). */
   directorContext?: string
+  openrouterModelId?: string
 }): Promise<CharacterWithShare[]> {
   const names = input.characterNames.map(n => n.trim()).filter(Boolean)
   if (!names.length) return []
@@ -807,14 +920,14 @@ export async function enrichFixedCharacterRosterWithAi (input: {
   const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) return []
 
-  const system = `You are a screenplay analyst. The project already has a fixed cast list (exact names below). For EACH name you must return exactly one JSON object.
+  const system = `You are a screenplay analyst and character concept prompt writer. The project already has a fixed cast list (exact names below). For EACH name you must return exactly one JSON object.
 
 Reply with ONLY valid JSON (no markdown fences), shape:
 {
   "characters": [
     {
       "name": "EXACT name from the list",
-      "role_description": "2–4 sentences: who they are in this story, relationships, dramatic function — grounded in the script excerpt and synopsis.",
+      "role_description": "2–4 sentences written as an image-generation character prompt: visual appearance, age range, wardrobe, physical details, expression/body language, and mood/tone grounded in the script and director notes. Keep it practical for concept art generation, not biography.",
       "screen_share_percent": 0
     }
   ]
@@ -822,6 +935,7 @@ Reply with ONLY valid JSON (no markdown fences), shape:
 
 Rules:
 - Include every name from the provided list exactly once. Use the same spelling as in the list (preserve capitalization from the list).
+- role_description should prioritize how the character should look and feel on screen (casting/wardrobe/visual tone cues). Avoid plot-summary language unless needed for visual direction.
 - screen_share_percent: estimate this character’s share of all dialogue in the script excerpt (lines/cues), plus meaningful on-page presence where relevant; across the list these should sum to about 100.
 - Do not add characters not in the list. Do not omit any list name.
 - Escape quotes inside JSON strings properly.`
@@ -832,16 +946,16 @@ Rules:
 Genre: ${input.genre || '(unspecified)'}
 Tone: ${input.tone || '(unspecified)'}
 
-${dir ? `Director bible (honor this when describing roles and presence):\n${dir.slice(0, 4000)}\n\n` : ''}Synopsis and treatment (context):
+${dir ? `Director bible (honor this when writing visual look-and-feel prompts):\n${dir.slice(0, 4000)}\n\n` : ''}Synopsis and treatment (context):
 ${[input.synopsis, input.treatment].filter(Boolean).join('\n\n').slice(0, 8000)}
 
 Fixed cast — return exactly one row per line (same name strings):
 ${names.map((n, i) => `${i + 1}. ${n}`).join('\n')}
 
-Script excerpt (scene headings + action and dialogue — use for descriptions and percentages):
+Script excerpt (scene headings + action and dialogue — use this to infer visual design and percentages):
 ${input.sceneOutline.slice(0, 14000)}`
 
-  const model = OPENROUTER_TEXT_MODEL_MAP.Claude
+  const model = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
   const body = buildOpenRouterChatCompletionBody({
     model,
     messages: [
@@ -1025,6 +1139,7 @@ export async function inferScenesFromScriptWithClaude (input: {
   fullScriptText: string
   /** Director-tab notes — influences scene boundaries and emphasis. */
   directorContext?: string
+  openrouterModelId?: string
 }): Promise<InferredImportScene[]> {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -1066,7 +1181,7 @@ ${dir ? `Director priorities (use when choosing scene splits and emphasis):\n${d
 FULL SCREENPLAY:
 ${script}`
 
-  const model = OPENROUTER_TEXT_MODEL_MAP.Claude
+  const model = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
   const chatBody = buildOpenRouterChatCompletionBody({
     model,
     messages: [

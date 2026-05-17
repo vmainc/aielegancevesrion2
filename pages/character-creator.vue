@@ -285,6 +285,7 @@ useHead({
 })
 
 const toast = useToast()
+const route = useRoute()
 const { isAuthenticated, initAuth, getAuthToken } = useAuth()
 const { projects, loadServerProjects, clientReady } = useCreativeProject()
 
@@ -312,9 +313,32 @@ const saveProjectId = ref('')
 const saveTitle = ref('')
 const saveError = ref('')
 const cloudSaving = ref(false)
+const contextProjectId = ref('')
+const contextCharacterId = ref('')
 
 const pbProjects = computed(() =>
   projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
+)
+
+function firstQueryString (v: unknown): string {
+  if (typeof v === 'string') return v
+  if (Array.isArray(v) && typeof v[0] === 'string') return v[0]
+  return ''
+}
+
+watch(
+  () => route.query,
+  (q) => {
+    const incomingName = firstQueryString(q.name).trim()
+    const incomingDescription = firstQueryString(q.description).trim()
+    if (incomingName) name.value = incomingName.slice(0, 200)
+    if (incomingDescription) description.value = incomingDescription.slice(0, 4000)
+    const incomingProjectId = firstQueryString(q.projectId).trim()
+    const incomingCharacterId = firstQueryString(q.characterId).trim()
+    contextProjectId.value = PB_ID.test(incomingProjectId) ? incomingProjectId : ''
+    contextCharacterId.value = PB_ID.test(incomingCharacterId) ? incomingCharacterId : ''
+  },
+  { immediate: true }
 )
 
 watch([isAuthenticated, clientReady], () => {
@@ -413,7 +437,12 @@ function openSaveModal (modelId: string, modelLabel: string, imageUrl: string) {
   const charName = name.value.trim() || 'Character'
   saveTitle.value = `${charName} — ${modelLabel}`.slice(0, 500)
   saveError.value = ''
-  saveProjectId.value = pbProjects.value[0]?.id ?? ''
+  const preferredPid = contextProjectId.value
+  saveProjectId.value = (
+    preferredPid && pbProjects.value.some(p => p.id === preferredPid)
+      ? preferredPid
+      : pbProjects.value[0]?.id
+  ) ?? ''
   saveModalOpen.value = true
   if (isAuthenticated.value && clientReady.value) {
     void loadServerProjects()
@@ -448,7 +477,62 @@ async function imageUrlToFile (imageUrl: string, baseName: string): Promise<File
             ? 'gif'
             : 'png'
   const safe = baseName.replace(/[^\w\s-]/g, '').trim().slice(0, 80) || 'character'
-  return new File([blob], `${safe}.${ext}`, { type: blob.type || 'image/png' })
+  // Live reverse proxies commonly cap request body size near 1MB. Large AI images can exceed this.
+  // Compress aggressively when needed so "Save to account" remains reliable.
+  const compressed = await maybeCompressImageBlob(blob)
+  const outExt = compressed.type.includes('jpeg') ? 'jpg' : ext
+  return new File([compressed], `${safe}.${outExt}`, { type: compressed.type || blob.type || 'image/png' })
+}
+
+async function maybeCompressImageBlob (blob: Blob): Promise<Blob> {
+  const MAX_UPLOAD_BYTES = 900_000
+  if (!blob.type.startsWith('image/')) return blob
+  if (blob.size <= MAX_UPLOAD_BYTES) return blob
+  const dataUrl = await blobToDataUrl(blob)
+  const img = await loadImageFromDataUrl(dataUrl)
+  let width = img.naturalWidth || img.width
+  let height = img.naturalHeight || img.height
+  const maxSide = 1400
+  if (Math.max(width, height) > maxSide) {
+    const scale = maxSide / Math.max(width, height)
+    width = Math.max(1, Math.round(width * scale))
+    height = Math.max(1, Math.round(height * scale))
+  }
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return blob
+  ctx.drawImage(img, 0, 0, width, height)
+  let quality = 0.86
+  let out = await canvasToBlob(canvas, 'image/jpeg', quality)
+  while (out && out.size > MAX_UPLOAD_BYTES && quality > 0.45) {
+    quality -= 0.08
+    out = await canvasToBlob(canvas, 'image/jpeg', quality)
+  }
+  return out || blob
+}
+
+function blobToDataUrl (blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result || ''))
+    r.onerror = () => reject(new Error('Could not read image data'))
+    r.readAsDataURL(blob)
+  })
+}
+
+function loadImageFromDataUrl (dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Could not decode image'))
+    img.src = dataUrl
+  })
+}
+
+function canvasToBlob (canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), type, quality))
 }
 
 async function confirmCloudSave () {
@@ -463,6 +547,12 @@ async function confirmCloudSave () {
   saveError.value = ''
   try {
     const charName = name.value.trim() || 'Character'
+    const linkedCharacter = await resolveOrCreateCharacterForSave(
+      saveProjectId.value,
+      charName,
+      description.value.trim(),
+      token
+    )
     const file = await imageUrlToFile(
       pending.imageUrl,
       `${charName}-${pending.modelId}`.replace(/\s+/g, '-')
@@ -478,7 +568,10 @@ async function confirmCloudSave () {
         source: 'character_creator',
         model: pending.modelId,
         model_label: pending.modelLabel,
-        character_name: charName,
+        character_name: linkedCharacter.name,
+        character_id: linkedCharacter.id,
+        featured: true,
+        ...(contextProjectId.value ? { source_project_id: contextProjectId.value } : {}),
         prompt_used: slotByModel.value[pending.modelId]?.prompt_used ?? lastPromptUsed.value
       })
     )
@@ -497,17 +590,66 @@ async function confirmCloudSave () {
     }
     toast.showToast('Saved to your library — Assets → Characters and this project.', 'success')
     closeSaveModal()
+    await navigateTo(`/projects/${pid}/characters`)
   } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message ?? '')
-        : e instanceof Error
-          ? e.message
-          : ''
-    saveError.value = msg.slice(0, 240) || 'Could not save. Try again.'
+    const msg = saveErrorMessageFromUnknown(e)
+    saveError.value = msg.slice(0, 260) || 'Could not save. Check project assets setup or try device-only.'
   } finally {
     cloudSaving.value = false
   }
+}
+
+async function resolveOrCreateCharacterForSave (
+  projectId: string,
+  characterName: string,
+  roleDescription: string,
+  token: string
+): Promise<{ id: string; name: string }> {
+  const targetName = characterName.trim().slice(0, 200) || 'Character'
+  const normalize = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ')
+  const existing = await $fetch<{ characters: Array<{ id: string; name: string }> }>(
+    `/api/projects/${projectId}/characters`,
+    { headers: { Authorization: `Bearer ${token}` } }
+  )
+  const hit = (existing.characters || []).find(c => normalize(c.name || '') === normalize(targetName))
+  if (hit?.id) {
+    return { id: hit.id, name: hit.name || targetName }
+  }
+  const created = await $fetch<{ character?: { id: string; name: string } }>(`/api/projects/${projectId}/characters`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+    body: {
+      name: targetName,
+      roleDescription: roleDescription.slice(0, 10_000),
+      screenSharePercent: null
+    }
+  })
+  if (created.character?.id) {
+    return { id: created.character.id, name: created.character.name || targetName }
+  }
+  throw new Error('Could not create character row for this image.')
+}
+
+function saveErrorMessageFromUnknown (e: unknown): string {
+  if (!e || typeof e !== 'object') return ''
+  const x = e as {
+    data?: { message?: string; statusMessage?: string; error?: string }
+    statusMessage?: string
+    message?: string
+    response?: { _data?: { message?: string; statusMessage?: string } }
+  }
+  const fromData =
+    x.data?.message ||
+    x.data?.statusMessage ||
+    x.data?.error ||
+    x.response?._data?.message ||
+    x.response?._data?.statusMessage
+  if (typeof fromData === 'string' && fromData.trim()) return fromData.trim()
+  if (typeof x.statusMessage === 'string' && x.statusMessage.trim()) return x.statusMessage.trim()
+  if (typeof x.message === 'string' && x.message.trim() && !x.message.includes('500 Internal Server Error')) {
+    return x.message.trim()
+  }
+  return ''
 }
 
 function saveToDeviceOnly () {

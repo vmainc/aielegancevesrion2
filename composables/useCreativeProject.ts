@@ -1,6 +1,6 @@
 import { getCurrentInstance, onMounted } from 'vue'
 import { defaultDirector } from '~/lib/director-presets'
-import type { CreativeProject, ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
+import type { CreativeProject, ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
 const STORAGE_KEY = 'aielegance-creative-projects'
 
@@ -116,6 +116,7 @@ export function useCreativeProject () {
     name: string
     aspectRatio: ProjectAspectRatio
     goal: ProjectGoal
+    workflowMode?: ProjectWorkflowMode
   }): CreativeProject => {
     if (!hydrated.value) hydrateLocalOnly()
     const t = nowIso()
@@ -126,6 +127,8 @@ export function useCreativeProject () {
       name: input.name.trim() || 'Untitled project',
       aspectRatio: input.aspectRatio,
       goal: input.goal,
+      workflowMode: input.workflowMode || 'import',
+      preferredModelId: 'claude',
       targetLength: 'short',
       synopsis: '',
       treatment: '',

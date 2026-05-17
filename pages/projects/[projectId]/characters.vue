@@ -2,7 +2,7 @@
   <div class="max-w-4xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Cast list: name and Claude-written description. After you run director analysis and tweak the Director tab, use the button below so descriptions and dialogue-share % follow your <span class="font-medium text-gray-700">newest</span> synopsis, treatment, and director bible. The chart matches table swatches. Reference art lives under Assets.
+      · Cast list: name and AI-written look/feel prompt. After you run director analysis and tweak the Director tab, use the button below so visual prompts and dialogue-share % follow your <span class="font-medium text-gray-700">newest</span> synopsis, treatment, and director bible. The chart matches table swatches. Reference art lives under Assets.
     </p>
 
     <div
@@ -41,8 +41,8 @@
           class="flex flex-wrap items-center justify-between gap-3 mb-4"
         >
           <p class="text-sm text-gray-600 max-w-xl">
-            <span class="font-medium text-gray-800">Build / refresh cast from script (Claude)</span>
-            uses your saved screenplay plus the project’s current synopsis, treatment, and Director-tab notes. If the table is empty it seeds names from the file, then writes a description and dialogue-share % for every row.
+            <span class="font-medium text-gray-800">Build / refresh cast from script</span>
+            uses your saved screenplay plus the project’s current synopsis, treatment, and Director-tab notes. If the table is empty it seeds names from the file, then writes a visual look/feel prompt and dialogue-share % for every row.
           </p>
           <button
             type="button"
@@ -60,20 +60,24 @@
         >
           <FilmReelLoader
             size="sm"
-            label="Claude is reading your script"
-            sub-label="Creating or updating cast rows, descriptions, and dialogue share for the chart…"
+            label="AI is reading your script"
+            sub-label="Creating or updating cast rows, look/feel prompts, and dialogue share for the chart…"
           />
         </div>
 
         <ProjectCharactersDescriptionTable
           class="mb-8"
-          :characters="characters"
+          :characters="displayCharacters"
           :editable="true"
           :busy="characterMutating || enrichingCast"
-          :show-chart-swatches="characters.length > 0"
+          :show-chart-swatches="displayCharacters.length > 0"
           :chart-color-by-name="chartSwatchColors"
+          :show-character-creator-link="true"
+          :project-id-for-creator-link="projectId"
+          :portrait-url-by-character-id="portraitUrlByCharacterId"
+          :show-portraits="true"
           heading="Characters"
-          subheading="Square colors match the dialogue-share chart. Use the button above to pull names from the screenplay and have Claude describe each role."
+          subheading="Square colors match the dialogue-share chart. Use the button above to pull names from the screenplay and have AI write a visual prompt for each character."
           empty-hint="No characters yet. Click “Build / refresh cast from script” (needs a saved screenplay on Overview), or add a row manually."
           @create="onCreateCharacter"
           @update="onUpdateCharacter"
@@ -81,7 +85,7 @@
         />
 
         <div
-          v-if="characters.length"
+          v-if="displayCharacters.length"
           class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-8 shadow-sm"
         >
           <h2 class="text-lg font-semibold text-gray-900 mb-1">
@@ -131,6 +135,7 @@ import {
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { CreativeCharacter } from '~/types/creative-project'
+import type { ProjectAsset } from '~/types/project-asset'
 
 const PB_ID = /^[a-z0-9]{15}$/
 
@@ -143,6 +148,7 @@ const toast = useToast()
 const projectId = activeProjectId
 
 const characters = ref<CreativeCharacter[]>([])
+const characterAssets = ref<ProjectAsset[]>([])
 const loadError = ref<string | null>(null)
 const pending = ref(false)
 
@@ -156,9 +162,80 @@ const canLoadCloud = computed(
     isAuthenticated.value
 )
 
-const characterPieModel = computed(() => buildCharacterPieModel(characters.value))
+const displayCharacters = computed<CreativeCharacter[]>(() => {
+  const normalized = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ')
+  const hasPortrait = (id: string) => Boolean(portraitUrlByCharacterId.value[id])
+  const map = new Map<string, CreativeCharacter>()
+  for (const c of characters.value) {
+    const key = normalized(c.name || '')
+    if (!key) continue
+    const prev = map.get(key)
+    if (!prev) {
+      map.set(key, c)
+      continue
+    }
+    const prevScore = (hasPortrait(prev.id) ? 1000 : 0) + (prev.screenSharePercent ?? 0)
+    const nextScore = (hasPortrait(c.id) ? 1000 : 0) + (c.screenSharePercent ?? 0)
+    if (nextScore >= prevScore) map.set(key, c)
+  }
+  return [...map.values()]
+})
+const characterPieModel = computed(() => buildCharacterPieModel(displayCharacters.value))
 const pieSlices = computed(() => characterPieModel.value.slices)
 const chartSwatchColors = computed(() => pieModelToSwatchRecord(characterPieModel.value))
+const portraitUrlByCharacterId = computed<Record<string, string>>(() => {
+  const byCharacterId: Record<string, { url: string; ts: string; featured: boolean }> = {}
+  const byCharacterName: Record<string, { url: string; ts: string; featured: boolean }> = {}
+  const byTitleGuess: Record<string, { url: string; ts: string; featured: boolean }> = {}
+  const normalize = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ')
+  for (const a of characterAssets.value) {
+    if (!a.fileUrl) continue
+    const meta = a.metadata || {}
+    const cid = typeof meta.character_id === 'string' ? meta.character_id.trim() : ''
+    const cname = typeof meta.character_name === 'string' ? normalize(meta.character_name) : ''
+    const ts = a.updated || a.created || ''
+    const featured = meta && typeof meta === 'object' && meta.featured === true
+    if (cid) {
+      const prev = byCharacterId[cid]
+      if (!prev || (featured && !prev.featured) || (featured === prev.featured && ts > prev.ts)) {
+        byCharacterId[cid] = { url: a.fileUrl, ts, featured }
+      }
+    }
+    if (cname) {
+      const prev = byCharacterName[cname]
+      if (!prev || (featured && !prev.featured) || (featured === prev.featured && ts > prev.ts)) {
+        byCharacterName[cname] = { url: a.fileUrl, ts, featured }
+      }
+    }
+    const title = normalize(a.title || '')
+    if (title) {
+      const candidates = characters.value
+        .map(c => normalize(c.name))
+        .filter(Boolean)
+      for (const n of candidates) {
+        if (title.includes(n)) {
+          const prev = byTitleGuess[n]
+          if (!prev || (featured && !prev.featured) || (featured === prev.featured && ts > prev.ts)) {
+            byTitleGuess[n] = { url: a.fileUrl, ts, featured }
+          }
+        }
+      }
+    }
+  }
+  const out: Record<string, string> = {}
+  for (const c of characters.value) {
+    const hitById = byCharacterId[c.id]
+    if (hitById?.url) {
+      out[c.id] = hitById.url
+      continue
+    }
+    const normName = normalize(c.name)
+    const hitByName = byCharacterName[normName]
+    if (hitByName?.url) out[c.id] = hitByName.url
+    else if (byTitleGuess[normName]?.url) out[c.id] = byTitleGuess[normName].url
+  }
+  return out
+})
 
 async function refreshCharactersList () {
   const token = getAuthToken()
@@ -169,8 +246,23 @@ async function refreshCharactersList () {
       { headers: { Authorization: `Bearer ${token}` } }
     )
     characters.value = res.characters || []
+    await loadCharacterAssets()
   } catch (e: unknown) {
     toast.showToast(formatApiFetchError(e, 'Could not refresh characters'), 'error')
+  }
+}
+
+async function loadCharacterAssets () {
+  const token = getAuthToken()
+  if (!canLoadCloud.value || !token) return
+  try {
+    const res = await $fetch<{ items: ProjectAsset[] }>(
+      `/api/projects/${projectId.value}/assets?kind=character`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    characterAssets.value = res.items || []
+  } catch {
+    characterAssets.value = []
   }
 }
 
@@ -186,6 +278,7 @@ async function loadCharacters () {
       { headers: { Authorization: `Bearer ${token}` } }
     )
     characters.value = res.characters || []
+    await loadCharacterAssets()
   } catch (e: unknown) {
     const msg =
       e && typeof e === 'object' && 'data' in e
@@ -193,6 +286,7 @@ async function loadCharacters () {
         : 'Could not load characters'
     loadError.value = msg
     characters.value = []
+    characterAssets.value = []
   } finally {
     pending.value = false
   }
@@ -204,7 +298,7 @@ async function enrichCastFromScript () {
   if (!id || !token) return
   enrichingCast.value = true
   try {
-    const res = await $fetch<{ updated: number; seeded?: number; characters: CreativeCharacter[] }>(
+    const res = await $fetch<{ updated: number; seeded?: number; warning?: string; characters: CreativeCharacter[] }>(
       `/api/projects/${id}/characters/enrich-from-script`,
       {
         method: 'POST',
@@ -223,9 +317,12 @@ async function enrichCastFromScript () {
       bits.push(res.seeded === 1 ? 'Added 1 character from the screenplay' : `Added ${res.seeded} characters from the screenplay`)
     }
     bits.push(
-      res.updated === 1 ? 'Claude updated 1 description & dialogue %' : `Claude updated ${res.updated} descriptions & dialogue %`
+      res.updated === 1 ? 'Updated 1 look/feel prompt & dialogue %' : `Updated ${res.updated} look/feel prompts & dialogue %`
     )
     toast.showToast(bits.join(' · '), 'success')
+    if (res.warning) {
+      toast.showToast(res.warning, 'warning')
+    }
   } catch (e: unknown) {
     toast.showToast(formatApiFetchError(e, 'Could not build cast from script'), 'error')
   } finally {

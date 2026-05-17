@@ -71,6 +71,34 @@
 
           <form class="space-y-4" @submit.prevent="submitCreate">
             <div>
+              <p class="block text-sm font-medium text-gray-700 mb-2">How do you want to start?</p>
+              <label class="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 mb-2">
+                <input
+                  v-model="form.workflowMode"
+                  type="radio"
+                  value="import"
+                  class="mt-0.5"
+                >
+                <span class="text-sm text-gray-700">
+                  <span class="font-medium text-gray-900">Import screenplay</span><br>
+                  Show screenplay upload + analysis modules on Overview.
+                </span>
+              </label>
+              <label class="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2">
+                <input
+                  v-model="form.workflowMode"
+                  type="radio"
+                  value="scratch"
+                  class="mt-0.5"
+                >
+                <span class="text-sm text-gray-700">
+                  <span class="font-medium text-gray-900">Start from scratch</span><br>
+                  Hide screenplay upload modules and build concept manually.
+                </span>
+              </label>
+            </div>
+
+            <div>
               <label for="proj-name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
               <input
                 id="proj-name"
@@ -148,7 +176,7 @@
 </template>
 
 <script setup lang="ts">
-import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
+import type { ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
 const { projects, createProject, clientReady, registerImportedProject } = useCreativeProject()
 const { isAuthenticated, getAuthToken } = useAuth()
@@ -162,7 +190,8 @@ const createError = ref('')
 const form = reactive({
   name: '',
   aspectRatio: '16:9' as ProjectAspectRatio,
-  goal: 'film' as ProjectGoal
+  goal: 'film' as ProjectGoal,
+  workflowMode: 'import' as ProjectWorkflowMode
 })
 
 function openCreateModal () {
@@ -179,6 +208,7 @@ watch(openCreate, (v) => {
   form.name = ''
   form.aspectRatio = '16:9'
   form.goal = 'film'
+  form.workflowMode = 'import'
   showOptions.value = false
   createError.value = ''
 })
@@ -203,7 +233,8 @@ async function submitCreate () {
           body: {
             name: displayName,
             aspectRatio: form.aspectRatio,
-            goal: form.goal
+            goal: form.goal,
+            workflowMode: form.workflowMode
           }
         }
       )
@@ -225,7 +256,8 @@ async function submitCreate () {
   const p = createProject({
     name: displayName,
     aspectRatio: form.aspectRatio,
-    goal: form.goal
+    goal: form.goal,
+    workflowMode: form.workflowMode
   })
   openCreate.value = false
   await navigateTo(`/projects/${p.id}/overview`)

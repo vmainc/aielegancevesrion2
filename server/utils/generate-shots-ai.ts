@@ -1,4 +1,5 @@
 import type { ProjectDirector } from '~/types/creative-project'
+import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
 import { OPENROUTER_TEXT_MODEL_MAP } from '~/server/utils/openrouter-text-models'
@@ -28,6 +29,7 @@ export interface GenerateShotsContext {
   }>
   director?: ProjectDirector | null
   continuityMemory?: string | null
+  openrouterModelId?: string
 }
 
 function extractJsonWithShots (text: string): { shots?: unknown[] } | null {
@@ -78,7 +80,7 @@ export function normalizeShotsFromModelArray (rawList: unknown[]): GeneratedShot
       description: description.slice(0, 5000),
       shot_type: str(o.shot_type, 'medium shot').slice(0, 200),
       camera_move: str(o.camera_move, 'static').slice(0, 200),
-      duration_seconds: Math.min(120, Math.max(0.5, num(o.duration_seconds, 3))),
+      duration_seconds: snapToStoryboardClipSeconds(num(o.duration_seconds, 5)),
       image_prompt: image_prompt.slice(0, 8000),
       video_prompt: video_prompt.slice(0, 8000)
     })
@@ -115,9 +117,9 @@ export async function generateShotsWithAi (ctx: GenerateShotsContext): Promise<G
 
   const goalRules =
     ctx.goal === 'social'
-      ? `Goal: social — first 1–2 shots must be a strong hook; faster pacing; shorter duration_seconds (often 1–4s per shot).`
+      ? `Goal: social — first 1–2 shots must be a strong hook; faster pacing; use duration_seconds 5 for most panels (10 only when the beat needs room).`
       : ctx.goal === 'film'
-        ? `Goal: film — slower, atmospheric pacing; longer duration_seconds (often 4–10s); room for mood and silence.`
+        ? `Goal: film — slower, atmospheric pacing; prefer duration_seconds 10 for mood beats, 5 for quicker cuts.`
         : ctx.goal === 'commercial'
           ? `Goal: commercial/ad — clear product or message readability; confident, polished look; varied shot sizes for cut points.`
           : `Goal: ${ctx.goal} — balanced pacing suitable for the format.`
@@ -166,7 +168,7 @@ ${mem.slice(0, 8000)}
   const system = `You are a professional storyboard artist and director of photography. You break each scene into a clear SEQUENCE OF PANELS — like a printed storyboard: each row is one beat the audience sees, in strict story order (establish geography → develop action → emotional turn → cut point).
 
 Output ONLY valid JSON (no markdown), exactly this shape:
-{"shots":[{"order":1,"title":"short label","description":"what we see and story beat","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static | crane up","duration_seconds":4,"image_prompt":"single clean visual prompt: lighting, environment, subject, mood, lens feel","video_prompt":"cinematic motion description: camera move, subject motion, lighting shifts, atmosphere"}]}
+{"shots":[{"order":1,"title":"short label","description":"what we see and story beat","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static | crane up","duration_seconds":5,"image_prompt":"single clean visual prompt: lighting, environment, subject, mood, lens feel","video_prompt":"cinematic motion description: camera move, subject motion, lighting shifts, atmosphere"}]}
 Rules:
 - Think in panels: coverage that an editor could cut together — vary shot scale on purpose (establish, re-establish, tighten, insert, reaction).
 - Produce between 5 and 12 shots in "shots" array for THIS scene only; do not merge adjacent screenplay scenes.
@@ -175,7 +177,7 @@ Rules:
 - video_prompt: expand with motion, camera behavior, lighting, atmosphere; may repeat and elaborate image_prompt.
 - When named characters appear, keep their described traits and visual continuity across shots (wardrobe, age, eyelines).
 - Interpret scene meaning from summary and script; imperfect script formatting is OK.
-- duration_seconds: realistic float (e.g. 2.5), aligned with goal rules below.`
+- duration_seconds: MUST be exactly 5 or 10 (integer seconds per panel) — these are the only clip lengths the video step supports; pick 5 vs 10 from pacing (goal rules), not arbitrary values.`
 
   const user = `${directorBlock}${continuityBlock}PROJECT
 Name: ${ctx.projectName}
@@ -198,7 +200,7 @@ CHARACTERS
 ${charBlock}`
 
   const body = buildOpenRouterChatCompletionBody({
-    model: OPENROUTER_TEXT_MODEL_MAP.Claude,
+    model: ctx.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude,
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: user }
@@ -207,16 +209,24 @@ ${charBlock}`
     max_tokens: 8192
   })
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey.trim()}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://aielegance.com',
-      'X-Title': 'AI Elegance Storyboard (Claude)'
-    },
-    body: JSON.stringify(body)
-  })
+  const controller = new AbortController()
+  const t = setTimeout(() => controller.abort(), 120_000)
+  let res: Response
+  try {
+    res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://aielegance.com',
+        'X-Title': 'AI Elegance Storyboard'
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal
+    })
+  } finally {
+    clearTimeout(t)
+  }
 
   const raw = await res.text()
   if (!res.ok) {

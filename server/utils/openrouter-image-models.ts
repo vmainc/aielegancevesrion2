@@ -12,7 +12,8 @@ export const OPENROUTER_IMAGE_MODEL_SLUGS: Record<string, string> = {
   'gpt-5-image': 'openai/gpt-5-image',
   'gpt-5-image-mini': 'openai/gpt-5-image-mini',
   /** Character Creator labels map to distinct image-capable models (same API). */
-  'dalle-3': 'openai/gpt-5-image',
+  // Keep legacy UI id `dalle-3`, but route to the more reliable OpenAI image mini model.
+  'dalle-3': 'openai/gpt-5-image-mini',
   'sdxl-stacy': 'black-forest-labs/flux.2-pro',
   'sdxl-jace': 'black-forest-labs/flux.2-max',
   'deepfloyd': 'black-forest-labs/flux.2-flex',

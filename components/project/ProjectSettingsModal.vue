@@ -194,6 +194,30 @@ function syncDraft () {
   draft.goal = props.project.goal
 }
 
+async function loadCloudStats () {
+  const pid = props.project.id
+  const token = getAuthToken()
+  if (!token) {
+    stats.sceneCount = 0
+    stats.characterCount = 0
+    return
+  }
+  try {
+    const res = await $fetch<{
+      stats: { sceneCount: number; characterCount: number }
+    }>(`/api/projects/${pid}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (props.project.id !== pid) return
+    stats.sceneCount = res.stats?.sceneCount ?? 0
+    stats.characterCount = res.stats?.characterCount ?? 0
+  } catch {
+    if (props.project.id !== pid) return
+    stats.sceneCount = 0
+    stats.characterCount = 0
+  }
+}
+
 watch(
   () => props.open,
   async (v) => {
@@ -202,28 +226,20 @@ watch(
     if (!v) return
     syncDraft()
     if (isCloud.value) {
-      const token = getAuthToken()
-      if (!token) {
-        stats.sceneCount = 0
-        stats.characterCount = 0
-        return
-      }
-      try {
-        const res = await $fetch<{
-          stats: { sceneCount: number; characterCount: number }
-        }>(`/api/projects/${props.project.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-        stats.sceneCount = res.stats?.sceneCount ?? 0
-        stats.characterCount = res.stats?.characterCount ?? 0
-      } catch {
-        stats.sceneCount = 0
-        stats.characterCount = 0
-      }
+      await loadCloudStats()
     } else {
       stats.sceneCount = 0
       stats.characterCount = 0
     }
+  }
+)
+
+watch(
+  () => props.project.id,
+  async () => {
+    if (!props.open || !isCloud.value) return
+    syncDraft()
+    await loadCloudStats()
   }
 )
 

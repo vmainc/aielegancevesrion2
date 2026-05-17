@@ -142,6 +142,13 @@ const props = withDefaults(
 const settingsOpen = ref(false)
 const route = useRoute()
 
+watch(
+  () => route.params.projectId,
+  () => {
+    settingsOpen.value = false
+  }
+)
+
 const sectionLabels: Record<string, string> = {
   overview: 'Overview',
   director: 'Director',
@@ -149,7 +156,8 @@ const sectionLabels: Record<string, string> = {
   characters: 'Characters',
   scenes: 'Scenes',
   storyboard: 'Storyboard',
-  video: 'Video'
+  video: 'Video',
+  timeline: 'Timeline'
 }
 
 const sections = computed(() => {

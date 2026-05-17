@@ -41,6 +41,9 @@ export async function getAuthenticatedPocketBase() {
   authPromise = (async () => {
     try {
       const pb = new PocketBase(pbUrl)
+      // This instance is shared across concurrent Nitro requests; disable SDK auto-cancel
+      // so one request cannot abort another with the same endpoint/filter.
+      pb.autoCancellation(false)
       
       // Authenticate as admin if credentials are provided (runtimeConfig and/or process.env)
       if (admin.email && admin.password) {

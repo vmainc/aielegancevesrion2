@@ -1,16 +1,43 @@
-import { createError, getHeader, type H3Event } from 'h3'
+import { createError, getHeader, getQuery, type H3Event } from 'h3'
 import { resolvePocketBaseAdmin } from '~/server/utils/server-env'
 
-/**
- * Resolve PocketBase user id from `Authorization: Bearer <users_token>`.
- */
-export async function getPocketBaseUserIdFromRequest (event: H3Event): Promise<string> {
+export type PocketBaseUserFromRequestOpts = {
+  /**
+   * Also accept `?access_token=` (GET only). Used for `<video src>` / `<audio src>`
+   * where the browser cannot attach `Authorization`.
+   */
+  allowAccessTokenQuery?: boolean
+}
+
+function extractUserJwtFromEvent (event: H3Event, opts?: PocketBaseUserFromRequestOpts): string {
   const raw = getHeader(event, 'authorization') || getHeader(event, 'Authorization') || ''
   const m = raw.match(/^Bearer\s+(.+)$/i)
-  const token = m?.[1]?.trim()
-  if (!token) {
-    throw createError({ statusCode: 401, message: 'Missing Authorization Bearer token' })
+  const fromHeader = m?.[1]?.trim()
+  if (fromHeader) return fromHeader
+
+  if (opts?.allowAccessTokenQuery && event.method === 'GET') {
+    const q = getQuery(event) as { access_token?: unknown }
+    if (typeof q.access_token === 'string' && q.access_token.trim()) {
+      return q.access_token.trim()
+    }
   }
+
+  const msg =
+    opts?.allowAccessTokenQuery && event.method === 'GET'
+      ? 'Missing Authorization Bearer token or access_token query parameter'
+      : 'Missing Authorization Bearer token'
+  throw createError({ statusCode: 401, message: msg })
+}
+
+/**
+ * Resolve PocketBase user id from `Authorization: Bearer <users_token>`
+ * (or `?access_token=` when opts.allowAccessTokenQuery and method is GET).
+ */
+export async function getPocketBaseUserIdFromRequest (
+  event: H3Event,
+  opts?: PocketBaseUserFromRequestOpts
+): Promise<string> {
+  const token = extractUserJwtFromEvent(event, opts)
 
   const config = useRuntimeConfig()
   const admin = resolvePocketBaseAdmin(config)

@@ -3,6 +3,7 @@ import type {
   ProjectAspectRatio,
   ProjectDirector,
   ProjectGoal,
+  ProjectWorkflowMode,
   ProjectTargetLength
 } from '~/types/creative-project'
 
@@ -11,6 +12,8 @@ type PbProjectRecord = {
   name: string
   aspect_ratio: string
   goal: string
+  workflow_mode?: string
+  preferred_model_id?: string
   synopsis?: string
   treatment?: string
   concept_notes?: string
@@ -77,6 +80,8 @@ export function pbRecordToCreativeProject (r: PbProjectRecord): CreativeProject 
     name: r.name,
     aspectRatio: (r.aspect_ratio || '16:9') as ProjectAspectRatio,
     goal: (r.goal || 'film') as ProjectGoal,
+    workflowMode: (r.workflow_mode === 'scratch' ? 'scratch' : 'import') as ProjectWorkflowMode,
+    preferredModelId: String(r.preferred_model_id || '').trim() || 'claude',
     targetLength,
     synopsis: r.synopsis || '',
     treatment: r.treatment || '',

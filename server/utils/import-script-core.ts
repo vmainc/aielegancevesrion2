@@ -1,4 +1,3 @@
-import { createError } from 'h3'
 import type PocketBase from 'pocketbase'
 import type { ParsedScript } from '~/server/utils/parse-script-fdx'
 import { parseFdxXml } from '~/server/utils/parse-script-fdx'
@@ -12,6 +11,7 @@ import { extractTextFromPdfBuffer } from '~/server/utils/extract-pdf-text'
 import {
   enrichScriptWithAi,
   enrichmentToProjectFields,
+  scriptPreviewEnrichmentIsUsable,
   inferThreeActThemeBreakdown,
   inferDirectorFromImportedScript,
   inferCharactersWithScreenShareFromScript,
@@ -31,8 +31,14 @@ import {
   pbRecordToCreativeProject
 } from '~/server/utils/creative-project-map'
 import { listProjectAssetsForProject } from '~/server/utils/list-project-assets-pb'
-import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
+import {
+  formatPocketBaseRecordError,
+  isPocketBaseMissingCollectionError,
+  pocketBaseErrorStatus
+} from '~/server/utils/pb-missing-collection-error'
+import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { resolveProjectPreferredOpenRouterModel } from '~/server/utils/project-model-preference'
 import type { CreativeProject } from '~/types/creative-project'
 
 const ASPECT = new Set(['16:9', '9:16', '1:1'])
@@ -213,6 +219,21 @@ function isWorkflowScriptImportRow (row: { id: string; notes?: string; metadata?
   return source === 'script_import' || notes.includes('Imported script for') || notes.includes('Screenplay file saved')
 }
 
+function recordIsoTime (row: Record<string, unknown>): string {
+  const created = typeof row.created === 'string' ? row.created : ''
+  if (created) return created
+  return typeof row.updated === 'string' ? row.updated : ''
+}
+
+function buildSceneOutlineForAi (parsed: ParsedScript): string {
+  // If parser can't segment scenes, we keep one FULL SCRIPT block. Give AI much more
+  // context in that case; 2.5k chars was too short and produced generic analyses.
+  const perSceneLimit = parsed.scenes.length <= 1 ? 20000 : 2500
+  return parsed.scenes
+    .map((s, i) => `## Scene ${i + 1}\nHeading: ${s.heading}\n---\n${s.body.slice(0, perSceneLimit)}`)
+    .join('\n\n')
+}
+
 /**
  * Remove workflow script-import rows. If exceptId is set, keep that record (e.g. re-analyze same upload).
  */
@@ -246,7 +267,7 @@ function scriptExtensionOk (filename: string): boolean {
 /** Strict parse for analysis / legacy full import. */
 export async function parseScriptBufferToParsed (fileBuf: Buffer, filename: string): Promise<ParsedScript> {
   if (!scriptExtensionOk(filename)) {
-    throw createError({ statusCode: 400, message: 'Only .fdx, .txt, and .pdf files are supported' })
+    throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Only .fdx, .txt, and .pdf files are supported')
   }
   const lower = filename.toLowerCase()
   const isFdx = lower.endsWith('.fdx')
@@ -263,7 +284,7 @@ export async function parseScriptBufferToParsed (fileBuf: Buffer, filename: stri
     }
   } catch (e: unknown) {
     const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : 'Could not parse script'
-    throw createError({ statusCode: 400, message: msg })
+    throwApiError(400, ApiErrorCode.VALIDATION_ERROR, msg)
   }
   if (!parsed.scenes.length) {
     let body = ''
@@ -278,7 +299,7 @@ export async function parseScriptBufferToParsed (fileBuf: Buffer, filename: stri
     }
     body = body.trim()
     if (!body) {
-      throw createError({ statusCode: 400, message: 'No readable text or scenes found in this file.' })
+      throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'No readable text or scenes found in this file.')
     }
     return {
       scenes: [{ heading: 'FULL SCRIPT', body: body.slice(0, 150_000) }],
@@ -291,7 +312,7 @@ export async function parseScriptBufferToParsed (fileBuf: Buffer, filename: stri
 export async function downloadProjectAssetFileBuffer (pb: PocketBase, record: Record<string, unknown>): Promise<Buffer> {
   const fname = record.file
   if (typeof fname !== 'string' || !fname.length) {
-    throw createError({ statusCode: 400, message: 'Asset has no file attached' })
+    throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Asset has no file attached', { field: 'file' })
   }
   const url = pb.files.getURL(record as never, fname)
   const headers: Record<string, string> = {}
@@ -301,10 +322,12 @@ export async function downloadProjectAssetFileBuffer (pb: PocketBase, record: Re
   }
   const res = await fetch(url, { headers })
   if (!res.ok) {
-    throw createError({
-      statusCode: 502,
-      message: `Could not download screenplay file from storage (${res.status})`
-    })
+    throwApiError(
+      502,
+      ApiErrorCode.BAD_GATEWAY,
+      `Could not download screenplay file from storage (${res.status})`,
+      { httpStatus: res.status }
+    )
   }
   return Buffer.from(await res.arrayBuffer())
 }
@@ -479,16 +502,32 @@ export async function uploadScriptFileToProject (input: {
 }> {
   const { userId, pb, projectId, fileBuf, filename } = input
   if (!scriptExtensionOk(filename)) {
-    throw createError({ statusCode: 400, message: 'Only .fdx, .txt, and .pdf files are supported' })
+    throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Only .fdx, .txt, and .pdf files are supported')
   }
   if (!fileBuf?.length) {
-    throw createError({ statusCode: 400, message: 'Missing script file' })
+    throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Missing script file')
   }
 
-  const existing = await pb.collection('creative_projects').getOne(projectId)
+  let existing: unknown
+  try {
+    existing = await pb.collection('creative_projects').getOne(projectId)
+  } catch (e: unknown) {
+    if (isPocketBaseMissingCollectionError(e)) {
+      throwApiError(
+        503,
+        ApiErrorCode.MISSING_COLLECTION,
+        'PocketBase creative_projects collection is missing or not provisioned. Run npm run setup-db against this environment.',
+        { collection: 'creative_projects' }
+      )
+    }
+    if (pocketBaseErrorStatus(e) === 404) {
+      throwApiError(404, ApiErrorCode.PROJECT_NOT_FOUND, 'Project not found.', { projectId })
+    }
+    throw e
+  }
   const owner = pbRecordOwnerId(existing as { owner?: unknown; user?: unknown })
   if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
+    throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
   }
 
   const stemTitle =
@@ -573,24 +612,67 @@ export async function loadWorkflowScreenplayParsedForProject (input: {
   let assetRow: Record<string, unknown>
 
   if (input.assetId) {
-    const one = await pb.collection('project_assets').getOne(input.assetId)
+    let one: unknown
+    try {
+      one = await pb.collection('project_assets').getOne(input.assetId)
+    } catch (e: unknown) {
+      if (isPocketBaseMissingCollectionError(e)) {
+        throwApiError(
+          503,
+          ApiErrorCode.MISSING_COLLECTION,
+          'PocketBase project_assets collection is missing or not provisioned. Run npm run setup-db against this environment.',
+          { collection: 'project_assets' }
+        )
+      }
+      if (pocketBaseErrorStatus(e) === 404) {
+        throwApiError(
+          404,
+          ApiErrorCode.SCRIPT_ASSET_NOT_FOUND,
+          'No screenplay asset with this id, or it was deleted.',
+          { assetId: input.assetId, projectId }
+        )
+      }
+      throw e
+    }
     if (pbRecordOwnerId(one as { owned_by?: unknown }) !== userId) {
-      throw createError({ statusCode: 403, message: 'Forbidden' })
+      throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'script_asset' })
     }
     if (String((one as { project?: string }).project) !== projectId) {
-      throw createError({ statusCode: 400, message: 'Asset does not belong to this project' })
+      throwApiError(400, ApiErrorCode.SCRIPT_ASSET_WRONG_PROJECT, 'Asset does not belong to this project', {
+        assetId: input.assetId,
+        projectId
+      })
     }
     assetRow = one as Record<string, unknown>
   } else {
-    const list = await listProjectAssetsForProject(pb, projectId, userId, { kind: 'script' })
-    const found = list.find(r =>
-      isWorkflowScriptImportRow(r as { id: string; notes?: string; metadata?: unknown })
-    )
+    let list: Awaited<ReturnType<typeof listProjectAssetsForProject>>
+    try {
+      list = await listProjectAssetsForProject(pb, projectId, userId, { kind: 'script' })
+    } catch (e: unknown) {
+      if (isPocketBaseMissingCollectionError(e)) {
+        throwApiError(
+          503,
+          ApiErrorCode.MISSING_COLLECTION,
+          'PocketBase project_assets collection is missing or not provisioned. Run npm run setup-db against this environment.',
+          { collection: 'project_assets' }
+        )
+      }
+      throw e
+    }
+    const found = list
+      .filter(r => isWorkflowScriptImportRow(r as { id: string; notes?: string; metadata?: unknown }))
+      .sort((a, b) => {
+        const ta = recordIsoTime(a as Record<string, unknown>)
+        const tb = recordIsoTime(b as Record<string, unknown>)
+        return tb.localeCompare(ta)
+      })[0]
     if (!found) {
-      throw createError({
-        statusCode: 400,
-        message: 'No screenplay file found for this project. Upload a script first.'
-      })
+      throwApiError(
+        400,
+        ApiErrorCode.SCRIPT_ASSET_NOT_FOUND,
+        'No screenplay file found for this project. Upload a script first.',
+        { projectId }
+      )
     }
     assetRow = found as Record<string, unknown>
   }
@@ -618,18 +700,34 @@ export async function runDirectorOnlyFromParsed (input: {
   parsed: ParsedScript
   existingProjectId: string
   reuseAssetId: string
+  openrouterModelId?: string
+  preferredModelId?: string
 }): Promise<{ project: CreativeProject; scriptAsset: ScriptAssetAttachResult }> {
   const { userId, pb, filename, parsed, existingProjectId, reuseAssetId } = input
 
-  const existing = await pb.collection('creative_projects').getOne(existingProjectId)
+  let existing: unknown
+  try {
+    existing = await pb.collection('creative_projects').getOne(existingProjectId)
+  } catch (e: unknown) {
+    if (isPocketBaseMissingCollectionError(e)) {
+      throwApiError(
+        503,
+        ApiErrorCode.MISSING_COLLECTION,
+        'PocketBase creative_projects collection is missing or not provisioned. Run npm run setup-db against this environment.',
+        { collection: 'creative_projects' }
+      )
+    }
+    if (pocketBaseErrorStatus(e) === 404) {
+      throwApiError(404, ApiErrorCode.PROJECT_NOT_FOUND, 'Project not found.', { projectId: existingProjectId })
+    }
+    throw e
+  }
   const owner = pbRecordOwnerId(existing as { owner?: unknown; user?: unknown })
   if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
+    throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
   }
 
-  const sceneOutline = parsed.scenes
-    .map((s, i) => `## Scene ${i}\nHeading: ${s.heading}\n---\n${s.body.slice(0, 2500)}`)
-    .join('\n\n')
+  const sceneOutline = buildSceneOutlineForAi(parsed)
 
   const mergedCharacterNames = filterLikelyCharacterNames([
     ...parsed.characterNames,
@@ -643,31 +741,69 @@ export async function runDirectorOnlyFromParsed (input: {
       ? (existing as { name: string }).name.trim()
       : stemTitle
 
-  const enrichment = await enrichScriptWithAi({
-    projectName: noteTitle,
-    sceneOutline,
-    characterNames: mergedCharacterNames
-  })
+  const preferredSlug = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
+  const modelCandidates = [...new Set([
+    preferredSlug,
+    OPENROUTER_TEXT_MODEL_MAP.Claude,
+    OPENROUTER_TEXT_MODEL_MAP.ChatGPT
+  ])].filter(Boolean)
 
-  const directorBible = await inferDirectorFromImportedScript({
-    projectName: noteTitle,
-    logline: enrichment.logline,
-    onePageSynopsis: enrichment.onePageSynopsis,
-    genre: enrichment.genre,
-    tone: enrichment.tone,
-    themes: enrichment.themes,
-    sceneOutline,
-    characterNames: mergedCharacterNames
-  })
+  let enrichment: Awaited<ReturnType<typeof enrichScriptWithAi>> | null = null
+  let prose: ReturnType<typeof enrichmentToProjectFields> | null = null
+  let selectedModelSlug = modelCandidates[0] || preferredSlug
+  let lastModelError = ''
 
-  const prose = enrichmentToProjectFields(enrichment)
-  const threeAct = await inferThreeActThemeBreakdown({
-    projectName: noteTitle,
-    logline: enrichment.logline,
-    onePageSynopsis: enrichment.onePageSynopsis,
-    themeExploration: enrichment.themeExploration,
-    sceneOutline
-  })
+  for (const slug of modelCandidates) {
+    try {
+      const candidate = await enrichScriptWithAi({
+        projectName: noteTitle,
+        sceneOutline,
+        characterNames: mergedCharacterNames,
+        openrouterModelId: slug
+      })
+      const candidateProse = enrichmentToProjectFields(candidate)
+      if (scriptPreviewEnrichmentIsUsable(candidate, candidateProse)) {
+        enrichment = candidate
+        prose = candidateProse
+        selectedModelSlug = slug
+        lastModelError = ''
+        break
+      }
+      lastModelError = `Model returned unusable screenplay output (${slug}).`
+    } catch (e: unknown) {
+      lastModelError = e instanceof Error ? e.message : String(e)
+    }
+  }
+
+  if (!enrichment || !prose) {
+    throwApiError(
+      502,
+      ApiErrorCode.SERVICE_UNAVAILABLE,
+      lastModelError || 'AI analysis failed. OpenRouter did not return usable screenplay output.'
+    )
+  }
+
+  const [directorBible, threeAct] = await Promise.all([
+    inferDirectorFromImportedScript({
+      projectName: noteTitle,
+      logline: enrichment.logline,
+      onePageSynopsis: enrichment.onePageSynopsis,
+      genre: enrichment.genre,
+      tone: enrichment.tone,
+      themes: enrichment.themes,
+      sceneOutline,
+      characterNames: mergedCharacterNames,
+      openrouterModelId: selectedModelSlug
+    }),
+    inferThreeActThemeBreakdown({
+      projectName: noteTitle,
+      logline: enrichment.logline,
+      onePageSynopsis: enrichment.onePageSynopsis,
+      themeExploration: enrichment.themeExploration,
+      sceneOutline,
+      openrouterModelId: selectedModelSlug
+    })
+  ])
   const treatmentWithActs = threeAct ? `${prose.treatment}\n\n${threeAct}` : prose.treatment
   const synopsisDb = prose.synopsis.slice(0, 20_000)
   const treatmentDb = treatmentWithActs.slice(0, 50_000)
@@ -680,7 +816,7 @@ export async function runDirectorOnlyFromParsed (input: {
     `Imported from ${filename}. Director pass: synopsis, treatment, and comparable-film notes on Overview — refine the bible on the Director tab. ` +
     `Then generate cast (Characters), scene breakdown (Scenes), and optional panels (Storyboard). ${previewSceneCount} scene block(s) parsed from the file.`
 
-  await pb.collection('creative_projects').update(existingProjectId, {
+  const projectPatch: Record<string, unknown> = {
     synopsis: synopsisDb,
     treatment: treatmentDb,
     concept_notes: conceptNotes,
@@ -689,7 +825,11 @@ export async function runDirectorOnlyFromParsed (input: {
     themes: enrichment.themes.length ? enrichment.themes : null,
     source_filename: filename,
     ...(directorFilled ? { director: directorBible } : {})
-  })
+  }
+  if ((input.preferredModelId || '').trim()) {
+    projectPatch.preferred_model_id = input.preferredModelId!.trim()
+  }
+  await pb.collection('creative_projects').update(existingProjectId, projectPatch)
 
   const scriptAsset = await updateScriptAssetAfterDirectorPass(pb, reuseAssetId, {
     noteTitle,
@@ -715,10 +855,26 @@ export async function analyzeScriptImportForProject (input: {
 }): Promise<{ project: CreativeProject; scriptAsset: ScriptAssetAttachResult }> {
   const { userId, pb, projectId } = input
 
-  const projectRow = await pb.collection('creative_projects').getOne(projectId)
+  let projectRow: unknown
+  try {
+    projectRow = await pb.collection('creative_projects').getOne(projectId)
+  } catch (e: unknown) {
+    if (isPocketBaseMissingCollectionError(e)) {
+      throwApiError(
+        503,
+        ApiErrorCode.MISSING_COLLECTION,
+        'PocketBase creative_projects collection is missing or not provisioned. Run npm run setup-db against this environment.',
+        { collection: 'creative_projects' }
+      )
+    }
+    if (pocketBaseErrorStatus(e) === 404) {
+      throwApiError(404, ApiErrorCode.PROJECT_NOT_FOUND, 'Project not found.', { projectId })
+    }
+    throw e
+  }
   const owner = pbRecordOwnerId(projectRow as { owner?: unknown; user?: unknown })
   if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
+    throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
   }
 
   const { parsed, filename, assetId } = await loadWorkflowScreenplayParsedForProject({
@@ -728,13 +884,17 @@ export async function analyzeScriptImportForProject (input: {
     assetId: input.assetId
   })
 
+  const pref = resolveProjectPreferredOpenRouterModel(projectRow as Record<string, unknown>)
+
   return runDirectorOnlyFromParsed({
     userId,
     pb,
     filename,
     parsed,
     existingProjectId: projectId,
-    reuseAssetId: assetId
+    reuseAssetId: assetId,
+    openrouterModelId: pref.openrouterModelId,
+    preferredModelId: pref.preferredModelId
   })
 }
 
@@ -753,9 +913,25 @@ export async function generateScenesFromScriptForProject (input: {
 }> {
   const { userId, pb, projectId } = input
 
-  const projectRow = await pb.collection('creative_projects').getOne(projectId)
+  let projectRow: unknown
+  try {
+    projectRow = await pb.collection('creative_projects').getOne(projectId)
+  } catch (e: unknown) {
+    if (isPocketBaseMissingCollectionError(e)) {
+      throwApiError(
+        503,
+        ApiErrorCode.MISSING_COLLECTION,
+        'PocketBase creative_projects collection is missing or not provisioned. Run npm run setup-db against this environment.',
+        { collection: 'creative_projects' }
+      )
+    }
+    if (pocketBaseErrorStatus(e) === 404) {
+      throwApiError(404, ApiErrorCode.PROJECT_NOT_FOUND, 'Project not found.', { projectId })
+    }
+    throw e
+  }
   if (pbRecordOwnerId(projectRow as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
+    throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
   }
 
   const { parsed, filename, assetId } = await loadWorkflowScreenplayParsedForProject({
@@ -783,6 +959,7 @@ export async function generateScenesFromScriptForProject (input: {
 
   const genre = String((projectRow as { genre?: string }).genre || '')
   const tone = String((projectRow as { tone?: string }).tone || '')
+  const pref = resolveProjectPreferredOpenRouterModel(projectRow as Record<string, unknown>)
 
   const claudeInferredScenes = await inferScenesFromScriptWithClaude({
     projectName: noteTitle,
@@ -790,7 +967,8 @@ export async function generateScenesFromScriptForProject (input: {
     tone,
     characterNames: mergedCharacterNames,
     fullScriptText,
-    directorContext
+    directorContext,
+    openrouterModelId: pref.openrouterModelId
   })
 
   const usedClaudeScenes = claudeInferredScenes.length > 0
@@ -822,13 +1000,14 @@ export async function generateScenesFromScriptForProject (input: {
     } catch (e: unknown) {
       const detail = formatPocketBaseRecordError(e)
       console.error('[generate-scenes] creative_scenes.create failed:', detail, e)
-      throw createError({
-        statusCode: 400,
-        message:
-          detail && detail !== 'Failed to create record.'
-            ? detail
-            : `Could not save scene ${i + 1}. Check creative_scenes rules and field limits in PocketBase.`
-      })
+      throwApiError(
+        400,
+        ApiErrorCode.VALIDATION_ERROR,
+        detail && detail !== 'Failed to create record.'
+          ? detail
+          : `Could not save scene ${i + 1}. Check creative_scenes rules and field limits in PocketBase.`,
+        { sceneIndex: i + 1, pocketbase: detail }
+      )
     }
   }
 
@@ -866,9 +1045,25 @@ export async function seedStoryboardFromProjectScenes (input: {
 }): Promise<StoryboardSeedResult> {
   const { userId, pb, projectId } = input
 
-  const projectRow = await pb.collection('creative_projects').getOne(projectId)
+  let projectRow: unknown
+  try {
+    projectRow = await pb.collection('creative_projects').getOne(projectId)
+  } catch (e: unknown) {
+    if (isPocketBaseMissingCollectionError(e)) {
+      throwApiError(
+        503,
+        ApiErrorCode.MISSING_COLLECTION,
+        'PocketBase creative_projects collection is missing or not provisioned. Run npm run setup-db against this environment.',
+        { collection: 'creative_projects' }
+      )
+    }
+    if (pocketBaseErrorStatus(e) === 404) {
+      throwApiError(404, ApiErrorCode.PROJECT_NOT_FOUND, 'Project not found.', { projectId })
+    }
+    throw e
+  }
   if (pbRecordOwnerId(projectRow as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
+    throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
   }
 
   const sceneRows = await pb.collection('creative_scenes').getFullList({
@@ -877,10 +1072,12 @@ export async function seedStoryboardFromProjectScenes (input: {
     batch: 400
   })
   if (!sceneRows.length) {
-    throw createError({
-      statusCode: 400,
-      message: 'No scenes yet. Generate scenes from the Scenes tab first.'
-    })
+    throwApiError(
+      400,
+      ApiErrorCode.VALIDATION_ERROR,
+      'No scenes yet. Generate scenes from the Scenes tab first.',
+      { projectId }
+    )
   }
 
   const charRows = await pb.collection('creative_characters').getFullList({
@@ -964,9 +1161,7 @@ export async function runFullImportFromParsed (input: {
     reuseAssetId
   } = input
 
-  const sceneOutline = parsed.scenes
-    .map((s, i) => `## Scene ${i}\nHeading: ${s.heading}\n---\n${s.body.slice(0, 2500)}`)
-    .join('\n\n')
+  const sceneOutline = buildSceneOutlineForAi(parsed)
 
   const mergedCharacterNames = filterLikelyCharacterNames([
     ...parsed.characterNames,
@@ -980,10 +1175,26 @@ export async function runFullImportFromParsed (input: {
   let noteTitle: string
 
   if (existingProjectId) {
-    const existing = await pb.collection('creative_projects').getOne(existingProjectId)
+    let existing: unknown
+    try {
+      existing = await pb.collection('creative_projects').getOne(existingProjectId)
+    } catch (e: unknown) {
+      if (isPocketBaseMissingCollectionError(e)) {
+        throwApiError(
+          503,
+          ApiErrorCode.MISSING_COLLECTION,
+          'PocketBase creative_projects collection is missing or not provisioned. Run npm run setup-db against this environment.',
+          { collection: 'creative_projects' }
+        )
+      }
+      if (pocketBaseErrorStatus(e) === 404) {
+        throwApiError(404, ApiErrorCode.PROJECT_NOT_FOUND, 'Project not found.', { projectId: existingProjectId })
+      }
+      throw e
+    }
     const owner = pbRecordOwnerId(existing as { owner?: unknown; user?: unknown })
     if (owner !== userId) {
-      throw createError({ statusCode: 403, message: 'Forbidden' })
+      throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
     }
     await deleteProjectScenesAndCharacters(pb, existingProjectId)
 

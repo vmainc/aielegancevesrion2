@@ -2,7 +2,7 @@
   <button
     type="button"
     class="inline-flex items-center gap-1 sm:gap-1.5 shrink-0 px-2 py-1 rounded-md text-xs font-medium text-gray-600 hover:text-primary hover:bg-primary/5 border border-transparent hover:border-primary/20 transition-colors disabled:opacity-35 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:border-transparent"
-    :title="loading ? 'Enhancing…' : 'Enhance prompt (Claude)'"
+    :title="loading ? 'Enhancing…' : 'Enhance prompt'"
     :disabled="disabled || loading || !trimmed"
     :aria-busy="loading"
     @click="run"
@@ -84,6 +84,7 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const route = useRoute()
 const loading = ref(false)
 
 const trimmed = computed(() => (typeof props.modelValue === 'string' ? props.modelValue.trim() : ''))
@@ -97,7 +98,13 @@ async function run () {
       body: {
         prompt: props.modelValue,
         context: props.context,
-        fieldHint: props.fieldHint
+        fieldHint: props.fieldHint,
+        projectId:
+          typeof route.params.projectId === 'string'
+            ? route.params.projectId
+            : Array.isArray(route.params.projectId)
+              ? route.params.projectId[0]
+              : undefined
       }
     })
     emit('update:modelValue', res.enhanced)

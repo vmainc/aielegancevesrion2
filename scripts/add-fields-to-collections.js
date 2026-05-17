@@ -99,6 +99,37 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
         console.log('  ✓ target_length exists');
       }
 
+      if (!fieldExists(col, 'workflow_mode')) {
+        fieldsToAdd.push(
+          flattenField({
+            name: 'workflow_mode',
+            type: 'select',
+            required: false,
+            options: {
+              maxSelect: 1,
+              values: ['import', 'scratch']
+            }
+          })
+        );
+        console.log('  ➕ Will add: workflow_mode (select)');
+      } else {
+        console.log('  ✓ workflow_mode exists');
+      }
+
+      if (!fieldExists(col, 'preferred_model_id')) {
+        fieldsToAdd.push(
+          flattenField({
+            name: 'preferred_model_id',
+            type: 'text',
+            required: false,
+            options: { max: 100 }
+          })
+        );
+        console.log('  ➕ Will add: preferred_model_id (text)');
+      } else {
+        console.log('  ✓ preferred_model_id exists');
+      }
+
       if (fieldsToAdd.length > 0) {
         await pb.collections.update(col.id, {
           fields: [...currentSchema, ...fieldsToAdd.map(flattenField)]

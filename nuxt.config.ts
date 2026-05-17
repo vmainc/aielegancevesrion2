@@ -11,9 +11,8 @@ const pocketbaseProxyTarget = (
 export default defineNuxtConfig({
   modules: ['@nuxtjs/tailwindcss'],
   tailwindcss: {
-    // PostCSS/Tailwind config only — global CSS is imported from app.vue so the client bundle
-    // includes utilities (see nuxt + Vite 6: nuxt.options.css alone can omit them from emitted CSS).
-    cssPath: false,
+    // Use a single canonical Tailwind entry CSS file for both dev + prod.
+    cssPath: '~/assets/css/main.css',
   },
   // Default bind is often IPv6-only (::1); browsers using http://127.0.0.1:3000 then miss the
   // dev server and static assets/CSS appear "broken". Listen on all interfaces in dev.
@@ -47,7 +46,7 @@ export default defineNuxtConfig({
     openrouterApiKey:
       process.env.NUXT_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY,
     openaiApiKey: process.env.OPENAI_API_KEY,
-    omdbApiKey: process.env.OMDB_API_KEY || '7d5b2e8e',
+    omdbApiKey: process.env.NUXT_OMDB_API_KEY || process.env.OMDB_API_KEY || '',
     pocketbaseAdminEmail:
       process.env.NUXT_POCKETBASE_ADMIN_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL,
     pocketbaseAdminPassword:

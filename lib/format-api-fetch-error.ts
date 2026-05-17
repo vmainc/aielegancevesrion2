@@ -53,6 +53,11 @@ export function formatApiFetchError (e: unknown, fallback: string): string {
 function pickMessageFromData (data: unknown): string {
   if (!data || typeof data !== 'object') return ''
   const d = data as Record<string, unknown>
+  /** Nitro `createError({ data: { ok: false, error: { code, message }}})` */
+  if (d.ok === false && d.error && typeof d.error === 'object') {
+    const em = (d.error as { message?: string }).message
+    if (typeof em === 'string' && em.trim()) return em.trim()
+  }
   const m = d.message
   if (typeof m === 'string') return m
   const nested = d.error

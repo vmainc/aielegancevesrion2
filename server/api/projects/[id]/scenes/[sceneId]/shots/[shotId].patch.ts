@@ -1,4 +1,5 @@
 import { createError, getRouterParam, readBody } from 'h3'
+import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
@@ -42,7 +43,7 @@ export default defineEventHandler(async (event) => {
     if (typeof body.shotType === 'string') patch.shot_type = body.shotType.slice(0, 300)
     if (typeof body.cameraMove === 'string') patch.camera_move = body.cameraMove.slice(0, 300)
     if (typeof body.durationSeconds === 'number' && Number.isFinite(body.durationSeconds)) {
-      patch.duration_seconds = Math.min(120, Math.max(0.5, body.durationSeconds))
+      patch.duration_seconds = snapToStoryboardClipSeconds(body.durationSeconds)
     }
     if (typeof body.imagePrompt === 'string') patch.image_prompt = body.imagePrompt.slice(0, 20000)
     if (typeof body.videoPrompt === 'string') patch.video_prompt = body.videoPrompt.slice(0, 20000)

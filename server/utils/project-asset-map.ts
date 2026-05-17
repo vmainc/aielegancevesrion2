@@ -10,6 +10,23 @@ function parseKind (v: unknown): ProjectAssetKind {
   return 'other'
 }
 
+function toSafeAssetUrl (rawUrl: string): string {
+  // Always serve PB files through Nitro's /pb proxy so browser origin stays https-safe.
+  // This avoids mixed-content issues when PocketBase internal URL is http://127.0.0.1:8090.
+  try {
+    const parsed = new URL(rawUrl)
+    if (parsed.pathname.startsWith('/api/files/')) {
+      return `/pb${parsed.pathname}${parsed.search || ''}`
+    }
+    return rawUrl
+  } catch {
+    if (rawUrl.startsWith('/api/files/')) {
+      return `/pb${rawUrl}`
+    }
+    return rawUrl
+  }
+}
+
 export function pbRecordToProjectAsset (
   record: Record<string, unknown>,
   pb: PocketBase
@@ -26,7 +43,8 @@ export function pbRecordToProjectAsset (
   const file = record.file
   if (typeof file === 'string' && file.length) {
     try {
-      fileUrl = pb.files.getUrl(record as never, file)
+      const raw = pb.files.getURL(record as never, file)
+      fileUrl = toSafeAssetUrl(raw)
     } catch {
       fileUrl = null
     }

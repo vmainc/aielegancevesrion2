@@ -1,6 +1,7 @@
 export type ProjectAspectRatio = '16:9' | '9:16' | '1:1'
 
 export type ProjectGoal = 'film' | 'social' | 'commercial' | 'other'
+export type ProjectWorkflowMode = 'import' | 'scratch'
 
 /** How long the finished piece should feel — drives AI script/treatment scale. */
 export type ProjectTargetLength = 'spot' | 'short' | 'episode' | 'feature'
@@ -31,6 +32,8 @@ export interface CreativeProject {
   name: string
   aspectRatio: ProjectAspectRatio
   goal: ProjectGoal
+  workflowMode?: ProjectWorkflowMode
+  preferredModelId?: string
   /** Intended runtime scope (spot vs feature). Default short when unset. */
   targetLength?: ProjectTargetLength
   synopsis: string

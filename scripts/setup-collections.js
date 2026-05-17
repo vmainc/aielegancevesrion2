@@ -191,6 +191,16 @@ async function createCollections(adminEmail, adminPassword) {
             }
           },
           {
+            name: 'workflow_mode',
+            type: 'select',
+            required: false,
+            options: {
+              maxSelect: 1,
+              values: ['import', 'scratch']
+            }
+          },
+          { name: 'preferred_model_id', type: 'text', required: false, options: { max: 100 } },
+          {
             name: 'target_length',
             type: 'select',
             required: false,

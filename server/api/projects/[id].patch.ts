@@ -3,6 +3,7 @@ import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { parseDirectorField, pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { CONCEPT_GENERATOR_MODELS } from '~/lib/concept-generator-models'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -22,23 +23,30 @@ export default defineEventHandler(async (event) => {
   const ASPECT = new Set(['16:9', '9:16', '1:1'])
   const GOALS = new Set(['film', 'social', 'commercial', 'other'])
   const LENGTHS = new Set(['spot', 'short', 'episode', 'feature'])
+  const MODEL_IDS = new Set(CONCEPT_GENERATOR_MODELS.map(m => m.id))
 
   const patch: Record<string, unknown> = {}
-  if (typeof body.synopsis === 'string') patch.synopsis = body.synopsis
-  if (typeof body.conceptNotes === 'string') patch.concept_notes = body.conceptNotes
-  if (typeof body.treatment === 'string') patch.treatment = body.treatment
-  if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim()
+  if (typeof body.synopsis === 'string') patch.synopsis = body.synopsis.slice(0, 20000)
+  if (typeof body.conceptNotes === 'string') patch.concept_notes = body.conceptNotes.slice(0, 50000)
+  if (typeof body.treatment === 'string') patch.treatment = body.treatment.slice(0, 100000)
+  if (typeof body.name === 'string' && body.name.trim()) patch.name = body.name.trim().slice(0, 500)
   if (typeof body.aspectRatio === 'string' && ASPECT.has(body.aspectRatio)) {
     patch.aspect_ratio = body.aspectRatio
   }
   if (typeof body.goal === 'string' && GOALS.has(body.goal)) {
     patch.goal = body.goal
   }
+  if (typeof body.preferredModelId === 'string' && MODEL_IDS.has(body.preferredModelId)) {
+    patch.preferred_model_id = body.preferredModelId
+  }
   if (typeof body.targetLength === 'string' && LENGTHS.has(body.targetLength)) {
     patch.target_length = body.targetLength
   }
 
-  if (body.director !== undefined && body.director !== null) {
+  if (body.director === null) {
+    // Allow explicit reset from UI.
+    patch.director = null
+  } else if (body.director !== undefined) {
     const d = parseDirectorField(body.director)
     if (d) patch.director = d
   }

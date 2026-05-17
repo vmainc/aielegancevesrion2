@@ -7,12 +7,14 @@ const FALLBACK_VIDEO_MODELS = [
     name: 'Alibaba: Wan 2.6',
     description: 'Experimental video generation (API-only, alpha).',
     provider: 'Alibaba',
+    generateAudio: true,
   },
   {
     id: 'bytedance/seedance-1.5-pro',
     name: 'ByteDance: Seedance 1.5 Pro',
     description: 'Experimental video generation (API-only, alpha).',
     provider: 'ByteDance',
+    generateAudio: true,
   },
   {
     id: 'openai/sora-2-pro',
@@ -25,6 +27,7 @@ const FALLBACK_VIDEO_MODELS = [
     name: 'Google: Veo 3.1',
     description: 'Experimental video generation (API-only, alpha).',
     provider: 'Google',
+    generateAudio: true,
   },
 ]
 
@@ -34,6 +37,62 @@ type VideoModelRow = {
   description?: string
   provider?: string
   outputModalities?: string[]
+  /** From OpenRouter `GET /api/v1/videos/models` when available. */
+  supportedDurations?: number[]
+  /** From OpenRouter video catalog: model can emit synchronized audio. Omitted when unknown. */
+  generateAudio?: boolean
+}
+
+type VideosModelsPayload = {
+  data?: Array<{
+    id?: string
+    supported_durations?: unknown
+    generate_audio?: unknown
+  }>
+}
+
+type VideoCatalogEntry = {
+  supportedDurations: number[]
+  generateAudio: boolean | undefined
+}
+
+function parseSupportedDurations (raw: unknown): number[] {
+  if (!Array.isArray(raw)) return []
+  const out: number[] = []
+  for (const x of raw) {
+    const n = typeof x === 'number' ? x : Number(x)
+    if (Number.isFinite(n) && n > 0) out.push(Math.floor(n))
+  }
+  return [...new Set(out)].sort((a, b) => a - b)
+}
+
+function parseGenerateAudio (raw: unknown): boolean | undefined {
+  if (raw === true) return true
+  if (raw === false) return false
+  return undefined
+}
+
+/** OpenRouter public catalog: durations + native audio capability per model id. */
+async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> {
+  const map = new Map<string, VideoCatalogEntry>()
+  try {
+    const res = await fetch('https://openrouter.ai/api/v1/videos/models', {
+      headers: { Accept: 'application/json' }
+    })
+    if (!res.ok) return map
+    const json = (await res.json()) as VideosModelsPayload
+    for (const row of json.data || []) {
+      const id = typeof row.id === 'string' ? row.id.trim() : ''
+      if (!id) continue
+      map.set(id, {
+        supportedDurations: parseSupportedDurations(row.supported_durations),
+        generateAudio: parseGenerateAudio(row.generate_audio)
+      })
+    }
+  } catch {
+    // leave map empty
+  }
+  return map
 }
 
 export default defineEventHandler(async () => {
@@ -113,6 +172,14 @@ export default defineEventHandler(async () => {
   }
 
   rows.sort((a, b) => a.name.localeCompare(b.name))
+
+  const catalogById = await loadVideoCatalogById()
+  for (const row of rows) {
+    const meta = catalogById.get(row.id)
+    if (!meta) continue
+    if (meta.supportedDurations.length) row.supportedDurations = meta.supportedDurations
+    if (meta.generateAudio !== undefined) row.generateAudio = meta.generateAudio
+  }
 
   if (rows.length === 0) {
     return {

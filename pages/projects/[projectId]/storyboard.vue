@@ -1,13 +1,22 @@
 <template>
-  <div class="max-w-4xl">
-    <p class="text-sm text-gray-500 mb-6">
-      <span class="text-primary font-medium">Storyboard</span>
-      · After scenes exist, use <span class="font-medium text-gray-700">Generate panels from scenes</span> for an import-style batch (first 28 scenes, two at a time), or pick a scene and use
+  <div :class="isFullscreen ? 'fixed inset-0 z-40 bg-white overflow-y-auto p-4 sm:p-6' : 'max-w-4xl'">
+    <div class="flex items-start justify-between gap-3 mb-6">
+      <p class="text-sm text-gray-500">
+        <span class="text-primary font-medium">Storyboard</span>
+      · Pick a scene and use
       <span class="text-gray-700">Generate Shots</span>
       for a continuity-aware refresh. Then
       <span class="text-gray-700">Generate frame</span>
       from each shot’s image prompt.
-    </p>
+      </p>
+      <button
+        type="button"
+        class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-800"
+        @click="isFullscreen = !isFullscreen"
+      >
+        {{ isFullscreen ? 'Exit fullscreen' : 'Fullscreen' }}
+      </button>
+    </div>
 
     <div
       v-if="!clientReady"
@@ -61,35 +70,6 @@
       </div>
 
       <div v-else class="space-y-8 mb-10">
-        <div class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 shadow-sm">
-          <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-            <div class="min-w-0">
-              <h2 class="text-base font-semibold text-gray-900 mb-1">Generate panels from scenes</h2>
-              <p class="text-sm text-gray-600">
-                Import-style batch: shot lists for the first {{ storyboardSceneCap }} scenes using your Director notes and cast (two scenes at a time). For a continuity pass on one beat, use <span class="font-medium text-gray-800">Generate Shots</span> below.
-              </p>
-            </div>
-            <button
-              type="button"
-              class="shrink-0 px-4 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
-              :disabled="seedingStoryboard || generating"
-              @click="seedStoryboardBatch"
-            >
-              {{ seedingStoryboard ? 'Working…' : 'Generate panels from scenes' }}
-            </button>
-          </div>
-          <div
-            v-if="seedingStoryboard"
-            class="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-5"
-          >
-            <FilmReelLoader
-              size="sm"
-              label="Building shot lists"
-              sub-label="Claude is working through your scenes — large projects can take several minutes."
-            />
-          </div>
-        </div>
-
         <div class="rounded-xl border border-gray-200 bg-gray-50 p-5 sm:p-6">
           <div class="flex flex-col sm:flex-row sm:items-end gap-4 sm:justify-between">
             <div class="flex-1 min-w-0">
@@ -104,21 +84,62 @@
                   :key="s.id"
                   :value="s.id"
                 >
-                  SCENE {{ idx + 1 }} — {{ s.heading }}
+                  SCENE {{ idx + 1 }} — {{ s.heading }} ({{ scenePanelLabel(s) }})
                 </option>
               </select>
               <p v-if="activeScene?.summary" class="mt-2 text-xs text-gray-500 line-clamp-2">
                 {{ activeScene.summary }}
               </p>
+              <p class="mt-1 text-xs text-gray-500">
+                <template v-if="activeSceneShotCount > 0">
+                  {{ activeSceneShotCount }} panel skeleton{{ activeSceneShotCount === 1 ? '' : 's' }} currently in this scene.
+                </template>
+                <template v-else>
+                  Estimated output: 5-12 panels for this scene.
+                </template>
+              </p>
             </div>
-            <button
-              type="button"
-              class="shrink-0 px-5 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
-              :disabled="generating || !selectedSceneId"
-              @click="generateShots"
-            >
-              {{ generating ? 'Generating cinematic shots…' : 'Generate Shots' }}
-            </button>
+            <div class="shrink-0 flex items-center gap-2">
+              <div class="relative">
+                <button
+                  type="button"
+                  class="h-10 w-10 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700"
+                  :aria-expanded="showImageSettings ? 'true' : 'false'"
+                  aria-label="Image settings"
+                  @click="showImageSettings = !showImageSettings"
+                >
+                  ⚙
+                </button>
+                <div
+                  v-if="showImageSettings"
+                  class="absolute right-0 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-lg z-20"
+                >
+                  <label for="image-model-pick" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
+                    Image model
+                  </label>
+                  <select
+                    id="image-model-pick"
+                    v-model="selectedImageModelId"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                  >
+                    <option v-for="m in imageModelOptions" :key="m.id" :value="m.id">
+                      {{ m.label }}
+                    </option>
+                  </select>
+                  <p class="mt-2 text-xs text-gray-500">
+                    Generated frames auto-save to this project by default.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+                :disabled="generating || !selectedSceneId"
+                @click="generateShots"
+              >
+                {{ generating ? 'Generating cinematic shots…' : 'Generate Shots' }}
+              </button>
+            </div>
           </div>
           <p v-if="generateError" class="mt-3 text-sm text-red-600">{{ generateError }}</p>
           <div
@@ -150,19 +171,42 @@
           to build a list (replaces any previous shots for this scene).
         </div>
 
-        <ul v-else class="space-y-5">
+        <div
+          v-if="!shotsLoading && !generating && persistenceWarning"
+          class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
+        >
+          {{ persistenceWarning }}
+        </div>
+
+        <ul v-if="!shotsLoading && shots.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           <li
             v-for="(shot, idx) in shots"
             :key="shot.id"
-            class="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden"
+            class="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden flex flex-col"
           >
-            <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-2 bg-gray-50">
-              <span class="text-xs font-mono text-primary">#{{ idx + 1 }}</span>
-              <span class="text-xs text-gray-500 truncate">{{ shot.shotType }} · {{ shot.durationSeconds }}s</span>
+            <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-2 bg-gray-50 shrink-0">
+              <span class="text-xs font-mono text-primary">BOARD {{ idx + 1 }}</span>
+              <span class="text-xs text-gray-500 truncate">{{ shot.shotType || 'Shot' }} · {{ shot.durationSeconds }}s</span>
             </div>
-            <div class="p-4 sm:p-5 space-y-3">
+            <div class="p-4 pt-3 sm:p-5 space-y-3 grow">
+              <div
+                v-if="framePreview[shot.id]"
+                class="rounded-lg border border-gray-200 overflow-hidden bg-gray-100"
+              >
+                <img
+                  :src="framePreview[shot.id]"
+                  alt=""
+                  class="w-full aspect-video object-cover"
+                >
+              </div>
+              <div
+                v-else
+                class="rounded-lg border border-dashed border-gray-300 bg-white text-xs text-gray-500 px-3 py-8 text-center"
+              >
+                No frame yet
+              </div>
               <div>
-                <label class="block text-xs font-medium text-gray-500 mb-1">Title</label>
+                <label class="block text-xs font-medium text-gray-500 mb-1">Board title</label>
                 <input
                   v-model="shot.title"
                   type="text"
@@ -180,9 +224,9 @@
                   class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y min-h-[3rem]"
                 />
               </div>
-              <div class="grid sm:grid-cols-3 gap-3">
+              <div class="grid grid-cols-3 gap-2">
                 <div>
-                  <label class="block text-xs font-medium text-gray-500 mb-1">Shot type</label>
+                  <label class="block text-[11px] font-medium text-gray-500 mb-1">Type</label>
                   <input
                     v-model="shot.shotType"
                     type="text"
@@ -190,7 +234,7 @@
                   >
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-gray-500 mb-1">Camera</label>
+                  <label class="block text-[11px] font-medium text-gray-500 mb-1">Camera</label>
                   <input
                     v-model="shot.cameraMove"
                     type="text"
@@ -198,25 +242,41 @@
                   >
                 </div>
                 <div>
-                  <label class="block text-xs font-medium text-gray-500 mb-1">Duration (sec)</label>
-                  <input
+                  <label class="block text-[11px] font-medium text-gray-500 mb-1">Clip (video)</label>
+                  <select
                     v-model.number="shot.durationSeconds"
-                    type="number"
-                    min="0.5"
-                    max="120"
-                    step="0.5"
                     class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
                   >
+                    <option :value="5">
+                      5s
+                    </option>
+                    <option :value="10">
+                      10s
+                    </option>
+                  </select>
                 </div>
               </div>
-              <details class="group">
+              <div class="flex flex-wrap items-center gap-2 pt-1">
+                <button
+                  type="button"
+                  class="px-3 py-1.5 text-sm font-medium rounded-lg bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+                  :disabled="
+                    imageGenId === shot.id ||
+                    !((shot.imagePrompt || shot.description || '').trim())
+                  "
+                  @click="generateFrame(shot)"
+                >
+                  {{ imageGenId === shot.id ? 'Generating…' : `Generate image (${activeImageModelLabel})` }}
+                </button>
+              </div>
+              <details class="group border-t border-gray-200 pt-3">
                 <summary class="cursor-pointer text-sm text-primary font-medium hover:underline">
-                  Image &amp; video prompts
+                  Shot details & prompts
                 </summary>
                 <div class="mt-3 space-y-3 pt-1">
                   <div>
                     <div class="flex justify-between items-center gap-2 mb-1">
-                      <label class="text-xs font-medium text-gray-500">Image prompt</label>
+                      <label class="text-xs font-medium text-gray-500">{{ shotImagePromptLabel(shot) }}</label>
                       <PromptEnhanceButton v-model="shot.imagePrompt" context="shot_image" />
                     </div>
                     <textarea
@@ -224,29 +284,6 @@
                       rows="3"
                       class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
                     />
-                    <div class="flex flex-wrap items-center gap-2 mt-2">
-                      <button
-                        type="button"
-                        class="px-3 py-1.5 text-sm font-medium rounded-lg bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
-                        :disabled="
-                          imageGenId === shot.id ||
-                          !((shot.imagePrompt || shot.description || '').trim())
-                        "
-                        @click="generateFrame(shot)"
-                      >
-                        {{ imageGenId === shot.id ? 'Generating…' : 'Generate frame' }}
-                      </button>
-                    </div>
-                    <div
-                      v-if="framePreview[shot.id]"
-                      class="mt-3 rounded-lg border border-gray-200 overflow-hidden bg-gray-100"
-                    >
-                      <img
-                        :src="framePreview[shot.id]"
-                        alt=""
-                        class="w-full max-h-80 object-contain"
-                      >
-                    </div>
                   </div>
                   <div>
                     <div class="flex justify-between items-center gap-2 mb-1">
@@ -261,16 +298,6 @@
                   </div>
                 </div>
               </details>
-              <div class="flex justify-end pt-1">
-                <button
-                  type="button"
-                  class="px-4 py-2 text-sm font-medium rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-900 transition-colors disabled:opacity-50"
-                  :disabled="savingId === shot.id"
-                  @click="saveShot(shot)"
-                >
-                  {{ savingId === shot.id ? 'Saving…' : 'Save changes' }}
-                </button>
-              </div>
             </div>
           </li>
         </ul>
@@ -289,17 +316,22 @@
         >
           Next: Video →
         </NuxtLink>
+        <NuxtLink
+          :to="`/projects/${projectId}/timeline`"
+          class="text-sm text-gray-600 hover:text-gray-900 font-medium"
+        >
+          Timeline
+        </NuxtLink>
       </div>
     </template>
   </div>
 </template>
 
 <script setup lang="ts">
-import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { CreativeShot } from '~/types/creative-shot'
-
-/** Keep in sync with `IMPORT_STORYBOARD_MAX_SCENES` in server import-storyboard-seed. */
-const storyboardSceneCap = 28
+import type { ProjectAsset } from '~/types/project-asset'
+import { CHARACTER_CREATOR_IMAGE_MODELS } from '~/lib/character-creator-models'
+import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 
 const {
   activeProject,
@@ -319,21 +351,53 @@ type SceneRow = {
   heading: string
   summary: string
   bodyLength: number
+  shotCount?: number
 }
 
 const scenes = ref<SceneRow[]>([])
+const characterNames = ref<string[]>([])
+const storyboardAssets = ref<ProjectAsset[]>([])
 const selectedSceneId = ref('')
 const scenesLoadError = ref('')
 const shots = ref<CreativeShot[]>([])
 const shotsLoading = ref(false)
 const generating = ref(false)
 const generateError = ref('')
-const seedingStoryboard = ref(false)
-const savingId = ref<string | null>(null)
+const persistenceWarning = ref('')
+const shotsPersisted = ref(true)
 const imageGenId = ref<string | null>(null)
 const framePreview = reactive<Record<string, string>>({})
+const isFullscreen = ref(false)
+const showImageSettings = ref(false)
+const imageModelOptions = CHARACTER_CREATOR_IMAGE_MODELS
+const selectedImageModelId = ref<string>(imageModelOptions[0]?.id || 'dalle-3')
+const activeImageModelLabel = computed(
+  () => imageModelOptions.find(m => m.id === selectedImageModelId.value)?.label || selectedImageModelId.value
+)
 
 const activeScene = computed(() => scenes.value.find(s => s.id === selectedSceneId.value))
+const activeSceneShotCount = computed(() => {
+  const n = Number(activeScene.value?.shotCount || 0)
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+})
+
+function scenePanelLabel (scene: SceneRow): string {
+  const existing = Number(scene.shotCount || 0)
+  if (Number.isFinite(existing) && existing > 0) {
+    return `${Math.floor(existing)} panel${Math.floor(existing) === 1 ? '' : 's'}`
+  }
+  return 'est. 5-12 panels'
+}
+
+function shotImagePromptLabel (shot: CreativeShot): string {
+  const haystack = `${shot.title || ''} ${shot.description || ''} ${shot.imagePrompt || ''}`.toLowerCase()
+  for (const name of characterNames.value) {
+    const n = name.trim().toLowerCase()
+    if (!n) continue
+    if (haystack.includes(n)) return `${name} prompt`
+  }
+  return 'Character prompt'
+}
 
 function firstImageUrl (urls: unknown[]): string {
   for (const u of urls) {
@@ -356,12 +420,17 @@ async function generateFrame (shot: CreativeShot) {
   try {
     const res = await $fetch<{ urls?: unknown[] }>('/api/generate/image', {
       method: 'POST',
-      body: { prompt }
+      body: { prompt, model: selectedImageModelId.value }
     })
     const url = firstImageUrl(res.urls || [])
     if (url) {
       framePreview[shot.id] = url
-      toast.showToast('Frame generated.', 'success')
+      const saveErr = await autoSaveGeneratedFrame(shot, url)
+      if (!saveErr) {
+        toast.showToast('Frame generated and saved.', 'success')
+      } else {
+        toast.showToast(`Frame generated (save failed): ${saveErr}`, 'warning')
+      }
     } else {
       toast.showToast('No image returned.', 'error')
     }
@@ -374,6 +443,137 @@ async function generateFrame (shot: CreativeShot) {
   } finally {
     imageGenId.value = null
   }
+}
+
+function applySavedFramesForCurrentScene () {
+  const sid = selectedSceneId.value
+  if (!sid) return
+  for (const s of shots.value) {
+    const hit = storyboardAssets.value.find((a) => {
+      const meta = a.metadata || {}
+      return (
+        a.fileUrl &&
+        typeof meta.scene_id === 'string' &&
+        typeof meta.shot_id === 'string' &&
+        meta.scene_id === sid &&
+        meta.shot_id === s.id
+      )
+    })
+    if (hit?.fileUrl) framePreview[s.id] = hit.fileUrl
+  }
+}
+
+async function loadStoryboardAssets () {
+  const id = projectId.value
+  if (!id || project.value?.source !== 'pocketbase') return
+  const headers = await authHeaders()
+  if (!headers) return
+  try {
+    const res = await $fetch<{ items: ProjectAsset[] }>(`/api/projects/${id}/assets?kind=storyboard`, { headers })
+    storyboardAssets.value = res.items || []
+  } catch {
+    storyboardAssets.value = []
+  }
+}
+
+async function autoSaveGeneratedFrame (shot: CreativeShot, imageUrl: string): Promise<string | null> {
+  if (!shotsPersisted.value) return 'shots are preview-only right now'
+  const id = projectId.value
+  const sid = selectedSceneId.value
+  if (!id || !sid) return 'missing project or scene id'
+  const token = getAuthToken()
+  if (!token) return 'not authenticated'
+  try {
+    const imgRes = await fetch(imageUrl)
+    if (!imgRes.ok) return `could not download generated image (HTTP ${imgRes.status})`
+    const blob = await imgRes.blob()
+    const compressed = await maybeCompressImageBlob(blob)
+    const ext = compressed.type.includes('png') ? 'png' : 'jpg'
+    const fd = new FormData()
+    fd.append('kind', 'storyboard')
+    fd.append('title', `${shot.title || 'Storyboard Frame'} (${activeImageModelLabel.value})`)
+    fd.append('notes', 'Auto-saved generated frame')
+    fd.append(
+      'metadata',
+      JSON.stringify({
+        scene_id: sid,
+        shot_id: shot.id,
+        model_id: selectedImageModelId.value,
+        model_label: activeImageModelLabel.value
+      })
+    )
+    fd.append('file', new File([compressed], `frame_${shot.id}.${ext}`, { type: compressed.type || 'image/jpeg' }))
+    const out = await $fetch<{ asset?: ProjectAsset }>(`/api/projects/${id}/assets/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd
+    })
+    const fileUrl = out.asset?.fileUrl || ''
+    if (fileUrl) {
+      framePreview[shot.id] = fileUrl
+      await loadStoryboardAssets()
+      return null
+    }
+    return 'upload endpoint returned no file URL'
+  } catch (e: unknown) {
+    if (e && typeof e === 'object' && 'data' in e) {
+      const msg = String((e as { data?: { message?: string } }).data?.message || '').trim()
+      if (msg) return msg
+    }
+    if (e instanceof Error && e.message.trim()) return e.message.trim()
+    return 'unknown upload error'
+  }
+}
+
+async function maybeCompressImageBlob (blob: Blob): Promise<Blob> {
+  const MAX_UPLOAD_BYTES = 900_000
+  if (!blob.type.startsWith('image/')) return blob
+  if (blob.size <= MAX_UPLOAD_BYTES) return blob
+  const dataUrl = await blobToDataUrl(blob)
+  const img = await loadImageFromDataUrl(dataUrl)
+  let width = img.naturalWidth || img.width
+  let height = img.naturalHeight || img.height
+  const maxSide = 1400
+  if (Math.max(width, height) > maxSide) {
+    const scale = maxSide / Math.max(width, height)
+    width = Math.max(1, Math.round(width * scale))
+    height = Math.max(1, Math.round(height * scale))
+  }
+  const canvas = document.createElement('canvas')
+  canvas.width = width
+  canvas.height = height
+  const ctx = canvas.getContext('2d')
+  if (!ctx) return blob
+  ctx.drawImage(img, 0, 0, width, height)
+  let quality = 0.86
+  let out = await canvasToBlob(canvas, 'image/jpeg', quality)
+  while (out && out.size > MAX_UPLOAD_BYTES && quality > 0.45) {
+    quality -= 0.08
+    out = await canvasToBlob(canvas, 'image/jpeg', quality)
+  }
+  return out || blob
+}
+
+function blobToDataUrl (blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader()
+    r.onload = () => resolve(String(r.result || ''))
+    r.onerror = () => reject(new Error('Could not read image data'))
+    r.readAsDataURL(blob)
+  })
+}
+
+function loadImageFromDataUrl (dataUrl: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Could not decode image'))
+    img.src = dataUrl
+  })
+}
+
+function canvasToBlob (canvas: HTMLCanvasElement, type: string, quality: number): Promise<Blob | null> {
+  return new Promise((resolve) => canvas.toBlob((b) => resolve(b), type, quality))
 }
 
 async function authHeaders () {
@@ -412,8 +612,29 @@ async function loadScenes () {
   }
 }
 
+async function loadCharactersForLabels () {
+  if (project.value?.source !== 'pocketbase' || !isAuthenticated.value) {
+    characterNames.value = []
+    return
+  }
+  const id = projectId.value
+  if (!id) return
+  const headers = await authHeaders()
+  if (!headers) return
+  try {
+    const res = await $fetch<{ characters: Array<{ name?: string }> }>(`/api/projects/${id}/characters`, { headers })
+    characterNames.value = (res.characters || [])
+      .map(c => String(c?.name || '').trim())
+      .filter(Boolean)
+  } catch {
+    characterNames.value = []
+  }
+}
+
 async function loadShots () {
   generateError.value = ''
+  persistenceWarning.value = ''
+  shotsPersisted.value = true
   const id = projectId.value
   const sid = selectedSceneId.value
   if (!id || !sid || project.value?.source !== 'pocketbase') {
@@ -431,45 +652,19 @@ async function loadShots () {
       `/api/projects/${id}/scenes/${sid}/shots`,
       { headers }
     )
-    shots.value = res.shots?.length ? [...res.shots] : []
+    shots.value = res.shots?.length
+      ? res.shots.map(s => ({
+        ...s,
+        durationSeconds: snapToStoryboardClipSeconds(Number(s.durationSeconds) || 5)
+      }))
+      : []
+    shotsPersisted.value = true
+    await loadStoryboardAssets()
+    applySavedFramesForCurrentScene()
   } catch {
     shots.value = []
   } finally {
     shotsLoading.value = false
-  }
-}
-
-async function seedStoryboardBatch () {
-  const id = projectId.value
-  const headers = await authHeaders()
-  if (!id || !headers) {
-    toast.showToast('Log in to generate panels.', 'error')
-    return
-  }
-  seedingStoryboard.value = true
-  try {
-    const res = await $fetch<{
-      result: { ok: number; failed: number; capSkipped: number; emptySkipped: number }
-    }>(`/api/projects/${id}/script/seed-storyboard`, {
-      method: 'POST',
-      headers,
-      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
-    })
-    const r = res.result
-    const parts: string[] = [`Seeded ${r.ok} scene(s).`]
-    if (r.failed > 0) parts.push(`${r.failed} failed.`)
-    if (r.capSkipped > 0) parts.push(`${r.capSkipped} past the first ${storyboardSceneCap}.`)
-    if (r.emptySkipped > 0) parts.push(`${r.emptySkipped} skipped (empty).`)
-    toast.showToast(parts.join(' '), r.ok > 0 ? 'success' : 'info')
-    await loadShots()
-  } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message || 'Storyboard seed failed.')
-        : 'Storyboard seed failed.'
-    toast.showToast(msg, 'error')
-  } finally {
-    seedingStoryboard.value = false
   }
 }
 
@@ -484,16 +679,29 @@ async function generateShots () {
   }
   generating.value = true
   generateError.value = ''
+  persistenceWarning.value = ''
+  shotsPersisted.value = true
   try {
     const res = await $fetch<{
       shots: CreativeShot[]
+      persisted?: boolean
+      warning?: string
       continuity?: { issueCount: number; memoryUpdated: boolean }
     }>('/api/generate-shots', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: { project_id: id, scene_id: sid }
     })
-    shots.value = res.shots?.length ? [...res.shots] : []
+    shots.value = res.shots?.length
+      ? res.shots.map(s => ({
+        ...s,
+        durationSeconds: snapToStoryboardClipSeconds(Number(s.durationSeconds) || 5)
+      }))
+      : []
+    shotsPersisted.value = res.persisted !== false
+    if (!shotsPersisted.value) {
+      persistenceWarning.value = res.warning || 'Shots are preview-only right now and were not saved.'
+    }
     await loadServerProjects()
     const n = res.continuity?.issueCount ?? 0
     if (n > 0) {
@@ -510,49 +718,17 @@ async function generateShots () {
   }
 }
 
-async function saveShot (shot: CreativeShot) {
-  const id = projectId.value
-  const sid = selectedSceneId.value
-  if (!id || !sid) return
-  const headers = await authHeaders()
-  if (!headers) return
-  savingId.value = shot.id
-  try {
-    const res = await $fetch<{ shot: CreativeShot }>(
-      `/api/projects/${id}/scenes/${sid}/shots/${shot.id}`,
-      {
-        method: 'PATCH',
-        headers: { ...headers, 'Content-Type': 'application/json' },
-        body: {
-          title: shot.title,
-          description: shot.description,
-          shotType: shot.shotType,
-          cameraMove: shot.cameraMove,
-          durationSeconds: shot.durationSeconds,
-          imagePrompt: shot.imagePrompt,
-          videoPrompt: shot.videoPrompt
-        }
-      }
-    )
-    const i = shots.value.findIndex(s => s.id === shot.id)
-    if (i !== -1) shots.value[i] = res.shot
-    toast.showToast('Shot saved.', 'success')
-  } catch (e: any) {
-    toast.showToast(e?.data?.message || 'Save failed.', 'error')
-  } finally {
-    savingId.value = null
-  }
-}
-
 watch(
   () => [clientReady.value, isAuthenticated.value, project.value?.id, project.value?.source] as const,
   () => {
     void loadScenes()
+    void loadCharactersForLabels()
   },
   { immediate: true }
 )
 
 watch(selectedSceneId, () => {
+  showImageSettings.value = false
   void loadShots()
 })
 </script>

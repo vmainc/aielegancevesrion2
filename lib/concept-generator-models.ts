@@ -12,7 +12,12 @@ export interface ConceptGeneratorModelConfig {
 
 export const CONCEPT_GENERATOR_MODELS: ConceptGeneratorModelConfig[] = [
   { id: 'gpt-4o', label: 'GPT-4o', openrouterModelId: 'openai/gpt-4o' },
+  // Keep "Claude" label stable, use a currently routable Sonnet slug.
   { id: 'claude', label: 'Claude', openrouterModelId: 'anthropic/claude-sonnet-4' },
+  { id: 'gemini', label: 'Gemini', openrouterModelId: 'google/gemini-2.0-flash-001' },
+  { id: 'deepseek', label: 'DeepSeek', openrouterModelId: 'deepseek/deepseek-chat-v3-0324' },
+  { id: 'llama', label: 'Llama', openrouterModelId: 'meta-llama/llama-3.1-70b-instruct' },
+  { id: 'mistral', label: 'Mistral', openrouterModelId: 'mistralai/mistral-large-2512' },
   { id: 'mixtral', label: 'Mixtral', openrouterModelId: 'mistralai/mixtral-8x7b-instruct' }
 ]
 

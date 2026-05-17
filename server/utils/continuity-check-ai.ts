@@ -10,6 +10,7 @@ export interface ContinuityCheckInput {
   director: ProjectDirector | null
   sceneTitle: string
   charactersSummary: string
+  openrouterModelId?: string
 }
 
 export interface ContinuityCheckResult {
@@ -92,7 +93,7 @@ GENERATED SHOTS (JSON):
 ${JSON.stringify(input.shots).slice(0, 45000)}`
 
   const body = buildOpenRouterChatCompletionBody({
-    model: 'anthropic/claude-3.5-sonnet',
+    model: input.openrouterModelId || 'anthropic/claude-3.5-sonnet',
     messages: [
       { role: 'system', content: system },
       { role: 'user', content: user }

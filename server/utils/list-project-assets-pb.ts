@@ -33,9 +33,20 @@ export async function listProjectAssetsForProject (
     rows.filter((r) => {
       const row = r as Record<string, unknown>
       if (projectIdOnAsset(row) !== projectId) return false
+      const owner = row.owned_by
+      const ownerId =
+        typeof owner === 'string'
+          ? owner
+          : owner && typeof owner === 'object' && 'id' in owner
+            ? String((owner as { id?: string }).id)
+            : ''
+      if (ownerId && ownerId !== userId) return false
       if (!kind) return true
       return String(row.kind || '') === kind
     })
+
+  const filterProjectOwner = `project = "${projectId}" && owned_by = "${userId}"`
+  const reqKey = `list_pa_${projectId}_${userId}_${kind || 'all'}`
 
   const tries: Array<() => Promise<unknown[]>> = [
     () =>
@@ -49,20 +60,56 @@ export async function listProjectAssetsForProject (
         filter,
         batch: 200
       }),
+    // kind in SQL can 400 on some deployments — omit kind in query and filter in memory
+    async () => {
+      const all = await pb.collection('project_assets').getFullList({
+        filter: filterProjectOwner,
+        sort: '-created',
+        batch: 400,
+        requestKey: `${reqKey}_nokind`
+      })
+      return filterInMemory(all)
+    },
+    async () => {
+      const all = await pb.collection('project_assets').getFullList({
+        filter: filterProjectOwner,
+        batch: 400,
+        requestKey: `${reqKey}_nokind2`
+      })
+      return filterInMemory(all)
+    },
     async () => {
       const all = await pb.collection('project_assets').getFullList({
         filter: `owned_by = "${userId}"`,
         sort: '-created',
-        batch: 400
+        batch: 400,
+        requestKey: reqKey
+      })
+      return filterInMemory(all)
+    },
+    async () => {
+      const all = await pb.collection('project_assets').getFullList({
+        filter: `owned_by = "${userId}"`,
+        batch: 400,
+        requestKey: `${reqKey}_batch`
       })
       return filterInMemory(all)
     }
   ]
 
   let lastErr: unknown
-  for (const run of tries) {
+  for (let i = 0; i < tries.length; i++) {
+    const run = tries[i]
     try {
-      return await run()
+      const rows = await run()
+      if (rows.length > 0) {
+        return rows
+      }
+      // Success but empty: stricter filters (e.g. kind in SQL) often miss legacy rows — try next strategy.
+      if (i < tries.length - 1) {
+        continue
+      }
+      return rows
     } catch (e: unknown) {
       lastErr = e
       if (isPocketBaseMissingCollectionError(e)) {
@@ -72,7 +119,12 @@ export async function listProjectAssetsForProject (
       if (st === 401 || st === 403) {
         throw e
       }
+      // Retry: 400 (bad filter), 500 (transient), etc.
+      continue
     }
   }
-  throw lastErr
+  if (lastErr !== undefined && lastErr !== null) {
+    throw lastErr
+  }
+  return []
 }

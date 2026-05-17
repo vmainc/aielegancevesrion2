@@ -3,10 +3,11 @@ import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
-import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
+import type { ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
 const ASPECT = new Set<ProjectAspectRatio>(['16:9', '9:16', '1:1'])
 const GOALS = new Set<ProjectGoal>(['film', 'social', 'commercial', 'other'])
+const WORKFLOW = new Set<ProjectWorkflowMode>(['import', 'scratch'])
 
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
@@ -14,6 +15,7 @@ export default defineEventHandler(async (event) => {
     name?: string
     aspectRatio?: string
     goal?: string
+    workflowMode?: string
   }>(event)
 
   const nameRaw = typeof body?.name === 'string' ? body.name.trim() : ''
@@ -29,19 +31,44 @@ export default defineEventHandler(async (event) => {
       ? (body.goal as ProjectGoal)
       : 'film'
 
+  const workflowMode =
+    typeof body?.workflowMode === 'string' && WORKFLOW.has(body.workflowMode as ProjectWorkflowMode)
+      ? (body.workflowMode as ProjectWorkflowMode)
+      : 'import'
+
   const pb = await getAuthenticatedPocketBase()
 
   try {
-    const created = await pb.collection('creative_projects').create({
-      name,
-      owned_by: userId,
-      aspect_ratio: aspectRatio,
-      goal,
-      target_length: 'short',
-      synopsis: '',
-      treatment: '',
-      concept_notes: ''
-    })
+    let created
+    try {
+      created = await pb.collection('creative_projects').create({
+        name,
+        owned_by: userId,
+        aspect_ratio: aspectRatio,
+        goal,
+        workflow_mode: workflowMode,
+        preferred_model_id: 'claude',
+        target_length: 'short',
+        synopsis: '',
+        treatment: '',
+        concept_notes: ''
+      })
+    } catch (createErr: unknown) {
+      // Backward-compatible fallback for environments where workflow_mode field is not provisioned yet.
+      const msg = createErr instanceof Error ? createErr.message : String(createErr)
+      if (!/workflow_mode/i.test(msg)) throw createErr
+      created = await pb.collection('creative_projects').create({
+        name,
+        owned_by: userId,
+        aspect_ratio: aspectRatio,
+        goal,
+        preferred_model_id: 'claude',
+        target_length: 'short',
+        synopsis: '',
+        treatment: '',
+        concept_notes: ''
+      })
+    }
     const full = await pb.collection('creative_projects').getOne(created.id)
     return {
       project: pbRecordToCreativeProject(full as Parameters<typeof pbRecordToCreativeProject>[0])

@@ -1,6 +1,7 @@
 import { readMultipartFormData, createError, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { formatPocketBaseRecordError, isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import type { ProjectAssetKind } from '~/types/project-asset'
@@ -97,7 +98,8 @@ export default defineEventHandler(async (event) => {
   formData.append('kind', kind)
   formData.append('title', title.slice(0, 500))
   formData.append('notes', notes.slice(0, 20_000))
-  formData.append('sort_order', '0')
+  // Some legacy PB number validators treat 0 as blank on required fields.
+  formData.append('sort_order', '1')
   if (metadata) {
     formData.append('metadata', JSON.stringify(metadata))
   }
@@ -111,14 +113,21 @@ export default defineEventHandler(async (event) => {
       asset: pbRecordToProjectAsset(created as Record<string, unknown>, pb)
     }
   } catch (e: unknown) {
-    const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : String(e)
-    if (/wasn't found|not found|404|Missing collection/i.test(msg)) {
+    if (isPocketBaseMissingCollectionError(e)) {
       throw createError({
         statusCode: 503,
         message:
           'project_assets collection is missing. Run: node scripts/setup-collections.js (adds project_assets).'
       })
     }
-    throw createError({ statusCode: 500, message: msg })
+    const status = pocketBaseErrorStatus(e)
+    const detail = formatPocketBaseRecordError(e)
+    if (status === 400 || status === 401 || status === 403 || status === 404 || status === 413) {
+      throw createError({ statusCode: status, message: detail || 'Could not save asset' })
+    }
+    throw createError({
+      statusCode: 500,
+      message: detail || 'Could not save asset right now. Please try again.'
+    })
   }
 })

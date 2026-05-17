@@ -52,13 +52,13 @@
             >
           </div>
           <div>
-            <label class="block text-xs font-medium text-gray-600 mb-1">Description</label>
+            <label class="block text-xs font-medium text-gray-600 mb-1">Look & feel prompt</label>
             <textarea
               v-model="addDraft.roleDescription"
               rows="3"
               maxlength="10000"
               class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
-              placeholder="Role, traits, arc…"
+              placeholder="Visual cues: age, wardrobe, styling, expression, vibe..."
               :disabled="busy"
             />
           </div>
@@ -126,16 +126,23 @@
                 >
                   <span class="sr-only">Chart color</span>
                 </th>
+                <th
+                  v-if="showPortraits"
+                  scope="col"
+                  class="w-16 px-3 sm:px-4 py-3 align-bottom text-center"
+                >
+                  Image
+                </th>
                 <th scope="col" class="px-4 sm:px-5 py-3 align-bottom w-[min(11rem,22%)]">
                   Name
                 </th>
                 <th scope="col" class="px-4 sm:px-5 py-3 align-bottom">
-                  Description
+                  Look & feel prompt
                 </th>
                 <th
                   v-if="editable"
                   scope="col"
-                  class="px-4 sm:px-5 py-3 align-bottom w-[min(7rem,18%)] text-right"
+                  class="px-4 sm:px-5 py-3 align-bottom w-[min(12rem,26%)] text-right"
                 >
                   Actions
                 </th>
@@ -157,6 +164,12 @@
                       :style="{ backgroundColor: swatchColorFor(c) }"
                       aria-hidden="true"
                     />
+                  </td>
+                  <td
+                    v-if="showPortraits"
+                    class="w-16 px-3 sm:px-4 py-3 align-middle text-center"
+                  >
+                    <div class="h-11 w-11 rounded-md border border-gray-200 bg-gray-50 mx-auto" />
                   </td>
                   <td class="px-4 sm:px-5 py-3 align-top" colspan="2">
                     <div class="space-y-2 max-w-3xl">
@@ -219,6 +232,28 @@
                       :title="`Color in dialogue share chart (${c.name})`"
                     />
                   </td>
+                  <td
+                    v-if="showPortraits"
+                    class="w-16 px-3 sm:px-4 py-3 align-middle text-center"
+                  >
+                    <div class="h-11 w-11 rounded-md border border-gray-200 bg-gray-50 overflow-hidden mx-auto mb-1">
+                      <img
+                        v-if="portraitUrlFor(c)"
+                        :src="portraitUrlFor(c)"
+                        :alt="`${c.name} portrait`"
+                        class="h-full w-full object-cover"
+                      >
+                    </div>
+                    <NuxtLink
+                      v-if="editable && projectIdForCreatorLink"
+                      :to="characterFolderTo(c)"
+                      class="inline-flex items-center justify-center text-[11px] text-primary hover:underline"
+                      title="Open character image folder"
+                    >
+                      <span aria-hidden="true">📁</span>
+                      <span class="sr-only">Open character image folder</span>
+                    </NuxtLink>
+                  </td>
                   <td class="px-4 sm:px-5 py-3 align-top font-semibold text-gray-900">
                     {{ c.name }}
                   </td>
@@ -235,6 +270,13 @@
                     v-if="editable"
                     class="px-4 sm:px-5 py-3 align-top text-right whitespace-nowrap"
                   >
+                    <NuxtLink
+                      v-if="showCharacterCreatorLink"
+                      :to="characterCreatorTo(c)"
+                      class="text-xs font-medium text-primary hover:underline mr-3"
+                    >
+                      Character Creator
+                    </NuxtLink>
                     <button
                       type="button"
                       class="text-xs font-medium text-primary hover:underline disabled:opacity-40 mr-3"
@@ -287,6 +329,14 @@ const props = withDefaults(
     showChartSwatches?: boolean
     /** Lowercase name → hex; from `buildCharacterPieModel` / `pieModelToSwatchRecord`. */
     chartColorByName?: Record<string, string>
+    /** Show shortcut to Character Creator with name/description prefilled. */
+    showCharacterCreatorLink?: boolean
+    /** Project id to preserve context when opening Character Creator from this row. */
+    projectIdForCreatorLink?: string
+    /** Character id -> portrait URL (typically from character assets). */
+    portraitUrlByCharacterId?: Record<string, string>
+    /** Show portrait image column. */
+    showPortraits?: boolean
   }>(),
   {
     loading: false,
@@ -298,13 +348,55 @@ const props = withDefaults(
     editable: false,
     busy: false,
     showChartSwatches: false,
-    chartColorByName: undefined
+    chartColorByName: undefined,
+    showCharacterCreatorLink: false,
+    projectIdForCreatorLink: '',
+    portraitUrlByCharacterId: undefined,
+    showPortraits: false
   }
 )
 
 function swatchColorFor (c: CreativeCharacter): string {
   if (!props.showChartSwatches || !props.chartColorByName) return '#d1d5db'
   return props.chartColorByName[c.name.trim().toLowerCase()] ?? '#d1d5db'
+}
+
+function characterCreatorTo (c: CreativeCharacter) {
+  const q: Record<string, string> = {
+    name: c.name || '',
+    description: c.roleDescription || ''
+  }
+  if (props.projectIdForCreatorLink) q.projectId = props.projectIdForCreatorLink
+  if (c.id) q.characterId = c.id
+  return {
+    path: '/character-creator',
+    query: q
+  }
+}
+
+function characterFolderTo (c: CreativeCharacter) {
+  const q: Record<string, string> = {}
+  if (props.projectIdForCreatorLink) q.projectId = props.projectIdForCreatorLink
+  if (c.id) q.characterId = c.id
+  if (c.name) q.characterName = c.name
+  return {
+    path: '/assets/characters',
+    query: q
+  }
+}
+
+function portraitUrlFor (c: CreativeCharacter): string {
+  const url = props.portraitUrlByCharacterId?.[c.id] || ''
+  if (!url) return ''
+  if (
+    url.startsWith('http://') ||
+    url.startsWith('https://') ||
+    url.startsWith('data:') ||
+    url.startsWith('/')
+  ) {
+    return url
+  }
+  return ''
 }
 
 const emit = defineEmits<{

@@ -1,4 +1,4 @@
-import { createError, getRouterParam, readBody } from 'h3'
+import { getRouterParam, readBody } from 'h3'
 import type PocketBase from 'pocketbase'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
@@ -18,6 +18,9 @@ import {
 import { formatDirectorForAiPrompt, parseDirectorField } from '~/server/utils/creative-project-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { enrichFixedCharacterRosterWithAi } from '~/server/utils/script-import-ai'
+import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
+import { resolveProjectPreferredOpenRouterModel } from '~/server/utils/project-model-preference'
+import { OPENROUTER_TEXT_MODEL_MAP } from '~/server/utils/openrouter-text-models'
 
 async function listProjectCharacterRows (
   pb: PocketBase,
@@ -44,7 +47,7 @@ async function listProjectCharacterRows (
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
   if (!projectId) {
-    throw createError({ statusCode: 400, message: 'Missing project id' })
+    throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Missing project id')
   }
 
   const userId = await getPocketBaseUserIdFromRequest(event)
@@ -56,7 +59,7 @@ export default defineEventHandler(async (event) => {
 
   const projectRow = await pb.collection('creative_projects').getOne(projectId)
   if (pbRecordOwnerId(projectRow as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
+    throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
   }
 
   const { parsed } = await loadWorkflowScreenplayParsedForProject({
@@ -75,11 +78,12 @@ export default defineEventHandler(async (event) => {
       ...heuristicCharacterNamesFromScenes(parsed.scenes)
     ])
     if (!names.length) {
-      throw createError({
-        statusCode: 400,
-        message:
-          'No characters were found in the screenplay file. Upload a script on Overview, or add cast rows manually.'
-      })
+      throwApiError(
+        400,
+        ApiErrorCode.VALIDATION_ERROR,
+        'No characters were found in the screenplay file. Upload a script on Overview, or add cast rows manually.',
+        { projectId }
+      )
     }
     for (const name of names.slice(0, 48)) {
       const n = name.slice(0, 200).trim()
@@ -100,10 +104,12 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!rows.length) {
-    throw createError({
-      statusCode: 500,
-      message: 'Could not create character rows from the screenplay. Check creative_characters rules in PocketBase.'
-    })
+    throwApiError(
+      500,
+      ApiErrorCode.SERVICE_UNAVAILABLE,
+      'Could not create character rows from the screenplay. Check creative_characters rules in PocketBase.',
+      { projectId }
+    )
   }
 
   const sceneOutline = parsed.scenes
@@ -129,23 +135,49 @@ export default defineEventHandler(async (event) => {
     parseDirectorField((pr as { director?: unknown }).director)
   )
 
-  const aiRows = await enrichFixedCharacterRosterWithAi({
-    projectName,
-    synopsis,
-    treatment,
-    genre,
-    tone,
-    sceneOutline,
-    characterNames: dbNames,
-    directorContext
-  })
+  const pref = resolveProjectPreferredOpenRouterModel(pr)
+  const modelCandidates = [...new Set([
+    pref.openrouterModelId,
+    OPENROUTER_TEXT_MODEL_MAP.Claude,
+    OPENROUTER_TEXT_MODEL_MAP.ChatGPT
+  ])].filter(Boolean)
+  let aiRows: Awaited<ReturnType<typeof enrichFixedCharacterRosterWithAi>> = []
+  let modelWarning = ''
+  for (const slug of modelCandidates) {
+    aiRows = await enrichFixedCharacterRosterWithAi({
+      projectName,
+      synopsis,
+      treatment,
+      genre,
+      tone,
+      sceneOutline,
+      characterNames: dbNames,
+      directorContext,
+      openrouterModelId: slug
+    })
+    if (aiRows.length > 0) {
+      modelWarning = ''
+      break
+    }
+    modelWarning = `No usable cast output from model (${slug}).`
+  }
 
   if (!aiRows.length) {
-    throw createError({
-      statusCode: 502,
-      message:
-        'AI did not return usable character data. Check OPENROUTER_API_KEY, or run director analysis on Overview once so synopsis and treatment are filled.'
+    const refreshed = await listProjectCharacterRows(pb, projectId, userId)
+    refreshed.sort((a, b) => {
+      const ra = a as Record<string, unknown>
+      const rb = b as Record<string, unknown>
+      return String(ra.name || '').localeCompare(String(rb.name || ''))
     })
+    const characters = refreshed.map((r) => pbRecordToCreativeCharacter(r as Record<string, unknown>))
+    return {
+      updated: 0,
+      seeded,
+      warning:
+        modelWarning ||
+        'Model returned no usable character details this run. Try another model or run Analyze script first.',
+      characters
+    }
   }
 
   const aiByNorm = new Map<string, (typeof aiRows)[0]>()
@@ -173,11 +205,21 @@ export default defineEventHandler(async (event) => {
   }
 
   if (updated === 0) {
-    throw createError({
-      statusCode: 502,
-      message:
-        'AI names did not match your table rows. Align names with screenplay cues or edit characters, then try again.'
+    const refreshed = await listProjectCharacterRows(pb, projectId, userId)
+    refreshed.sort((a, b) => {
+      const ra = a as Record<string, unknown>
+      const rb = b as Record<string, unknown>
+      return String(ra.name || '').localeCompare(String(rb.name || ''))
     })
+    const characters = refreshed.map((r) => pbRecordToCreativeCharacter(r as Record<string, unknown>))
+    return {
+      updated: 0,
+      seeded,
+      warning:
+        modelWarning ||
+        'Model output did not match current cast names. Edit names to match screenplay cues, then refresh again.',
+      characters
+    }
   }
 
   const refreshed = await listProjectCharacterRows(pb, projectId, userId)

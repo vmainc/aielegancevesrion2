@@ -1,6 +1,7 @@
 /** Character Creator — selectable image models (UI labels). Routing: `id` → `server/utils/openrouter-image-models`. */
 export const CHARACTER_CREATOR_IMAGE_MODELS = [
-  { id: 'dalle-3', label: 'DALL·E 3 (GPT-4o)' },
+  { id: 'flux-klein', label: 'Flux Klein (flux.2-klein-4b)' },
+  { id: 'dalle-3', label: 'OpenAI Image (gpt-5-image-mini)' },
   { id: 'sdxl-stacy', label: 'SDXL (Stacy)' },
   { id: 'sdxl-jace', label: 'SDXL (Jace)' },
   { id: 'deepfloyd', label: 'DeepFloyd' },

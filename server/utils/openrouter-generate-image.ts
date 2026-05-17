@@ -30,7 +30,8 @@ export async function openRouterGenerateImage (options: {
     }>
   }>('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
-    timeout: 240000,
+    // Keep below common proxy/gateway limits so clients get a clear API error instead of 504.
+    timeout: 45000,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`

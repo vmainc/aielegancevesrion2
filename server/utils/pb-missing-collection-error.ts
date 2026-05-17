@@ -4,11 +4,16 @@
  * Older code matched only the contiguous phrase "missing collection context" and missed the common case.
  */
 export const POCKETBASE_MISSING_COLLECTION_MESSAGE_RE =
-  /missing or invalid collection context|missing collection context|wasn't found|not found|missing collection/i
+  /missing or invalid collection context|missing collection context|wasn't found|not found|missing collection|unknown collection|collection (id|name) (is )?invalid|no such collection/i
 
 export function pocketBaseErrorMessage (e: unknown): string {
-  if (e && typeof e === 'object' && 'message' in e) {
-    return String((e as { message?: string }).message || '')
+  if (e && typeof e === 'object') {
+    const o = e as { message?: string; data?: { message?: string }; response?: { data?: { message?: string } } }
+    const fromData =
+      (typeof o.data?.message === 'string' && o.data.message) ||
+      (typeof o.response?.data?.message === 'string' && o.response.data.message)
+    if (fromData) return fromData
+    if (typeof o.message === 'string') return o.message
   }
   return typeof e === 'string' ? e : String(e)
 }

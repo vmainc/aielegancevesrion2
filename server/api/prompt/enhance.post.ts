@@ -1,8 +1,14 @@
+import { ApiErrorCode, isAbortLikeError, throwApiError } from '~/server/utils/api-error-envelope'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
+import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
+import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 
-/** Claude via OpenRouter — same as text comparison “Claude” model. */
+/** Fallback model when project preference is unavailable. */
 const ENHANCE_MODEL = 'anthropic/claude-sonnet-4'
+const ENHANCE_MODEL_FALLBACKS = ['openai/gpt-4o', 'google/gemini-2.0-flash-001']
 
 const CONTEXT_HINTS: Record<string, string> = {
   character:
@@ -49,15 +55,16 @@ export default defineEventHandler(async (event) => {
     prompt?: string
     context?: string
     fieldHint?: string
+    projectId?: string
   }>(event)
 
   const raw = typeof body?.prompt === 'string' ? body.prompt : ''
   const prompt = raw.trim()
   if (!prompt) {
-    throw createError({ statusCode: 400, message: 'prompt is required' })
+    throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'prompt is required')
   }
   if (prompt.length > 20000) {
-    throw createError({ statusCode: 400, message: 'prompt is too long' })
+    throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'prompt is too long')
   }
 
   const ctxKey = typeof body?.context === 'string' && CONTEXT_HINTS[body.context] ? body.context : 'general'
@@ -66,10 +73,11 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) {
-    throw createError({
-      statusCode: 500,
-      message: 'OpenRouter API key not configured. Set OPENROUTER_API_KEY or NUXT_OPENROUTER_API_KEY.'
-    })
+    throwApiError(
+      500,
+      ApiErrorCode.OPENROUTER_NOT_CONFIGURED,
+      'OpenRouter API key not configured. Set OPENROUTER_API_KEY or NUXT_OPENROUTER_API_KEY.'
+    )
   }
 
   const system = `You are an expert prompt engineer. Improve the user's prompt for clarity, specificity, and results—without changing their intent or language.
@@ -88,15 +96,22 @@ ${CONTEXT_HINTS[ctxKey]}`
   ].filter(Boolean)
   const userContent = userParts.join('\n\n')
 
-  const requestBody = buildOpenRouterChatCompletionBody({
-    model: ENHANCE_MODEL,
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: userContent }
-    ],
-    temperature: 0.45,
-    max_tokens: 4096
-  })
+  let enhanceModel = ENHANCE_MODEL
+  const projectId = typeof body?.projectId === 'string' ? body.projectId.trim() : ''
+  if (projectId) {
+    try {
+      const userId = await getPocketBaseUserIdFromRequest(event)
+      const pb = await getAuthenticatedPocketBase()
+      const project = await pb.collection('creative_projects').getOne(projectId)
+      if (pbRecordOwnerId(project as { owner?: unknown; user?: unknown }) === userId) {
+        const preferred = String((project as { preferred_model_id?: unknown }).preferred_model_id || '').trim()
+        const cfg = getConceptGeneratorModelById(preferred)
+        if (cfg?.openrouterModelId) enhanceModel = cfg.openrouterModelId
+      }
+    } catch {
+      // Keep endpoint resilient: fallback to default enhance model.
+    }
+  }
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -109,48 +124,91 @@ ${CONTEXT_HINTS[ctxKey]}`
     headers['X-Title'] = process.env.OPENROUTER_TITLE
   }
 
-  const controller = new AbortController()
-  const t = setTimeout(() => controller.abort(), 90000)
-  let response: Response
-  try {
-    response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(requestBody),
-      signal: controller.signal
+  const candidates = [enhanceModel, ...ENHANCE_MODEL_FALLBACKS]
+    .map(m => m.trim())
+    .filter(Boolean)
+    .filter((m, i, arr) => arr.indexOf(m) === i)
+
+  let lastMessage = ''
+  let lastStatus = 502
+  for (const model of candidates) {
+    const requestBody = buildOpenRouterChatCompletionBody({
+      model,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: userContent }
+      ],
+      temperature: 0.45,
+      max_tokens: 4096
     })
-  } finally {
-    clearTimeout(t)
-  }
 
-  const rawText = await response.text()
-  if (!response.ok) {
-    let msg = `OpenRouter error (${response.status})`
+    const controller = new AbortController()
+    const t = setTimeout(() => controller.abort(), 90000)
+    let response: Response
     try {
-      const j = JSON.parse(rawText) as { error?: { message?: string } }
-      if (j?.error?.message) msg = j.error.message
-    } catch {
-      msg = rawText.slice(0, 300)
+      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      })
+    } catch (e: unknown) {
+      clearTimeout(t)
+      if (isAbortLikeError(e)) {
+        lastMessage = 'Prompt enhancement timed out (90s). Try again with a shorter prompt.'
+        lastStatus = 504
+        continue
+      }
+      lastMessage = e instanceof Error ? e.message : String(e)
+      lastStatus = 502
+      continue
+    } finally {
+      clearTimeout(t)
     }
-    throw createError({ statusCode: response.status === 401 ? 401 : 502, message: msg })
+
+    const rawText = await response.text()
+    if (!response.ok) {
+      let msg = `OpenRouter error (${response.status})`
+      try {
+        const j = JSON.parse(rawText) as { error?: { message?: string } }
+        if (j?.error?.message) msg = j.error.message
+      } catch {
+        msg = rawText.slice(0, 300)
+      }
+      lastMessage = msg
+      lastStatus = response.status === 401 ? 401 : 502
+      if (response.status === 401) break
+      continue
+    }
+
+    let data: { choices?: Array<{ message?: { content?: string } }> }
+    try {
+      data = JSON.parse(rawText) as { choices?: Array<{ message?: { content?: string } }> }
+    } catch {
+      lastMessage = 'Invalid JSON from OpenRouter'
+      lastStatus = 502
+      continue
+    }
+
+    const content = data.choices?.[0]?.message?.content
+    if (typeof content !== 'string' || !content.trim()) {
+      lastMessage = 'Empty response from model'
+      lastStatus = 502
+      continue
+    }
+
+    const enhanced = stripCodeFences(content).trim()
+    if (!enhanced) {
+      lastMessage = 'Could not parse enhanced prompt'
+      lastStatus = 502
+      continue
+    }
+    return { enhanced }
   }
 
-  let data: { choices?: Array<{ message?: { content?: string } }> }
-  try {
-    data = JSON.parse(rawText) as { choices?: Array<{ message?: { content?: string } }> }
-  } catch {
-    throw createError({ statusCode: 502, message: 'Invalid JSON from OpenRouter' })
-  }
-
-  const content = data.choices?.[0]?.message?.content
-  if (typeof content !== 'string' || !content.trim()) {
-    throw createError({ statusCode: 502, message: 'Empty response from model' })
-  }
-
-  const enhanced = stripCodeFences(content).trim()
-  if (!enhanced) {
-    throw createError({ statusCode: 502, message: 'Could not parse enhanced prompt' })
-  }
-
-  return { enhanced }
+  throwApiError(
+    lastStatus === 401 ? 401 : lastStatus,
+    lastStatus === 401 ? ApiErrorCode.UNAUTHORIZED : ApiErrorCode.OPENROUTER_UPSTREAM,
+    lastMessage || 'Prompt enhancement failed across available models.'
+  )
 })

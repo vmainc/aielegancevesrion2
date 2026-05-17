@@ -5,7 +5,7 @@ import {
   pbRecordToCreativeCharacter,
   projectIdOnCharacterRow
 } from '~/server/utils/creative-character-map'
-import { pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
+import { isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import type { CreativeCharacter } from '~/types/creative-project'
 
@@ -17,7 +17,21 @@ export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
   const pb = await getAuthenticatedPocketBase()
 
-  const record = await pb.collection('creative_projects').getOne(id)
+  let record: unknown
+  try {
+    record = await pb.collection('creative_projects').getOne(id)
+  } catch (e: unknown) {
+    if (isPocketBaseMissingCollectionError(e)) {
+      throw createError({
+        statusCode: 503,
+        message: 'creative_projects collection is missing or not provisioned on PocketBase.'
+      })
+    }
+    if (pocketBaseErrorStatus(e) === 404) {
+      throw createError({ statusCode: 404, message: 'Project not found' })
+    }
+    throw e
+  }
   const owner = pbRecordOwnerId(record as { owner?: unknown; user?: unknown })
   if (owner !== userId) {
     throw createError({ statusCode: 403, message: 'Forbidden' })

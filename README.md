@@ -81,7 +81,9 @@ npm run dev
 
 **Production:** Use `npm run build` (not `nuxt build` alone). The build copies client assets into `.output/server/chunks/public` so the Node server can serve `/_nuxt/*`.
 
-### VPS deploy (avoid `ENOENT` on `/_nuxt/*`)
+### Production deploy — Interserver VPS (Node + nginx + PocketBase)
+
+Hosting is a **Linux VPS** (e.g. Interserver): Nuxt runs as **Node** (`node .output/server/index.mjs`), **nginx** serves the site and proxies **`/pb` → PocketBase** on loopback. You need a **long-running Node** deploy (rsync the full `.output`), not a static file host, so `/_nuxt/*` hashes stay in sync with the HTML (avoids `ENOENT` on `/_nuxt/*`).
 
 1. **Production build on your Mac** with the **public** PocketBase URL baked in (not `127.0.0.1`):
    ```bash

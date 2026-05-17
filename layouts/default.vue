@@ -3,23 +3,23 @@
     <nav class="shrink-0 bg-white border-b border-gray-200">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div
-          class="flex justify-between items-center gap-4 min-h-[5rem] sm:min-h-[5.5rem] py-2.5 sm:py-3"
+          class="flex justify-between items-center gap-4 min-h-[4.5rem] sm:min-h-[5rem] py-2"
         >
           <!-- Logo -->
-          <div class="flex items-center min-h-0 space-x-4 lg:space-x-10">
+          <div class="flex items-center min-h-0 space-x-4 lg:space-x-8">
             <NuxtLink
               to="/"
-              class="flex items-center shrink-0 self-center"
+              class="flex items-center shrink-0"
             >
               <img
                 :src="logo"
                 alt="AI Elegance"
-                class="h-14 sm:h-16 w-auto max-h-[4.5rem] rounded-md shadow-sm object-contain object-center block"
+                class="h-10 sm:h-11 w-auto rounded-md shadow-sm object-contain object-center block"
               />
             </NuxtLink>
             <!-- Desktop: workspace nav (logged in) or marketing anchors (guest) -->
             <ClientOnly>
-              <div v-if="isAuthenticated" class="hidden lg:flex items-center self-center space-x-8">
+              <div v-if="isAuthenticated" class="hidden lg:flex items-center space-x-8">
                 <NuxtLink
                   to="/projects"
                   class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
@@ -130,7 +130,7 @@
                   </div>
                 </div>
               </div>
-              <div v-else class="hidden lg:flex items-center self-center space-x-8">
+              <div v-else class="hidden lg:flex items-center space-x-8">
                 <NuxtLink
                   to="/#capabilities"
                   class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
@@ -157,7 +157,7 @@
                 </NuxtLink>
               </div>
               <template #fallback>
-                <div class="hidden lg:flex items-center self-center space-x-8">
+                <div class="hidden lg:flex items-center space-x-8">
                   <NuxtLink
                     to="/#capabilities"
                     class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
@@ -187,7 +187,7 @@
             </ClientOnly>
           </div>
           <!-- Mobile menu + auth -->
-          <div class="flex items-center justify-end self-center space-x-2 sm:space-x-4 shrink-0">
+          <div class="flex items-center justify-end space-x-2 sm:space-x-4 shrink-0">
             <button
               @click.stop="toggleMobileMenu"
               class="lg:hidden inline-flex items-center justify-center p-2 text-gray-700 hover:text-primary transition-colors rounded-lg hover:bg-gray-100"

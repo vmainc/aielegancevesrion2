@@ -61,8 +61,9 @@ export default defineEventHandler(async (event) => {
     }
   }
   const apiKey = String(useRuntimeConfig().omdbApiKey || '').trim()
+  const omdbConfigured = Boolean(apiKey)
   if (!apiKey) {
-    return { candidates, movies: [] }
+    return { candidates, movies: [], omdbConfigured }
   }
 
   const movies = (
@@ -77,6 +78,6 @@ export default defineEventHandler(async (event) => {
     )
   ).filter((x): x is NonNullable<typeof x> => Boolean(x))
 
-  return { candidates, movies }
+  return { candidates, movies, omdbConfigured }
 })
 

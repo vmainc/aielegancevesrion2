@@ -24,6 +24,21 @@ export default defineEventHandler(async (event) => {
     batch: 500
   })
 
+  const shotCountBySceneId: Record<string, number> = {}
+  try {
+    const shotRows = await pb.collection('creative_shots').getFullList({
+      filter,
+      batch: 5000
+    })
+    for (const row of shotRows as Array<{ scene?: unknown }>) {
+      const sid = typeof row.scene === 'string' ? row.scene : ''
+      if (!sid) continue
+      shotCountBySceneId[sid] = (shotCountBySceneId[sid] || 0) + 1
+    }
+  } catch {
+    // If creative_shots is missing/unreadable, still return scenes with zero counts.
+  }
+
   return {
     scenes: list.map(s => {
       const so = Number(s.sort_order)
@@ -32,7 +47,8 @@ export default defineEventHandler(async (event) => {
         sortOrder: Number.isFinite(so) ? so : 0,
         heading: s.heading,
         summary: s.summary || '',
-        bodyLength: String(s.body || '').length
+        bodyLength: String(s.body || '').length,
+        shotCount: shotCountBySceneId[s.id] || 0
       }
     })
   }
