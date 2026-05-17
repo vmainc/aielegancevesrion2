@@ -356,8 +356,19 @@
                   Actions
                 </summary>
                 <div
-                  class="absolute right-0 z-50 mt-2 min-w-[13rem] max-h-[min(70vh,20rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg p-1"
+                  :class="props.kind === 'script'
+                    ? 'absolute right-0 bottom-full mb-2 z-50 min-w-[13rem] max-h-[min(70vh,20rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg p-1'
+                    : 'absolute right-0 z-50 mt-2 min-w-[13rem] max-h-[min(70vh,20rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg p-1'"
                 >
+                  <button
+                    v-if="props.kind === 'script'"
+                    type="button"
+                    class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+                    :disabled="readingScriptId === a.id"
+                    @click="openScriptReader(a)"
+                  >
+                    {{ readingScriptId === a.id ? 'Loading…' : 'Read script' }}
+                  </button>
                   <a
                     v-if="a.fileUrl"
                     :href="a.fileUrl"
@@ -454,6 +465,39 @@
             :alt="expandedImage.title"
             class="w-full flex-1 min-h-[40vh] max-h-[calc(100vh-5rem)] rounded-lg object-contain mx-auto"
           >
+        </div>
+      </div>
+
+      <div
+        v-if="expandedScript"
+        class="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-4 bg-black/50"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="expandedScript.title"
+        @click.self="closeScriptReader"
+      >
+        <div
+          class="w-full max-w-3xl max-h-[min(92vh,48rem)] rounded-xl border border-gray-200 bg-white shadow-xl flex flex-col overflow-hidden"
+          @click.stop
+        >
+          <div class="flex justify-between items-start gap-3 px-5 py-4 border-b border-gray-200 shrink-0">
+            <div class="min-w-0">
+              <h2 class="text-lg font-semibold text-gray-900 truncate">
+                {{ expandedScript.title }}
+              </h2>
+              <p v-if="expandedScript.partial" class="text-xs text-amber-800 mt-1">
+                Showing synopsis only — full screenplay text was not available for this entry.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="shrink-0 px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
+              @click="closeScriptReader"
+            >
+              Close
+            </button>
+          </div>
+          <pre class="flex-1 overflow-y-auto px-5 py-4 text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{{ expandedScript.text }}</pre>
         </div>
       </div>
 
@@ -578,6 +622,8 @@ const loadError = ref('')
 const items = ref<ProjectAsset[]>([])
 const openAdd = ref(false)
 const expandedImage = ref<{ url: string; title: string; downloadUrl: string } | null>(null)
+const expandedScript = ref<{ title: string; text: string; partial?: boolean } | null>(null)
+const readingScriptId = ref('')
 const adding = ref(false)
 const addError = ref('')
 const deletingId = ref('')
@@ -635,6 +681,38 @@ function openImagePreview (a: ProjectAsset) {
 
 function closeImagePreview () {
   expandedImage.value = null
+}
+
+async function openScriptReader (a: ProjectAsset) {
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Sign in to read scripts.', 'info')
+    return
+  }
+  readingScriptId.value = a.id
+  try {
+    const res = await $fetch<{ title: string; text: string; partial?: boolean }>(
+      `/api/assets/${a.id}/script-text`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    expandedScript.value = {
+      title: res.title || a.title || 'Script',
+      text: res.text || '',
+      partial: res.partial
+    }
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message || 'Could not load script')
+        : 'Could not load script'
+    toast.showToast(msg, 'error')
+  } finally {
+    readingScriptId.value = ''
+  }
+}
+
+function closeScriptReader () {
+  expandedScript.value = null
 }
 
 /** Where a script file came from + whether AI import was run (scripts hub only). */
