@@ -380,10 +380,10 @@
                   </a>
                   <NuxtLink
                     v-if="a.projectId"
-                    :to="`/projects/${a.projectId}/overview`"
+                    :to="projectOverviewPath(a)"
                     class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
                   >
-                    Open project
+                    {{ props.kind === 'script' && scriptNeedsFullImport(a) ? 'Import into project' : 'Open project' }}
                   </NuxtLink>
                   <NuxtLink
                     v-if="props.kind === 'character'"
@@ -716,6 +716,24 @@ function closeScriptReader () {
 }
 
 /** Where a script file came from + whether AI import was run (scripts hub only). */
+function scriptNeedsFullImport (a: ProjectAsset): boolean {
+  if (props.kind !== 'script') return false
+  const meta = a.metadata
+  if (!meta || typeof meta !== 'object') return false
+  const source = typeof meta.source === 'string' ? meta.source : ''
+  if (source !== 'script_import') return false
+  const status = typeof meta.analysis_status === 'string' ? meta.analysis_status : ''
+  return status === 'pending' || status === ''
+}
+
+function projectOverviewPath (a: ProjectAsset): string {
+  if (!a.projectId) return '/projects'
+  if (props.kind === 'script' && scriptNeedsFullImport(a)) {
+    return `/projects/${a.projectId}/overview?bootstrap=1`
+  }
+  return `/projects/${a.projectId}/overview`
+}
+
 function scriptSourceLine (a: ProjectAsset): string {
   if (props.kind !== 'script') return ''
   const meta = a.metadata

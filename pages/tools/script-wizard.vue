@@ -140,7 +140,7 @@
                   stepAction
                     ? 'Running Script Wizard — treatment and three-act breakdown. This can take several minutes.'
                     : wizardReady
-                      ? 'Analysis is ready. Open a new project to continue in the workflow.'
+                      ? 'Open as project runs a full import (scenes, cast, storyboard) and takes you to Storyboard for video.'
                       : 'After you pick a story, Script Wizard runs treatment and breakdown automatically.'
                 }}
               </p>
@@ -165,13 +165,15 @@
                 </button>
               </div>
               <div
-                v-if="stepAction"
+                v-if="stepAction || openingProject"
                 class="mt-4 rounded-xl border border-primary/25 bg-white/90 p-5"
               >
                 <FilmReelLoader
                   size="sm"
-                  :label="wizardStepLabel"
-                  :sub-label="wizardStepSubLabel"
+                  :label="openingProject ? 'Opening project' : wizardStepLabel"
+                  :sub-label="openingProject
+                    ? 'Full import: reading the script, building scenes, cast, and storyboard panels…'
+                    : wizardStepSubLabel"
                 />
               </div>
             </div>
@@ -277,7 +279,7 @@ import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-f
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { SCRIPT_WIZARD_STEP_CLIENT_MS, SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { GeneratedConceptItem } from '~/types/concept-generator'
-import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
+import type { CreativeProject, ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 
 type StoryIdeaApplyPayload = {
   item: GeneratedConceptItem
@@ -300,6 +302,7 @@ type WizardMovie = {
 }
 
 const { isAuthenticated, getAuthToken } = useAuth()
+const { registerImportedProject } = useCreativeProject()
 const toast = useToast()
 
 const selectedFile = ref<File | null>(null)
@@ -561,19 +564,28 @@ async function openAsProject () {
   const token = getAuthToken()
   if (!token || !id) return
   openingProject.value = true
+  toast.showToast('Importing script — scenes, cast, and storyboard panels…', 'info')
   try {
-    const res = await $fetch<{ projectId: string }>(`/api/script-wizard/scripts/${id}/open-as-project`, {
+    const res = await $fetch<{
+      projectId: string
+      project: CreativeProject
+      importComplete?: boolean
+    }>(`/api/script-wizard/scripts/${id}/open-as-project`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
       body: {
         goal: lastWizardFormat.value.goal,
         aspectRatio: lastWizardFormat.value.aspectRatio
-      }
+      },
+      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
     })
-    toast.showToast('Project created.', 'success')
-    await navigateTo(`/projects/${res.projectId}/overview`)
+    if (res.project) {
+      registerImportedProject(res.project)
+    }
+    toast.showToast('Project ready — review storyboard panels, then generate video.', 'success')
+    await navigateTo(`/projects/${res.projectId}/storyboard`)
   } catch (e: unknown) {
-    toast.showToast(formatApiFetchError(e, 'Could not open project'), 'error')
+    toast.showToast(formatApiFetchError(e, 'Could not import project'), 'error')
   } finally {
     openingProject.value = false
   }

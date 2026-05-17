@@ -29,91 +29,26 @@
           {{ project?.name }}
         </h1>
         <p class="text-base text-gray-700 mb-6 max-w-xl leading-relaxed">
-          Your script file is saved. Click <span class="font-semibold text-gray-900">Analyze script</span> to generate a clear synopsis, treatment, director notes, and comparable movies. Cast, scenes, and storyboard are separate steps after this run.
+          Your screenplay is saved. <span class="font-semibold text-gray-900">Import script</span> reads the file, builds scenes and cast, seeds storyboard panels, and sets up director notes — then generate video from the Storyboard step.
         </p>
-        <ProjectOverviewScriptImportPanel
-          v-model:aspect="overviewAspect"
-          v-model:goal="overviewGoal"
-          hide-upload-step
-          prominent-analyze
-          :show-aspect-goal="false"
-          :importing="overviewImporting"
-          :analyzing="overviewAnalyzing"
-          :analyze-enabled="false"
-          analyze-button-label="Analyze script"
-          :error="overviewImportError"
-          :has-file="Boolean(overviewImportFile)"
-          heading="Director analysis"
-          intro="Your screenplay file is in this project’s assets. Run analysis when you are ready."
-          @file-change="onOverviewImportFile"
-          @import-click="importScriptFromOverview"
-          @analyze-click="runDefaultScriptAnalyze"
-        />
-        <div class="mt-5 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <p class="text-sm font-semibold text-gray-900 mb-2">Choose analysis models</p>
-          <p class="text-xs text-gray-600 mb-3">
-            Run multiple models, compare synopsis/treatment output, then choose one to drive this project.
-          </p>
-          <div class="flex flex-wrap gap-3 mb-4">
-            <label
-              v-for="m in modelOptions"
-              :key="`analyze-${m.id}`"
-              class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-            >
-              <input
-                v-model="selectedAnalysisModelIds"
-                type="checkbox"
-                :value="m.id"
-                class="rounded border-gray-300 text-primary focus:ring-primary"
-              >
-              <span class="text-sm text-gray-800">{{ m.label }}</span>
-            </label>
-          </div>
-          <button
-            type="button"
-            class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-            :disabled="overviewPreviewing || overviewAnalyzing || !selectedAnalysisModelIds.length"
-            @click="previewScriptAnalyses"
-          >
-            {{ overviewPreviewing ? 'Analyzing script…' : 'Analyze script' }}
-          </button>
-        </div>
+        <button
+          type="button"
+          class="px-5 py-3 bg-primary hover:bg-primary/90 text-gray-950 rounded-xl text-base font-semibold transition-colors disabled:opacity-50"
+          :disabled="overviewFullImporting || !scriptWorkflowAssetId"
+          @click="runProjectFullImport"
+        >
+          {{ overviewFullImporting ? 'Importing script…' : 'Import script into project' }}
+        </button>
+        <p v-if="overviewImportError" class="mt-3 text-sm text-red-700">{{ overviewImportError }}</p>
         <div
-          v-if="overviewPreviewing || overviewAnalyzing"
+          v-if="overviewFullImporting"
           class="mt-5 rounded-xl border border-primary/20 bg-primary/5 p-6"
         >
           <FilmReelLoader
             size="sm"
-            :label="overviewPreviewing ? 'Comparing script analyses' : 'Analyzing script'"
-            :sub-label="overviewPreviewing
-              ? 'Running selected models in parallel and preparing synopsis options…'
-              : 'Applying your selected model to build synopsis, treatment, and director notes…'"
+            label="Importing screenplay"
+            sub-label="Synopsis, treatment, director bible, scenes, cast, and storyboard panels — this can take several minutes."
           />
-        </div>
-        <div v-if="analysisCandidates.length" class="mt-5 grid gap-4">
-          <article
-            v-for="c in analysisCandidates"
-            :key="`candidate-${c.modelId}`"
-            class="rounded-xl border border-gray-200 bg-white p-4"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <p class="text-sm font-semibold text-gray-900">{{ c.label }}</p>
-              <button
-                v-if="!c.error"
-                type="button"
-                class="px-3 py-1.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
-                :disabled="overviewAnalyzing"
-                @click="applyCandidateModel(c.modelId)"
-              >
-                Use this analysis
-              </button>
-            </div>
-            <p v-if="c.error" class="text-sm text-red-700">{{ c.error }}</p>
-            <template v-else>
-              <p class="text-xs text-gray-500 mb-2">{{ c.genre || '—' }} · {{ c.tone || '—' }}</p>
-              <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ c.synopsis || 'No synopsis returned.' }}</p>
-            </template>
-          </article>
         </div>
       </section>
     </template>
@@ -826,13 +761,20 @@
       >
         Story →
       </NuxtLink>
-      <NuxtLink
-        v-else
-        :to="`/projects/${projectId}/characters`"
-        class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
-      >
-        Characters →
-      </NuxtLink>
+      <template v-else>
+        <NuxtLink
+          :to="`/projects/${projectId}/storyboard`"
+          class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-sm font-semibold transition-colors inline-flex items-center"
+        >
+          Storyboard →
+        </NuxtLink>
+        <NuxtLink
+          :to="`/projects/${projectId}/characters`"
+          class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
+        >
+          Characters →
+        </NuxtLink>
+      </template>
     </div>
   </div>
 </template>
@@ -865,6 +807,7 @@ const { activeProject, activeProjectId, updateProject, registerImportedProject, 
 const { isAuthenticated, getAuthToken } = useAuth()
 const { stepBadge } = useProjectWorkflowStep()
 const toast = useToast()
+const route = useRoute()
 
 const PB_ID = /^[a-z0-9]{15}$/
 
@@ -903,8 +846,10 @@ const canCloudImport = computed(() => isAuthenticated.value && PB_ID.test(projec
 const overviewImportFile = ref<File | null>(null)
 const overviewImporting = ref(false)
 const overviewAnalyzing = ref(false)
+const overviewFullImporting = ref(false)
 const overviewPreviewing = ref(false)
 const overviewImportError = ref('')
+const fullImportAttempted = ref(false)
 const scriptWorkflowAssetId = ref('')
 const overviewAspect = ref<'16:9' | '9:16' | '1:1'>('16:9')
 const overviewGoal = ref<'film' | 'social' | 'commercial' | 'other'>('film')
@@ -957,7 +902,22 @@ async function syncScriptWorkflowAssetFromServer () {
 watch(
   () => projectId.value,
   () => {
+    fullImportAttempted.value = false
     void syncScriptWorkflowAssetFromServer()
+  },
+  { immediate: true }
+)
+
+watch(
+  [() => route.query.bootstrap, scriptWorkflowAssetId, showImportedScriptOverview, canCloudImport],
+  ([bootstrap]) => {
+    if (fullImportAttempted.value) return
+    if (bootstrap !== '1') return
+    if (!canCloudImport.value) return
+    if (!scriptWorkflowAssetId.value) return
+    if (showImportedScriptOverview.value) return
+    fullImportAttempted.value = true
+    void runProjectFullImport()
   },
   { immediate: true }
 )
@@ -1012,6 +972,36 @@ async function importScriptFromOverview () {
     toast.showToast(overviewImportError.value, 'error')
   } finally {
     overviewImporting.value = false
+  }
+}
+
+async function runProjectFullImport () {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token || !scriptWorkflowAssetId.value) return
+  overviewFullImporting.value = true
+  overviewImportError.value = ''
+  try {
+    const res = await $fetch<{
+      project: CreativeProject
+      scriptAsset: { ok: boolean; message?: string; id?: string }
+    }>(`/api/projects/${id}/script/full-import`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: { assetId: scriptWorkflowAssetId.value },
+      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    })
+    registerImportedProject(res.project)
+    if (res.scriptAsset?.ok && res.scriptAsset.id) {
+      scriptWorkflowAssetId.value = res.scriptAsset.id
+    }
+    toast.showToast('Script imported — open Storyboard to generate video clips.', 'success')
+    await navigateTo(`/projects/${id}/storyboard`)
+  } catch (e: unknown) {
+    overviewImportError.value = formatApiFetchError(e, 'Full script import failed')
+    toast.showToast(overviewImportError.value, 'error')
+  } finally {
+    overviewFullImporting.value = false
   }
 }
 
