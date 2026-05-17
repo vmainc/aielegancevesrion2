@@ -188,17 +188,16 @@ export function useCreativeProject () {
       const token = auth.getAuthToken()
       if (!token) return
       try {
-        const body: Record<string, unknown> = {
-          synopsis: patch.synopsis,
-          conceptNotes: patch.conceptNotes,
-          treatment: patch.treatment,
-          name: patch.name,
-          aspectRatio: patch.aspectRatio,
-          goal: patch.goal,
-          workflowMode: patch.workflowMode,
-          genre: patch.genre,
-          tone: patch.tone
-        }
+        const body: Record<string, unknown> = {}
+        if (patch.synopsis !== undefined) body.synopsis = patch.synopsis
+        if (patch.conceptNotes !== undefined) body.conceptNotes = patch.conceptNotes
+        if (patch.treatment !== undefined) body.treatment = patch.treatment
+        if (patch.name !== undefined) body.name = patch.name
+        if (patch.aspectRatio !== undefined) body.aspectRatio = patch.aspectRatio
+        if (patch.goal !== undefined) body.goal = patch.goal
+        if (patch.workflowMode !== undefined) body.workflowMode = patch.workflowMode
+        if (patch.genre !== undefined) body.genre = patch.genre
+        if (patch.tone !== undefined) body.tone = patch.tone
         if (patch.targetLength !== undefined) body.targetLength = patch.targetLength
         if (patch.targetDurationSeconds !== undefined) {
           body.targetDurationSeconds = patch.targetDurationSeconds

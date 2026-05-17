@@ -151,7 +151,7 @@
       <div
         class="text-gray-800 text-base sm:text-lg leading-relaxed whitespace-pre-wrap border-t border-gray-100 pt-6"
       >
-        {{ project?.synopsis || stripWorkflowMarker(project?.conceptNotes || '') }}
+        {{ conceptSynopsisDisplay }}
       </div>
 
       <template v-if="showImportedScriptOverview">
@@ -835,14 +835,15 @@
 </template>
 
 <script setup lang="ts">
-import { stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
 import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-from-treatment'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import {
+  conceptNotesHaveUserContent,
   formatStoredConceptNotes,
   parseCharactersFromConceptNotes,
-  parseLoglineFromConceptNotes
+  parseLoglineFromConceptNotes,
+  stripConceptMetadataMarkers
 } from '~/lib/format-stored-concept'
 import { defaultDurationSecondsForProject } from '~/lib/project-duration-budget'
 import { pollScriptImportJob } from '~/lib/poll-script-import-job'
@@ -1161,11 +1162,20 @@ const targetDurationSeconds = ref<string>('')
 const targetDurationTouched = ref(false)
 const promptTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
+const conceptSynopsisDisplay = computed(() => {
+  const p = project.value
+  if (!p) return ''
+  const syn = (p.synopsis || '').trim()
+  if (syn) return syn
+  const logline = parseLoglineFromConceptNotes(p.conceptNotes || '')
+  if (logline) return logline
+  return stripConceptMetadataMarkers(p.conceptNotes || '')
+})
+
 const hasConcept = computed(() => {
   const p = project.value
   if (!p) return false
-  const notes = stripWorkflowMarker(p.conceptNotes || '')
-  return Boolean((p.synopsis || '').trim() || notes.trim())
+  return Boolean((p.synopsis || '').trim() || conceptNotesHaveUserContent(p.conceptNotes || ''))
 })
 
 const screenplayWorkflowEnabled = computed(
@@ -1348,6 +1358,16 @@ watch(
   { immediate: true }
 )
 
+function resolveBootstrapSummary (p: CreativeProject | null | undefined, override?: string): string {
+  const fromOverride = (override || '').trim()
+  if (fromOverride) return fromOverride
+  const syn = (p?.synopsis || '').trim()
+  if (syn) return syn
+  const logline = parseLoglineFromConceptNotes(p?.conceptNotes || '')
+  if (logline) return logline
+  return stripConceptMetadataMarkers(p?.conceptNotes || '')
+}
+
 async function runConceptBootstrap (opts?: {
   title?: string
   logline?: string
@@ -1359,16 +1379,24 @@ async function runConceptBootstrap (opts?: {
   const id = projectId.value
   const token = getAuthToken()
   if (!id || !token) return
+  const p = project.value
+  const title = (opts?.title || p?.name || '').trim()
+  const summary = resolveBootstrapSummary(p, opts?.summary)
+  if (!title || !summary) {
+    conceptBootstrapError.value =
+      'Add a story synopsis first (generate ideas and pick one, or paste your idea), then build again.'
+    toast.showToast(conceptBootstrapError.value, 'error')
+    return
+  }
   await persistTargetDuration()
   conceptBootstrapRunning.value = true
   conceptBootstrapError.value = ''
   const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   try {
-    const p = project.value
     const body = {
-      title: opts?.title || p?.name,
-      logline: opts?.logline || parseLoglineFromConceptNotes(p?.conceptNotes || ''),
-      summary: opts?.summary || p?.synopsis,
+      title,
+      logline: opts?.logline || parseLoglineFromConceptNotes(p?.conceptNotes || '') || summary.split('\n')[0],
+      summary,
       genre: opts?.genre || p?.genre,
       tone: opts?.tone || p?.tone,
       characters: opts?.characters?.length
@@ -1605,9 +1633,10 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
       modelLabel: label,
       characters: item.characters
     })
+    const synopsis = (item.summary || item.logline || '').trim()
     await updateProject(id, {
       name: item.title.slice(0, 500),
-      synopsis: item.summary,
+      synopsis,
       genre: item.genre || undefined,
       tone: item.tone || undefined,
       conceptNotes
@@ -1619,7 +1648,7 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
       await runConceptBootstrap({
         title: item.title,
         logline: item.logline,
-        summary: item.summary,
+        summary: synopsis,
         genre: item.genre,
         tone: item.tone,
         characters: item.characters

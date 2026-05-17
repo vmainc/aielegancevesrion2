@@ -1,17 +1,24 @@
-const CHARACTERS_MARKER_RE = /<!--\s*aielegance:characters=(\[.*?\])\s*-->/s
-const DURATION_MARKER_RE = /<!--\s*aielegance:duration=(\d+)\s*-->/i
+import { WORKFLOW_SCRATCH_MARKER } from '~/lib/project-workflow-mode'
 
-export function upsertDurationInConceptNotes (notes: string, seconds: number | null): string {
-  const stripped = (notes || '').replace(DURATION_MARKER_RE, '').trimStart()
-  if (seconds == null || !Number.isFinite(seconds) || seconds < 15) {
-    return stripped
-  }
-  const n = Math.floor(seconds)
-  return `<!-- aielegance:duration=${n} -->\n${stripped}`.trim()
+const CHARACTERS_MARKER_RE = /<!--\s*aielegance:characters=(\[.*?\])\s*-->/s
+const DURATION_MARKER_RE = /<!--\s*aielegance:duration=(\d+)\s*-->/gi
+
+/** Remove embedded metadata markers; leaves user-facing concept text. */
+export function stripConceptMetadataMarkers (text: string): string {
+  return (text || '')
+    .replace(WORKFLOW_SCRATCH_MARKER, '')
+    .replace(DURATION_MARKER_RE, '')
+    .replace(CHARACTERS_MARKER_RE, '')
+    .replace(/^\s*\n+/gm, '\n')
+    .trim()
+}
+
+export function conceptNotesHaveUserContent (notes: string): boolean {
+  return Boolean(stripConceptMetadataMarkers(notes).trim())
 }
 
 export function parseDurationFromConceptNotes (notes: string): number | undefined {
-  const m = DURATION_MARKER_RE.exec(notes || '')
+  const m = /<!--\s*aielegance:duration=(\d+)\s*-->/i.exec(notes || '')
   if (!m?.[1]) return undefined
   const n = Math.floor(Number(m[1]))
   if (!Number.isFinite(n) || n < 15 || n > 3600) return undefined

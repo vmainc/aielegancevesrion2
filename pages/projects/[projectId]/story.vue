@@ -181,6 +181,7 @@
 </template>
 
 <script setup lang="ts">
+import { stripConceptMetadataMarkers } from '~/lib/format-stored-concept'
 import { stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
 import { defaultDurationSecondsForProject } from '~/lib/project-duration-budget'
@@ -232,7 +233,7 @@ const storySynopsisDisplay = computed(() => {
   if (!p) return ''
   const syn = (p.synopsis || '').trim()
   if (syn) return syn
-  const notes = stripWorkflowMarker(p.conceptNotes || '').trim()
+  const notes = stripConceptMetadataMarkers(stripWorkflowMarker(p.conceptNotes || '')).trim()
   return notes
 })
 

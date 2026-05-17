@@ -1,5 +1,11 @@
 import type PocketBase from 'pocketbase'
-import { parseCharactersFromConceptNotes, parseLoglineFromConceptNotes } from '~/lib/format-stored-concept'
+import {
+  conceptNotesHaveUserContent,
+  parseCharactersFromConceptNotes,
+  parseDurationFromConceptNotes,
+  parseLoglineFromConceptNotes,
+  stripConceptMetadataMarkers
+} from '~/lib/format-stored-concept'
 import { resolveProjectDurationBudget } from '~/lib/project-duration-budget'
 import { sanitizeCharacterNameList } from '~/lib/screenplay-format'
 import { generateScreenplayFromStoryIdea } from '~/server/utils/generate-screenplay-from-idea'
@@ -73,7 +79,14 @@ export async function bootstrapProjectFromConcept (
 
   const conceptNotes = String(projectRow.concept_notes || '')
   const title = (input.title || String(projectRow.name || '')).trim().slice(0, 500)
-  const summary = (input.summary || String(projectRow.synopsis || '')).trim()
+  let summary = (input.summary || String(projectRow.synopsis || '')).trim()
+  if (!summary) {
+    const logline = parseLoglineFromConceptNotes(conceptNotes)
+    if (logline) summary = logline
+  }
+  if (!summary && conceptNotesHaveUserContent(conceptNotes)) {
+    summary = stripConceptMetadataMarkers(conceptNotes).slice(0, 20_000)
+  }
   if (!title || !summary) {
     throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Project needs a title and synopsis before building.')
   }
@@ -92,9 +105,9 @@ export async function bootstrapProjectFromConcept (
 
   const durationBudget = resolveProjectDurationBudget({
     targetDurationSeconds:
-      typeof projectRow.target_duration_seconds === 'number'
+      typeof projectRow.target_duration_seconds === 'number' && projectRow.target_duration_seconds > 0
         ? projectRow.target_duration_seconds
-        : undefined,
+        : parseDurationFromConceptNotes(conceptNotes),
     targetLength: projectRow.target_length as import('~/types/creative-project').ProjectTargetLength | undefined,
     goal
   })
