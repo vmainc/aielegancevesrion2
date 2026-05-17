@@ -2,7 +2,7 @@ import { readBody, setResponseStatus } from 'h3'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { openRouterGenerateVideo } from '~/server/utils/openrouter-generate-video'
 import { startOpenRouterVideoJob } from '~/server/utils/openrouter-video-job'
-import { resolvePocketBaseProxiedUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
+import { resolveReferenceImageUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
 import {
   getOpenRouterVideoModelSupportedDurations,
   snapVideoDurationToOpenRouterModel
@@ -75,13 +75,12 @@ export default defineEventHandler(async (event) => {
 
   const internalPb = String(config.pocketbaseInternalUrl || '').trim()
   const publicPb = String(config.public?.pocketbaseUrl || '').trim()
-  const resolvedFrame =
-    frameImageUrl
-      ? resolvePocketBaseProxiedUrlForServerFetch(frameImageUrl, {
-          pocketbaseInternalUrl: internalPb,
-          publicPocketbaseUrl: publicPb || undefined
-        })
-      : ''
+  const resolvedFrame = frameImageUrl
+    ? await resolveReferenceImageUrlForServerFetch(frameImageUrl, {
+        pocketbaseInternalUrl: internalPb,
+        publicPocketbaseUrl: publicPb || undefined
+      })
+    : ''
 
   let supportedDurations: number[] | null = null
   try {

@@ -1,6 +1,6 @@
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { openRouterGenerateImage } from '~/server/utils/openrouter-generate-image'
-import { resolvePocketBaseProxiedUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
+import { resolveReferenceImageUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
 
 function imageErrorMessage (err: unknown): string {
   const anyErr = err as { data?: { error?: { message?: string } }; message?: string }
@@ -66,7 +66,7 @@ export default defineEventHandler(async (event) => {
     const internalPb = String(config.pocketbaseInternalUrl || '').trim()
     const publicPb = String(config.public?.pocketbaseUrl || '').trim()
     const resolvedRef = referenceImageUrl
-      ? resolvePocketBaseProxiedUrlForServerFetch(referenceImageUrl, {
+      ? await resolveReferenceImageUrlForServerFetch(referenceImageUrl, {
           pocketbaseInternalUrl: internalPb,
           publicPocketbaseUrl: publicPb || undefined
         })
