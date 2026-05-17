@@ -173,9 +173,10 @@ Rules:
 - Think in panels: coverage that an editor could cut together — vary shot scale on purpose (establish, re-establish, tighten, insert, reaction).
 - Produce between 5 and 12 shots in "shots" array for THIS scene only; do not merge adjacent screenplay scenes.
 - order must be 1..N in story order within the scene.
-- image_prompt: concise, production-ready still description (no camera jargon overload).
+- image_prompt: concise, production-ready still description (no camera jargon overload); name which cast members appear and their locked visual traits.
 - video_prompt: expand with motion, camera behavior, lighting, atmosphere; may repeat and elaborate image_prompt.
-- When named characters appear, keep their described traits and visual continuity across shots (wardrobe, age, eyelines).
+- When named characters appear, image_prompt MUST restate their full visual design from CHARACTERS verbatim (face, body, materials, colors) — never a generic label like "toast with a face" if the cast bible says more.
+- Shots featuring the same character must describe the SAME design each time; close-ups still match the established look.
 - Interpret scene meaning from summary and script; imperfect script formatting is OK.
 - duration_seconds: MUST be exactly 5 or 10 (integer seconds per panel) — these are the only clip lengths the video step supports; pick 5 vs 10 from pacing (goal rules), not arbitrary values.`
 

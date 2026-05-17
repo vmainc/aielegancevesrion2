@@ -325,6 +325,11 @@ import {
 } from '~/lib/project-asset-playback-url'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import {
+  buildVideoMotionPrompt,
+  findCharactersInShot,
+  pickPrimaryCharacterPortrait
+} from '~/lib/shot-character-continuity'
+import {
   generateOpenRouterVideo,
   playbackUrlForProjectVideoAsset,
   saveVideoToProjectLibrary
@@ -383,6 +388,7 @@ const videoPreviewByKey = reactive<Record<string, string>>({})
 const expandedVideo = ref<{ url: string; title: string } | null>(null)
 
 const { addVideoClip } = useProjectTimeline(projectId)
+const { refs: characterRefs } = useProjectCharacterRefs(projectId)
 
 const canLoadBoards = computed(
   () => !!project.value && project.value.source === 'pocketbase' && PB_ID.test(projectId.value) && isAuthenticated.value
@@ -546,8 +552,8 @@ function addClipToTimeline (scene: SceneRow, shot: CreativeShot, url: string) {
 }
 
 async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
-  const prompt = finalVideoPrompt(shot).trim()
-  if (!prompt) {
+  const basePrompt = finalVideoPrompt(shot).trim()
+  if (!basePrompt) {
     toast.showToast('This panel has no prompt yet.', 'info')
     return
   }
@@ -555,6 +561,9 @@ async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
     toast.showToast('Pick a video model first.', 'info')
     return
   }
+  const scene = scenes.value.find(s => s.id === sceneId)
+  const castMatches = findCharactersInShot(shot, characterRefs.value, scene?.summary)
+  const prompt = buildVideoMotionPrompt(basePrompt, castMatches)
   videoGenKey.value = genKey(sceneId, shot.id)
   try {
     const aspect =
@@ -563,7 +572,9 @@ async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
         : project.value?.aspectRatio === '1:1'
           ? '1:1'
           : '16:9'
-    const frame = frameUrlFor(sceneId, shot.id) || ''
+    const storyboardFrame = frameUrlFor(sceneId, shot.id) || ''
+    const castPortrait = pickPrimaryCharacterPortrait(castMatches) || ''
+    const frame = storyboardFrame || castPortrait
     const baseSec = snapToStoryboardClipSeconds(Number(shot.durationSeconds) || 5)
     const modelRow = videoModels.value.find(m => m.id === selectedModelId.value)
     const headers = authHeaders()
@@ -591,7 +602,9 @@ async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
           scene_id: sceneId,
           shot_id: shot.id,
           model_id: selectedModelId.value,
-          source: 'openrouter_video'
+          source: 'openrouter_video',
+          character_ids: castMatches.map(c => c.id),
+          character_names: castMatches.map(c => c.name)
         },
         headers
       })
@@ -608,7 +621,6 @@ async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
     }
 
     if (addToTimelineOnSave.value && playbackUrl) {
-      const scene = scenes.value.find(s => s.id === sceneId)
       addClipToTimeline(
         scene || { id: sceneId, heading: 'Scene', sortOrder: 0, summary: '', bodyLength: 0 },
         shot,

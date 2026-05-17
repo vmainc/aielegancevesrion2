@@ -7,7 +7,7 @@
       <span class="text-gray-700">Generate Shots</span>
       for a continuity-aware refresh. Then
       <span class="text-gray-700">Generate frame</span>
-      from each shot’s image prompt.
+      — we attach your cast’s featured portraits and visual prompts so panels match Character Creator.
       </p>
       <button
         type="button"
@@ -127,7 +127,7 @@
                     </option>
                   </select>
                   <p class="mt-2 text-xs text-gray-500">
-                    Generated frames auto-save to this project by default.
+                    Generated frames auto-save to this project. Named characters use their featured portrait from Assets → Characters when available.
                   </p>
                 </div>
               </div>
@@ -256,18 +256,33 @@
                   </select>
                 </div>
               </div>
-              <div class="flex flex-wrap items-center gap-2 pt-1">
-                <button
-                  type="button"
-                  class="px-3 py-1.5 text-sm font-medium rounded-lg bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
-                  :disabled="
-                    imageGenId === shot.id ||
-                    !((shot.imagePrompt || shot.description || '').trim())
-                  "
-                  @click="generateFrame(shot)"
+              <div class="flex flex-col gap-1.5 pt-1">
+                <div class="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 text-sm font-medium rounded-lg bg-primary/15 text-primary border border-primary/30 hover:bg-primary/25 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
+                    :disabled="
+                      imageGenId === shot.id ||
+                      !((shot.imagePrompt || shot.description || '').trim())
+                    "
+                    @click="generateFrame(shot)"
+                  >
+                    {{ imageGenId === shot.id ? 'Generating…' : `Generate image (${activeImageModelLabel})` }}
+                  </button>
+                </div>
+                <p
+                  v-if="shotCharacterMatches(shot).length"
+                  class="text-[11px] text-gray-500 leading-snug"
                 >
-                  {{ imageGenId === shot.id ? 'Generating…' : `Generate image (${activeImageModelLabel})` }}
-                </button>
+                  Cast continuity:
+                  <span
+                    v-for="(c, ci) in shotCharacterMatches(shot)"
+                    :key="c.id"
+                    class="font-medium text-gray-700"
+                  >
+                    {{ c.name }}<span v-if="c.portraitUrl" class="text-primary"> · ref</span><span v-if="ci < shotCharacterMatches(shot).length - 1">, </span>
+                  </span>
+                </p>
               </div>
               <details class="group border-t border-gray-200 pt-3">
                 <summary class="cursor-pointer text-sm text-primary font-medium hover:underline">
@@ -332,6 +347,11 @@ import type { CreativeShot } from '~/types/creative-shot'
 import type { ProjectAsset } from '~/types/project-asset'
 import { CHARACTER_CREATOR_IMAGE_MODELS } from '~/lib/character-creator-models'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
+import {
+  buildStoryboardFramePrompt,
+  findCharactersInShot,
+  pickPrimaryCharacterPortrait
+} from '~/lib/shot-character-continuity'
 
 const {
   activeProject,
@@ -355,7 +375,7 @@ type SceneRow = {
 }
 
 const scenes = ref<SceneRow[]>([])
-const characterNames = ref<string[]>([])
+const { refs: characterRefs, reload: reloadCharacterRefs } = useProjectCharacterRefs(projectId)
 const storyboardAssets = ref<ProjectAsset[]>([])
 const selectedSceneId = ref('')
 const scenesLoadError = ref('')
@@ -389,14 +409,15 @@ function scenePanelLabel (scene: SceneRow): string {
   return 'est. 5-12 panels'
 }
 
+function shotCharacterMatches (shot: CreativeShot) {
+  return findCharactersInShot(shot, characterRefs.value, activeScene.value?.summary)
+}
+
 function shotImagePromptLabel (shot: CreativeShot): string {
-  const haystack = `${shot.title || ''} ${shot.description || ''} ${shot.imagePrompt || ''}`.toLowerCase()
-  for (const name of characterNames.value) {
-    const n = name.trim().toLowerCase()
-    if (!n) continue
-    if (haystack.includes(n)) return `${name} prompt`
-  }
-  return 'Character prompt'
+  const matches = shotCharacterMatches(shot)
+  if (matches.length === 1) return `${matches[0].name} prompt`
+  if (matches.length > 1) return 'Cast prompt'
+  return 'Image prompt'
 }
 
 function firstImageUrl (urls: unknown[]): string {
@@ -411,21 +432,28 @@ function firstImageUrl (urls: unknown[]): string {
 }
 
 async function generateFrame (shot: CreativeShot) {
-  const prompt = (shot.imagePrompt || shot.description || '').trim()
-  if (!prompt) {
+  const basePrompt = (shot.imagePrompt || shot.description || '').trim()
+  if (!basePrompt) {
     toast.showToast('Add an image prompt or description first.', 'info')
     return
   }
+  const matches = shotCharacterMatches(shot)
+  const prompt = buildStoryboardFramePrompt(basePrompt, matches)
+  const referenceImageUrl = pickPrimaryCharacterPortrait(matches) || undefined
   imageGenId.value = shot.id
   try {
     const res = await $fetch<{ urls?: unknown[] }>('/api/generate/image', {
       method: 'POST',
-      body: { prompt, model: selectedImageModelId.value }
+      body: {
+        prompt,
+        model: selectedImageModelId.value,
+        referenceImageUrl
+      }
     })
     const url = firstImageUrl(res.urls || [])
     if (url) {
       framePreview[shot.id] = url
-      const saveErr = await autoSaveGeneratedFrame(shot, url)
+      const saveErr = await autoSaveGeneratedFrame(shot, url, matches)
       if (!saveErr) {
         toast.showToast('Frame generated and saved.', 'success')
       } else {
@@ -476,7 +504,11 @@ async function loadStoryboardAssets () {
   }
 }
 
-async function autoSaveGeneratedFrame (shot: CreativeShot, imageUrl: string): Promise<string | null> {
+async function autoSaveGeneratedFrame (
+  shot: CreativeShot,
+  imageUrl: string,
+  matches: ReturnType<typeof shotCharacterMatches>
+): Promise<string | null> {
   if (!shotsPersisted.value) return 'shots are preview-only right now'
   const id = projectId.value
   const sid = selectedSceneId.value
@@ -499,7 +531,9 @@ async function autoSaveGeneratedFrame (shot: CreativeShot, imageUrl: string): Pr
         scene_id: sid,
         shot_id: shot.id,
         model_id: selectedImageModelId.value,
-        model_label: activeImageModelLabel.value
+        model_label: activeImageModelLabel.value,
+        character_ids: matches.map(c => c.id),
+        character_names: matches.map(c => c.name)
       })
     )
     fd.append('file', new File([compressed], `frame_${shot.id}.${ext}`, { type: compressed.type || 'image/jpeg' }))
@@ -612,24 +646,6 @@ async function loadScenes () {
   }
 }
 
-async function loadCharactersForLabels () {
-  if (project.value?.source !== 'pocketbase' || !isAuthenticated.value) {
-    characterNames.value = []
-    return
-  }
-  const id = projectId.value
-  if (!id) return
-  const headers = await authHeaders()
-  if (!headers) return
-  try {
-    const res = await $fetch<{ characters: Array<{ name?: string }> }>(`/api/projects/${id}/characters`, { headers })
-    characterNames.value = (res.characters || [])
-      .map(c => String(c?.name || '').trim())
-      .filter(Boolean)
-  } catch {
-    characterNames.value = []
-  }
-}
 
 async function loadShots () {
   generateError.value = ''
@@ -722,7 +738,7 @@ watch(
   () => [clientReady.value, isAuthenticated.value, project.value?.id, project.value?.source] as const,
   () => {
     void loadScenes()
-    void loadCharactersForLabels()
+    void reloadCharacterRefs()
   },
   { immediate: true }
 )

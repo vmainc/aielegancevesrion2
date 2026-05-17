@@ -1,4 +1,5 @@
 import { resolveOpenRouterImageSlug } from '~/server/utils/openrouter-image-models'
+import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 
 export interface OpenRouterGenerateImageResult {
   urls: string[]
@@ -8,10 +9,29 @@ export interface OpenRouterGenerateImageResult {
 /**
  * Single image generation via OpenRouter (shared by /api/generate/image and batch routes).
  */
+async function fetchReferenceImageAsDataUrl (imageUrl: string, maxBytes: number): Promise<string> {
+  const res = await fetchWithTimeout(
+    imageUrl,
+    { method: 'GET', headers: { Accept: 'image/*' } },
+    30_000
+  )
+  if (!res.ok) {
+    throw createError({ statusCode: 400, message: `Could not download reference image (HTTP ${res.status})` })
+  }
+  const buf = Buffer.from(await res.arrayBuffer())
+  if (buf.length > maxBytes) {
+    throw createError({ statusCode: 400, message: 'Reference image is too large for image generation' })
+  }
+  const ct = (res.headers.get('content-type') || '').split(';')[0]?.trim() || 'image/jpeg'
+  return `data:${ct};base64,${buf.toString('base64')}`
+}
+
 export async function openRouterGenerateImage (options: {
   prompt: string
   modelId: string
   apiKey: string
+  /** Featured character portrait — image-to-image style guidance when the model supports vision input. */
+  referenceImageUrl?: string
 }): Promise<OpenRouterGenerateImageResult> {
   const prompt = options.prompt.trim().slice(0, 4000)
   if (!prompt) {
@@ -20,6 +40,24 @@ export async function openRouterGenerateImage (options: {
 
   const openRouterModel = resolveOpenRouterImageSlug(options.modelId)
   const apiKey = options.apiKey.trim()
+
+  let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }> = prompt
+  const refUrl = (options.referenceImageUrl || '').trim()
+  if (refUrl) {
+    try {
+      const dataUrl = await fetchReferenceImageAsDataUrl(refUrl, 4_000_000)
+      userContent = [
+        {
+          type: 'text',
+          text:
+            `${prompt}\n\nUse the attached reference image as the exact character design (face, proportions, materials, colors). Match it closely; do not redesign the character.`
+        },
+        { type: 'image_url', image_url: { url: dataUrl } }
+      ]
+    } catch {
+      userContent = `${prompt}\n\n(Match the established character design from the project cast bible.)`
+    }
+  }
 
   const response = await $fetch<{
     choices?: Array<{
@@ -38,7 +76,7 @@ export async function openRouterGenerateImage (options: {
     },
     body: {
       model: openRouterModel,
-      messages: [{ role: 'user', content: prompt }],
+      messages: [{ role: 'user', content: userContent }],
       modalities: ['image']
     }
   })

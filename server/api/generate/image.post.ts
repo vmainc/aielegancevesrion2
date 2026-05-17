@@ -1,5 +1,6 @@
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { openRouterGenerateImage } from '~/server/utils/openrouter-generate-image'
+import { resolvePocketBaseProxiedUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
 
 function imageErrorMessage (err: unknown): string {
   const anyErr = err as { data?: { error?: { message?: string } }; message?: string }
@@ -32,6 +33,12 @@ function isRetryableImageError (err: unknown): boolean {
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { prompt, model: modelId } = body || {}
+  const referenceImageUrl =
+    typeof body?.referenceImageUrl === 'string'
+      ? body.referenceImageUrl.trim()
+      : typeof body?.reference_image_url === 'string'
+        ? body.reference_image_url.trim()
+        : ''
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
     throw createError({
@@ -56,6 +63,15 @@ export default defineEventHandler(async (event) => {
       .filter(Boolean)
       .filter((m, idx, arr) => arr.indexOf(m) === idx)
 
+    const internalPb = String(config.pocketbaseInternalUrl || '').trim()
+    const publicPb = String(config.public?.pocketbaseUrl || '').trim()
+    const resolvedRef = referenceImageUrl
+      ? resolvePocketBaseProxiedUrlForServerFetch(referenceImageUrl, {
+          pocketbaseInternalUrl: internalPb,
+          publicPocketbaseUrl: publicPb || undefined
+        })
+      : ''
+
     let lastErr: unknown = null
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i]!
@@ -63,7 +79,8 @@ export default defineEventHandler(async (event) => {
         const { urls, model } = await openRouterGenerateImage({
           prompt,
           modelId: candidate,
-          apiKey
+          apiKey,
+          referenceImageUrl: resolvedRef || undefined
         })
         return { urls, model }
       } catch (err: unknown) {
