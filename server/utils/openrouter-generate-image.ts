@@ -10,6 +10,20 @@ export interface OpenRouterGenerateImageResult {
  * Single image generation via OpenRouter (shared by /api/generate/image and batch routes).
  */
 async function fetchReferenceImageAsDataUrl (imageUrl: string, maxBytes: number): Promise<string> {
+  const u = imageUrl.trim()
+  if (u.startsWith('data:image/')) {
+    const comma = u.indexOf(',')
+    if (comma < 0) {
+      throw createError({ statusCode: 400, message: 'Invalid reference image data URL' })
+    }
+    const b64 = u.slice(comma + 1)
+    const approxBytes = Math.floor((b64.length * 3) / 4)
+    if (approxBytes > maxBytes) {
+      throw createError({ statusCode: 400, message: 'Reference image is too large for image generation' })
+    }
+    return u
+  }
+
   const res = await fetchWithTimeout(
     imageUrl,
     { method: 'GET', headers: { Accept: 'image/*' } },

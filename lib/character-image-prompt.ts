@@ -24,13 +24,18 @@ export const CHARACTER_STYLE_PRESETS = [
 export function buildCharacterImagePrompt (
   name: string,
   description: string,
-  stylePreset: string
+  stylePreset: string,
+  options?: { hasReferenceImage?: boolean }
 ): string {
   const style = STYLE_FRAGMENTS[stylePreset] ?? STYLE_FRAGMENTS.custom
   const safeName = (name || '').trim() || 'Character'
   const desc = (description || '').trim() || 'No extra description provided.'
+  const refLine = options?.hasReferenceImage
+    ? 'A reference image is attached — preserve its character design (face, proportions, materials, colors) while applying the description and style below.'
+    : ''
   return [
     'Create a detailed character portrait.',
+    refLine,
     '',
     `Character Name: ${safeName}`,
     '',
@@ -41,7 +46,9 @@ export function buildCharacterImagePrompt (
     style,
     '',
     'High detail, consistent lighting, professional quality.'
-  ].join('\n')
+  ]
+    .filter(Boolean)
+    .join('\n')
 }
 
 export function isValidStylePreset (key: string): boolean {

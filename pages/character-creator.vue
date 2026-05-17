@@ -54,6 +54,59 @@
             </option>
           </select>
         </div>
+
+        <div class="pt-2 border-t border-gray-200">
+          <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <label for="cc-reference" class="text-sm font-medium text-gray-700">
+              Reference / seed image <span class="font-normal text-gray-500">(optional)</span>
+            </label>
+            <button
+              v-if="referenceImageUrl"
+              type="button"
+              class="text-xs font-medium text-gray-600 hover:text-red-700"
+              @click="clearReferenceImage"
+            >
+              Remove
+            </button>
+          </div>
+          <p class="text-xs text-gray-500 mb-3 max-w-2xl">
+            Upload a photo or sketch, or use a portrait already saved for this character. Models will try to match this look while applying your description and style.
+          </p>
+          <div class="flex flex-col sm:flex-row gap-4 items-start">
+            <div
+              v-if="referenceImageUrl"
+              class="w-28 h-28 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0"
+            >
+              <img
+                :src="referenceImageUrl"
+                alt="Reference preview"
+                class="w-full h-full object-cover"
+              >
+            </div>
+            <div class="flex-1 min-w-0 space-y-2">
+              <input
+                id="cc-reference"
+                ref="referenceFileInput"
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                class="block w-full text-sm text-gray-700 file:mr-3 file:py-2 file:px-3 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-primary file:text-gray-950 hover:file:bg-primary/90"
+                @change="onReferenceFileSelected"
+              >
+              <p v-if="referenceLabel" class="text-xs text-gray-600">
+                {{ referenceLabel }}
+              </p>
+              <button
+                v-if="canLoadProjectPortrait && !referenceImageUrl"
+                type="button"
+                class="text-xs font-medium text-primary hover:underline"
+                :disabled="loadingProjectPortrait"
+                @click="loadPortraitFromProject"
+              >
+                {{ loadingProjectPortrait ? 'Loading…' : 'Use featured portrait from project' }}
+              </button>
+            </div>
+          </div>
+        </div>
       </section>
 
       <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
@@ -273,8 +326,10 @@ import {
   CHARACTER_CREATOR_IMAGE_MODELS
 } from '~/lib/character-creator-models'
 import { buildCharacterImagePrompt, CHARACTER_STYLE_PRESETS } from '~/lib/character-image-prompt'
+import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import type { CharacterLibraryEntry } from '~/types/character-creator'
 import type { CreativeProject } from '~/types/creative-project'
+import type { ProjectAsset } from '~/types/project-asset'
 
 const LIBRARY_STORAGE_KEY = 'aielegance-character-library'
 const PB_ID = /^[a-z0-9]{15}$/
@@ -315,6 +370,19 @@ const saveError = ref('')
 const cloudSaving = ref(false)
 const contextProjectId = ref('')
 const contextCharacterId = ref('')
+const referenceImageUrl = ref<string | null>(null)
+/** URL sent to the API (data URL or authenticated media URL). */
+const referenceForApi = ref<string | null>(null)
+const referenceLabel = ref('')
+const referenceFileInput = ref<HTMLInputElement | null>(null)
+const loadingProjectPortrait = ref(false)
+
+const canLoadProjectPortrait = computed(
+  () =>
+    PB_ID.test(contextProjectId.value) &&
+    isAuthenticated.value &&
+    (!!contextCharacterId.value || !!name.value.trim())
+)
 
 const pbProjects = computed(() =>
   projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
@@ -358,6 +426,88 @@ function imageSrc (url: unknown): string {
   return url.startsWith('data:') || url.startsWith('http') ? url : ''
 }
 
+function clearReferenceImage () {
+  referenceImageUrl.value = null
+  referenceForApi.value = null
+  referenceLabel.value = ''
+  if (referenceFileInput.value) referenceFileInput.value.value = ''
+}
+
+async function onReferenceFileSelected (event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  if (!file.type.startsWith('image/')) {
+    toast.showToast('Please choose an image file (JPEG, PNG, WebP, or GIF).', 'warning')
+    input.value = ''
+    return
+  }
+  try {
+    let blob: Blob = file
+    if (file.size > 3_500_000) {
+      blob = await maybeCompressImageBlob(file)
+    }
+    const dataUrl = await blobToDataUrl(blob)
+    referenceImageUrl.value = dataUrl
+    referenceForApi.value = dataUrl
+    referenceLabel.value = `Uploaded: ${file.name}`
+    toast.showToast('Reference image attached.', 'success')
+  } catch {
+    toast.showToast('Could not read that image.', 'error')
+    input.value = ''
+  }
+}
+
+async function loadPortraitFromProject () {
+  const pid = contextProjectId.value
+  if (!PB_ID.test(pid)) return
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Sign in to load a project portrait.', 'info')
+    return
+  }
+  loadingProjectPortrait.value = true
+  try {
+    const res = await $fetch<{ items: ProjectAsset[] }>(
+      `/api/projects/${pid}/assets?kind=character`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    const items = res.items || []
+    const cid = contextCharacterId.value
+    const normName = name.value.trim().toLowerCase().replace(/\s+/g, ' ')
+    let hit: ProjectAsset | undefined
+    if (cid) {
+      const forChar = items.filter((a) => {
+        const meta = a.metadata || {}
+        return meta.character_id === cid && a.id
+      })
+      hit =
+        forChar.find(a => a.metadata?.featured === true) ||
+        forChar[0]
+    }
+    if (!hit && normName) {
+      hit = items.find((a) => {
+        const meta = a.metadata || {}
+        const cname = typeof meta.character_name === 'string' ? meta.character_name.trim().toLowerCase().replace(/\s+/g, ' ') : ''
+        return cname === normName && a.id
+      })
+    }
+    if (!hit?.id) {
+      toast.showToast('No saved portrait found for this character on that project.', 'warning')
+      return
+    }
+    const apiUrl = appendPlaybackAccessToken(projectAssetMediaPath(pid, hit.id), token)
+    referenceImageUrl.value = apiUrl
+    referenceForApi.value = apiUrl
+    referenceLabel.value = `From project: ${hit.title || 'Featured portrait'}`
+    toast.showToast('Using project portrait as reference.', 'success')
+  } catch {
+    toast.showToast('Could not load project portrait.', 'error')
+  } finally {
+    loadingProjectPortrait.value = false
+  }
+}
+
 const hasAnySlot = computed(() =>
   CHARACTER_CREATOR_IMAGE_MODELS.some(
     m => selectedModelIds.value.includes(m.id) && slotByModel.value[m.id] != null
@@ -381,7 +531,8 @@ async function runGenerate () {
   const promptUsed = buildCharacterImagePrompt(
     name.value,
     description.value,
-    stylePreset.value
+    stylePreset.value,
+    { hasReferenceImage: !!referenceForApi.value }
   )
   lastPromptUsed.value = promptUsed
   loading.value = true
@@ -398,7 +549,11 @@ async function runGenerate () {
       try {
         const result = await $fetch<{ urls: string[] }>('/api/generate/image', {
           method: 'POST',
-          body: { prompt: promptUsed, model: modelId }
+          body: {
+            prompt: promptUsed,
+            model: modelId,
+            referenceImageUrl: referenceForApi.value || undefined
+          }
         })
         const urls = result?.urls ?? []
         const first =
