@@ -1,11 +1,7 @@
-import { createError, getRouterParam, readBody } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
+import { createError, getRouterParam, readBody, setResponseStatus } from 'h3'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import {
-  parseScriptBufferToParsed,
-  runFullImportFromParsed
-} from '~/server/utils/import-script-core'
-import { resolveScriptWizardSource } from '~/server/utils/resolve-script-wizard-source'
+import { createScriptImportJob } from '~/server/utils/script-import-job-registry'
+import { runOpenAsProjectImportJob } from '~/server/utils/run-open-as-project-import'
 import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 
 const ASPECT = new Set<ProjectAspectRatio>(['16:9', '9:16', '1:1'])
@@ -32,41 +28,19 @@ export default defineEventHandler(async (event) => {
       ? (body.goal as ProjectGoal)
       : 'film'
 
-  const pb = await getAuthenticatedPocketBase()
-  const resolved = await resolveScriptWizardSource(pb, userId, id)
-  const row = resolved.row
-
-  const title = resolved.title
-  const scriptText = resolved.scriptText.trim()
-  if (!scriptText) {
-    throw createError({
-      statusCode: 400,
-      message: 'No script text to import. Add screenplay content in Script Wizard first.'
-    })
-  }
-
-  const filename =
-    String(row.source_filename || 'script-wizard.txt').replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 180) ||
-    'script-wizard.txt'
-  const fileBuf = Buffer.from(scriptText, 'utf8')
-  const parsed = await parseScriptBufferToParsed(fileBuf, filename)
-
-  const { project, scriptAsset } = await runFullImportFromParsed({
+  const jobId = createScriptImportJob(userId)
+  void runOpenAsProjectImportJob({
+    jobId,
     userId,
-    pb,
-    fileBuf,
-    filename,
-    parsed,
+    scriptId: id,
     aspectRatio,
-    goal,
-    newProjectName: title.slice(0, 500),
-    reuseAssetId: null
+    goal
   })
 
+  setResponseStatus(event, 202)
   return {
-    projectId: project.id,
-    project,
-    scriptAsset,
-    importComplete: true
+    async: true,
+    jobId,
+    status: 'running'
   }
 })

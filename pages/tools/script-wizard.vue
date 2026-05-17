@@ -172,7 +172,7 @@
                   size="sm"
                   :label="openingProject ? 'Opening project' : wizardStepLabel"
                   :sub-label="openingProject
-                    ? 'Full import: reading the script, building scenes, cast, and storyboard panels…'
+                    ? 'Full import runs in the background — scenes, cast, and storyboard panels. This can take several minutes.'
                     : wizardStepSubLabel"
                 />
               </div>
@@ -277,6 +277,7 @@
 <script setup lang="ts">
 import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-from-treatment'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { pollScriptImportJob } from '~/lib/poll-script-import-job'
 import { SCRIPT_WIZARD_STEP_CLIENT_MS, SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { GeneratedConceptItem } from '~/types/concept-generator'
 import type { CreativeProject, ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
@@ -564,24 +565,29 @@ async function openAsProject () {
   const token = getAuthToken()
   if (!token || !id) return
   openingProject.value = true
-  toast.showToast('Importing script — scenes, cast, and storyboard panels…', 'info')
+  toast.showToast('Starting import — scenes, cast, and storyboard panels…', 'info')
+  const headers = { Authorization: `Bearer ${token}` }
   try {
-    const res = await $fetch<{
-      projectId: string
-      project: CreativeProject
-      importComplete?: boolean
+    const started = await $fetch<{
+      async?: boolean
+      jobId?: string
+      status?: string
     }>(`/api/script-wizard/scripts/${id}/open-as-project`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
+      headers,
       body: {
         goal: lastWizardFormat.value.goal,
         aspectRatio: lastWizardFormat.value.aspectRatio
       },
-      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+      timeout: 60_000
     })
-    if (res.project) {
-      registerImportedProject(res.project)
+    if (!started.jobId) {
+      throw new Error('Server did not start an import job')
     }
+    const res = await pollScriptImportJob(started.jobId, headers, {
+      maxMs: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    })
+    registerImportedProject(res.project)
     toast.showToast('Project ready — review storyboard panels, then generate video.', 'success')
     await navigateTo(`/projects/${res.projectId}/storyboard`)
   } catch (e: unknown) {

@@ -1136,6 +1136,16 @@ export async function seedStoryboardFromProjectScenes (input: {
   return sb
 }
 
+/** Reuse Script Wizard / library analysis instead of a second full enrichment pass. */
+export type ScriptImportPrefillEnrichment = {
+  synopsis: string
+  treatment: string
+  genre: string
+  tone: string
+  themes: string[]
+  logline?: string
+}
+
 export async function runFullImportFromParsed (input: {
   userId: string
   pb: PocketBase
@@ -1147,6 +1157,7 @@ export async function runFullImportFromParsed (input: {
   existingProjectId?: string
   newProjectName?: string
   reuseAssetId: string | null
+  prefillEnrichment?: ScriptImportPrefillEnrichment
 }): Promise<{ project: CreativeProject; scriptAsset: ScriptAssetAttachResult }> {
   const {
     userId,
@@ -1173,6 +1184,7 @@ export async function runFullImportFromParsed (input: {
 
   let projectId: string
   let noteTitle: string
+  let projectRowForPref: Record<string, unknown> = {}
 
   if (existingProjectId) {
     let existing: unknown
@@ -1202,15 +1214,39 @@ export async function runFullImportFromParsed (input: {
       typeof (existing as { name?: string }).name === 'string' && (existing as { name: string }).name.trim()
         ? (existing as { name: string }).name.trim()
         : stemTitle
+    projectRowForPref = existing as Record<string, unknown>
   } else {
     noteTitle = (newProjectName && newProjectName.trim()) || stemTitle || 'Imported project'
   }
 
-  const enrichment = await enrichScriptWithAi({
-    projectName: noteTitle,
-    sceneOutline,
-    characterNames: mergedCharacterNames
-  })
+  const pref = resolveProjectPreferredOpenRouterModel(projectRowForPref)
+
+  const prefill = input.prefillEnrichment
+  const enrichment = prefill
+    ? {
+        logline: (prefill.logline || prefill.synopsis.split('\n')[0] || '').trim(),
+        onePageSynopsis: prefill.synopsis.trim(),
+        genre: prefill.genre,
+        tone: prefill.tone,
+        themes: prefill.themes,
+        characterRoles: [],
+        comparableFilms: [],
+        themeExploration: '',
+        sceneSummaries: [],
+        summary: prefill.synopsis.trim()
+      }
+    : await enrichScriptWithAi({
+        projectName: noteTitle,
+        sceneOutline,
+        characterNames: mergedCharacterNames
+      })
+
+  const prose = prefill
+    ? {
+        synopsis: prefill.synopsis.slice(0, 20_000),
+        treatment: prefill.treatment.slice(0, 50_000)
+      }
+    : enrichmentToProjectFields(enrichment)
 
   const fullScriptText = parsed.scenes
     .map(s => `${s.heading}\n\n${s.body}`)
@@ -1225,7 +1261,8 @@ export async function runFullImportFromParsed (input: {
       tone: enrichment.tone,
       themes: enrichment.themes,
       sceneOutline,
-      characterNames: mergedCharacterNames
+      characterNames: mergedCharacterNames,
+      openrouterModelId: pref.openrouterModelId
     }),
     inferCharactersWithScreenShareFromScript({
       projectName: noteTitle,
@@ -1235,14 +1272,16 @@ export async function runFullImportFromParsed (input: {
       tone: enrichment.tone,
       sceneOutline,
       enrichmentHints: enrichment.characterRoles,
-      parserCharacterNames: mergedCharacterNames
+      parserCharacterNames: mergedCharacterNames,
+      openrouterModelId: pref.openrouterModelId
     }),
     inferScenesFromScriptWithClaude({
       projectName: noteTitle,
       genre: enrichment.genre,
       tone: enrichment.tone,
       characterNames: mergedCharacterNames,
-      fullScriptText
+      fullScriptText,
+      openrouterModelId: pref.openrouterModelId
     })
   ])
 
@@ -1273,14 +1312,19 @@ export async function runFullImportFromParsed (input: {
 
   characterRows = characterRows.filter(c => !isExcludedScreenplayCharacterLabel(c.name))
 
-  const prose = enrichmentToProjectFields(enrichment)
-  const threeAct = await inferThreeActThemeBreakdown({
-    projectName: noteTitle,
-    logline: enrichment.logline,
-    onePageSynopsis: enrichment.onePageSynopsis,
-    themeExploration: enrichment.themeExploration,
-    sceneOutline
-  })
+  const treatmentHasThreeAct =
+    prefill &&
+    /three-act|act one|act ii|act 2|act three/i.test(prefill.treatment)
+  const threeAct = treatmentHasThreeAct
+    ? ''
+    : await inferThreeActThemeBreakdown({
+        projectName: noteTitle,
+        logline: enrichment.logline,
+        onePageSynopsis: enrichment.onePageSynopsis,
+        themeExploration: enrichment.themeExploration,
+        sceneOutline,
+        openrouterModelId: pref.openrouterModelId
+      })
   const treatmentWithActs = threeAct ? `${prose.treatment}\n\n${threeAct}` : prose.treatment
   const synopsisDb = prose.synopsis.slice(0, 20_000)
   const treatmentDb = treatmentWithActs.slice(0, 50_000)
