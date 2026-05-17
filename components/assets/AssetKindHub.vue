@@ -714,6 +714,7 @@
 
 <script setup lang="ts">
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { prepareImageFileForUpload } from '~/lib/image-blob-client'
 import { groupProjectAssetsByProject, sortProjectAssetsWithinProjectByKind } from '~/lib/project-asset-sort'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import type { ProjectAsset, ProjectAssetKind } from '~/types/project-asset'
@@ -909,6 +910,11 @@ function firstQueryString (v: unknown): string {
 
 function normalizeName (v: string): string {
   return v.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+/** Synthetic list rows from `creative_characters` — not PATCHable as `project_assets`. */
+function isStoredProjectAsset (a: ProjectAsset): boolean {
+  return PB_ID.test(a.id) && !a.id.startsWith('charrow_')
 }
 
 function characterMetaFromAsset (a: ProjectAsset): { id: string; name: string } {
@@ -1282,6 +1288,7 @@ async function onCharacterImageFilePicked (ev: Event) {
   if (!token) return
   uploadingCharacterAssetId.value = target.id
   try {
+    const uploadFile = await prepareImageFileForUpload(file)
     const charName = characterDisplayName(target)
     const linked = await resolveOrCreateCharacterForUpload(
       target.projectId,
@@ -1290,7 +1297,7 @@ async function onCharacterImageFilePicked (ev: Event) {
       token
     )
     const fd = new FormData()
-    fd.append('file', file)
+    fd.append('file', uploadFile)
     fd.append('kind', 'character')
     fd.append('title', `${charName} — uploaded`.slice(0, 500))
     fd.append('notes', (target.notes || '').slice(0, 20_000))
@@ -1311,14 +1318,29 @@ async function onCharacterImageFilePicked (ev: Event) {
         body: fd
       }
     )
+    toast.showToast('Image uploaded.', 'success')
     if (res.asset) {
-      await setFeaturedCharacterImage(res.asset)
+      try {
+        await setFeaturedCharacterImage(res.asset)
+      } catch {
+        await fetchItems()
+      }
     } else {
-      toast.showToast('Image uploaded to character library.', 'success')
       await fetchItems()
     }
   } catch (e: unknown) {
-    toast.showToast(formatApiFetchError(e, 'Could not upload image'), 'error')
+    const status =
+      e && typeof e === 'object' && 'statusCode' in e
+        ? Number((e as { statusCode?: number }).statusCode)
+        : 0
+    if (status === 413) {
+      toast.showToast(
+        'Image is too large for the server. We resized it automatically — try again, or use a smaller file.',
+        'error'
+      )
+    } else {
+      toast.showToast(formatApiFetchError(e, 'Could not upload image'), 'error')
+    }
   } finally {
     uploadingCharacterAssetId.value = ''
   }
@@ -1342,6 +1364,7 @@ async function setFeaturedCharacterImage (target: ProjectAsset) {
       return normalizeName(m.name) === normalizeName(targetMeta.name)
     })
     for (const a of peers) {
+      if (!isStoredProjectAsset(a)) continue
       const baseMeta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
       await $fetch(`/api/projects/${a.projectId}/assets/${a.id}`, {
         method: 'PATCH',
