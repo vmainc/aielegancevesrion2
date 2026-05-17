@@ -36,6 +36,8 @@ export interface CreativeProject {
   preferredModelId?: string
   /** Intended runtime scope (spot vs feature). Default short when unset. */
   targetLength?: ProjectTargetLength
+  /** Optional hard cap in seconds (e.g. 90 for a social spot). Drives scene/shot counts. */
+  targetDurationSeconds?: number
   synopsis: string
   treatment: string
   conceptNotes: string

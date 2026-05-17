@@ -19,7 +19,9 @@ export default defineEventHandler(async (event) => {
       status: 'completed',
       projectId: job.projectId,
       project: job.project,
-      scriptAsset: job.scriptAsset
+      scriptAsset: job.scriptAsset,
+      storyboard: job.storyboard,
+      sceneCount: job.sceneCount
     }
   }
 

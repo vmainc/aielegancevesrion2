@@ -200,6 +200,9 @@ export function useCreativeProject () {
           tone: patch.tone
         }
         if (patch.targetLength !== undefined) body.targetLength = patch.targetLength
+        if (patch.targetDurationSeconds !== undefined) {
+          body.targetDurationSeconds = patch.targetDurationSeconds
+        }
         if (patch.director !== undefined) body.director = patch.director
         if (patch.continuityMemory !== undefined) body.continuityMemory = patch.continuityMemory
         if (patch.continuityLastIssues !== undefined) body.continuityLastIssues = patch.continuityLastIssues

@@ -59,6 +59,7 @@ export default defineEventHandler(async (event) => {
 
   let projectGoal: ProjectGoal = 'film'
   let projectAspect: ProjectAspectRatio = '16:9'
+  let projectDurationSeconds: number | undefined
   if (typeof body?.goal === 'string' && GOALS.has(body.goal as ProjectGoal)) {
     projectGoal = body.goal as ProjectGoal
   }
@@ -74,8 +75,13 @@ export default defineEventHandler(async (event) => {
       if (owner !== userId) {
         throw createError({ statusCode: 403, message: 'Forbidden' })
       }
-      projectGoal = projectGoalFromRecord(project as Record<string, unknown>)
-      projectAspect = projectAspectFromRecord(project as Record<string, unknown>)
+      const row = project as Record<string, unknown>
+      projectGoal = projectGoalFromRecord(row)
+      projectAspect = projectAspectFromRecord(row)
+      const d = Number(row.target_duration_seconds)
+      if (Number.isFinite(d) && d >= 15 && d <= 3600) {
+        projectDurationSeconds = Math.floor(d)
+      }
     } catch (e: unknown) {
       const err = e as { statusCode?: number; status?: number; response?: { status?: number } }
       if (err?.statusCode === 403 || err?.status === 403) throw e
@@ -96,7 +102,8 @@ export default defineEventHandler(async (event) => {
         openrouterModelId: cfg.openrouterModelId,
         userPrompt,
         goal: projectGoal,
-        aspectRatio: projectAspect
+        aspectRatio: projectAspect,
+        targetDurationSeconds: projectDurationSeconds
       })
       return {
         model: cfg.id,

@@ -1,3 +1,4 @@
+import type { StoryboardSeedResult } from '~/server/utils/import-storyboard-seed'
 import type { CreativeProject } from '~/types/creative-project'
 import type { ScriptAssetAttachResult } from '~/server/utils/import-script-core'
 
@@ -10,6 +11,8 @@ export type ScriptImportJobRecord = {
   projectId?: string
   project?: CreativeProject
   scriptAsset?: ScriptAssetAttachResult
+  storyboard?: StoryboardSeedResult
+  sceneCount?: number
   error?: string
 }
 
@@ -43,6 +46,8 @@ export function completeScriptImportJob (
     projectId: string
     project: CreativeProject
     scriptAsset: ScriptAssetAttachResult
+    storyboard?: StoryboardSeedResult
+    sceneCount?: number
   }
 ): void {
   const row = jobs.get(jobId.trim())
@@ -52,7 +57,9 @@ export function completeScriptImportJob (
     status: 'completed',
     projectId: result.projectId,
     project: result.project,
-    scriptAsset: result.scriptAsset
+    scriptAsset: result.scriptAsset,
+    storyboard: result.storyboard,
+    sceneCount: result.sceneCount
   })
 }
 

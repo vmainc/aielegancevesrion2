@@ -1,4 +1,5 @@
 import type { ProjectDirector } from '~/types/creative-project'
+import { durationBudgetPromptBlock, type ProjectDurationBudget } from '~/lib/project-duration-budget'
 import { isAnimalOnlyCast } from '~/lib/storyboard-continuity-prompts'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
@@ -33,6 +34,7 @@ export interface GenerateShotsContext {
   director?: ProjectDirector | null
   continuityMemory?: string | null
   openrouterModelId?: string
+  durationBudget?: ProjectDurationBudget | null
 }
 
 function extractJsonWithShots (text: string): { shots?: unknown[] } | null {
@@ -202,6 +204,10 @@ ${mem.slice(0, 8000)}
 `
     : ''
 
+  const budget = ctx.durationBudget
+  const shotMax = budget ? Math.min(12, budget.maxShotsPerScene) : 12
+  const shotMin = budget ? Math.min(budget.minShotsPerScene, shotMax) : 3
+
   const animalOnly = isAnimalOnlyCast(
     ctx.characters.map(c => ({ name: c.name, traitsRoleVisual: c.traitsRoleVisual }))
   )
@@ -218,7 +224,7 @@ ANIMAL-ONLY CAST (critical):
 Output ONLY valid JSON (no markdown), exactly this shape:
 {"shots":[{"order":1,"title":"short label","description":"story beat in plain language","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static","duration_seconds":5,"image_prompt":"LONG detailed still-frame prompt (see rules)","video_prompt":"LONG motion prompt (see rules)","negative_prompt":"comma-separated exclusions"}]}
 Rules:
-- Produce between 5 and 12 shots for THIS scene only; order 1..N; duration_seconds MUST be exactly 5 or 10 (integer).
+- Produce between ${shotMin} and ${shotMax} shots for THIS scene only; order 1..N; duration_seconds MUST be exactly 5 or 10 (integer).
 - image_prompt: MINIMUM ~120 words. Production-ready STILL frame. Must include: (1) which cast members appear and their COMPLETE visual design copied from CHARACTERS (materials, colors, proportions, wardrobe, expression) — never shorten to one adjective; (2) locked environment/props/lighting for this scene; (3) lens/framing for shot_type; (4) same art direction as director bible. Repeat identical character wording across shots — consistency beats brevity.
 - video_prompt: MINIMUM ~80 words. Motion-only delta on the still: camera_move, subject action, lighting shifts — do NOT introduce new characters or redesign anyone.
 - negative_prompt: comma-separated forbidden elements (watermark, text, blurry, wrong species, extra characters, style drift).${animalRules}
@@ -244,7 +250,7 @@ SCRIPT / SCENE TEXT (may be partial or messy):
 ${scriptExcerpt || '(no script body — work from title and summary only)'}
 
 CHARACTERS
-${charBlock}`
+${budget ? `${durationBudgetPromptBlock(budget)}\n\n` : ''}${charBlock}`
 
   const body = buildOpenRouterChatCompletionBody({
     model: ctx.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude,
@@ -297,7 +303,7 @@ ${charBlock}`
 
   const normalized = normalizeShotsFromModelArray(arr)
   const shots = enrichGeneratedShotsForContinuity(normalized, ctx)
-  if (shots.length < 3) {
+  if (shots.length < shotMin) {
     console.warn(
       '[generate-shots-ai] Too few normalized shots:',
       shots.length,
@@ -307,8 +313,8 @@ ${charBlock}`
     throw new Error(
       shots.length === 0
         ? 'Model returned shots but none had usable prompts — try again'
-        : `Too few shots generated (${shots.length}); need at least 3`
+        : `Too few shots generated (${shots.length}); need at least ${shotMin}`
     )
   }
-  return shots.slice(0, 12)
+  return shots.slice(0, shotMax)
 }

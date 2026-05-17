@@ -1,4 +1,5 @@
 import type PocketBase from 'pocketbase'
+import { resolveProjectDurationBudget } from '~/lib/project-duration-budget'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
 import { replaceSceneShots } from '~/server/utils/persist-scene-shots'
@@ -50,8 +51,19 @@ export async function seedStoryboardsAfterScriptImport (params: {
   }
 
   const { pb, userId, projectId, project, scenes, characters } = params
-  const capSkipped = Math.max(0, scenes.length - IMPORT_STORYBOARD_MAX_SCENES)
-  const toProcess = scenes.slice(0, IMPORT_STORYBOARD_MAX_SCENES)
+  const budget = resolveProjectDurationBudget({
+    targetDurationSeconds:
+      typeof project.target_duration_seconds === 'number'
+        ? project.target_duration_seconds
+        : undefined,
+    targetLength: project.target_length as import('~/types/creative-project').ProjectTargetLength | undefined,
+    goal: String(project.goal || 'film') as import('~/types/creative-project').ProjectGoal
+  })
+  const sceneCap = budget
+    ? Math.min(IMPORT_STORYBOARD_MAX_SCENES, budget.maxScenesForImport)
+    : IMPORT_STORYBOARD_MAX_SCENES
+  const capSkipped = Math.max(0, scenes.length - sceneCap)
+  const toProcess = scenes.slice(0, sceneCap)
 
   const director = parseDirectorField(project.director) ?? null
   const continuityMemory = String(project.continuity_memory || '')
@@ -75,7 +87,8 @@ export async function seedStoryboardsAfterScriptImport (params: {
         sceneScript: body,
         characters: charCtx,
         director,
-        continuityMemory
+        continuityMemory,
+        durationBudget: budget
       })
       await replaceSceneShots(pb, userId, projectId, scene.id, shots)
       return 'ok'

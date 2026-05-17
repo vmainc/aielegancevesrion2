@@ -1,5 +1,6 @@
 import type PocketBase from 'pocketbase'
 import { parseCharactersFromConceptNotes, parseLoglineFromConceptNotes } from '~/lib/format-stored-concept'
+import { resolveProjectDurationBudget } from '~/lib/project-duration-budget'
 import { sanitizeCharacterNameList } from '~/lib/screenplay-format'
 import { generateScreenplayFromStoryIdea } from '~/server/utils/generate-screenplay-from-idea'
 import {
@@ -89,6 +90,15 @@ export async function bootstrapProjectFromConcept (
     ...parseCharactersFromConceptNotes(conceptNotes)
   ])
 
+  const durationBudget = resolveProjectDurationBudget({
+    targetDurationSeconds:
+      typeof projectRow.target_duration_seconds === 'number'
+        ? projectRow.target_duration_seconds
+        : undefined,
+    targetLength: projectRow.target_length as import('~/types/creative-project').ProjectTargetLength | undefined,
+    goal
+  })
+
   const scriptText = await generateScreenplayFromStoryIdea({
     title,
     logline,
@@ -96,7 +106,8 @@ export async function bootstrapProjectFromConcept (
     genre,
     tone,
     characters: conceptChars,
-    goal
+    goal,
+    durationBudget
   })
 
   const filename = 'ai-story-idea.txt'

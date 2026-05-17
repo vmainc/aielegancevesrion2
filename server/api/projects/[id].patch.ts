@@ -53,6 +53,14 @@ export default defineEventHandler(async (event) => {
   if (typeof body.targetLength === 'string' && LENGTHS.has(body.targetLength)) {
     patch.target_length = body.targetLength
   }
+  if (body.targetDurationSeconds === null) {
+    patch.target_duration_seconds = null
+  } else if (body.targetDurationSeconds !== undefined) {
+    const n = Math.floor(Number(body.targetDurationSeconds))
+    if (Number.isFinite(n) && n >= 15 && n <= 3600) {
+      patch.target_duration_seconds = n
+    }
+  }
 
   if (body.director === null) {
     // Allow explicit reset from UI.

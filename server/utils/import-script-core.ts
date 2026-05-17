@@ -39,6 +39,7 @@ import {
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { resolveProjectPreferredOpenRouterModel } from '~/server/utils/project-model-preference'
+import { resolveProjectDurationBudget } from '~/lib/project-duration-budget'
 import type { CreativeProject } from '~/types/creative-project'
 
 const ASPECT = new Set(['16:9', '9:16', '1:1'])
@@ -1358,7 +1359,7 @@ export async function runFullImportFromParsed (input: {
   )
 
   const usedClaudeScenes = claudeInferredScenes.length > 0
-  const sceneRowsForCreate: Array<{ heading: string; summary: string; body: string }> = usedClaudeScenes
+  let sceneRowsForCreate: Array<{ heading: string; summary: string; body: string }> = usedClaudeScenes
     ? claudeInferredScenes.map(s => ({
         heading: s.heading,
         summary: s.summary,
@@ -1373,6 +1374,18 @@ export async function runFullImportFromParsed (input: {
         ).slice(0, 2000),
         body: s.body.slice(0, 100_000)
       }))
+
+  const durationBudget = resolveProjectDurationBudget({
+    targetDurationSeconds:
+      typeof projectRowForPref.target_duration_seconds === 'number'
+        ? projectRowForPref.target_duration_seconds
+        : undefined,
+    targetLength: projectRowForPref.target_length as import('~/types/creative-project').ProjectTargetLength | undefined,
+    goal
+  })
+  if (durationBudget && sceneRowsForCreate.length > durationBudget.maxScenesForImport) {
+    sceneRowsForCreate = sceneRowsForCreate.slice(0, durationBudget.maxScenesForImport)
+  }
 
   const conceptNotes =
     `Imported from ${filename}. ${sceneRowsForCreate.length} scene(s)${

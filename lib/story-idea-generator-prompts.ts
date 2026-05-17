@@ -48,7 +48,8 @@ Rules:
 export function buildConceptUserPrompt (
   userPrompt: string,
   goal: ProjectGoal,
-  aspectRatio?: ProjectAspectRatio
+  aspectRatio?: ProjectAspectRatio,
+  targetDurationSeconds?: number
 ): string {
   const aspect =
     aspectRatio === '9:16'
@@ -59,24 +60,28 @@ export function buildConceptUserPrompt (
           ? 'landscape 16:9'
           : ''
   const aspectLine = aspect ? `\nTarget frame: ${aspect}.` : ''
+  const runtimeLine =
+    typeof targetDurationSeconds === 'number' && targetDurationSeconds >= 15
+      ? `\nTarget runtime: ${targetDurationSeconds} seconds total — story must fit this length when storyboarded (5s panels).`
+      : ''
 
   if (goal === 'social') {
     return `Create multiple-ready short-form story concepts from this idea:
 
-${userPrompt.trim()}${aspectLine}
+${userPrompt.trim()}${aspectLine}${runtimeLine}
 
 Return title, logline, summary (beat outline), tone, genre, hook (opening grab), and characters (ALL CAPS names array).`
   }
   if (goal === 'commercial') {
     return `Create a compelling branded video concept from this brief:
 
-${userPrompt.trim()}${aspectLine}
+${userPrompt.trim()}${aspectLine}${runtimeLine}
 
 Return title, logline, summary, tone, genre, hook, and characters (ALL CAPS names array).`
   }
   return `Create a compelling concept based on this idea:
 
-${userPrompt.trim()}${aspectLine}
+${userPrompt.trim()}${aspectLine}${runtimeLine}
 
 Return title, logline (1 sentence), summary (3–5 sentences), tone, genre, and characters (ALL CAPS names array). Make it engaging and cinematic.`
 }

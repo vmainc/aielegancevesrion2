@@ -4,6 +4,12 @@ import {
   sanitizeCharacterNameList,
   SCREENPLAY_AI_FORMAT_RULES
 } from '~/lib/screenplay-format'
+import {
+  resolveProjectDurationBudget,
+  screenplayDurationGuidance,
+  type ProjectDurationBudget
+} from '~/lib/project-duration-budget'
+import type { ProjectGoal } from '~/types/creative-project'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
 
@@ -43,6 +49,9 @@ export async function generateScreenplayFromStoryIdea (input: {
   tone?: string
   characters?: unknown
   goal?: string
+  targetDurationSeconds?: number
+  targetLength?: import('~/types/creative-project').ProjectTargetLength
+  durationBudget?: ProjectDurationBudget | null
 }): Promise<string> {
   const cast = resolveCastForStoryIdea({
     characters: input.characters,
@@ -62,11 +71,22 @@ export async function generateScreenplayFromStoryIdea (input: {
     })
   }
 
+  const goal = (input.goal || 'film') as ProjectGoal
+  const budget =
+    input.durationBudget ??
+    resolveProjectDurationBudget({
+      targetDurationSeconds: input.targetDurationSeconds,
+      targetLength: input.targetLength,
+      goal
+    })
+  const durationBlock = budget
+    ? `\n\n${screenplayDurationGuidance(budget, goal)}`
+    : `\n\nTarget: ${goal === 'social' ? 'short social video (under 2 minutes on screen)' : goal === 'commercial' ? '30–60 second spot' : 'short film / proof-of-concept (about 3–8 pages)'}.`
+
   const system = `You are an experienced screenwriter drafting a short screenplay for development and automated import.
 
 ${SCREENPLAY_AI_FORMAT_RULES}
-
-Target: ${input.goal === 'social' ? 'short social video (under 2 minutes on screen)' : input.goal === 'commercial' ? '30–60 second spot' : 'short film / proof-of-concept (about 3–8 pages)'}.`
+${durationBlock}`
 
   const userMsg = [
     `Title: ${input.title}`,

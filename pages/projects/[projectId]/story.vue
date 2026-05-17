@@ -39,6 +39,29 @@
         <p v-if="!canPersist" class="mt-2 text-xs text-amber-800">
           Sign in and open a cloud project to sync length to your account. Local-only projects still use this choice for display until you save online.
         </p>
+        <div
+          v-if="lengthModel === 'spot' || activeProject?.goal === 'social' || activeProject?.goal === 'commercial'"
+          class="mt-4 pt-4 border-t border-gray-200"
+        >
+          <label for="target-duration-sec" class="block text-sm font-medium text-gray-700 mb-1">
+            Exact runtime (seconds)
+          </label>
+          <p class="text-xs text-gray-500 mb-2">
+            Optional hard cap — storyboard panels and scenes stay within this total (e.g. 90).
+          </p>
+          <input
+            id="target-duration-sec"
+            v-model.number="durationSecondsModel"
+            type="number"
+            min="15"
+            max="3600"
+            step="5"
+            class="w-full max-w-[12rem] px-3 py-2 rounded-lg bg-white border border-gray-300 text-sm"
+            :disabled="savingLength || !canPersist"
+            placeholder="90"
+            @change="onDurationSecondsChange"
+          >
+        </div>
       </div>
 
       <div
@@ -154,6 +177,7 @@
 <script setup lang="ts">
 import { stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
+import { defaultDurationSecondsForProject } from '~/lib/project-duration-budget'
 import { TARGET_LENGTH_OPTIONS } from '~/lib/target-length'
 import type { CreativeProject, ProjectTargetLength } from '~/types/creative-project'
 
@@ -178,6 +202,7 @@ const projectId = activeProjectId
 const lengthOptions = TARGET_LENGTH_OPTIONS
 
 const lengthModel = ref<ProjectTargetLength>('short')
+const durationSecondsModel = ref<number | ''>('')
 const savingLength = ref(false)
 const generatingKind = ref<'script' | 'treatment' | null>(null)
 
@@ -213,6 +238,44 @@ watch(
   },
   { immediate: true }
 )
+
+watch(
+  () => activeProject.value,
+  (p) => {
+    if (!p) {
+      durationSecondsModel.value = ''
+      return
+    }
+    if (typeof p.targetDurationSeconds === 'number' && p.targetDurationSeconds > 0) {
+      durationSecondsModel.value = p.targetDurationSeconds
+      return
+    }
+    const def = defaultDurationSecondsForProject({
+      goal: p.goal,
+      targetLength: p.targetLength
+    })
+    durationSecondsModel.value = def ?? ''
+  },
+  { immediate: true }
+)
+
+async function onDurationSecondsChange () {
+  const p = activeProject.value
+  if (!p || !canPersist.value) return
+  const raw = durationSecondsModel.value
+  const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : null
+  savingLength.value = true
+  try {
+    await updateProject(p.id, {
+      targetDurationSeconds: n && n >= 15 && n <= 3600 ? n : null
+    })
+    toast.showToast('Runtime saved.', 'success')
+  } catch {
+    toast.showToast('Could not save runtime.', 'error')
+  } finally {
+    savingLength.value = false
+  }
+}
 
 async function onLengthChange () {
   const p = activeProject.value

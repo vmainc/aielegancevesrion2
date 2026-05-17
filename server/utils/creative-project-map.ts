@@ -25,6 +25,7 @@ type PbProjectRecord = {
   continuity_memory?: string
   continuity_last_issues?: string
   target_length?: string
+  target_duration_seconds?: number
   created?: string
   updated?: string
 }
@@ -86,6 +87,10 @@ export function pbRecordToCreativeProject (r: PbProjectRecord): CreativeProject 
     workflowMode: workflowModeFromProjectRecord(r) as ProjectWorkflowMode,
     preferredModelId: String(r.preferred_model_id || '').trim() || 'claude',
     targetLength,
+    targetDurationSeconds:
+      typeof r.target_duration_seconds === 'number' && r.target_duration_seconds > 0
+        ? Math.floor(r.target_duration_seconds)
+        : undefined,
     synopsis: r.synopsis || '',
     treatment: r.treatment || '',
     conceptNotes: r.concept_notes || '',

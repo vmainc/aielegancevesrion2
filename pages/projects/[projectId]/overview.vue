@@ -342,7 +342,7 @@
         <FilmReelLoader
           size="sm"
           label="Building your project"
-          sub-label="Screenplay, director, cast, scenes, and storyboard panels — several minutes."
+          sub-label="Runs in the background — screenplay, director, cast, scenes, and storyboard panels."
         />
       </div>
       <p v-if="conceptBootstrapError" class="text-sm text-red-700 mb-3">{{ conceptBootstrapError }}</p>
@@ -421,10 +421,34 @@
         ref="promptTextareaRef"
         v-model="conceptPrompt"
         rows="4"
-        class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-5"
+        class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-4"
         :placeholder="scratchPromptPlaceholder"
         :disabled="generating"
       />
+
+      <div
+        v-if="scratchWorkflow"
+        class="mb-5 rounded-lg border border-gray-200 bg-white px-3 py-3"
+      >
+        <label for="target-runtime-seconds" class="block text-sm font-medium text-gray-700 mb-1">
+          Target runtime (seconds)
+        </label>
+        <p class="text-xs text-gray-500 mb-2">
+          Scenes and storyboard panels are capped to fit (e.g. 90s ≈ 18 panels at 5s each). Leave blank for no hard cap.
+        </p>
+        <input
+          id="target-runtime-seconds"
+          v-model.number="targetDurationSeconds"
+          type="number"
+          min="15"
+          max="3600"
+          step="5"
+          class="w-full max-w-[12rem] px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:border-primary"
+          :disabled="generating || conceptBootstrapRunning"
+          placeholder="e.g. 90"
+          @change="persistTargetDuration"
+        >
+      </div>
 
       <fieldset class="mb-5" :disabled="generating || !(modelOptions?.length)">
         <legend class="text-sm font-medium text-gray-700 mb-2">AI models</legend>
@@ -814,6 +838,8 @@ import {
   parseCharactersFromConceptNotes,
   parseLoglineFromConceptNotes
 } from '~/lib/format-stored-concept'
+import { defaultDurationSecondsForProject } from '~/lib/project-duration-budget'
+import { pollScriptImportJob } from '~/lib/poll-script-import-job'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { ConceptGeneratorResultItem, GeneratedConceptItem } from '~/types/concept-generator'
 import type { CreativeCharacter, CreativeProject } from '~/types/creative-project'
@@ -1125,6 +1151,7 @@ const deletingConcept = ref(false)
 const conceptBootstrapRunning = ref(false)
 const conceptBootstrapError = ref('')
 const pipelineBuilt = ref<boolean | null>(null)
+const targetDurationSeconds = ref<number | ''>('')
 const promptTextareaRef = ref<HTMLTextAreaElement | null>(null)
 
 const hasConcept = computed(() => {
@@ -1208,6 +1235,42 @@ watch(hasConcept, (has) => {
   showGeneratorForm.value = !has
 }, { immediate: true })
 
+watch(
+  () => [project.value?.targetDurationSeconds, project.value?.goal, project.value?.targetLength] as const,
+  () => {
+    const p = project.value
+    if (!p) {
+      targetDurationSeconds.value = ''
+      return
+    }
+    if (typeof p.targetDurationSeconds === 'number' && p.targetDurationSeconds > 0) {
+      targetDurationSeconds.value = p.targetDurationSeconds
+      return
+    }
+    const def = defaultDurationSecondsForProject({
+      goal: p.goal,
+      targetLength: p.targetLength
+    })
+    targetDurationSeconds.value = def ?? ''
+  },
+  { immediate: true }
+)
+
+async function persistTargetDuration () {
+  const id = projectId.value
+  if (!id || !canCloudImport.value) return
+  const raw = targetDurationSeconds.value
+  const n = typeof raw === 'number' && Number.isFinite(raw) ? Math.floor(raw) : null
+  try {
+    await updateProject(id, {
+      targetDurationSeconds:
+        n && n >= 15 && n <= 3600 ? n : null
+    })
+  } catch {
+    toast.showToast('Could not save target runtime.', 'error')
+  }
+}
+
 const showConceptBootstrapCta = computed(
   () =>
     scratchWorkflow.value &&
@@ -1265,8 +1328,10 @@ async function runConceptBootstrap (opts?: {
   const id = projectId.value
   const token = getAuthToken()
   if (!id || !token) return
+  await persistTargetDuration()
   conceptBootstrapRunning.value = true
   conceptBootstrapError.value = ''
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   try {
     const p = project.value
     const body = {
@@ -1279,26 +1344,25 @@ async function runConceptBootstrap (opts?: {
         ? opts.characters
         : parseCharactersFromConceptNotes(p?.conceptNotes || '')
     }
-    const res = await $fetch<{
-      project: CreativeProject
-      storyboard?: { ok: number; failed: number; capSkipped: number }
-      sceneCount: number
-    }>(`/api/projects/${id}/bootstrap-from-concept`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-      body,
-      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    const started = await $fetch<{ async: boolean; jobId: string }>(
+      `/api/projects/${id}/bootstrap-from-concept`,
+      { method: 'POST', headers, body }
+    )
+    if (!started.jobId) {
+      throw new Error('Server did not start build job')
+    }
+    const polled = await pollScriptImportJob(started.jobId, headers, {
+      maxMs: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
     })
-    registerImportedProject(res.project)
+    registerImportedProject(polled.project)
     pipelineBuilt.value = true
-    const sb = res.storyboard
-    const msg = sb?.ok
-      ? `Built ${res.sceneCount} scene(s) with storyboard shots for ${sb.ok} scene(s). Open Storyboard to review panels.`
-      : `Built ${res.sceneCount} scene(s). Open Storyboard to generate or refresh shots.`
-    toast.showToast(msg, 'success')
+    toast.showToast('Project built — opening Storyboard.', 'success')
     await navigateTo(withProjectQuery(`/projects/${id}/storyboard`))
   } catch (e: unknown) {
-    conceptBootstrapError.value = formatApiFetchError(e, 'Could not build project from this story.')
+    conceptBootstrapError.value = formatApiFetchError(
+      e,
+      'Could not build project from this story. Try again or use Claude instead of Llama for faster results.'
+    )
     toast.showToast(conceptBootstrapError.value, 'error')
   } finally {
     conceptBootstrapRunning.value = false
@@ -1453,6 +1517,7 @@ async function generateConcepts () {
   generating.value = true
   conceptResults.value = null
   try {
+    await persistTargetDuration()
     const res = await $fetch<ConceptGeneratorResultItem[]>('/api/generate-concepts', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },

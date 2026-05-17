@@ -75,6 +75,7 @@ export async function generateConceptWithOpenRouter (options: {
   userPrompt: string
   goal?: ProjectGoal
   aspectRatio?: ProjectAspectRatio
+  targetDurationSeconds?: number
 }): Promise<ParsedConceptFields> {
   const goal = options.goal || 'film'
   const config = useRuntimeConfig()
@@ -89,7 +90,12 @@ export async function generateConceptWithOpenRouter (options: {
       { role: 'system', content: buildConceptSystemPrompt(goal) },
       {
         role: 'user',
-        content: buildConceptUserPrompt(options.userPrompt, goal, options.aspectRatio)
+        content: buildConceptUserPrompt(
+          options.userPrompt,
+          goal,
+          options.aspectRatio,
+          options.targetDurationSeconds
+        )
       }
     ],
     temperature: 0.75,
