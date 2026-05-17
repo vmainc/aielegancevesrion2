@@ -263,7 +263,7 @@ ${budget ? `${durationBudgetPromptBlock(budget)}\n\n` : ''}${charBlock}`
   })
 
   const controller = new AbortController()
-  const t = setTimeout(() => controller.abort(), 120_000)
+  const t = setTimeout(() => controller.abort(), 180_000)
   let res: Response
   try {
     res = await fetch('https://openrouter.ai/api/v1/chat/completions', {

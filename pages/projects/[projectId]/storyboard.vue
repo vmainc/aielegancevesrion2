@@ -217,9 +217,12 @@
               </div>
               <div>
                 <div class="flex justify-between items-start gap-2 mb-1">
-                  <label class="text-xs font-medium text-gray-500">Description</label>
+                  <label class="text-xs font-medium text-gray-500">Story beat (short)</label>
                   <PromptEnhanceButton v-model="shot.description" context="story" />
                 </div>
+                <p class="text-[10px] text-gray-400 mb-1">
+                  Full director / cast / frame prompts are under “Shot details & prompts” below.
+                </p>
                 <textarea
                   v-model="shot.description"
                   rows="2"
@@ -286,9 +289,12 @@
                   </span>
                 </p>
               </div>
-              <details class="group border-t border-gray-200 pt-3">
+              <details
+                class="group border-t border-gray-200 pt-3"
+                :open="Boolean((shot.imagePrompt || '').trim().length > 120)"
+              >
                 <summary class="cursor-pointer text-sm text-primary font-medium hover:underline">
-                  Shot details & prompts
+                  Shot details & prompts (full frame / video prompts)
                 </summary>
                 <div class="mt-3 space-y-3 pt-1">
                   <div>
@@ -298,8 +304,8 @@
                     </div>
                     <textarea
                       v-model="shot.imagePrompt"
-                      rows="6"
-                      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                      rows="10"
+                      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y font-mono text-[13px] leading-relaxed"
                     />
                   </div>
                   <div>
@@ -309,8 +315,8 @@
                     </div>
                     <textarea
                       v-model="shot.videoPrompt"
-                      rows="4"
-                      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                      rows="8"
+                      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y font-mono text-[13px] leading-relaxed"
                     />
                   </div>
                   <div>
@@ -368,6 +374,7 @@ import {
 } from '~/lib/shot-character-continuity'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { pollGenerateShotsJob } from '~/lib/poll-generate-shots-job'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 
 const PB_SHOT_ID = /^[a-z0-9]{15}$/
@@ -772,16 +779,18 @@ async function generateShots () {
   persistenceWarning.value = ''
   shotsPersisted.value = true
   try {
-    const res = await $fetch<{
-      shots: CreativeShot[]
-      persisted?: boolean
-      warning?: string
-      continuity?: { issueCount: number; memoryUpdated: boolean }
-    }>('/api/generate-shots', {
+    const started = await $fetch<{ async: boolean; jobId: string }>('/api/generate-shots', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
       body: { project_id: id, scene_id: sid },
-      timeout: 180_000
+      timeout: 60_000
+    })
+    if (!started.jobId) {
+      throw new Error('Server did not start shot generation job')
+    }
+    toast.showToast('Generating shots — this can take a few minutes…', 'info')
+    const res = await pollGenerateShotsJob(started.jobId, headers, {
+      maxMs: 12 * 60 * 1000
     })
     const fromApi = mapShotsFromApi(res.shots)
     shotsPersisted.value = res.persisted !== false

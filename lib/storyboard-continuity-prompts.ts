@@ -1,5 +1,7 @@
 /** Shared storyboard continuity helpers (client + server). */
 
+import type { ProjectDirector } from '~/types/creative-project'
+
 export interface CastMemberForContinuity {
   name: string
   traitsRoleVisual: string
@@ -56,6 +58,21 @@ export function mergeNegativePromptParts (...parts: (string | undefined)[]): str
     }
   }
   return out.join(', ')
+}
+
+export function buildDirectorBibleBlock (director: ProjectDirector | null | undefined): string {
+  const d = director
+  if (!d) return ''
+  const lines = [
+    d.name?.trim() && `Director: ${d.name.trim()}`,
+    d.style?.trim() && `Visual style: ${d.style.trim()}`,
+    d.tone?.trim() && `Director tone: ${d.tone.trim()}`,
+    d.camera_preferences?.trim() && `Camera language: ${d.camera_preferences.trim()}`,
+    d.lighting_style?.trim() && `Lighting: ${d.lighting_style.trim()}`,
+    d.pacing?.trim() && `Pacing: ${d.pacing.trim()}`
+  ].filter((x): x is string => Boolean(x))
+  if (!lines.length) return ''
+  return ['DIRECTOR BIBLE (mandatory — apply to every frame):', ...lines].join('\n')
 }
 
 export function buildCastBibleParagraph (cast: CastMemberForContinuity[]): string {
@@ -128,6 +145,7 @@ export function expandShortImagePrompt (opts: {
   cameraMove: string
   sceneTitle: string
   sceneSummary: string
+  directorBible?: string
   directorStyle?: string
   directorLighting?: string
   characterLock: string
@@ -138,6 +156,7 @@ export function expandShortImagePrompt (opts: {
   const style = [opts.directorStyle, opts.directorLighting].filter(Boolean).join('; ')
   return [
     `STORYBOARD STILL — "${opts.title}" (${opts.shotType}, camera: ${opts.cameraMove}).`,
+    opts.directorBible,
     base,
     env ? `SETTING (locked across scene): ${env}` : '',
     style ? `VISUAL STYLE & LIGHTING (project-wide, do not change between panels): ${style}` : '',

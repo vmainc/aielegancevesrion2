@@ -2,6 +2,7 @@ import type { GeneratedShot, GenerateShotsContext } from '~/server/utils/generat
 import {
   buildCastBibleParagraph,
   buildCharacterLockForShot,
+  buildDirectorBibleBlock,
   buildProjectNegativePrompt,
   castMembersInShot,
   expandShortImagePrompt,
@@ -9,8 +10,8 @@ import {
   mergeNegativePromptParts
 } from '~/lib/storyboard-continuity-prompts'
 
-const MIN_IMAGE_PROMPT_CHARS = 180
-const MIN_VIDEO_PROMPT_CHARS = 120
+const MIN_IMAGE_PROMPT_CHARS = 280
+const MIN_VIDEO_PROMPT_CHARS = 140
 
 function directorField (ctx: GenerateShotsContext, key: 'style' | 'lighting_style'): string {
   const d = ctx.director
@@ -32,6 +33,8 @@ export function enrichGeneratedShotsForContinuity (
   const animalOnly = isAnimalOnlyCast(cast)
   const projectNegative = buildProjectNegativePrompt({ cast })
   const fullCastBible = buildCastBibleParagraph(cast)
+  const directorBible = buildDirectorBibleBlock(ctx.director)
+  const mem = (ctx.continuityMemory || '').trim()
 
   return shots.map((shot) => {
     const inShot = castMembersInShot(
@@ -53,17 +56,27 @@ export function enrichGeneratedShotsForContinuity (
         cameraMove: shot.camera_move,
         sceneTitle: ctx.sceneTitle,
         sceneSummary: ctx.sceneSummary,
+        directorBible,
         directorStyle: directorField(ctx, 'style'),
         directorLighting: directorField(ctx, 'lighting_style'),
         characterLock,
         existingImagePrompt: image_prompt
       })
-    } else if (characterLock && !image_prompt.includes('CHARACTER LOCK')) {
-      image_prompt = `${image_prompt}\n\n${characterLock}`
+    } else {
+      if (directorBible && !image_prompt.includes('DIRECTOR BIBLE')) {
+        image_prompt = `${directorBible}\n\n${image_prompt}`
+      }
+      if (characterLock && !image_prompt.includes('CHARACTER LOCK')) {
+        image_prompt = `${image_prompt}\n\n${characterLock}`
+      }
     }
 
     if (fullCastBible && !image_prompt.includes('FULL CAST BIBLE')) {
       image_prompt = `${image_prompt}\n\nFULL CAST BIBLE (same designs every panel):\n${fullCastBible}`
+    }
+
+    if (mem && !image_prompt.includes('CONTINUITY MEMORY')) {
+      image_prompt = `${image_prompt}\n\nCONTINUITY MEMORY (do not contradict):\n${mem.slice(0, 2500)}`
     }
 
     if (animalOnly && !image_prompt.includes('ANIMAL-ONLY')) {
@@ -74,13 +87,16 @@ export function enrichGeneratedShotsForContinuity (
     if (video_prompt.length < MIN_VIDEO_PROMPT_CHARS) {
       video_prompt = [
         `MOTION for "${shot.title}" (${shot.camera_move}):`,
+        directorBible,
         shot.description,
         characterLock,
-        'Camera and subject motion only — preserve exact character designs and environment from the still frame.',
-        image_prompt.slice(0, 1200)
+        'Camera and subject motion only — preserve exact character designs, director bible look, and environment from the still frame.',
+        image_prompt.slice(0, 1600)
       ]
         .filter(Boolean)
         .join('\n\n')
+    } else if (directorBible && !video_prompt.includes('DIRECTOR BIBLE')) {
+      video_prompt = `${directorBible}\n\n${video_prompt}`
     }
 
     const negative_prompt = mergeNegativePromptParts(
