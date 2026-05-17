@@ -222,7 +222,7 @@
                   <PromptEnhanceButton v-model="shot.description" context="story" />
                 </div>
                 <p class="text-[10px] text-gray-400 mb-1">
-                  Full director / cast / frame prompts are under “Shot details & prompts” below.
+                  One-line beat for the board list. The full AI prompt is in Production prompt below.
                 </p>
                 <textarea
                   v-model="shot.description"

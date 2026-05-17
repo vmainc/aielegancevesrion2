@@ -117,7 +117,7 @@ export function buildUnifiedProductionPrompt (
     ? ['SETTING (locked across this scene):', ...sceneLines].join('\n')
     : ''
 
-  const panelBeat = (shot.imagePrompt || shot.description || shot.title || '').trim()
+  const panelBeat = (shot.description || shot.title || '').trim()
   const title = (shot.title || 'Shot').trim()
   const shotType = (shot.shotType || 'medium').trim()
 
