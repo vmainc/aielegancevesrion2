@@ -47,6 +47,9 @@ export default defineEventHandler(async (event) => {
     }
     if (typeof body.imagePrompt === 'string') patch.image_prompt = body.imagePrompt.slice(0, 20000)
     if (typeof body.videoPrompt === 'string') patch.video_prompt = body.videoPrompt.slice(0, 20000)
+    if (typeof body.negativePrompt === 'string') {
+      patch.negative_prompt = body.negativePrompt.slice(0, 10000)
+    }
     if (typeof body.sortOrder === 'number' && Number.isInteger(body.sortOrder) && body.sortOrder >= 0) {
       patch.sort_order = body.sortOrder
     }

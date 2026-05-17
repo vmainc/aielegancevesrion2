@@ -298,7 +298,7 @@
                     </div>
                     <textarea
                       v-model="shot.imagePrompt"
-                      rows="3"
+                      rows="6"
                       class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
                     />
                   </div>
@@ -309,9 +309,21 @@
                     </div>
                     <textarea
                       v-model="shot.videoPrompt"
-                      rows="3"
+                      rows="4"
                       class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
                     />
+                  </div>
+                  <div>
+                    <label class="text-xs font-medium text-gray-500 mb-1 block">Negative prompt (exclusions)</label>
+                    <textarea
+                      v-model="shot.negativePrompt"
+                      rows="2"
+                      placeholder="e.g. no humans, no people, no watermark…"
+                      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                    />
+                    <p class="mt-1 text-[11px] text-gray-500">
+                      Used when generating frames. Click Generate Shots again to rebuild long continuity prompts from your cast.
+                    </p>
                   </div>
                 </div>
               </details>
@@ -355,6 +367,7 @@ import {
   pickPrimaryCharacterPortrait
 } from '~/lib/shot-character-continuity'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
+import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 
 const PB_SHOT_ID = /^[a-z0-9]{15}$/
@@ -697,20 +710,31 @@ async function loadScenes () {
 }
 
 
-async function loadShots () {
+function mapShotsFromApi (list: CreativeShot[] | undefined): CreativeShot[] {
+  if (!list?.length) return []
+  return list.map(s => ({
+    ...s,
+    negativePrompt: s.negativePrompt || '',
+    durationSeconds: snapToStoryboardClipSeconds(Number(s.durationSeconds) || 5)
+  }))
+}
+
+async function loadShots (opts?: { preserveOnError?: boolean }) {
   generateError.value = ''
-  persistenceWarning.value = ''
-  shotsPersisted.value = true
+  if (!opts?.preserveOnError) {
+    persistenceWarning.value = ''
+    shotsPersisted.value = true
+  }
   const id = projectId.value
   const sid = selectedSceneId.value
   if (!id || !sid || project.value?.source !== 'pocketbase') {
-    shots.value = []
-    return
+    if (!opts?.preserveOnError) shots.value = []
+    return false
   }
   const headers = await authHeaders()
   if (!headers) {
-    shots.value = []
-    return
+    if (!opts?.preserveOnError) shots.value = []
+    return false
   }
   shotsLoading.value = true
   try {
@@ -718,17 +742,17 @@ async function loadShots () {
       `/api/projects/${id}/scenes/${sid}/shots`,
       { headers }
     )
-    shots.value = res.shots?.length
-      ? res.shots.map(s => ({
-        ...s,
-        durationSeconds: snapToStoryboardClipSeconds(Number(s.durationSeconds) || 5)
-      }))
-      : []
+    shots.value = mapShotsFromApi(res.shots)
     shotsPersisted.value = true
     await loadStoryboardAssets()
     applySavedFramesForCurrentScene()
-  } catch {
-    shots.value = []
+    return true
+  } catch (e: unknown) {
+    if (!opts?.preserveOnError) {
+      shots.value = []
+      generateError.value = formatApiFetchError(e, 'Could not load shots for this scene.')
+    }
+    return false
   } finally {
     shotsLoading.value = false
   }
@@ -756,20 +780,34 @@ async function generateShots () {
     }>('/api/generate-shots', {
       method: 'POST',
       headers: { ...headers, 'Content-Type': 'application/json' },
-      body: { project_id: id, scene_id: sid }
+      body: { project_id: id, scene_id: sid },
+      timeout: 180_000
     })
+    const fromApi = mapShotsFromApi(res.shots)
     shotsPersisted.value = res.persisted !== false
     if (!shotsPersisted.value) {
       persistenceWarning.value = res.warning || 'Shots are preview-only right now and were not saved.'
-      shots.value = res.shots?.length
-        ? res.shots.map(s => ({
-          ...s,
-          durationSeconds: snapToStoryboardClipSeconds(Number(s.durationSeconds) || 5)
-        }))
-        : []
+      shots.value = fromApi
     } else {
       persistenceWarning.value = ''
-      await loadShots()
+      if (fromApi.length) shots.value = fromApi
+      const reloaded = await loadShots({ preserveOnError: true })
+      if (!shots.value.length && fromApi.length) {
+        shots.value = fromApi
+        persistenceWarning.value =
+          'Shots were saved but could not be reloaded from the server — showing the generated list.'
+      } else if (!reloaded && fromApi.length && shots.value.length) {
+        persistenceWarning.value =
+          res.warning ||
+          'Shots generated; reload from the server failed — list may be from the last response.'
+      }
+    }
+    if (!shots.value.length) {
+      generateError.value =
+        res.warning ||
+        'Generation finished but no shots were returned. Check OpenRouter and PocketBase creative_shots.'
+      toast.showToast(generateError.value, 'error')
+      return
     }
     await loadServerProjects()
     const n = res.continuity?.issueCount ?? 0
@@ -778,9 +816,8 @@ async function generateShots () {
     } else {
       toast.showToast('Shots generated.', 'success')
     }
-  } catch (e: any) {
-    generateError.value =
-      e?.data?.message || e?.data?.statusMessage || e?.message || 'Generation failed.'
+  } catch (e: unknown) {
+    generateError.value = formatApiFetchError(e, 'Generation failed.')
     toast.showToast(generateError.value, 'error')
   } finally {
     generating.value = false

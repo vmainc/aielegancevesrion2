@@ -1,4 +1,11 @@
 import { isMusicVideoTarget } from '~/lib/project-video-audio'
+import {
+  buildProjectNegativePrompt,
+  formatNegativePromptForImageModel,
+  isAnimalOnlyCast,
+  mergeNegativePromptParts,
+  trimPromptForImageModel
+} from '~/lib/storyboard-continuity-prompts'
 import type { ProjectDirector, ProjectTargetLength } from '~/types/creative-project'
 import type { CreativeShot } from '~/types/creative-shot'
 
@@ -225,10 +232,31 @@ export function buildStoryboardFramePrompt (
   ctx?: ProductionPromptContext
 ): string {
   const base = basePrompt.trim()
+  const castForNeg = ctx?.cast?.length ? ctx.cast : matches
+  const shotNegative =
+    ctx?.shot && 'negativePrompt' in ctx.shot
+      ? String((ctx.shot as CreativeShot).negativePrompt || '').trim()
+      : ''
+  const negative = mergeNegativePromptParts(
+    shotNegative,
+    buildProjectNegativePrompt({
+      cast: castForNeg.map(c => ({
+        name: c.name,
+        traitsRoleVisual: c.roleDescription
+      }))
+    })
+  )
+  const negSuffix = formatNegativePromptForImageModel(negative)
+
   if (!ctx) {
     const block = buildContinuityPromptBlock(matches)
-    if (!block) return base
-    return `${block}\n\nSTILL FRAME FOR THIS PANEL:\n${base}`
+    const animalNote = isAnimalOnlyCast(
+      matches.map(c => ({ name: c.name, traitsRoleVisual: c.roleDescription }))
+    )
+      ? 'ANIMAL-ONLY: render only the named animal characters — no humans.'
+      : ''
+    const parts = [block, animalNote, `STILL FRAME FOR THIS PANEL:\n${base}`, negSuffix].filter(Boolean)
+    return trimPromptForImageModel(parts.join('\n\n'))
   }
 
   const shot = ctx.shot
@@ -243,15 +271,21 @@ export function buildStoryboardFramePrompt (
 
   const title = (shot.title || 'Shot').trim()
   const shotType = (shot.shotType || 'shot').trim()
+  if (isAnimalOnlyCast(ctx.cast.map(c => ({ name: c.name, traitsRoleVisual: c.roleDescription })))) {
+    parts.push(
+      'ANIMAL-ONLY STORY: single storyboard still with ONLY the animal/creature cast listed above — never add human figures, human faces, or human hands.'
+    )
+  }
   parts.push(
     [
       `STILL FRAME FOR THIS PANEL: "${title}" · ${shotType}`,
       '',
-      'Compose a single storyboard image (not motion). Match cast, setting, and lighting above exactly.',
+      'Compose a single storyboard image (not motion). Match cast, setting, and lighting above exactly — same character designs as every other panel.',
       base
     ].join('\n')
   )
-  return parts.join('\n\n').trim()
+  if (negSuffix) parts.push(negSuffix)
+  return trimPromptForImageModel(parts.join('\n\n').trim())
 }
 
 /** @deprecated Use buildFullVideoGenerationPrompt — kept for any legacy imports */

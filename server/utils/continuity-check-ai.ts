@@ -68,13 +68,14 @@ export async function checkShotsContinuity (input: ContinuityCheckInput): Promis
   const system = `You are a film continuity supervisor. Reply with ONLY valid JSON (no markdown):
 {
   "issues": ["short bullet strings"],
-  "shots": [ ... same objects as input, same keys: order, title, description, shot_type, camera_move, duration_seconds, image_prompt, video_prompt ],
+  "shots": [ ... same objects as input, same keys: order, title, description, shot_type, camera_move, duration_seconds, image_prompt, video_prompt, negative_prompt ],
   "continuity_memory_append": "optional new bullet lines to append to production bible — empty string if nothing to add"
 }
 Rules:
 - If the shot list already matches continuity memory and director bible, return "issues": [] and echo the same "shots" unchanged.
 - If you find contradictions (character traits, wardrobe, geography, tone clash, director style break), list them in "issues" and put a FIXED shot list in "shots" (same length preferred; min 3 shots).
 - Keep corrections minimal: adjust prompts and descriptions, not wholesale rewrites unless necessary.
+- Preserve long image_prompt / video_prompt length and negative_prompt exclusions (especially "no humans" on animal casts).
 - continuity_memory_append: only factual additions (e.g. "Mara always wears red scarf") — one line or short paragraph, or "".
 `
 

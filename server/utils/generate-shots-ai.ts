@@ -1,7 +1,9 @@
 import type { ProjectDirector } from '~/types/creative-project'
+import { isAnimalOnlyCast } from '~/lib/storyboard-continuity-prompts'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
+import { enrichGeneratedShotsForContinuity } from '~/server/utils/enrich-generated-shots'
 import { OPENROUTER_TEXT_MODEL_MAP } from '~/server/utils/openrouter-text-models'
 
 export interface GeneratedShot {
@@ -13,6 +15,7 @@ export interface GeneratedShot {
   duration_seconds: number
   image_prompt: string
   video_prompt: string
+  negative_prompt: string
 }
 
 export interface GenerateShotsContext {
@@ -62,6 +65,24 @@ function str (v: unknown, fallback = ''): string {
   return typeof v === 'string' ? v : fallback
 }
 
+function firstStr (o: Record<string, unknown>, ...keys: string[]): string {
+  for (const k of keys) {
+    const v = o[k]
+    if (typeof v === 'string' && v.trim()) return v.trim()
+  }
+  return ''
+}
+
+function buildFallbackVideoPrompt (
+  description: string,
+  cameraMove: string,
+  shotType: string
+): string {
+  const move = cameraMove || 'subtle camera movement'
+  const type = shotType || 'cinematic'
+  return `${description}. ${type}, ${move}, atmospheric lighting, filmic motion.`.slice(0, 8000)
+}
+
 /** Reconcile order field: prefer 1-based order from model, fall back to index. */
 export function normalizeShotsFromModelArray (rawList: unknown[]): GeneratedShot[] {
   const out: GeneratedShot[] = []
@@ -69,20 +90,36 @@ export function normalizeShotsFromModelArray (rawList: unknown[]): GeneratedShot
     if (!raw || typeof raw !== 'object') return
     const o = raw as Record<string, unknown>
     const orderVal = Math.floor(num(o.order, i + 1))
-    const title = str(o.title).trim() || `Shot ${i + 1}`
-    const description = str(o.description).trim() || title
-    const image_prompt = str(o.image_prompt).trim()
-    const video_prompt = str(o.video_prompt).trim()
-    if (!image_prompt || !video_prompt) return
+    const title = firstStr(o, 'title') || `Shot ${i + 1}`
+    const description = firstStr(o, 'description', 'summary', 'beat') || title
+    const shot_type = firstStr(o, 'shot_type', 'shotType', 'type') || 'medium shot'
+    const camera_move = firstStr(o, 'camera_move', 'cameraMove', 'camera') || 'static'
+    let image_prompt = firstStr(o, 'image_prompt', 'imagePrompt', 'still_prompt', 'stillPrompt')
+    let video_prompt = firstStr(o, 'video_prompt', 'videoPrompt', 'motion_prompt', 'motionPrompt')
+    if (!image_prompt) image_prompt = description
+    if (!video_prompt) {
+      video_prompt = buildFallbackVideoPrompt(description, camera_move, shot_type)
+    }
+    const negative_prompt = firstStr(
+      o,
+      'negative_prompt',
+      'negativePrompt',
+      'negative',
+      'exclusions'
+    )
+    if (!image_prompt.trim()) return
     out.push({
       order: orderVal,
       title: title.slice(0, 300),
       description: description.slice(0, 5000),
-      shot_type: str(o.shot_type, 'medium shot').slice(0, 200),
-      camera_move: str(o.camera_move, 'static').slice(0, 200),
-      duration_seconds: snapToStoryboardClipSeconds(num(o.duration_seconds, 5)),
+      shot_type: shot_type.slice(0, 200),
+      camera_move: camera_move.slice(0, 200),
+      duration_seconds: snapToStoryboardClipSeconds(
+        num(o.duration_seconds, num(o.durationSeconds, 5))
+      ),
       image_prompt: image_prompt.slice(0, 8000),
-      video_prompt: video_prompt.slice(0, 8000)
+      video_prompt: video_prompt.slice(0, 8000),
+      negative_prompt: negative_prompt.slice(0, 4000)
     })
   })
   out.sort((a, b) => a.order - b.order)
@@ -165,20 +202,29 @@ ${mem.slice(0, 8000)}
 `
     : ''
 
-  const system = `You are a professional storyboard artist and director of photography. You break each scene into a clear SEQUENCE OF PANELS — like a printed storyboard: each row is one beat the audience sees, in strict story order (establish geography → develop action → emotional turn → cut point).
+  const animalOnly = isAnimalOnlyCast(
+    ctx.characters.map(c => ({ name: c.name, traitsRoleVisual: c.traitsRoleVisual }))
+  )
+  const animalRules = animalOnly
+    ? `
+ANIMAL-ONLY CAST (critical):
+- This project uses NON-HUMAN animal/creature characters only. NEVER describe or imply humans, people, human faces, human hands, or human silhouettes in any shot.
+- Every image_prompt must name which animal characters are visible and paste their FULL visual design from CHARACTERS (species, fur/feathers, colors, clothing, props, expression style).
+- negative_prompt on every shot MUST include: no humans, no people, no human faces, no human hands, no realistic human figures.`
+    : ''
+
+  const system = `You are a professional storyboard artist and director of photography focused on VISUAL CONTINUITY across panels. You break each scene into a clear SEQUENCE OF PANELS — strict story order (establish geography → develop action → emotional turn → cut point).
 
 Output ONLY valid JSON (no markdown), exactly this shape:
-{"shots":[{"order":1,"title":"short label","description":"what we see and story beat","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static | crane up","duration_seconds":5,"image_prompt":"single clean visual prompt: lighting, environment, subject, mood, lens feel","video_prompt":"cinematic motion description: camera move, subject motion, lighting shifts, atmosphere"}]}
+{"shots":[{"order":1,"title":"short label","description":"story beat in plain language","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static","duration_seconds":5,"image_prompt":"LONG detailed still-frame prompt (see rules)","video_prompt":"LONG motion prompt (see rules)","negative_prompt":"comma-separated exclusions"}]}
 Rules:
-- Think in panels: coverage that an editor could cut together — vary shot scale on purpose (establish, re-establish, tighten, insert, reaction).
-- Produce between 5 and 12 shots in "shots" array for THIS scene only; do not merge adjacent screenplay scenes.
-- order must be 1..N in story order within the scene.
-- image_prompt: concise, production-ready still description (no camera jargon overload); name which cast members appear and their locked visual traits.
-- video_prompt: expand with motion, camera behavior, lighting, atmosphere; may repeat and elaborate image_prompt.
-- When named characters appear, image_prompt MUST restate their full visual design from CHARACTERS verbatim (face, body, materials, colors) — never a generic label like "toast with a face" if the cast bible says more.
-- Shots featuring the same character must describe the SAME design each time; close-ups still match the established look.
-- Interpret scene meaning from summary and script; imperfect script formatting is OK.
-- duration_seconds: MUST be exactly 5 or 10 (integer seconds per panel) — these are the only clip lengths the video step supports; pick 5 vs 10 from pacing (goal rules), not arbitrary values.`
+- Produce between 5 and 12 shots for THIS scene only; order 1..N; duration_seconds MUST be exactly 5 or 10 (integer).
+- image_prompt: MINIMUM ~120 words. Production-ready STILL frame. Must include: (1) which cast members appear and their COMPLETE visual design copied from CHARACTERS (materials, colors, proportions, wardrobe, expression) — never shorten to one adjective; (2) locked environment/props/lighting for this scene; (3) lens/framing for shot_type; (4) same art direction as director bible. Repeat identical character wording across shots — consistency beats brevity.
+- video_prompt: MINIMUM ~80 words. Motion-only delta on the still: camera_move, subject action, lighting shifts — do NOT introduce new characters or redesign anyone.
+- negative_prompt: comma-separated forbidden elements (watermark, text, blurry, wrong species, extra characters, style drift).${animalRules}
+- Same character = SAME design in every panel; close-ups must match wide shots.
+- Vary shot scale on purpose (establish, medium, close-up, insert) but keep location palette and set dressing consistent unless the script changes location.
+- Interpret summary and script; imperfect formatting is OK.`
 
   const user = `${directorBlock}${continuityBlock}PROJECT
 Name: ${ctx.projectName}
@@ -206,8 +252,8 @@ ${charBlock}`
       { role: 'system', content: system },
       { role: 'user', content: user }
     ],
-    temperature: 0.45,
-    max_tokens: 8192
+    temperature: 0.35,
+    max_tokens: 12_288
   })
 
   const controller = new AbortController()
@@ -249,9 +295,20 @@ ${charBlock}`
     throw new Error('Model did not return a usable shots array')
   }
 
-  const shots = normalizeShotsFromModelArray(arr)
+  const normalized = normalizeShotsFromModelArray(arr)
+  const shots = enrichGeneratedShotsForContinuity(normalized, ctx)
   if (shots.length < 3) {
-    throw new Error('Too few shots generated')
+    console.warn(
+      '[generate-shots-ai] Too few normalized shots:',
+      shots.length,
+      'from raw array length',
+      arr.length
+    )
+    throw new Error(
+      shots.length === 0
+        ? 'Model returned shots but none had usable prompts — try again'
+        : `Too few shots generated (${shots.length}); need at least 3`
+    )
   }
   return shots.slice(0, 12)
 }

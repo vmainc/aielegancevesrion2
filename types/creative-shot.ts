@@ -10,4 +10,6 @@ export interface CreativeShot {
   durationSeconds: number
   imagePrompt: string
   videoPrompt: string
+  /** Comma-separated exclusions for frame/video generation (e.g. no humans). */
+  negativePrompt: string
 }

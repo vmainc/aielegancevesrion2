@@ -27,12 +27,22 @@ export default defineEventHandler(async (event) => {
   }
 
   const filter = `scene="${sceneId}"`
-  const list = await pb.collection('creative_shots').getFullList({
-    filter,
-    sort: 'sort_order',
-    batch: 200
-  })
+  let list: unknown[]
+  try {
+    list = await pb.collection('creative_shots').getFullList({
+      filter,
+      sort: 'sort_order',
+      batch: 200
+    })
+  } catch {
+    list = await pb.collection('creative_shots').getFullList({
+      filter,
+      batch: 200
+    })
+  }
 
-  const shots = list.map(r => pbRecordToCreativeShot(r as Parameters<typeof pbRecordToCreativeShot>[0]))
+  const shots = list
+    .map(r => pbRecordToCreativeShot(r as Parameters<typeof pbRecordToCreativeShot>[0]))
+    .sort((a, b) => a.sortOrder - b.sortOrder)
   return { shots }
 })

@@ -3,6 +3,7 @@ import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { checkShotsContinuity } from '~/server/utils/continuity-check-ai'
+import { enrichGeneratedShotsForContinuity } from '~/server/utils/enrich-generated-shots'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
@@ -102,24 +103,26 @@ export default defineEventHandler(async (event) => {
   const continuityMemory = String(projectRec.continuity_memory || '')
   const pref = resolveProjectPreferredOpenRouterModel(project as Record<string, unknown>)
 
+  const shotsCtx = {
+    projectName: String(projectRec.name || 'Project'),
+    aspectRatio: String(projectRec.aspect_ratio || '16:9'),
+    goal: String(projectRec.goal || 'film'),
+    tone: String(projectRec.tone || 'cinematic'),
+    sceneTitle: sceneRec.heading || 'Scene',
+    sceneSummary: String(sceneRec.summary || ''),
+    sceneScript: String(sceneRec.body || ''),
+    characters: characters.map(c => ({
+      name: c.name,
+      traitsRoleVisual: String(c.role_description || '')
+    })),
+    director,
+    continuityMemory,
+    openrouterModelId: pref.openrouterModelId
+  }
+
   let generated
   try {
-    generated = await generateShotsWithAi({
-      projectName: String(projectRec.name || 'Project'),
-      aspectRatio: String(projectRec.aspect_ratio || '16:9'),
-      goal: String(projectRec.goal || 'film'),
-      tone: String(projectRec.tone || 'cinematic'),
-      sceneTitle: sceneRec.heading || 'Scene',
-      sceneSummary: String(sceneRec.summary || ''),
-      sceneScript: String(sceneRec.body || ''),
-      characters: characters.map(c => ({
-        name: c.name,
-        traitsRoleVisual: String(c.role_description || '')
-      })),
-      director,
-      continuityMemory,
-      openrouterModelId: pref.openrouterModelId
-    })
+    generated = await generateShotsWithAi(shotsCtx)
   } catch (e: unknown) {
     if (isAbortLikeError(e)) {
       throwApiError(
@@ -151,10 +154,13 @@ export default defineEventHandler(async (event) => {
     openrouterModelId: pref.openrouterModelId
   })
 
-  const finalShots = continuity.shots.map(s => ({
-    ...s,
-    duration_seconds: snapToStoryboardClipSeconds(s.duration_seconds)
-  }))
+  const finalShots = enrichGeneratedShotsForContinuity(
+    continuity.shots.map(s => ({
+      ...s,
+      duration_seconds: snapToStoryboardClipSeconds(s.duration_seconds)
+    })),
+    shotsCtx
+  )
   const issuesText =
     continuity.issues.length > 0
       ? continuity.issues.map(i => `• ${i}`).join('\n')
@@ -180,6 +186,9 @@ export default defineEventHandler(async (event) => {
   let warning = ''
   try {
     created = await replaceSceneShots(pb, userId, projectId, sceneId, finalShots)
+    if (created.length === 0 && finalShots.length > 0) {
+      throw new Error('creative_shots records were not created')
+    }
   } catch (persistErr: unknown) {
     // Graceful fallback: still return generated shots so Storyboard can render cards.
     persisted = false
@@ -199,7 +208,8 @@ export default defineEventHandler(async (event) => {
       cameraMove: s.camera_move,
       durationSeconds: s.duration_seconds,
       imagePrompt: s.image_prompt,
-      videoPrompt: s.video_prompt
+      videoPrompt: s.video_prompt,
+      negativePrompt: s.negative_prompt || ''
     }))
   }
 

@@ -97,7 +97,8 @@ async function ensureCreativeShotsCollection (pb: PocketBase): Promise<void> {
     { name: 'camera_move', type: 'text', required: false, options: { max: 300 } },
     { name: 'duration_seconds', type: 'number', required: false, options: { min: 0 } },
     { name: 'image_prompt', type: 'text', required: false, options: { max: 20000 } },
-    { name: 'video_prompt', type: 'text', required: false, options: { max: 20000 } }
+    { name: 'video_prompt', type: 'text', required: false, options: { max: 20000 } },
+    { name: 'negative_prompt', type: 'text', required: false, options: { max: 10000 } }
   ])
 
   try {
@@ -156,7 +157,7 @@ export async function replaceSceneShots (
     // Some legacy PB validators treat 0 as "blank" for required numeric fields.
     // Persist 1-based order to avoid false "Cannot be blank" on first shot.
     const sortOrderValue = Math.max(1, Math.floor(Number(g.order || (i + 1))))
-    const makeBasePayload = () => ({
+    const makeBasePayload = (includeNegative: boolean) => ({
       owned_by: userId,
       project: projectId,
       scene: sceneId,
@@ -166,27 +167,34 @@ export async function replaceSceneShots (
       camera_move: g.camera_move,
       duration_seconds: g.duration_seconds,
       image_prompt: g.image_prompt,
-      video_prompt: g.video_prompt
+      video_prompt: g.video_prompt,
+      ...(includeNegative && g.negative_prompt?.trim()
+        ? { negative_prompt: g.negative_prompt.trim().slice(0, 10000) }
+        : {})
     })
-    try {
-      rec = await pb.collection('creative_shots').create({
-        ...makeBasePayload(),
+    const createShot = async (includeNegative: boolean) =>
+      pb.collection('creative_shots').create({
+        ...makeBasePayload(includeNegative),
         sort_order: sortOrderValue
       })
+    try {
+      rec = await createShot(true)
     } catch (e: unknown) {
       if (isPocketBaseMissingCollectionError(e)) {
         await ensureCreativeShotsCollection(pb)
-        rec = await pb.collection('creative_shots').create({
-          ...makeBasePayload(),
-          sort_order: sortOrderValue
-        })
+        rec = await createShot(true)
       } else {
         const msg = formatPocketBaseRecordError(e)
-        // Some older PB schemas used camelCase field names.
-        if (/sort_order: cannot be blank/i.test(msg)) {
+        if (/negative_prompt/i.test(msg) && /unknown|invalid/i.test(msg)) {
+          try {
+            rec = await createShot(false)
+          } catch (negRetryErr: unknown) {
+            throw negRetryErr
+          }
+        } else if (/sort_order: cannot be blank/i.test(msg)) {
           try {
             rec = await pb.collection('creative_shots').create({
-              ...makeBasePayload(),
+              ...makeBasePayload(true),
               sortOrder: sortOrderValue
             })
           } catch (retryErr: unknown) {
