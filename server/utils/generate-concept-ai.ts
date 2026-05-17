@@ -1,34 +1,10 @@
+import {
+  buildConceptSystemPrompt,
+  buildConceptUserPrompt
+} from '~/lib/story-idea-generator-prompts'
+import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
-
-const SYSTEM_JSON = `You are a film concept generator. The user will describe an idea.
-
-You must respond with ONLY valid JSON (no markdown fences), exactly one object with these string keys:
-"title", "logline", "summary", "tone", "genre"
-
-Rules:
-- title: compelling working title
-- logline: exactly one sentence
-- summary: 3–5 sentences, cinematic and engaging
-- tone: short phrase (e.g. "tense, intimate")
-- genre: primary genre label (e.g. "sci-fi thriller")`
-
-function buildUserContent (userPrompt: string): string {
-  return `You are a film concept generator.
-
-Create a compelling concept based on this idea:
-
-${userPrompt.trim()}
-
-Return:
-- Title
-- Logline (1 sentence)
-- Short summary (3–5 sentences)
-- Tone
-- Genre
-
-Make it engaging and cinematic.`
-}
 
 function extractJsonObject (text: string): Record<string, unknown> | null {
   const trimmed = text.trim()
@@ -64,6 +40,7 @@ export interface ParsedConceptFields {
   summary: string
   tone: string
   genre: string
+  hook?: string
 }
 
 export function parseConceptJsonFromAssistantText (text: string): ParsedConceptFields | null {
@@ -74,13 +51,15 @@ export function parseConceptJsonFromAssistantText (text: string): ParsedConceptF
   const summary = pickStr(o, ['summary', 'Summary', 'short_summary', 'shortSummary'])
   const tone = pickStr(o, ['tone', 'Tone'])
   const genre = pickStr(o, ['genre', 'Genre'])
+  const hook = pickStr(o, ['hook', 'Hook', 'opening_hook', 'openingHook'])
   if (!title || !summary) return null
   return {
     title: title.slice(0, 500),
     logline: logline.slice(0, 800),
     summary: summary.slice(0, 12000),
     tone: tone.slice(0, 500),
-    genre: genre.slice(0, 200)
+    genre: genre.slice(0, 200),
+    ...(hook ? { hook: hook.slice(0, 500) } : {})
   }
 }
 
@@ -90,7 +69,10 @@ export function parseConceptJsonFromAssistantText (text: string): ParsedConceptF
 export async function generateConceptWithOpenRouter (options: {
   openrouterModelId: string
   userPrompt: string
+  goal?: ProjectGoal
+  aspectRatio?: ProjectAspectRatio
 }): Promise<ParsedConceptFields> {
+  const goal = options.goal || 'film'
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) {
@@ -100,8 +82,11 @@ export async function generateConceptWithOpenRouter (options: {
   const body = buildOpenRouterChatCompletionBody({
     model: options.openrouterModelId,
     messages: [
-      { role: 'system', content: SYSTEM_JSON },
-      { role: 'user', content: buildUserContent(options.userPrompt) }
+      { role: 'system', content: buildConceptSystemPrompt(goal) },
+      {
+        role: 'user',
+        content: buildConceptUserPrompt(options.userPrompt, goal, options.aspectRatio)
+      }
     ],
     temperature: 0.75,
     max_tokens: 1200

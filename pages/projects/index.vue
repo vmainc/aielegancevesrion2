@@ -93,7 +93,7 @@
                 >
                 <span class="text-sm text-gray-700">
                   <span class="font-medium text-gray-900">Start from scratch</span><br>
-                  Hide screenplay upload modules and build concept manually.
+                  Generate story ideas with AI (great for social and short-form) — no screenplay upload.
                 </span>
               </label>
             </div>
@@ -191,7 +191,7 @@ const form = reactive({
   name: '',
   aspectRatio: '16:9' as ProjectAspectRatio,
   goal: 'film' as ProjectGoal,
-  workflowMode: 'import' as ProjectWorkflowMode
+  workflowMode: 'scratch' as ProjectWorkflowMode
 })
 
 function openCreateModal () {
@@ -208,7 +208,7 @@ watch(openCreate, (v) => {
   form.name = ''
   form.aspectRatio = '16:9'
   form.goal = 'film'
-  form.workflowMode = 'import'
+  form.workflowMode = 'scratch'
   showOptions.value = false
   createError.value = ''
 })

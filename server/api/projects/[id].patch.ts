@@ -36,6 +36,10 @@ export default defineEventHandler(async (event) => {
   if (typeof body.goal === 'string' && GOALS.has(body.goal)) {
     patch.goal = body.goal
   }
+  const WORKFLOW = new Set(['import', 'scratch'])
+  if (typeof body.workflowMode === 'string' && WORKFLOW.has(body.workflowMode)) {
+    patch.workflow_mode = body.workflowMode
+  }
   if (typeof body.preferredModelId === 'string' && MODEL_IDS.has(body.preferredModelId)) {
     patch.preferred_model_id = body.preferredModelId
   }

@@ -169,6 +169,7 @@ export function useCreativeProject () {
           name: patch.name,
           aspectRatio: patch.aspectRatio,
           goal: patch.goal,
+          workflowMode: patch.workflowMode,
           genre: patch.genre,
           tone: patch.tone
         }

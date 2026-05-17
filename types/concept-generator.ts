@@ -6,6 +6,8 @@ export interface GeneratedConceptItem {
   summary: string
   tone: string
   genre: string
+  /** Opening hook (common for social / commercial concepts). */
+  hook?: string
 }
 
 /** Per-model outcome: either fields or an error message. */

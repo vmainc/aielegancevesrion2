@@ -4,7 +4,21 @@ import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-t
 import { CONCEPT_GENERATOR_MODELS, getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 import { generateConceptWithOpenRouter } from '~/server/utils/generate-concept-ai'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 import type { ConceptGeneratorResultItem } from '~/types/concept-generator'
+
+const GOALS = new Set<ProjectGoal>(['film', 'social', 'commercial', 'other'])
+const ASPECTS = new Set<ProjectAspectRatio>(['16:9', '9:16', '1:1'])
+
+function projectGoalFromRecord (row: Record<string, unknown>): ProjectGoal {
+  const g = String(row.goal || 'film')
+  return GOALS.has(g as ProjectGoal) ? (g as ProjectGoal) : 'film'
+}
+
+function projectAspectFromRecord (row: Record<string, unknown>): ProjectAspectRatio {
+  const a = String(row.aspect_ratio || '16:9')
+  return ASPECTS.has(a as ProjectAspectRatio) ? (a as ProjectAspectRatio) : '16:9'
+}
 
 const PB_ID = /^[a-z0-9]{15}$/
 
@@ -15,6 +29,8 @@ export default defineEventHandler(async (event) => {
     project_id?: string
     user_prompt?: string
     selected_models?: string[]
+    goal?: string
+    aspect_ratio?: string
   } | null
 
   const projectId = typeof body?.project_id === 'string' ? body.project_id.trim() : ''
@@ -41,6 +57,15 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  let projectGoal: ProjectGoal = 'film'
+  let projectAspect: ProjectAspectRatio = '16:9'
+  if (typeof body?.goal === 'string' && GOALS.has(body.goal as ProjectGoal)) {
+    projectGoal = body.goal as ProjectGoal
+  }
+  if (typeof body?.aspect_ratio === 'string' && ASPECTS.has(body.aspect_ratio as ProjectAspectRatio)) {
+    projectAspect = body.aspect_ratio as ProjectAspectRatio
+  }
+
   if (PB_ID.test(projectId)) {
     const pb = await getAuthenticatedPocketBase()
     try {
@@ -49,6 +74,8 @@ export default defineEventHandler(async (event) => {
       if (owner !== userId) {
         throw createError({ statusCode: 403, message: 'Forbidden' })
       }
+      projectGoal = projectGoalFromRecord(project as Record<string, unknown>)
+      projectAspect = projectAspectFromRecord(project as Record<string, unknown>)
     } catch (e: unknown) {
       const err = e as { statusCode?: number; status?: number; response?: { status?: number } }
       if (err?.statusCode === 403 || err?.status === 403) throw e
@@ -67,7 +94,9 @@ export default defineEventHandler(async (event) => {
     try {
       const parsed = await generateConceptWithOpenRouter({
         openrouterModelId: cfg.openrouterModelId,
-        userPrompt
+        userPrompt,
+        goal: projectGoal,
+        aspectRatio: projectAspect
       })
       return {
         model: cfg.id,
@@ -75,7 +104,8 @@ export default defineEventHandler(async (event) => {
         logline: parsed.logline,
         summary: parsed.summary,
         tone: parsed.tone,
-        genre: parsed.genre
+        genre: parsed.genre,
+        ...(parsed.hook ? { hook: parsed.hook } : {})
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Request failed'

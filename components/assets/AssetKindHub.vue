@@ -50,28 +50,41 @@
         </div>
 
         <template v-if="props.kind === 'video' && videoProjectGroups.length">
-          <div
+          <details
             v-for="g in videoProjectGroups"
             :key="g.key"
-            class="mb-8 rounded-xl border border-gray-200 bg-white overflow-hidden"
+            class="mb-4 rounded-xl border border-gray-200 bg-white overflow-hidden group"
           >
-            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50/90 flex flex-wrap items-baseline justify-between gap-2">
-              <div class="min-w-0">
-                <h2 class="text-sm font-semibold text-gray-900 truncate">
-                  {{ g.title }}
-                </h2>
-                <p v-if="g.subtitle" class="text-xs text-gray-500 mt-0.5">
-                  {{ g.subtitle }}
-                </p>
+            <summary
+              class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50/90 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80 border-b border-transparent group-open:border-gray-200"
+            >
+              <div class="flex items-start gap-2 min-w-0 flex-1">
+                <span
+                  class="text-gray-400 text-xs shrink-0 mt-0.5 transition-transform group-open:rotate-90"
+                  aria-hidden="true"
+                >▶</span>
+                <div class="min-w-0">
+                  <h2 class="text-sm font-semibold text-gray-900 truncate">
+                    {{ g.title }}
+                  </h2>
+                  <p v-if="g.subtitle" class="text-xs text-gray-500 mt-0.5">
+                    {{ g.subtitle }}
+                    <span class="text-gray-400"> · {{ g.items.length }} clip{{ g.items.length === 1 ? '' : 's' }}</span>
+                  </p>
+                  <p v-else class="text-xs text-gray-500 mt-0.5">
+                    {{ g.items.length }} clip{{ g.items.length === 1 ? '' : 's' }}
+                  </p>
+                </div>
               </div>
               <NuxtLink
                 v-if="g.projectId && PB_ID.test(g.projectId)"
                 :to="`/projects/${g.projectId}/video`"
                 class="text-xs font-medium text-primary hover:underline shrink-0"
+                @click.stop
               >
                 Open Video step →
               </NuxtLink>
-            </div>
+            </summary>
             <ul class="divide-y divide-gray-200">
               <li
                 v-for="a in g.items"
@@ -151,32 +164,45 @@
                 </div>
               </li>
             </ul>
-          </div>
+          </details>
         </template>
 
         <template v-else-if="props.kind === 'character' && characterProjectGroups.length">
-          <div
+          <details
             v-for="g in characterProjectGroups"
             :key="g.key"
-            class="mb-8 rounded-xl border border-gray-200 bg-white overflow-hidden"
+            class="mb-4 rounded-xl border border-gray-200 bg-white overflow-hidden group"
           >
-            <div class="px-4 py-3 border-b border-gray-200 bg-gray-50/90 flex flex-wrap items-baseline justify-between gap-2">
-              <div class="min-w-0">
-                <h2 class="text-sm font-semibold text-gray-900 truncate">
-                  {{ g.title }}
-                </h2>
-                <p v-if="g.subtitle" class="text-xs text-gray-500 mt-0.5">
-                  {{ g.subtitle }}
-                </p>
+            <summary
+              class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50/90 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80 border-b border-transparent group-open:border-gray-200"
+            >
+              <div class="flex items-start gap-2 min-w-0 flex-1">
+                <span
+                  class="text-gray-400 text-xs shrink-0 mt-0.5 transition-transform group-open:rotate-90"
+                  aria-hidden="true"
+                >▶</span>
+                <div class="min-w-0">
+                  <h2 class="text-sm font-semibold text-gray-900 truncate">
+                    {{ g.title }}
+                  </h2>
+                  <p v-if="g.subtitle" class="text-xs text-gray-500 mt-0.5">
+                    {{ g.subtitle }}
+                    <span class="text-gray-400"> · {{ g.items.length }} character{{ g.items.length === 1 ? '' : 's' }}</span>
+                  </p>
+                  <p v-else class="text-xs text-gray-500 mt-0.5">
+                    {{ g.items.length }} character{{ g.items.length === 1 ? '' : 's' }}
+                  </p>
+                </div>
               </div>
               <NuxtLink
                 v-if="g.projectId && PB_ID.test(g.projectId)"
                 :to="`/projects/${g.projectId}/characters`"
                 class="text-xs font-medium text-primary hover:underline shrink-0"
+                @click.stop
               >
                 Open Characters step →
               </NuxtLink>
-            </div>
+            </summary>
             <ul class="divide-y divide-gray-200">
               <li
                 v-for="a in g.items"
@@ -267,7 +293,7 @@
                 </div>
               </li>
             </ul>
-          </div>
+          </details>
         </template>
 
         <ul

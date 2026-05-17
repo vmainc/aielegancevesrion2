@@ -91,6 +91,20 @@
                 <option value="other">Other</option>
               </select>
             </div>
+            <div>
+              <label for="set-workflow" class="block text-sm text-gray-600 mb-1">Starting workflow</label>
+              <select
+                id="set-workflow"
+                v-model="draft.workflowMode"
+                class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
+              >
+                <option value="scratch">Generate ideas (no screenplay upload)</option>
+                <option value="import">Import screenplay</option>
+              </select>
+              <p class="text-xs text-gray-500 mt-1">
+                Use “Generate ideas” for social-first projects without a script file.
+              </p>
+            </div>
             <button
               type="button"
               class="w-full py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors disabled:opacity-50"
@@ -145,7 +159,12 @@
 </template>
 
 <script setup lang="ts">
-import type { CreativeProject, ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
+import type {
+  CreativeProject,
+  ProjectAspectRatio,
+  ProjectGoal,
+  ProjectWorkflowMode
+} from '~/types/creative-project'
 
 const props = defineProps<{
   open: boolean
@@ -164,7 +183,8 @@ const stats = reactive({ sceneCount: 0, characterCount: 0 })
 const draft = reactive({
   name: '',
   aspectRatio: '16:9' as ProjectAspectRatio,
-  goal: 'film' as ProjectGoal
+  goal: 'film' as ProjectGoal,
+  workflowMode: 'import' as ProjectWorkflowMode
 })
 const saving = ref(false)
 const deleting = ref(false)
@@ -192,6 +212,7 @@ function syncDraft () {
   draft.name = props.project.name
   draft.aspectRatio = props.project.aspectRatio
   draft.goal = props.project.goal
+  draft.workflowMode = props.project.workflowMode || 'import'
 }
 
 async function loadCloudStats () {
@@ -262,7 +283,8 @@ async function saveEdits () {
     await updateProject(props.project.id, {
       name: draft.name.trim(),
       aspectRatio: draft.aspectRatio,
-      goal: draft.goal
+      goal: draft.goal,
+      workflowMode: draft.workflowMode
     })
     toast.showToast('Project updated.', 'success')
     close()

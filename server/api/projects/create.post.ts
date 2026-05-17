@@ -70,9 +70,11 @@ export default defineEventHandler(async (event) => {
       })
     }
     const full = await pb.collection('creative_projects').getOne(created.id)
-    return {
-      project: pbRecordToCreativeProject(full as Parameters<typeof pbRecordToCreativeProject>[0])
+    const project = pbRecordToCreativeProject(full as Parameters<typeof pbRecordToCreativeProject>[0])
+    if (workflowMode === 'scratch' && project.workflowMode !== 'scratch') {
+      project.workflowMode = 'scratch'
     }
+    return { project }
   } catch (e: unknown) {
     const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : String(e)
     if (isPocketBaseMissingCollectionError(e)) {

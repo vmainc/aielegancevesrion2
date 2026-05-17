@@ -2,7 +2,12 @@
   <div class="max-w-3xl">
     <p v-if="!scriptUploadedAwaitingAnalyze" class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Your synopsis lives here; director bible and continuity are on the Director tab.
+      <template v-if="scratchWorkflow && !hasConcept">
+        · Describe your idea, generate options with AI, then pick one story to develop.
+      </template>
+      <template v-else>
+        · Your synopsis lives here; director bible and continuity are on the Director tab.
+      </template>
     </p>
 
     <p
@@ -382,9 +387,13 @@
       v-if="hasConcept && !showGeneratorForm && !scriptUploadedAwaitingAnalyze"
       class="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6 mb-8"
     >
-      <h2 class="text-lg font-semibold text-gray-900 mb-1">Concept saved</h2>
+      <h2 class="text-lg font-semibold text-gray-900 mb-1">
+        {{ scratchWorkflow ? 'Story saved' : 'Concept saved' }}
+      </h2>
       <p class="text-sm text-gray-600 mb-4">
-        Try other models or remove this concept to start fresh.
+        {{ scratchWorkflow
+          ? 'Generate more ideas with other models, or remove this story to start fresh.'
+          : 'Try other models or remove this concept to start fresh.' }}
       </p>
       <div class="flex flex-wrap gap-2">
         <button
@@ -405,9 +414,137 @@
       </div>
     </div>
 
-    <!-- Concept generator (first time, or after "Generate with different AI") -->
+    <!-- Story / idea generator (start from scratch) -->
     <section
-      v-if="(showGeneratorForm || !hasConcept) && !scriptUploadedAwaitingAnalyze"
+      v-if="showScratchIdeaGenerator"
+      class="rounded-xl border-2 border-primary/25 bg-gradient-to-b from-primary/5 to-gray-50 p-6 sm:p-8 mb-8"
+    >
+      <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
+        <div>
+          <h2 class="text-lg font-semibold text-gray-900 mb-1">
+            {{ hasConcept ? 'Compare new story ideas' : scratchGeneratorHeading }}
+          </h2>
+          <p class="text-sm text-gray-600 max-w-2xl">
+            {{ hasConcept
+              ? 'Your saved story stays below until you pick a new idea.'
+              : scratchGeneratorBlurb }}
+          </p>
+        </div>
+        <button
+          v-if="hasConcept"
+          type="button"
+          class="shrink-0 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-white transition-colors"
+          @click="cancelGeneratorPanel"
+        >
+          Cancel
+        </button>
+      </div>
+
+      <ClientOnly>
+        <p
+          v-if="!isAuthenticated"
+          class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4"
+        >
+          Log in to generate story ideas with AI.
+        </p>
+      </ClientOnly>
+
+      <div v-if="modelsLoadError" class="text-sm text-red-700 mb-4">
+        {{ modelsLoadError }}
+      </div>
+
+      <div class="flex justify-between items-center gap-2 mb-2">
+        <label class="text-sm font-medium text-gray-700">Your idea</label>
+        <PromptEnhanceButton v-model="conceptPrompt" context="concept" />
+      </div>
+      <textarea
+        ref="promptTextareaRef"
+        v-model="conceptPrompt"
+        rows="4"
+        class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-5"
+        :placeholder="scratchPromptPlaceholder"
+        :disabled="generating"
+      />
+
+      <fieldset class="mb-5" :disabled="generating || !(modelOptions?.length)">
+        <legend class="text-sm font-medium text-gray-700 mb-2">AI models</legend>
+        <p class="text-xs text-gray-500 mb-3">Select one or more; each model returns a different take on your idea.</p>
+        <div class="flex flex-wrap gap-3">
+          <label
+            v-for="m in modelOptions"
+            :key="`scratch-${m.id}`"
+            class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+          >
+            <input
+              v-model="selectedModelIds"
+              type="checkbox"
+              :value="m.id"
+              class="rounded border-gray-300 text-primary focus:ring-primary"
+            >
+            <span class="text-sm text-gray-800">{{ m.label }}</span>
+          </label>
+        </div>
+      </fieldset>
+
+      <button
+        type="button"
+        class="px-4 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        :disabled="!canGenerate"
+        @click="generateConcepts"
+      >
+        {{ generateIdeasButtonLabel }}
+      </button>
+
+      <p v-if="generating" class="mt-4 text-sm text-gray-600 animate-pulse">
+        Generating ideas across selected models…
+      </p>
+
+      <div v-if="conceptResults != null && conceptResults.length" class="mt-8 space-y-4">
+        <h3 class="text-sm font-semibold text-gray-800 uppercase tracking-wide">
+          Pick an idea to develop
+        </h3>
+        <div class="grid gap-4 sm:grid-cols-1">
+          <article
+            v-for="(r, idx) in conceptResults"
+            :key="`scratch-result-${r.model}-${idx}`"
+            class="rounded-xl border p-4 sm:p-5 bg-white shadow-sm"
+            :class="r.error ? 'border-red-200 bg-red-50/50' : 'border-gray-200'"
+          >
+            <span class="text-xs font-semibold uppercase tracking-wide text-primary">
+              {{ modelLabel(r.model) }}
+            </span>
+            <template v-if="!r.error">
+              <h4 class="text-base font-bold text-gray-900 mt-3 mb-2">{{ r.title }}</h4>
+              <p class="text-sm text-gray-700 italic mb-3">{{ r.logline }}</p>
+              <p
+                v-if="'hook' in r && r.hook"
+                class="text-sm text-gray-800 mb-3 rounded-lg bg-primary/5 border border-primary/15 px-3 py-2"
+              >
+                <span class="font-semibold text-gray-900">Hook: </span>{{ r.hook }}
+              </p>
+              <p class="text-sm text-gray-600 whitespace-pre-wrap mb-4">{{ r.summary }}</p>
+              <div class="flex flex-wrap gap-2 mb-4">
+                <span v-if="r.tone" class="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-800">{{ r.tone }}</span>
+                <span v-if="r.genre" class="text-xs px-2 py-1 rounded-md bg-gray-200 text-gray-800 capitalize">{{ r.genre }}</span>
+              </div>
+              <button
+                type="button"
+                class="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
+                :disabled="applyingModel === r.model"
+                @click="useThisConcept(r)"
+              >
+                {{ applyingModel === r.model ? 'Saving…' : 'Use this story' }}
+              </button>
+            </template>
+            <p v-else class="text-sm text-red-800 mt-3">{{ r.error }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <!-- Screenplay import (import workflow) -->
+    <section
+      v-if="showImportWorkflowOverview"
       class="rounded-xl border border-gray-200 bg-gray-50 p-6 sm:p-8 mb-8"
     >
       <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-5">
@@ -417,12 +554,7 @@
               Screenplay saved
             </template>
             <template v-else>
-              <template v-if="screenplayWorkflowEnabled && !hasWorkflowScreenplaySaved">
-                {{ hasConcept ? 'Compare new AI concepts' : 'Import your screenplay' }}
-              </template>
-              <template v-else>
-                {{ hasConcept ? 'Compare new AI concepts' : 'Start by generating your concept' }}
-              </template>
+              {{ hasConcept ? 'Compare new AI concepts' : 'Import your screenplay' }}
             </template>
           </h2>
           <p class="text-sm text-gray-500">
@@ -432,20 +564,11 @@
               Prompt-based concept generation stays hidden while a script file is on this project.
             </template>
             <template v-else>
-              <template v-if="screenplayWorkflowEnabled && !hasWorkflowScreenplaySaved">
-                {{
-                  hasConcept
-                    ? 'Your saved concept stays below until you pick a new one.'
-                    : 'Upload your screenplay below, then pick models and run Analyze script when you are ready.'
-                }}
-              </template>
-              <template v-else>
-                {{
-                  hasConcept
-                    ? 'Your saved concept stays below until you pick a new one.'
-                    : 'Describe your idea, pick one or more models, compare results — or import a screenplay below.'
-                }}
-              </template>
+              {{
+                hasConcept
+                  ? 'Your saved concept stays below until you pick a new one.'
+                  : 'Upload your screenplay below, then pick models and run Analyze script when you are ready.'
+              }}
             </template>
           </p>
           <div
@@ -532,13 +655,7 @@
 
       <ClientOnly>
         <p
-          v-if="!isAuthenticated && scratchWorkflow"
-          class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4"
-        >
-          Log in to generate concepts with AI.
-        </p>
-        <p
-          v-else-if="!isAuthenticated && screenplayWorkflowEnabled && canCloudImport"
+          v-if="!isAuthenticated && canCloudImport"
           class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4"
         >
           Log in to import a screenplay and run analysis.
@@ -572,7 +689,8 @@
         </p>
       </ClientOnly>
 
-      <template v-if="!hasWorkflowScreenplaySaved && scratchWorkflow">
+      <!-- duplicate scratch UI removed (see showScratchIdeaGenerator section above) -->
+      <template v-if="false">
         <div v-if="modelsLoadError" class="text-sm text-red-700 mb-4">
           {{ modelsLoadError }}
         </div>
@@ -999,6 +1117,49 @@ const screenplayWorkflowEnabled = computed(
 /** Prompt-based concept generator — only for “start from scratch” projects, not script-import workflow. */
 const scratchWorkflow = computed(() => project.value?.workflowMode === 'scratch')
 
+const showScratchIdeaGenerator = computed(
+  () =>
+    scratchWorkflow.value &&
+    (showGeneratorForm.value || !hasConcept.value) &&
+    !scriptUploadedAwaitingAnalyze.value
+)
+
+const showImportWorkflowOverview = computed(
+  () =>
+    screenplayWorkflowEnabled.value &&
+    (showGeneratorForm.value || !hasConcept.value) &&
+    !scriptUploadedAwaitingAnalyze.value
+)
+
+const scratchGeneratorHeading = computed(() => {
+  if (project.value?.goal === 'social') return 'Generate story ideas'
+  if (project.value?.goal === 'commercial') return 'Generate your concept'
+  return 'Start with your idea'
+})
+
+const scratchGeneratorBlurb = computed(() => {
+  if (project.value?.goal === 'social') {
+    return 'Describe a hook, mood, or topic. Pick one or more AI models, compare ideas, then choose the story you want to turn into shots and video.'
+  }
+  return 'Describe your idea, pick models to compare, and choose the concept you want to build in Director, Story, and Storyboard.'
+})
+
+const scratchPromptPlaceholder = computed(() => {
+  if (project.value?.goal === 'social') {
+    return 'e.g. Anthropomorphic egg sandwich wakes up in a diner, realizes it is today’s special — 30s vertical comedy, snappy pacing…'
+  }
+  if (project.value?.goal === 'commercial') {
+    return 'e.g. Launch spot for a cold-brew brand — morning ritual, product hero shot, upbeat tone, 15s vertical…'
+  }
+  return 'Describe your film or video idea — genre, mood, characters, and what happens…'
+})
+
+const generateIdeasButtonLabel = computed(() => {
+  if (generating.value) return 'Generating ideas…'
+  if (project.value?.goal === 'social') return 'Generate story ideas'
+  return 'Generate concepts'
+})
+
 /** After screenplay save, before AI import: single-focus screen with only the run-import CTA. */
 const scriptUploadedAwaitingAnalyze = computed(
   () =>
@@ -1177,7 +1338,9 @@ async function generateConcepts () {
       body: {
         project_id: id,
         user_prompt: conceptPrompt.value.trim(),
-        selected_models: [...selectedModelIds.value]
+        selected_models: [...selectedModelIds.value],
+        goal: project.value?.goal,
+        aspect_ratio: project.value?.aspectRatio
       }
     })
     conceptResults.value = Array.isArray(res) ? res : []
@@ -1233,7 +1396,7 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
     })
     conceptResults.value = null
     showGeneratorForm.value = false
-    toast.showToast('Concept applied to project.', 'success')
+    toast.showToast(scratchWorkflow.value ? 'Story applied to project.' : 'Concept applied to project.', 'success')
   } catch {
     toast.showToast('Could not save concept.', 'error')
   } finally {
