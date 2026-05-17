@@ -44,6 +44,11 @@ onBeforeUnmount(() => {
   hydrateAbort = null
 })
 
+watch(projectId, () => {
+  hydrateAbort?.abort()
+  hydrateAbort = null
+})
+
 watch(
   [clientReady, projectId, project],
   async () => {

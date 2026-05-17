@@ -190,19 +190,31 @@ function onDropRow (kind: 'video' | 'audio', toIndex: number) {
 }
 
 function playSequenceFrom (startIdx: number) {
-  const v = state.video[startIdx]
-  if (!v?.url) {
+  const clips = state.value.video
+  if (!clips.length) {
+    toast.showToast('Add video clips from the Video page first.', 'info')
+    return
+  }
+  const v = clips[startIdx]
+  if (!v?.url?.trim()) {
     toast.showToast('No video clip at that position.', 'info')
     return
   }
   seqIndex.value = startIdx
-  previewUrl.value = v.url
-  nextTick(() => previewEl.value?.play().catch(() => {}))
+  previewUrl.value = v.url.trim()
+  nextTick(() => {
+    const el = previewEl.value
+    if (!el) return
+    el.load()
+    el.play().catch(() => {
+      toast.showToast('Could not play this clip — open Preview on the row or re-add from Video.', 'warning')
+    })
+  })
 }
 
 function onPreviewEnded () {
   const next = seqIndex.value + 1
-  if (next < state.video.length) {
+  if (next < state.value.video.length) {
     playSequenceFrom(next)
   }
 }
