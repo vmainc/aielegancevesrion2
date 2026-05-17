@@ -1,6 +1,7 @@
 import { createError, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { initialConceptNotesForWorkflow } from '~/lib/project-workflow-mode'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
 import type { ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
@@ -37,6 +38,7 @@ export default defineEventHandler(async (event) => {
       : 'import'
 
   const pb = await getAuthenticatedPocketBase()
+  const conceptNotesSeed = initialConceptNotesForWorkflow(workflowMode)
 
   try {
     let created
@@ -51,7 +53,7 @@ export default defineEventHandler(async (event) => {
         target_length: 'short',
         synopsis: '',
         treatment: '',
-        concept_notes: ''
+        concept_notes: conceptNotesSeed
       })
     } catch (createErr: unknown) {
       // Backward-compatible fallback for environments where workflow_mode field is not provisioned yet.
@@ -66,7 +68,7 @@ export default defineEventHandler(async (event) => {
         target_length: 'short',
         synopsis: '',
         treatment: '',
-        concept_notes: ''
+        concept_notes: conceptNotesSeed
       })
     }
     const full = await pb.collection('creative_projects').getOne(created.id)

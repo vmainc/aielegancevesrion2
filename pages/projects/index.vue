@@ -176,6 +176,7 @@
 </template>
 
 <script setup lang="ts">
+import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import type { ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
 const { projects, createProject, clientReady, registerImportedProject } = useCreativeProject()
@@ -238,6 +239,7 @@ async function submitCreate () {
           }
         }
       )
+      writeSessionWorkflow(res.project.id, res.project.workflowMode)
       registerImportedProject(res.project)
       openCreate.value = false
       toast.showToast('Project created.', 'success')
@@ -259,6 +261,7 @@ async function submitCreate () {
     goal: form.goal,
     workflowMode: form.workflowMode
   })
+  writeSessionWorkflow(p.id, p.workflowMode)
   openCreate.value = false
   await navigateTo(`/projects/${p.id}/overview`)
 }

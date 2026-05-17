@@ -1,3 +1,4 @@
+import { workflowModeFromProjectRecord } from '~/lib/project-workflow-mode'
 import type {
   CreativeProject,
   ProjectAspectRatio,
@@ -80,7 +81,7 @@ export function pbRecordToCreativeProject (r: PbProjectRecord): CreativeProject 
     name: r.name,
     aspectRatio: (r.aspect_ratio || '16:9') as ProjectAspectRatio,
     goal: (r.goal || 'film') as ProjectGoal,
-    workflowMode: (r.workflow_mode === 'scratch' ? 'scratch' : 'import') as ProjectWorkflowMode,
+    workflowMode: workflowModeFromProjectRecord(r) as ProjectWorkflowMode,
     preferredModelId: String(r.preferred_model_id || '').trim() || 'claude',
     targetLength,
     synopsis: r.synopsis || '',

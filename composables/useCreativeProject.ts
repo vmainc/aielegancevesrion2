@@ -1,5 +1,9 @@
 import { getCurrentInstance, onMounted } from 'vue'
 import { defaultDirector } from '~/lib/director-presets'
+import {
+  applyClientWorkflowOverlay,
+  writeSessionWorkflow
+} from '~/lib/project-workflow-mode'
 import type { CreativeProject, ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
 const STORAGE_KEY = 'aielegance-creative-projects'
@@ -91,8 +95,25 @@ export function useCreativeProject () {
       const res = await $fetch<{ items: CreativeProject[] }>('/api/projects/my', {
         headers: { Authorization: `Bearer ${token}` }
       })
+      const prevById = new Map(projects.value.map(p => [p.id, p]))
+      const serverIds = new Set(res.items.map(r => r.id))
+      // Keep PocketBase projects not yet returned by /my (e.g. immediately after create).
+      const recentPb = projects.value.filter(
+        p => p.source === 'pocketbase' && !serverIds.has(p.id)
+      )
       const locals = projects.value.filter(p => p.source === 'local' || !p.source)
-      const merged = [...res.items, ...locals.filter(l => !res.items.some(r => r.id === l.id))]
+      const merged = [
+        ...res.items.map((item) => {
+          const prev = prevById.get(item.id)
+          let next = item
+          if (prev?.workflowMode === 'scratch' && next.workflowMode !== 'scratch') {
+            next = { ...next, workflowMode: 'scratch' }
+          }
+          return applyClientWorkflowOverlay(next)
+        }),
+        ...recentPb.map(p => applyClientWorkflowOverlay(p)),
+        ...locals.filter(l => !serverIds.has(l.id) && !recentPb.some(r => r.id === l.id))
+      ]
       projects.value = merged
       hydrated.value = true
     } catch (e: any) {
@@ -110,7 +131,10 @@ export function useCreativeProject () {
     }
   }
 
-  const getById = (id: string) => projects.value.find(p => p.id === id) ?? null
+  const getById = (id: string) => {
+    const hit = projects.value.find(p => p.id === id)
+    return hit ? applyClientWorkflowOverlay(hit) : null
+  }
 
   const createProject = (input: {
     name: string
@@ -146,8 +170,10 @@ export function useCreativeProject () {
 
   const registerImportedProject = (p: CreativeProject) => {
     hydrated.value = true
+    const next = applyClientWorkflowOverlay(p)
+    writeSessionWorkflow(next.id, next.workflowMode)
     const without = projects.value.filter(x => x.id !== p.id)
-    projects.value = [p, ...without]
+    projects.value = [next, ...without]
   }
 
   const updateProject = async (
@@ -183,8 +209,10 @@ export function useCreativeProject () {
           headers: { Authorization: `Bearer ${token}` },
           body
         })
+        const merged = applyClientWorkflowOverlay(res.project)
+        if (patch.workflowMode) writeSessionWorkflow(id, merged.workflowMode)
         const copy = [...projects.value]
-        copy[idx] = res.project
+        copy[idx] = merged
         projects.value = copy
       } catch (e) {
         console.error('updateProject API failed', e)

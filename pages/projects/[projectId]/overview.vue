@@ -216,7 +216,7 @@
       <div
         class="text-gray-800 text-base sm:text-lg leading-relaxed whitespace-pre-wrap border-t border-gray-100 pt-6"
       >
-        {{ project?.synopsis || project?.conceptNotes }}
+        {{ project?.synopsis || stripWorkflowMarker(project?.conceptNotes || '') }}
       </div>
 
       <template v-if="showImportedScriptOverview">
@@ -838,6 +838,7 @@
 </template>
 
 <script setup lang="ts">
+import { stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
 import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-from-treatment'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
@@ -1107,7 +1108,8 @@ const promptTextareaRef = ref<HTMLTextAreaElement | null>(null)
 const hasConcept = computed(() => {
   const p = project.value
   if (!p) return false
-  return Boolean((p.synopsis || '').trim() || (p.conceptNotes || '').trim())
+  const notes = stripWorkflowMarker(p.conceptNotes || '')
+  return Boolean((p.synopsis || '').trim() || notes.trim())
 })
 
 const screenplayWorkflowEnabled = computed(
