@@ -46,6 +46,10 @@
               placeholder="Describe the scene, motion, camera, mood, and duration you want"
             />
           </div>
+          <VideoStartFramePicker
+            v-model:frame-image-url="startFrameUrl"
+            :prompt="prompt"
+          />
           <div class="grid sm:grid-cols-2 gap-4">
             <div>
               <label for="vg-aspect" class="block text-sm font-medium text-gray-700 mb-1.5">Aspect ratio</label>
@@ -299,6 +303,7 @@ const error = computed(() => {
 const models = computed(() => data.value?.models ?? [])
 
 const prompt = ref('')
+const startFrameUrl = ref<string | null>(null)
 const aspectRatio = ref<'16:9' | '9:16' | '1:1'>('16:9')
 const durationSeconds = ref(5)
 const selectedModelIds = ref<string[]>([])
@@ -369,6 +374,7 @@ async function runOneModel (modelId: string) {
       model: modelId,
       aspectRatio: aspectRatio.value,
       durationSeconds: durationSeconds.value,
+      frameImageUrl: startFrameUrl.value || undefined,
       supportedDurations: model?.supportedDurations
     })
 

@@ -204,16 +204,22 @@
                     playsinline
                   />
                   <img
-                    v-else-if="frameUrlFor(scene.id, shot.id)"
-                    :src="frameUrlFor(scene.id, shot.id)!"
+                    v-else-if="startFramePreviewUrl(scene.id, shot.id)"
+                    :src="startFramePreviewUrl(scene.id, shot.id)!"
                     alt=""
                     class="w-full h-full object-cover"
                     loading="lazy"
                   >
                   <span v-else class="text-xs text-gray-500 px-4 text-center">
-                    No saved storyboard frame yet
+                    No storyboard frame — upload or generate a starting image below
                   </span>
                 </div>
+                <VideoStartFramePicker
+                  :frame-image-url="customFrameByKey[genKey(scene.id, shot.id)] ?? null"
+                  :prompt="finalVideoPrompt(shot)"
+                  compact
+                  @update:frame-image-url="(v) => setCustomStartFrame(genKey(scene.id, shot.id), v)"
+                />
                 <div
                   v-if="videoPreviewByKey[genKey(scene.id, shot.id)]"
                   class="flex flex-wrap gap-2"
@@ -385,6 +391,7 @@ const sceneShotsBySceneId = reactive<Record<string, CreativeShot[]>>({})
 const sceneShotsLoading = reactive<Record<string, boolean>>({})
 const videoGenKey = ref('')
 const videoPreviewByKey = reactive<Record<string, string>>({})
+const customFrameByKey = reactive<Record<string, string>>({})
 const expandedVideo = ref<{ url: string; title: string } | null>(null)
 
 const { addVideoClip } = useProjectTimeline(projectId)
@@ -511,6 +518,29 @@ function frameUrlFor (sceneId: string, shotId: string): string | null {
   return hit?.fileUrl || null
 }
 
+function setCustomStartFrame (key: string, url: string | null) {
+  if (url) customFrameByKey[key] = url
+  else delete customFrameByKey[key]
+}
+
+function startFramePreviewUrl (sceneId: string, shotId: string): string | null {
+  const key = genKey(sceneId, shotId)
+  const custom = customFrameByKey[key]
+  if (custom) return custom
+  return frameUrlFor(sceneId, shotId)
+}
+
+function resolveStartFrameForApi (
+  sceneId: string,
+  shotId: string,
+  castMatches: ReturnType<typeof findCharactersInShot>
+): string {
+  const key = genKey(sceneId, shotId)
+  const custom = customFrameByKey[key]
+  if (custom) return custom
+  return frameUrlFor(sceneId, shotId) || pickPrimaryCharacterPortrait(castMatches) || ''
+}
+
 function finalVideoPrompt (shot: CreativeShot): string {
   const v = (shot.videoPrompt || '').trim()
   if (v) return v
@@ -572,9 +602,7 @@ async function generateVideoForPanel (shot: CreativeShot, sceneId: string) {
         : project.value?.aspectRatio === '1:1'
           ? '1:1'
           : '16:9'
-    const storyboardFrame = frameUrlFor(sceneId, shot.id) || ''
-    const castPortrait = pickPrimaryCharacterPortrait(castMatches) || ''
-    const frame = storyboardFrame || castPortrait
+    const frame = resolveStartFrameForApi(sceneId, shot.id, castMatches)
     const baseSec = snapToStoryboardClipSeconds(Number(shot.durationSeconds) || 5)
     const modelRow = videoModels.value.find(m => m.id === selectedModelId.value)
     const headers = authHeaders()
