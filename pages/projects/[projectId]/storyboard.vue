@@ -3,11 +3,10 @@
     <div class="flex items-start justify-between gap-3 mb-6">
       <p class="text-sm text-gray-500">
         <span class="text-primary font-medium">Storyboard</span>
-      · Pick a scene and use
-      <span class="text-gray-700">Generate Shots</span>
-      for a continuity-aware refresh. Then
-      <span class="text-gray-700">Generate frame</span>
-      — we attach your cast’s featured portraits and visual prompts so panels match Character Creator.
+      · <span class="text-gray-700">Generate Shots</span>
+      builds the panel list (titles, beats, prompts). Use
+      <span class="text-gray-700">Generate image</span>
+      on each board (or <span class="text-gray-700">Generate all images</span>) to fill the frames — cast portraits are used when available.
       </p>
       <button
         type="button"
@@ -137,8 +136,8 @@
                     </option>
                   </select>
                   <p class="mt-2 text-xs text-gray-500">
-                    <strong>Generate Shots</strong> builds the board list (text only).
-                    Use <strong>Generate image</strong> on each board to create frames — they save to Assets → Storyboards.
+                    <strong>Generate Shots</strong> = panel list only (no pictures).
+                    <strong>Generate image</strong> fills each board’s frame and saves to Assets → Storyboards.
                     Cast portraits from Assets → Characters are used when available.
                   </p>
                 </div>
@@ -152,6 +151,22 @@
                 {{ generating ? 'Generating cinematic shots…' : 'Generate Shots' }}
               </button>
             </div>
+          </div>
+          <div
+            v-if="shots.length && boardsMissingFrames > 0 && !generating && !generatingAllFrames"
+            class="mt-4 flex flex-wrap items-center gap-3"
+          >
+            <button
+              type="button"
+              class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 text-sm font-semibold rounded-lg transition-colors disabled:opacity-45"
+              :disabled="!!imageGenId || !shotsPersisted"
+              @click="generateAllFrames"
+            >
+              {{ generatingAllFrames ? 'Generating images…' : `Generate all images (${boardsMissingFrames})` }}
+            </button>
+            <p v-if="!shotsPersisted" class="text-xs text-amber-800">
+              Save the shot list first (fix any warning above), then generate images.
+            </p>
           </div>
           <p v-if="generateError" class="mt-3 text-sm text-red-600">{{ generateError }}</p>
           <div
@@ -230,9 +245,23 @@
               </div>
               <div
                 v-else
-                class="rounded-lg border border-dashed border-gray-300 bg-white text-xs text-gray-500 px-3 py-8 text-center"
+                :class="[framePreviewBoxClass, 'flex flex-col items-center justify-center gap-2 border-dashed border-gray-300 bg-white px-3 py-6']"
               >
-                No frame yet
+                <p class="text-xs text-gray-500 text-center max-w-[16rem]">
+                  Shots list only — generate the still frame here.
+                </p>
+                <button
+                  type="button"
+                  class="px-3 py-2 text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-gray-950 disabled:opacity-45"
+                  :disabled="
+                    imageGenId === shot.id ||
+                    generatingAllFrames ||
+                    !((shot.imagePrompt || shot.description || '').trim())
+                  "
+                  @click="generateFrame(shot)"
+                >
+                  {{ imageGenId === shot.id ? 'Generating…' : 'Generate image' }}
+                </button>
               </div>
               <div>
                 <label class="block text-xs font-medium text-gray-500 mb-1">Board title</label>
@@ -473,6 +502,7 @@ const scenesLoadError = ref('')
 const shots = ref<CreativeShot[]>([])
 const shotsLoading = ref(false)
 const generating = ref(false)
+const generatingAllFrames = ref(false)
 const generateError = ref('')
 const persistenceWarning = ref('')
 const shotsPersisted = ref(true)
@@ -494,9 +524,16 @@ const framePreviewBoxClass = computed(() =>
 
 const activeScene = computed(() => scenes.value.find(s => s.id === selectedSceneId.value))
 const activeSceneShotCount = computed(() => {
+  if (selectedSceneId.value && shots.value.length && !shotsLoading.value) {
+    return shots.value.length
+  }
   const n = Number(activeScene.value?.shotCount || 0)
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
 })
+
+const boardsMissingFrames = computed(() =>
+  shots.value.filter(s => !framePreview[s.id]).length
+)
 
 const durationBudget = computed(() =>
   project.value
@@ -584,6 +621,42 @@ function unifiedPromptContext () {
       name: c.name,
       traitsRoleVisual: c.roleDescription
     }))
+  }
+}
+
+async function generateAllFrames () {
+  if (!shotsPersisted.value) {
+    toast.showToast('Run Generate Shots again until the list saves (no amber warning).', 'error')
+    return
+  }
+  const pending = shots.value.filter(s => !framePreview[s.id])
+  if (!pending.length) {
+    toast.showToast('All boards already have frames.', 'info')
+    return
+  }
+  generatingAllFrames.value = true
+  let ok = 0
+  let failed = 0
+  try {
+    for (const shot of pending) {
+      try {
+        await generateFrame(shot)
+        if (framePreview[shot.id]) ok++
+        else failed++
+      } catch {
+        failed++
+      }
+    }
+    if (ok && !failed) {
+      toast.showToast(`Generated ${ok} frame(s).`, 'success')
+    } else if (ok) {
+      toast.showToast(`Generated ${ok} frame(s); ${failed} failed.`, 'info')
+    } else {
+      toast.showToast('Could not generate frames. Check prompts and try one board at a time.', 'error')
+    }
+  } finally {
+    generatingAllFrames.value = false
+    imageGenId.value = null
   }
 }
 
@@ -1006,11 +1079,21 @@ async function generateShots () {
       return
     }
     await loadServerProjects()
+    await loadScenes()
     const n = res.continuity?.issueCount ?? 0
-    if (n > 0) {
-      toast.showToast(`Shots generated — continuity adjusted ${n} issue(s). See Overview for details.`, 'success')
+    const frameHint =
+      boardsMissingFrames.value > 0
+        ? ` Use Generate image on each board, or Generate all images (${boardsMissingFrames.value}).`
+        : ''
+    if (persistenceWarning.value) {
+      toast.showToast(persistenceWarning.value, 'warning')
+    } else if (n > 0) {
+      toast.showToast(
+        `Panel list saved — continuity adjusted ${n} issue(s).${frameHint}`,
+        'success'
+      )
     } else {
-      toast.showToast('Shots generated.', 'success')
+      toast.showToast(`Panel list saved.${frameHint}`, 'success')
     }
   } catch (e: unknown) {
     generateError.value = formatApiFetchError(e, 'Generation failed.')
