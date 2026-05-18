@@ -474,8 +474,16 @@ import {
   normalizeStoryboardFrameImageUrl,
   storyboardFramePreviewClasses
 } from '~/lib/storyboard-frame-image'
-import { fetchImageAsDataUrl } from '~/lib/storyboard-frame-preview-url'
-import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
+import {
+  fetchImageAsDataUrl,
+  isDirectStoryboardFrameSrc
+} from '~/lib/storyboard-frame-preview-url'
+import {
+  appendPlaybackAccessToken,
+  isProjectAssetMediaPath,
+  projectAssetMediaPath,
+  projectAssetMediaPathOnly
+} from '~/lib/project-asset-playback-url'
 
 const PB_SHOT_ID = /^[a-z0-9]{15}$/
 
@@ -608,30 +616,65 @@ function firstImageUrl (urls: unknown[]): string {
   return ''
 }
 
-function onFramePreviewImgError (shotId: string) {
-  framePreviewFailed[shotId] = true
+async function onFramePreviewImgError (shotId: string) {
+  const current = framePreview[shotId]
+  if (!current || framePreviewFailed[shotId]) {
+    framePreviewFailed[shotId] = true
+    return
+  }
+  if (current.startsWith('data:image/') || !isDirectStoryboardFrameSrc(current)) {
+    framePreviewFailed[shotId] = true
+    return
+  }
+  try {
+    const headers = await authHeaders()
+    const dataUrl = await fetchImageAsDataUrl(current, { headers: headers ?? undefined })
+    const aspect = project.value?.aspectRatio || '16:9'
+    framePreview[shotId] = await normalizeStoryboardFrameImageUrl(dataUrl, aspect).catch(() => dataUrl)
+    framePreviewFailed[shotId] = false
+  } catch {
+    framePreviewFailed[shotId] = true
+  }
 }
 
 async function setFramePreviewFromUrl (shotId: string, rawUrl: string) {
   const aspect = project.value?.aspectRatio || '16:9'
+  const u = rawUrl.trim()
+  if (!u) return
   framePreviewFailed[shotId] = false
-  const headers = await authHeaders()
-  let dataUrl = ''
-  try {
-    dataUrl = await fetchImageAsDataUrl(rawUrl, headers || undefined)
-  } catch {
-    if (rawUrl.startsWith('data:image/')) {
-      dataUrl = rawUrl
-    } else {
-      framePreviewFailed[shotId] = true
-      delete framePreview[shotId]
-      return
-    }
+
+  let displayUrl = u
+  const pathOnly = projectAssetMediaPathOnly(u)
+  if (isProjectAssetMediaPath(pathOnly) && !/[?&]access_token=/.test(u)) {
+    displayUrl = appendPlaybackAccessToken(u.split('#')[0] || pathOnly, getAuthToken())
   }
+
+  if (isDirectStoryboardFrameSrc(displayUrl)) {
+    framePreview[shotId] = displayUrl
+    return
+  }
+
+  if (u.startsWith('data:image/')) {
+    try {
+      framePreview[shotId] = await normalizeStoryboardFrameImageUrl(u, aspect)
+    } catch {
+      framePreview[shotId] = u
+    }
+    return
+  }
+
+  const headers = await authHeaders()
   try {
-    framePreview[shotId] = await normalizeStoryboardFrameImageUrl(dataUrl, aspect)
+    const dataUrl = await fetchImageAsDataUrl(u, { headers: headers ?? undefined })
+    try {
+      framePreview[shotId] = await normalizeStoryboardFrameImageUrl(dataUrl, aspect)
+    } catch {
+      framePreview[shotId] = dataUrl
+    }
   } catch {
-    framePreview[shotId] = dataUrl
+    if (framePreview[shotId]) return
+    framePreviewFailed[shotId] = true
+    delete framePreview[shotId]
   }
 }
 
@@ -729,11 +772,13 @@ async function generateFrame (shot: CreativeShot) {
 }
 
 function storyboardFramePlaybackUrl (asset: ProjectAsset, projectPbId: string): string {
+  const fileUrl = (asset.fileUrl || '').trim()
+  if (fileUrl.startsWith('/pb/')) return fileUrl
   const token = getAuthToken()
   if (projectPbId && asset.id) {
     return appendPlaybackAccessToken(projectAssetMediaPath(projectPbId, asset.id), token)
   }
-  return asset.fileUrl || ''
+  return fileUrl
 }
 
 function storyboardAssetMatchesShot (asset: ProjectAsset, shot: CreativeShot, sceneId: string): boolean {
@@ -806,6 +851,7 @@ async function applySavedFramesForCurrentScene () {
   const pid = projectId.value
   if (!sid || !pid) return
   for (const s of shots.value) {
+    if (framePreview[s.id] && !framePreviewFailed[s.id]) continue
     const hit = storyboardAssetForShot(s)
     if (hit) {
       const src = storyboardFramePlaybackUrl(hit, pid)
@@ -885,13 +931,10 @@ async function autoSaveGeneratedFrame (
     })
     if (out.asset?.id) {
       const playback = storyboardFramePlaybackUrl(out.asset, id)
-      try {
+      if (!framePreview[shot.id]) {
         await setFramePreviewFromUrl(shot.id, playback)
-      } catch {
-        // Keep in-memory preview from generation if saved playback URL fails to load
       }
       await loadStoryboardAssets()
-      await applySavedFramesForCurrentScene()
       return null
     }
     return 'upload endpoint returned no file URL'
