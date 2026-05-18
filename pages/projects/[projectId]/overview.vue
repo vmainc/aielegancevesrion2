@@ -426,6 +426,11 @@
         :disabled="generating"
       />
 
+      <ConceptReferenceImageUpload
+        v-model="conceptReferenceImage"
+        :disabled="generating"
+      />
+
       <div
         v-if="scratchWorkflow"
         class="mb-5 rounded-lg border border-gray-200 bg-white px-3 py-3"
@@ -517,6 +522,12 @@
                 <span v-if="r.tone" class="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-800">{{ r.tone }}</span>
                 <span v-if="r.genre" class="text-xs px-2 py-1 rounded-md bg-gray-200 text-gray-800 capitalize">{{ r.genre }}</span>
               </div>
+              <p
+                v-if="isSuccessResult(r) && r.director?.style"
+                class="text-xs text-gray-500 mb-3"
+              >
+                Includes a director bible from your idea{{ conceptReferenceImage ? ' and reference image' : '' }} — editable on the Director tab after you apply.
+              </p>
               <button
                 type="button"
                 class="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
@@ -1149,6 +1160,7 @@ async function previewScriptAnalyses () {
 const modelOptions = ref<Array<{ id: string; label: string }>>([])
 const modelsLoadError = ref('')
 const conceptPrompt = ref('')
+const conceptReferenceImage = ref<string | null>(null)
 const selectedModelIds = ref<string[]>([])
 const generating = ref(false)
 const conceptResults = ref<ConceptGeneratorResultItem[] | null>(null)
@@ -1209,7 +1221,7 @@ const scratchGeneratorBlurb = computed(() => {
   if (project.value?.goal === 'social') {
     return 'Describe a hook, mood, or topic. Pick one or more AI models, compare ideas, then choose the story you want to turn into shots and video.'
   }
-  return 'Describe your idea, pick models to compare, and choose the concept you want to build in Director, Story, and Storyboard.'
+  return 'Describe your idea (and optionally upload a reference image). Pick models to compare — they use both to draft story, director bible, and prompts.'
 })
 
 const scratchPromptPlaceholder = computed(() => {
@@ -1375,6 +1387,8 @@ async function runConceptBootstrap (opts?: {
   genre?: string
   tone?: string
   characters?: string[]
+  director?: import('~/types/creative-project').ProjectDirector
+  visualReference?: string
 }) {
   const id = projectId.value
   const token = getAuthToken()
@@ -1401,7 +1415,9 @@ async function runConceptBootstrap (opts?: {
       tone: opts?.tone || p?.tone,
       characters: opts?.characters?.length
         ? opts.characters
-        : parseCharactersFromConceptNotes(p?.conceptNotes || '')
+        : parseCharactersFromConceptNotes(p?.conceptNotes || ''),
+      ...(opts?.director ? { director: opts.director } : {}),
+      ...(opts?.visualReference ? { visual_reference: opts.visualReference } : {})
     }
     const started = await $fetch<{ async: boolean; jobId: string }>(
       `/api/projects/${id}/bootstrap-from-concept`,
@@ -1510,7 +1526,7 @@ watch(
 const canGenerate = computed(() => {
   if (generating.value) return false
   if (!isAuthenticated.value) return false
-  if (!conceptPrompt.value.trim()) return false
+  if (!conceptPrompt.value.trim() && !conceptReferenceImage.value) return false
   if (!selectedModelIds.value.length) return false
   return true
 })
@@ -1585,7 +1601,8 @@ async function generateConcepts () {
         user_prompt: conceptPrompt.value.trim(),
         selected_models: [...selectedModelIds.value],
         goal: project.value?.goal,
-        aspect_ratio: project.value?.aspectRatio
+        aspect_ratio: project.value?.aspectRatio,
+        ...(conceptReferenceImage.value ? { reference_image: conceptReferenceImage.value } : {})
       }
     })
     conceptResults.value = Array.isArray(res) ? res : []
@@ -1639,7 +1656,8 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
       synopsis,
       genre: item.genre || undefined,
       tone: item.tone || undefined,
-      conceptNotes
+      conceptNotes,
+      ...(item.director ? { director: item.director } : {})
     })
     conceptResults.value = null
     showGeneratorForm.value = false
@@ -1651,7 +1669,9 @@ async function useThisConcept (item: ConceptGeneratorResultItem) {
         summary: synopsis,
         genre: item.genre,
         tone: item.tone,
-        characters: item.characters
+        characters: item.characters,
+        director: item.director,
+        visualReference: item.visual_reference
       })
       return
     }

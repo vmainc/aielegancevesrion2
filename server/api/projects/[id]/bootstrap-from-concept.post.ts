@@ -2,6 +2,7 @@ import { getRouterParam, readBody, setResponseStatus } from 'h3'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { createScriptImportJob } from '~/server/utils/script-import-job-registry'
 import { runConceptBootstrapJob } from '~/server/utils/run-concept-bootstrap-job'
+import { parseDirectorField } from '~/server/utils/creative-project-map'
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 
 /**
@@ -22,6 +23,9 @@ export default defineEventHandler(async (event) => {
     genre?: string
     tone?: string
     characters?: unknown
+    director?: unknown
+    visual_reference?: string
+    visualReference?: string
   } | null
 
   const characters = Array.isArray(body?.characters)
@@ -29,6 +33,14 @@ export default defineEventHandler(async (event) => {
     : undefined
 
   const jobId = createScriptImportJob(userId)
+  const visualReference =
+    typeof body?.visual_reference === 'string'
+      ? body.visual_reference.trim()
+      : typeof body?.visualReference === 'string'
+        ? body.visualReference.trim()
+        : undefined
+  const director = parseDirectorField(body?.director) ?? undefined
+
   void runConceptBootstrapJob({
     jobId,
     userId,
@@ -38,7 +50,9 @@ export default defineEventHandler(async (event) => {
     summary: typeof body?.summary === 'string' ? body.summary : undefined,
     genre: typeof body?.genre === 'string' ? body.genre : undefined,
     tone: typeof body?.tone === 'string' ? body.tone : undefined,
-    characters
+    characters,
+    director,
+    visualReference: visualReference || undefined
   })
 
   setResponseStatus(event, 202)

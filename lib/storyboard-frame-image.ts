@@ -5,10 +5,38 @@ import { blobToDataUrl, maybeCompressImageBlob } from '~/lib/image-blob-client'
 export const SINGLE_STORYBOARD_FRAME_DIRECTIVE =
   'ONE IMAGE ONLY: a single cinematic storyboard still for this panel — not a comic strip, not a diptych, not split screen, not stacked panels, not before/after, not a collage of multiple scenes.'
 
+export type ProjectAspectRatio = '16:9' | '9:16' | '1:1'
+
+export function normalizeProjectAspectRatio (aspectRatio?: string): ProjectAspectRatio {
+  if (aspectRatio === '9:16' || aspectRatio === '1:1' || aspectRatio === '16:9') {
+    return aspectRatio
+  }
+  return '16:9'
+}
+
 export function parseProjectAspectRatio (aspectRatio: string): { w: number; h: number } {
-  if (aspectRatio === '9:16') return { w: 9, h: 16 }
-  if (aspectRatio === '1:1') return { w: 1, h: 1 }
+  const ar = normalizeProjectAspectRatio(aspectRatio)
+  if (ar === '9:16') return { w: 9, h: 16 }
+  if (ar === '1:1') return { w: 1, h: 1 }
   return { w: 16, h: 9 }
+}
+
+/** Tailwind classes for storyboard / video frame preview boxes. */
+export function storyboardFramePreviewClasses (aspectRatio?: string): string {
+  const ar = normalizeProjectAspectRatio(aspectRatio)
+  const base =
+    'relative w-full rounded-lg border border-gray-200 overflow-hidden bg-gray-900'
+  if (ar === '9:16') {
+    return `${base} aspect-[9/16] max-w-[min(100%,300px)] mx-auto`
+  }
+  if (ar === '1:1') {
+    return `${base} aspect-square max-w-md mx-auto`
+  }
+  return `${base} aspect-video`
+}
+
+export function openRouterImageAspectRatio (aspectRatio?: string): ProjectAspectRatio {
+  return normalizeProjectAspectRatio(aspectRatio)
 }
 
 function loadImageFromDataUrl (dataUrl: string): Promise<HTMLImageElement> {
@@ -63,6 +91,22 @@ export async function normalizeStoryboardFrameImageUrl (
   const tolerance = 0.12
 
   if (Math.abs(imgAspect - targetAspect) <= tolerance) {
+    return dataUrl
+  }
+
+  const portraitImage = imgAspect < 1
+  const landscapeTarget = targetAspect > 1.15
+  const landscapeImage = imgAspect > 1
+  const portraitTarget = targetAspect < 0.9
+
+  // Portrait still on a landscape project (or vice versa): keep full frame; UI uses object-contain.
+  if ((portraitImage && landscapeTarget) || (landscapeImage && portraitTarget)) {
+    return dataUrl
+  }
+
+  // Very tall composite (stacked panels): crop to target aspect from vertical center.
+  const stackedComposite = imgAspect < targetAspect * 0.55
+  if (!stackedComposite) {
     return dataUrl
   }
 

@@ -1,5 +1,10 @@
 import type PocketBase from 'pocketbase'
-import { resolveProjectDurationBudget } from '~/lib/project-duration-budget'
+import {
+  fitShotsToSceneCap,
+  perSceneShotCap,
+  resolveProjectDurationBudget
+} from '~/lib/project-duration-budget'
+import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
 import { replaceSceneShots } from '~/server/utils/persist-scene-shots'
@@ -53,9 +58,9 @@ export async function seedStoryboardsAfterScriptImport (params: {
   const { pb, userId, projectId, project, scenes, characters } = params
   const budget = resolveProjectDurationBudget({
     targetDurationSeconds:
-      typeof project.target_duration_seconds === 'number'
+      typeof project.target_duration_seconds === 'number' && project.target_duration_seconds > 0
         ? project.target_duration_seconds
-        : undefined,
+        : parseDurationFromConceptNotes(String(project.concept_notes || '')),
     targetLength: project.target_length as import('~/types/creative-project').ProjectTargetLength | undefined,
     goal: String(project.goal || 'film') as import('~/types/creative-project').ProjectGoal
   })
@@ -72,11 +77,27 @@ export async function seedStoryboardsAfterScriptImport (params: {
     traitsRoleVisual: String(c.role_description || '')
   }))
 
-  async function seedOne (scene: StoryboardSeedScene): Promise<'ok' | 'fail' | 'empty'> {
+  let panelsUsed = 0
+
+  async function seedOne (
+    scene: StoryboardSeedScene,
+    sceneIndex: number
+  ): Promise<'ok' | 'fail' | 'empty'> {
     const body = (scene.body || '').trim()
     const summary = (scene.summary || '').trim()
     if (!body && !summary) return 'empty'
+    if (budget && panelsUsed >= budget.maxPanelsTotal) return 'empty'
     try {
+      const sceneCap = budget
+        ? perSceneShotCap(budget, toProcess.length, sceneIndex)
+        : null
+      const remaining = budget ? budget.maxPanelsTotal - panelsUsed : sceneCap?.maxShots ?? 12
+      const maxShots = sceneCap
+        ? Math.min(sceneCap.maxShots, Math.max(1, remaining))
+        : 12
+      const sceneShotCap = sceneCap
+        ? { minShots: Math.min(sceneCap.minShots, maxShots), maxShots }
+        : null
       const shots = await generateShotsWithAi({
         projectName: String(project.name || 'Project'),
         aspectRatio: String(project.aspect_ratio || '16:9'),
@@ -88,9 +109,14 @@ export async function seedStoryboardsAfterScriptImport (params: {
         characters: charCtx,
         director,
         continuityMemory,
-        durationBudget: budget
+        durationBudget: budget,
+        sceneShotCap
       })
-      await replaceSceneShots(pb, userId, projectId, scene.id, shots)
+      const fitted = budget
+        ? fitShotsToSceneCap(shots, maxShots, budget.clipSeconds)
+        : shots
+      panelsUsed += fitted.length
+      await replaceSceneShots(pb, userId, projectId, scene.id, fitted)
       return 'ok'
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : String(e)
@@ -105,7 +131,9 @@ export async function seedStoryboardsAfterScriptImport (params: {
 
   for (let i = 0; i < toProcess.length; i += CONCURRENCY) {
     const batch = toProcess.slice(i, i + CONCURRENCY)
-    const results = await Promise.all(batch.map(s => seedOne(s)))
+    const results = await Promise.all(
+      batch.map((s, j) => seedOne(s, i + j))
+    )
     for (const r of results) {
       if (r === 'ok') ok++
       else if (r === 'empty') emptySkipped++

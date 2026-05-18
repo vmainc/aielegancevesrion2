@@ -16,9 +16,13 @@ export function openRouterProviderPrefs(
   return undefined
 }
 
+export type OpenRouterMessageContent =
+  | string
+  | Array<{ type: string; text?: string; image_url?: { url: string } }>
+
 export function buildOpenRouterChatCompletionBody(options: {
   model: string
-  messages: Array<{ role: string; content: string }>
+  messages: Array<{ role: string; content: OpenRouterMessageContent }>
   temperature?: number
   max_tokens?: number
 }): Record<string, unknown> {

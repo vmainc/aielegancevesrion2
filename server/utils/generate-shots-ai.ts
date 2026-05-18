@@ -1,5 +1,9 @@
 import type { ProjectDirector } from '~/types/creative-project'
-import { durationBudgetPromptBlock, type ProjectDurationBudget } from '~/lib/project-duration-budget'
+import {
+  durationBudgetPromptBlock,
+  fitShotsToSceneCap,
+  type ProjectDurationBudget
+} from '~/lib/project-duration-budget'
 import { isAnimalOnlyCast } from '~/lib/storyboard-continuity-prompts'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
@@ -35,6 +39,8 @@ export interface GenerateShotsContext {
   continuityMemory?: string | null
   openrouterModelId?: string
   durationBudget?: ProjectDurationBudget | null
+  /** When set, overrides budget min/max for this scene (project-wide allocation). */
+  sceneShotCap?: { minShots: number; maxShots: number } | null
 }
 
 function extractJsonWithShots (text: string): { shots?: unknown[] } | null {
@@ -205,8 +211,8 @@ ${mem.slice(0, 8000)}
     : ''
 
   const budget = ctx.durationBudget
-  const shotMax = budget ? Math.min(12, budget.maxShotsPerScene) : 12
-  const shotMin = budget ? Math.min(budget.minShotsPerScene, shotMax) : 3
+  const shotMax = ctx.sceneShotCap?.maxShots ?? (budget ? Math.min(12, budget.maxShotsPerScene) : 12)
+  const shotMin = ctx.sceneShotCap?.minShots ?? (budget ? Math.min(budget.minShotsPerScene, shotMax) : 3)
 
   const animalOnly = isAnimalOnlyCast(
     ctx.characters.map(c => ({ name: c.name, traitsRoleVisual: c.traitsRoleVisual }))
@@ -250,7 +256,7 @@ SCRIPT / SCENE TEXT (may be partial or messy):
 ${scriptExcerpt || '(no script body — work from title and summary only)'}
 
 CHARACTERS
-${budget ? `${durationBudgetPromptBlock(budget)}\n\n` : ''}${charBlock}`
+${budget ? `${durationBudgetPromptBlock(budget, ctx.sceneShotCap ?? undefined)}\n\n` : ''}${charBlock}`
 
   const body = buildOpenRouterChatCompletionBody({
     model: ctx.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude,
@@ -302,8 +308,8 @@ ${budget ? `${durationBudgetPromptBlock(budget)}\n\n` : ''}${charBlock}`
   }
 
   const normalized = normalizeShotsFromModelArray(arr)
-  const shots = enrichGeneratedShotsForContinuity(normalized, ctx)
-  if (shots.length < shotMin) {
+  let shots = enrichGeneratedShotsForContinuity(normalized, ctx)
+  if (shots.length < shotMin && shotMin > 1) {
     console.warn(
       '[generate-shots-ai] Too few normalized shots:',
       shots.length,
@@ -316,5 +322,9 @@ ${budget ? `${durationBudgetPromptBlock(budget)}\n\n` : ''}${charBlock}`
         : `Too few shots generated (${shots.length}); need at least ${shotMin}`
     )
   }
-  return shots.slice(0, shotMax)
+  if (shots.length === 0) {
+    throw new Error('Model returned shots but none had usable prompts — try again')
+  }
+  shots = fitShotsToSceneCap(shots, shotMax, budget?.clipSeconds ?? 5)
+  return shots
 }

@@ -199,13 +199,16 @@
                 </p>
 
                 <div
-                  class="rounded-lg border border-gray-200 overflow-hidden bg-gray-100 aspect-video flex items-center justify-center relative"
+                  :class="[
+                    storyboardFramePreviewClasses(project?.aspectRatio),
+                    'flex items-center justify-center'
+                  ]"
                 >
                   <video
                     v-if="videoPreviewByKey[genKey(scene.id, shot.id)]"
                     :key="videoPreviewByKey[genKey(scene.id, shot.id)]"
                     :src="playbackVideoSrc(videoPreviewByKey[genKey(scene.id, shot.id)])"
-                    class="w-full h-full object-cover"
+                    class="w-full h-full object-contain"
                     controls
                     playsinline
                   />
@@ -213,7 +216,7 @@
                     v-else-if="startFramePreviewUrl(scene.id, shot.id)"
                     :src="startFramePreviewUrl(scene.id, shot.id)!"
                     alt=""
-                    class="w-full h-full object-cover"
+                    class="absolute inset-0 w-full h-full object-contain"
                     loading="lazy"
                   >
                   <span v-else class="text-xs text-gray-500 px-4 text-center">
@@ -340,6 +343,7 @@ import {
 } from '~/lib/project-asset-playback-url'
 import { isMusicVideoTarget, projectWantsGeneratedVideoAudio } from '~/lib/project-video-audio'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
+import { storyboardFramePreviewClasses } from '~/lib/storyboard-frame-image'
 import {
   buildFullVideoGenerationPrompt,
   findCharactersInShot,
@@ -565,6 +569,7 @@ function productionPromptContext (
   return {
     director: project.value?.director,
     continuityMemory: project.value?.continuityMemory,
+    aspectRatio: project.value?.aspectRatio,
     targetLength: project.value?.targetLength,
     scene: scene
       ? { heading: scene.heading, summary: scene.summary }

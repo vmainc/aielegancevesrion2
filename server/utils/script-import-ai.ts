@@ -1,4 +1,5 @@
 import { OPENROUTER_ENRICH_MS, OPENROUTER_THREE_ACT_MS } from '~/lib/script-wizard-timeouts'
+import { filterCastCharacterRows, isMetaCastCharacterEntry } from '~/lib/screenplay-character-filter'
 import { defaultDirector } from '~/lib/director-presets'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import type { ProjectDirector } from '~/types/creative-project'
@@ -202,6 +203,7 @@ export async function enrichScriptWithAi (input: {
 Rules:
 - Include 3–5 comparable_films (well-known, real titles). Be specific on parallel vs contrast.
 - Use the same scene order as given (index 0 = first scene). Include every character name from the provided list in characterRoles (infer role from context).
+- Never use CAST, CREDITS, or section headings as character names in characterRoles.
 - Escape quotes inside JSON strings properly.`
 
   const user = `Project title: ${input.projectName}
@@ -360,7 +362,7 @@ ${input.sceneOutline.slice(0, 12000)}`
     tone,
     themes,
     sceneSummaries,
-    characterRoles
+    characterRoles: filterCastCharacterRows(characterRoles)
   }
   } catch (err: unknown) {
     console.warn('[script-import-ai] enrichScriptWithAi failed:', err)
@@ -709,7 +711,7 @@ export function normalizeCharacterShares (rows: CharacterWithShare[]): Character
   const byKey = new Map<string, CharacterWithShare>()
   for (const r of rows) {
     const n = r.name.trim()
-    if (!n) continue
+    if (!n || isMetaCastCharacterEntry(n, r.role_description)) continue
     const k = n.toLowerCase()
     const pct = typeof r.screen_share_percent === 'number' && Number.isFinite(r.screen_share_percent)
       ? Math.max(0, r.screen_share_percent)
@@ -776,6 +778,7 @@ function rowFromUnknownChar (row: Record<string, unknown>): CharacterWithShare |
     asStr(row.description) ||
     asStr(row.bio) ||
     ''
+  if (isMetaCastCharacterEntry(name, role_description)) return null
   let pct = row.screen_share_percent ?? row.screen_time_percent ?? row.share_percent ?? row.percent
   let n = typeof pct === 'number' ? pct : Number(pct)
   if (!Number.isFinite(n)) n = 0
@@ -820,6 +823,7 @@ Rules:
 - screen_share_percent is your estimate of each character's share of total dialogue lines + meaningful on-screen presence in the excerpt (not runtime minutes). Principal cast should sum to about 100; tiny walk-ons can be 0.5–2 or grouped.
 - Include at most 18 rows; merge true extras into one "OTHER (extras)" row if needed with a small combined percent.
 - Use the parser hint list and scene text — do not invent characters never present in the excerpt.
+- Never use CAST, CREDITS, ENSEMBLE, or section headings as character names; only people/creatures who speak or act in scenes.
 - Escape quotes inside JSON strings properly.`
 
   const hints =
@@ -894,7 +898,7 @@ ${input.sceneOutline.slice(0, 14000)}`
   if (shouldReplaceFlatDistribution(withShares)) {
     withShares = applyMentionBasedSharesFromScript(input.sceneOutline, withShares)
   }
-  return normalizeCharacterShares(withShares)
+  return normalizeCharacterShares(filterCastCharacterRows(withShares))
 }
 
 /**
@@ -1029,7 +1033,7 @@ export function buildCharacterRowsFromFallback (input: {
   parsed: ParsedScriptForCharacters
 }): CharacterWithShare[] {
   const bodies = input.parsed.scenes.map(s => s.body).join('\n\n')
-  let roles = input.enrichmentRoles.filter(r => r.name.trim())
+  let roles = filterCastCharacterRows(input.enrichmentRoles.filter(r => r.name.trim()))
   if (!roles.length) {
     roles = input.parsed.characterNames
       .filter(Boolean)

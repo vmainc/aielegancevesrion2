@@ -42,8 +42,8 @@ export function buildDurationBudgetFromSeconds (totalSeconds: number): ProjectDu
   const clipSeconds: 5 | 10 = total <= 50 ? 5 : 5
   const maxPanelsTotal = Math.max(3, Math.floor(total / clipSeconds))
   const maxScenesForImport = Math.min(14, Math.max(2, Math.ceil(maxPanelsTotal / 4)))
-  const maxShotsPerScene = Math.min(12, Math.max(3, Math.ceil(maxPanelsTotal / maxScenesForImport)))
-  const minShotsPerScene = Math.min(3, maxShotsPerScene)
+  const maxShotsPerScene = Math.min(12, Math.max(1, Math.ceil(maxPanelsTotal / maxScenesForImport)))
+  const minShotsPerScene = Math.min(1, maxShotsPerScene)
   return {
     totalSeconds: total,
     clipSeconds,
@@ -69,14 +69,47 @@ export function resolveProjectDurationBudget (project: {
   return null
 }
 
-export function durationBudgetPromptBlock (budget: ProjectDurationBudget): string {
+export function perSceneShotCap (
+  budget: ProjectDurationBudget,
+  sceneCount: number,
+  sceneIndex: number
+): { minShots: number; maxShots: number } {
+  const n = Math.max(1, Math.floor(sceneCount))
+  const idx = Math.max(0, Math.min(n - 1, Math.floor(sceneIndex)))
+  const base = Math.floor(budget.maxPanelsTotal / n)
+  const extra = budget.maxPanelsTotal % n
+  const maxShots = base + (idx < extra ? 1 : 0)
+  const capped = Math.max(1, Math.min(maxShots, budget.maxShotsPerScene))
+  return {
+    minShots: Math.min(1, capped),
+    maxShots: capped
+  }
+}
+
+export function durationBudgetPromptBlock (
+  budget: ProjectDurationBudget,
+  sceneCap?: { minShots: number; maxShots: number }
+): string {
+  const minS = sceneCap?.minShots ?? budget.minShotsPerScene
+  const maxS = sceneCap?.maxShots ?? budget.maxShotsPerScene
   return [
     `RUNTIME BUDGET (strict): Finished piece must be ~${budget.totalSeconds} seconds total.`,
     `Storyboard panels use only ${budget.clipSeconds}s or 10s clips.`,
-    `Across the ENTIRE project use at most ${budget.maxPanelsTotal} panels (≈${budget.totalSeconds}s).`,
-    `For THIS scene use between ${budget.minShotsPerScene} and ${budget.maxShotsPerScene} panels.`,
+    `Across the ENTIRE project use at most ${budget.maxPanelsTotal} panels (≈${budget.totalSeconds}s when played in order).`,
+    `For THIS scene return exactly ${minS === maxS ? maxS : `${minS}–${maxS}`} panel(s) — not more.`,
+    'Prefer duration_seconds 5 on every panel unless one beat truly needs 10.',
     'Trim story beats to fit — no filler, no extra characters, no epilogue beyond the budget.'
   ].join(' ')
+}
+
+/** Trim model output and assign clip lengths so this scene fits its panel cap. */
+export function fitShotsToSceneCap<T extends { duration_seconds: number }> (
+  shots: T[],
+  maxShots: number,
+  clipSeconds: (typeof STORYBOARD_CLIP_SECONDS)[number] = 5
+): T[] {
+  const cap = Math.max(1, Math.floor(maxShots))
+  return shots.slice(0, cap).map(s => ({ ...s, duration_seconds: clipSeconds }))
 }
 
 export function screenplayDurationGuidance (budget: ProjectDurationBudget, goal?: ProjectGoal): string {

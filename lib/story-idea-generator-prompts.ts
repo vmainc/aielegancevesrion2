@@ -1,6 +1,13 @@
 import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 
-export function buildConceptSystemPrompt (goal: ProjectGoal): string {
+const DIRECTOR_BIBLE_JSON_KEYS = `
+- director_bible: object with string keys "name", "style", "tone", "camera_preferences", "lighting_style", "pacing" — a practical director bible for image/video generation (not biography)
+- visual_reference: 2–4 sentences on how the reference image (if any) informs look, palette, wardrobe, and mood`
+
+export function buildConceptSystemPrompt (goal: ProjectGoal, hasReferenceImage = false): string {
+  const imageRules = hasReferenceImage
+    ? ` When a reference image is attached, study it carefully. Align story, tone, and director_bible with what you see; do not contradict visible subjects, palette, or setting.${DIRECTOR_BIBLE_JSON_KEYS}`
+    : ''
   if (goal === 'social') {
     return `You are a short-form video story strategist (TikTok, Reels, YouTube Shorts, social ads).
 
@@ -14,7 +21,7 @@ Rules:
 - tone: short phrase (e.g. "playful, fast-cut")
 - genre: format label (e.g. "sketch comedy", "product demo", "POV story")
 - hook: the first 1–3 seconds — what grabs attention (visual or line)
-- characters: JSON array of 2–6 speaking role names in ALL CAPS (e.g. ["MAYA", "JORDAN"]) — no generic labels like "OTHER" or "NARRATOR"`
+- characters: JSON array of 2–6 speaking role names in ALL CAPS (e.g. ["MAYA", "JORDAN"]) — no generic labels like "OTHER" or "NARRATOR"${imageRules}`
   }
   if (goal === 'commercial') {
     return `You are a commercial / branded video concept writer.
@@ -29,7 +36,7 @@ Rules:
 - tone: short phrase
 - genre: e.g. "brand film", "product launch", "testimonial"
 - hook: opening beat that stops the scroll
-- characters: JSON array of 2–6 speaking role names in ALL CAPS for on-screen talent`
+- characters: JSON array of 2–6 speaking role names in ALL CAPS for on-screen talent${imageRules}`
   }
   return `You are a film and video concept generator.
 
@@ -42,14 +49,38 @@ Rules:
 - summary: 3–5 sentences, cinematic and engaging
 - tone: short phrase (e.g. "tense, intimate")
 - genre: primary genre label (e.g. "sci-fi thriller")
-- characters: JSON array of 2–8 named speaking roles in ALL CAPS (e.g. ["ELENA", "MARCUS"]) — specific names, not "OTHER" or "EXTRAS"`
+- characters: JSON array of 2–8 named speaking roles in ALL CAPS (e.g. ["ELENA", "MARCUS"]) — specific names, not "OTHER" or "EXTRAS"${imageRules}`
+}
+
+export function buildConceptUserMessageContent (input: {
+  userPrompt: string
+  goal: ProjectGoal
+  aspectRatio?: ProjectAspectRatio
+  targetDurationSeconds?: number
+  referenceImageDataUrl?: string | null
+  referenceImageBrief?: string
+}): string | Array<{ type: string; text?: string; image_url?: { url: string } }> {
+  const text = buildConceptUserPrompt(
+    input.userPrompt,
+    input.goal,
+    input.aspectRatio,
+    input.targetDurationSeconds,
+    input.referenceImageBrief
+  )
+  const dataUrl = (input.referenceImageDataUrl || '').trim()
+  if (!dataUrl) return text
+  return [
+    { type: 'text', text },
+    { type: 'image_url', image_url: { url: dataUrl } }
+  ]
 }
 
 export function buildConceptUserPrompt (
   userPrompt: string,
   goal: ProjectGoal,
   aspectRatio?: ProjectAspectRatio,
-  targetDurationSeconds?: number
+  targetDurationSeconds?: number,
+  referenceImageBrief?: string
 ): string {
   const aspect =
     aspectRatio === '9:16'
@@ -64,24 +95,29 @@ export function buildConceptUserPrompt (
     typeof targetDurationSeconds === 'number' && targetDurationSeconds >= 15
       ? `\nTarget runtime: ${targetDurationSeconds} seconds total — story must fit this length when storyboarded (5s panels).`
       : ''
+  const refLine = (referenceImageBrief || '').trim()
+    ? `\n\nREFERENCE IMAGE ANALYSIS (use for visual_reference and director_bible):\n${referenceImageBrief.trim()}`
+    : ''
+
+  const ideaBlock = userPrompt.trim() || '(No written idea — infer story from the reference image only.)'
 
   if (goal === 'social') {
     return `Create multiple-ready short-form story concepts from this idea:
 
-${userPrompt.trim()}${aspectLine}${runtimeLine}
+${ideaBlock}${aspectLine}${runtimeLine}${refLine}
 
-Return title, logline, summary (beat outline), tone, genre, hook (opening grab), and characters (ALL CAPS names array).`
+Return title, logline, summary (beat outline), tone, genre, hook (opening grab), characters (ALL CAPS names array), director_bible, and visual_reference.`
   }
   if (goal === 'commercial') {
     return `Create a compelling branded video concept from this brief:
 
-${userPrompt.trim()}${aspectLine}${runtimeLine}
+${ideaBlock}${aspectLine}${runtimeLine}${refLine}
 
-Return title, logline, summary, tone, genre, hook, and characters (ALL CAPS names array).`
+Return title, logline, summary, tone, genre, hook, characters (ALL CAPS names array), director_bible, and visual_reference.`
   }
   return `Create a compelling concept based on this idea:
 
-${userPrompt.trim()}${aspectLine}${runtimeLine}
+${ideaBlock}${aspectLine}${runtimeLine}${refLine}
 
-Return title, logline (1 sentence), summary (3–5 sentences), tone, genre, and characters (ALL CAPS names array). Make it engaging and cinematic.`
+Return title, logline (1 sentence), summary (3–5 sentences), tone, genre, characters (ALL CAPS names array), director_bible, and visual_reference. Make it engaging and cinematic.`
 }

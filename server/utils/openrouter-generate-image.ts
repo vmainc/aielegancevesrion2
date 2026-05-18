@@ -1,6 +1,9 @@
-import { SINGLE_STORYBOARD_FRAME_DIRECTIVE } from '~/lib/storyboard-frame-image'
+import {
+  openRouterImageAspectRatio,
+  SINGLE_STORYBOARD_FRAME_DIRECTIVE
+} from '~/lib/storyboard-frame-image'
 import { resolveOpenRouterImageSlug } from '~/server/utils/openrouter-image-models'
-import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
+import { fetchReferenceImageAsDataUrl } from '~/server/utils/reference-image-data-url'
 
 export interface OpenRouterGenerateImageResult {
   urls: string[]
@@ -10,37 +13,6 @@ export interface OpenRouterGenerateImageResult {
 /**
  * Single image generation via OpenRouter (shared by /api/generate/image and batch routes).
  */
-async function fetchReferenceImageAsDataUrl (imageUrl: string, maxBytes: number): Promise<string> {
-  const u = imageUrl.trim()
-  if (u.startsWith('data:image/')) {
-    const comma = u.indexOf(',')
-    if (comma < 0) {
-      throw createError({ statusCode: 400, message: 'Invalid reference image data URL' })
-    }
-    const b64 = u.slice(comma + 1)
-    const approxBytes = Math.floor((b64.length * 3) / 4)
-    if (approxBytes > maxBytes) {
-      throw createError({ statusCode: 400, message: 'Reference image is too large for image generation' })
-    }
-    return u
-  }
-
-  const res = await fetchWithTimeout(
-    imageUrl,
-    { method: 'GET', headers: { Accept: 'image/*' } },
-    30_000
-  )
-  if (!res.ok) {
-    throw createError({ statusCode: 400, message: `Could not download reference image (HTTP ${res.status})` })
-  }
-  const buf = Buffer.from(await res.arrayBuffer())
-  if (buf.length > maxBytes) {
-    throw createError({ statusCode: 400, message: 'Reference image is too large for image generation' })
-  }
-  const ct = (res.headers.get('content-type') || '').split(';')[0]?.trim() || 'image/jpeg'
-  return `data:${ct};base64,${buf.toString('base64')}`
-}
-
 export async function openRouterGenerateImage (options: {
   prompt: string
   modelId: string
@@ -49,10 +21,11 @@ export async function openRouterGenerateImage (options: {
   referenceImageUrl?: string
   aspectRatio?: string
 }): Promise<OpenRouterGenerateImageResult> {
+  const aspect = openRouterImageAspectRatio(options.aspectRatio)
   const aspectHint =
-    options.aspectRatio === '9:16'
+    aspect === '9:16'
       ? 'Output one 9:16 vertical frame.'
-      : options.aspectRatio === '1:1'
+      : aspect === '1:1'
         ? 'Output one 1:1 square frame.'
         : 'Output one 16:9 landscape frame.'
   const prompt = [
@@ -106,7 +79,10 @@ export async function openRouterGenerateImage (options: {
     body: {
       model: openRouterModel,
       messages: [{ role: 'user', content: userContent }],
-      modalities: ['image']
+      modalities: ['image'],
+      image_config: {
+        aspect_ratio: aspect
+      }
     }
   })
 

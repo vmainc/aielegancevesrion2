@@ -3,7 +3,9 @@ import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { CONCEPT_GENERATOR_MODELS, getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
+import { analyzeConceptReferenceImageBrief } from '~/server/utils/analyze-concept-reference-image'
 import { generateConceptWithOpenRouter } from '~/server/utils/generate-concept-ai'
+import { normalizeReferenceImageDataUrl } from '~/server/utils/reference-image-data-url'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 import type { ConceptGeneratorResultItem } from '~/types/concept-generator'
@@ -32,6 +34,7 @@ export default defineEventHandler(async (event) => {
     selected_models?: string[]
     goal?: string
     aspect_ratio?: string
+    reference_image?: string
   } | null
 
   const projectId = typeof body?.project_id === 'string' ? body.project_id.trim() : ''
@@ -41,8 +44,9 @@ export default defineEventHandler(async (event) => {
   if (!projectId) {
     throw createError({ statusCode: 400, message: 'project_id is required' })
   }
-  if (!userPrompt) {
-    throw createError({ statusCode: 400, message: 'user_prompt is required' })
+  const referenceImage = normalizeReferenceImageDataUrl(body?.reference_image)
+  if (!userPrompt && !referenceImage) {
+    throw createError({ statusCode: 400, message: 'user_prompt or reference_image is required' })
   }
 
   const selectedIds = [...new Set(selectedRaw.map(x => String(x).trim()).filter(Boolean))]
@@ -96,18 +100,26 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  let referenceImageBrief = ''
+  if (referenceImage) {
+    referenceImageBrief = await analyzeConceptReferenceImageBrief(referenceImage)
+  }
+
   const tasks = selectedIds.map(async (modelId): Promise<ConceptGeneratorResultItem> => {
     const cfg = CONCEPT_GENERATOR_MODELS.find(m => m.id === modelId)
     if (!cfg) {
       return { model: modelId, error: 'Unknown model' }
     }
     try {
+      const sendImage = Boolean(referenceImage && cfg.supportsVision === true)
       const parsed = await generateConceptWithOpenRouter({
         openrouterModelId: cfg.openrouterModelId,
         userPrompt,
         goal: projectGoal,
         aspectRatio: projectAspect,
-        targetDurationSeconds: projectDurationSeconds
+        targetDurationSeconds: projectDurationSeconds,
+        referenceImageDataUrl: sendImage ? referenceImage : null,
+        referenceImageBrief: referenceImageBrief || undefined
       })
       return {
         model: cfg.id,
@@ -117,7 +129,9 @@ export default defineEventHandler(async (event) => {
         tone: parsed.tone,
         genre: parsed.genre,
         ...(parsed.hook ? { hook: parsed.hook } : {}),
-        ...(parsed.characters?.length ? { characters: parsed.characters } : {})
+        ...(parsed.characters?.length ? { characters: parsed.characters } : {}),
+        ...(parsed.visual_reference ? { visual_reference: parsed.visual_reference } : {}),
+        ...(parsed.director ? { director: parsed.director } : {})
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Request failed'

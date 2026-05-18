@@ -1,3 +1,5 @@
+import type { ProjectDirector } from '~/types/creative-project'
+
 /** One model’s structured concept (success). */
 export interface GeneratedConceptItem {
   model: string
@@ -10,6 +12,10 @@ export interface GeneratedConceptItem {
   hook?: string
   /** Speaking roles in ALL CAPS for screenplay import / cast. */
   characters?: string[]
+  /** How the reference image informs the piece (when uploaded). */
+  visual_reference?: string
+  /** Draft director bible from concept / image analysis. */
+  director?: ProjectDirector
 }
 
 /** Per-model outcome: either fields or an error message. */

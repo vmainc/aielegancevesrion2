@@ -1,10 +1,10 @@
 import type PocketBase from 'pocketbase'
 import type { ParsedScript } from '~/server/utils/parse-script-fdx'
 import { parseFdxXml } from '~/server/utils/parse-script-fdx'
+import { filterCastCharacterRows } from '~/lib/screenplay-character-filter'
 import {
   filterLikelyCharacterNames,
   heuristicCharacterNamesFromScenes,
-  isExcludedScreenplayCharacterLabel,
   parsePlainScriptText
 } from '~/server/utils/parse-script-txt'
 import { extractTextFromPdfBuffer } from '~/server/utils/extract-pdf-text'
@@ -39,6 +39,7 @@ import {
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { resolveProjectPreferredOpenRouterModel } from '~/server/utils/project-model-preference'
+import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
 import { resolveProjectDurationBudget } from '~/lib/project-duration-budget'
 import type { CreativeProject } from '~/types/creative-project'
 
@@ -1336,7 +1337,7 @@ export async function runFullImportFromParsed (input: {
     }
   }
 
-  characterRows = characterRows.filter(c => !isExcludedScreenplayCharacterLabel(c.name))
+  characterRows = filterCastCharacterRows(characterRows)
 
   const treatmentHasThreeAct =
     prefill &&
@@ -1377,9 +1378,10 @@ export async function runFullImportFromParsed (input: {
 
   const durationBudget = resolveProjectDurationBudget({
     targetDurationSeconds:
-      typeof projectRowForPref.target_duration_seconds === 'number'
+      typeof projectRowForPref.target_duration_seconds === 'number' &&
+      projectRowForPref.target_duration_seconds > 0
         ? projectRowForPref.target_duration_seconds
-        : undefined,
+        : parseDurationFromConceptNotes(String(projectRowForPref.concept_notes || '')),
     targetLength: projectRowForPref.target_length as import('~/types/creative-project').ProjectTargetLength | undefined,
     goal
   })

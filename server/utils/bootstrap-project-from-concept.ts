@@ -16,7 +16,7 @@ import {
   type ProjectGoal as ImportGoal
 } from '~/server/utils/import-script-core'
 import type { StoryboardSeedResult } from '~/server/utils/import-storyboard-seed'
-import type { CreativeProject } from '~/types/creative-project'
+import type { CreativeProject, ProjectDirector } from '~/types/creative-project'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 import {
@@ -34,6 +34,8 @@ export interface BootstrapFromConceptInput {
   genre?: string
   tone?: string
   characters?: string[]
+  director?: ProjectDirector
+  visualReference?: string
 }
 
 export interface BootstrapFromConceptResult {
@@ -103,6 +105,14 @@ export async function bootstrapProjectFromConcept (
     ...parseCharactersFromConceptNotes(conceptNotes)
   ])
 
+  const directorPatch = input.director
+  if (directorPatch && Object.values(directorPatch).some(v => typeof v === 'string' && v.trim())) {
+    await pb.collection('creative_projects').update(projectId, {
+      director: directorPatch
+    })
+    projectRow = { ...projectRow, director: directorPatch }
+  }
+
   const durationBudget = resolveProjectDurationBudget({
     targetDurationSeconds:
       typeof projectRow.target_duration_seconds === 'number' && projectRow.target_duration_seconds > 0
@@ -120,7 +130,9 @@ export async function bootstrapProjectFromConcept (
     tone,
     characters: conceptChars,
     goal,
-    durationBudget
+    durationBudget,
+    visualReference: input.visualReference,
+    director: input.director
   })
 
   const filename = 'ai-story-idea.txt'

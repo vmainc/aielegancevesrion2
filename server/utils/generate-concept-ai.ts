@@ -1,11 +1,15 @@
+import { parseDirectorBibleFromConceptJson } from '~/lib/parse-concept-director-bible'
 import {
   buildConceptSystemPrompt,
-  buildConceptUserPrompt
+  buildConceptUserMessageContent
 } from '~/lib/story-idea-generator-prompts'
 import { sanitizeCharacterNameList } from '~/lib/screenplay-format'
 import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
-import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
+import {
+  buildOpenRouterChatCompletionBody,
+  type OpenRouterMessageContent
+} from '~/server/utils/openrouter-chat-completion'
 
 function extractJsonObject (text: string): Record<string, unknown> | null {
   const trimmed = text.trim()
@@ -43,6 +47,8 @@ export interface ParsedConceptFields {
   genre: string
   hook?: string
   characters?: string[]
+  visual_reference?: string
+  director?: import('~/types/creative-project').ProjectDirector
 }
 
 export function parseConceptJsonFromAssistantText (text: string): ParsedConceptFields | null {
@@ -56,6 +62,13 @@ export function parseConceptJsonFromAssistantText (text: string): ParsedConceptF
   const hook = pickStr(o, ['hook', 'Hook', 'opening_hook', 'openingHook'])
   if (!title || !summary) return null
   const characters = sanitizeCharacterNameList(o.characters ?? o.Characters ?? o.cast)
+  const visual_reference = pickStr(o, [
+    'visual_reference',
+    'visualReference',
+    'reference_visual',
+    'image_notes'
+  ])
+  const director = parseDirectorBibleFromConceptJson(o)
   return {
     title: title.slice(0, 500),
     logline: logline.slice(0, 800),
@@ -63,7 +76,9 @@ export function parseConceptJsonFromAssistantText (text: string): ParsedConceptF
     tone: tone.slice(0, 500),
     genre: genre.slice(0, 200),
     ...(hook ? { hook: hook.slice(0, 500) } : {}),
-    ...(characters.length ? { characters } : {})
+    ...(characters.length ? { characters } : {}),
+    ...(visual_reference ? { visual_reference: visual_reference.slice(0, 4000) } : {}),
+    ...(director ? { director } : {})
   }
 }
 
@@ -76,30 +91,36 @@ export async function generateConceptWithOpenRouter (options: {
   goal?: ProjectGoal
   aspectRatio?: ProjectAspectRatio
   targetDurationSeconds?: number
+  referenceImageDataUrl?: string | null
+  referenceImageBrief?: string
 }): Promise<ParsedConceptFields> {
   const goal = options.goal || 'film'
+  const hasImage = Boolean(
+    (options.referenceImageDataUrl || '').trim() || (options.referenceImageBrief || '').trim()
+  )
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) {
     throw new Error('OpenRouter API key not configured')
   }
 
+  const userContent: OpenRouterMessageContent = buildConceptUserMessageContent({
+    userPrompt: options.userPrompt,
+    goal,
+    aspectRatio: options.aspectRatio,
+    targetDurationSeconds: options.targetDurationSeconds,
+    referenceImageDataUrl: options.referenceImageDataUrl,
+    referenceImageBrief: options.referenceImageBrief
+  })
+
   const body = buildOpenRouterChatCompletionBody({
     model: options.openrouterModelId,
     messages: [
-      { role: 'system', content: buildConceptSystemPrompt(goal) },
-      {
-        role: 'user',
-        content: buildConceptUserPrompt(
-          options.userPrompt,
-          goal,
-          options.aspectRatio,
-          options.targetDurationSeconds
-        )
-      }
+      { role: 'system', content: buildConceptSystemPrompt(goal, hasImage) },
+      { role: 'user', content: userContent }
     ],
     temperature: 0.75,
-    max_tokens: 1200
+    max_tokens: hasImage ? 2000 : 1200
   })
 
   const headers: Record<string, string> = {

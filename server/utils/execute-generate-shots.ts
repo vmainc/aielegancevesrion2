@@ -1,6 +1,9 @@
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
-import { resolveProjectDurationBudget } from '~/lib/project-duration-budget'
+import {
+  perSceneShotCap,
+  resolveProjectDurationBudget
+} from '~/lib/project-duration-budget'
 import type PocketBase from 'pocketbase'
 import { enrichGeneratedShotsForContinuity } from '~/server/utils/enrich-generated-shots'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
@@ -114,6 +117,44 @@ export async function executeGenerateShots (opts: {
     goal: projectRec.goal as import('~/types/creative-project').ProjectGoal | undefined
   })
 
+  let sceneShotCap: { minShots: number; maxShots: number } | null = null
+  if (durationBudget) {
+    let allScenes: Array<{ id: string; sort_order?: number }> = []
+    try {
+      allScenes = (await pb.collection('creative_scenes').getFullList({
+        filter: `project="${projectId}"`,
+        sort: 'sort_order',
+        batch: 200
+      })) as Array<{ id: string; sort_order?: number }>
+    } catch {
+      allScenes = [{ id: sceneId }]
+    }
+    const sceneIndex = Math.max(
+      0,
+      allScenes.findIndex(s => s.id === sceneId)
+    )
+    const cap = perSceneShotCap(durationBudget, allScenes.length || 1, sceneIndex)
+    let otherPanels = 0
+    try {
+      const existingShots = await pb.collection('creative_shots').getFullList({
+        filter: `project="${projectId}"`,
+        batch: 500
+      })
+      otherPanels = existingShots.filter(
+        (s) =>
+          String((s as { scene?: string }).scene || '') !== sceneId
+      ).length
+    } catch {
+      otherPanels = 0
+    }
+    const remaining = Math.max(0, durationBudget.maxPanelsTotal - otherPanels)
+    const maxShots = Math.min(cap.maxShots, remaining || cap.maxShots)
+    sceneShotCap = {
+      minShots: Math.min(cap.minShots, maxShots),
+      maxShots: Math.max(1, maxShots)
+    }
+  }
+
   const shotsCtx = {
     projectName: String(projectRec.name || 'Project'),
     aspectRatio: String(projectRec.aspect_ratio || '16:9'),
@@ -129,7 +170,8 @@ export async function executeGenerateShots (opts: {
     director,
     continuityMemory,
     openrouterModelId: pref.openrouterModelId,
-    durationBudget
+    durationBudget,
+    sceneShotCap
   }
 
   let generated

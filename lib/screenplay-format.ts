@@ -1,3 +1,5 @@
+import { filterLikelyCharacterNames } from '~/lib/screenplay-character-filter'
+
 /** Normalize a name for screenplay cue lines (ALL CAPS, no parentheticals on cue). */
 export function normalizeScreenplayCharacterName (raw: string): string {
   const s = String(raw || '')
@@ -19,15 +21,16 @@ export function sanitizeCharacterNameList (names: unknown): string[] {
     out.push(norm)
     if (out.length >= 12) break
   }
-  return out
+  return filterLikelyCharacterNames(out)
 }
 
 export const SCREENPLAY_AI_FORMAT_RULES = `Write in plain-text screenplay format:
-- Start with a CAST section listing every speaking character (name in ALL CAPS, em dash, one-line description).
+- Start with a CAST section (heading line "CAST" only — not a character name) listing every speaking character (name in ALL CAPS, em dash, one-line description).
 - Use standard slug lines: INT. or EXT. LOCATION - TIME
 - Put each CHARACTER NAME alone on its own line in ALL CAPS immediately before their dialogue.
 - Action lines in sentence case; no markdown or code fences.
 - Include at least 3 scenes and dialogue for every named character in CAST.
+- Never use CAST, CREDITS, ENSEMBLE, or similar section labels as a character name; only real roles who appear in scenes.
 - Do not use "OTHER (extras)" as a character name — name specific roles instead.`
 
 export function buildCastSection (
@@ -36,7 +39,7 @@ export function buildCastSection (
   const lines = ['CAST', '']
   for (const c of characters) {
     const name = normalizeScreenplayCharacterName(c.name)
-    if (!name) continue
+    if (!name || filterLikelyCharacterNames([name]).length === 0) continue
     const desc = (c.description || '').trim() || 'Speaking role.'
     lines.push(`${name} — ${desc}`)
   }

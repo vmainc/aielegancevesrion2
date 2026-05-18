@@ -76,6 +76,11 @@
       :disabled="generating || !projectId"
     />
 
+    <ConceptReferenceImageUpload
+      v-model="conceptReferenceImage"
+      :disabled="generating || !projectId"
+    />
+
     <fieldset class="mb-5" :disabled="generating || !modelOptions.length || !projectId">
       <legend class="text-sm font-medium text-gray-700 mb-2">AI models</legend>
       <p class="text-xs text-gray-500 mb-3">Select one or more; each model returns a different take on your idea.</p>
@@ -202,6 +207,7 @@ const toast = useToast()
 const goalModel = ref<ProjectGoal>(props.goal)
 const aspectModel = ref<ProjectAspectRatio>(props.aspectRatio)
 const conceptPrompt = ref('')
+const conceptReferenceImage = ref<string | null>(null)
 const modelOptions = ref<Array<{ id: string; label: string }>>([])
 const modelsLoadError = ref('')
 const selectedModelIds = ref<string[]>([])
@@ -230,7 +236,7 @@ const promptPlaceholder = computed(() => {
 
 const canGenerate = computed(() => {
   if (generating.value || !isAuthenticated.value || !props.projectId) return false
-  if (!conceptPrompt.value.trim()) return false
+  if (!conceptPrompt.value.trim() && !conceptReferenceImage.value) return false
   if (!selectedModelIds.value.length) return false
   return true
 })
@@ -278,7 +284,8 @@ async function generateConcepts () {
         user_prompt: conceptPrompt.value.trim(),
         selected_models: [...selectedModelIds.value],
         goal: goalModel.value,
-        aspect_ratio: aspectModel.value
+        aspect_ratio: aspectModel.value,
+        ...(conceptReferenceImage.value ? { reference_image: conceptReferenceImage.value } : {})
       }
     })
     conceptResults.value = Array.isArray(res) ? res : []

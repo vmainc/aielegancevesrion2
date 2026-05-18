@@ -139,7 +139,7 @@
                   class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
                 >
                   <option value="film">Film</option>
-                  <option value="social">Social</option>
+                  <option value="social">Social (short-form)</option>
                   <option value="commercial">Commercial</option>
                   <option value="other">Other</option>
                 </select>
@@ -213,6 +213,13 @@ watch(openCreate, (v) => {
   showOptions.value = false
   createError.value = ''
 })
+
+watch(
+  () => form.goal,
+  (goal) => {
+    if (goal === 'social') form.aspectRatio = '9:16'
+  }
+)
 
 async function submitCreate () {
   createError.value = ''

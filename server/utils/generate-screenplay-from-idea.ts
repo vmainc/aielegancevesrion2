@@ -9,7 +9,8 @@ import {
   screenplayDurationGuidance,
   type ProjectDurationBudget
 } from '~/lib/project-duration-budget'
-import type { ProjectGoal } from '~/types/creative-project'
+import { formatDirectorForAiPrompt } from '~/server/utils/creative-project-map'
+import type { ProjectDirector, ProjectGoal } from '~/types/creative-project'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
 
@@ -52,6 +53,8 @@ export async function generateScreenplayFromStoryIdea (input: {
   targetDurationSeconds?: number
   targetLength?: import('~/types/creative-project').ProjectTargetLength
   durationBudget?: ProjectDurationBudget | null
+  visualReference?: string
+  director?: ProjectDirector | null
 }): Promise<string> {
   const cast = resolveCastForStoryIdea({
     characters: input.characters,
@@ -88,6 +91,13 @@ export async function generateScreenplayFromStoryIdea (input: {
 ${SCREENPLAY_AI_FORMAT_RULES}
 ${durationBlock}`
 
+  const visualBlock = (input.visualReference || '').trim()
+    ? `Visual reference (honor look, palette, wardrobe, mood):\n${input.visualReference!.trim().slice(0, 3000)}\n`
+    : ''
+  const directorBlock = input.director
+    ? `Director bible (honor in action lines and scene tone):\n${formatDirectorForAiPrompt(input.director).slice(0, 3500)}\n`
+    : ''
+
   const userMsg = [
     `Title: ${input.title}`,
     input.logline ? `Logline: ${input.logline}` : '',
@@ -95,6 +105,8 @@ ${durationBlock}`
     input.tone ? `Tone: ${input.tone}` : '',
     `Required speaking characters (use these exact ALL CAPS names in CAST and dialogue): ${castNames}`,
     '',
+    visualBlock,
+    directorBlock,
     'Story summary to adapt:',
     input.summary.trim(),
     '',

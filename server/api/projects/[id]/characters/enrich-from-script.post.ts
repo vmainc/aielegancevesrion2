@@ -7,6 +7,7 @@ import {
   projectIdOnCharacterRow
 } from '~/server/utils/creative-character-map'
 import { loadWorkflowScreenplayParsedForProject } from '~/server/utils/import-script-core'
+import { isMetaCastCharacterEntry } from '~/lib/screenplay-character-filter'
 import {
   filterLikelyCharacterNames,
   heuristicCharacterNamesFromScenes
@@ -71,6 +72,25 @@ export default defineEventHandler(async (event) => {
 
   let rows = await listProjectCharacterRows(pb, projectId, userId)
   let seeded = 0
+  let removedMeta = 0
+
+  for (const row of [...rows]) {
+    const rec = row as Record<string, unknown>
+    const name = String(rec.name || '').trim()
+    const desc = String(rec.role_description || '').trim()
+    if (!isMetaCastCharacterEntry(name, desc)) continue
+    const id = String(rec.id || '')
+    if (!id) continue
+    try {
+      await pb.collection('creative_characters').delete(id)
+      removedMeta++
+    } catch (e: unknown) {
+      console.warn('[characters enrich] removed meta cast row failed:', id, formatPocketBaseRecordError(e))
+    }
+  }
+  if (removedMeta > 0) {
+    rows = await listProjectCharacterRows(pb, projectId, userId)
+  }
 
   if (!rows.length) {
     const names = filterLikelyCharacterNames([
@@ -87,7 +107,7 @@ export default defineEventHandler(async (event) => {
     }
     for (const name of names.slice(0, 48)) {
       const n = name.slice(0, 200).trim()
-      if (!n) continue
+      if (!n || isMetaCastCharacterEntry(n)) continue
       try {
         await pb.collection('creative_characters').create({
           owned_by: userId,

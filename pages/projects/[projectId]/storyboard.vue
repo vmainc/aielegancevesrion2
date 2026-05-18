@@ -92,11 +92,21 @@
               </p>
               <p class="mt-1 text-xs text-gray-500">
                 <template v-if="activeSceneShotCount > 0">
-                  {{ activeSceneShotCount }} panel skeleton{{ activeSceneShotCount === 1 ? '' : 's' }} currently in this scene.
+                  {{ activeSceneShotCount }} panel skeleton{{ activeSceneShotCount === 1 ? '' : 's' }} in this scene
+                  ({{ activeSceneClipSeconds }}s at current clip lengths).
+                </template>
+                <template v-else-if="activeScenePanelEstimate">
+                  Estimated output: {{ activeScenePanelEstimate }} for this scene.
                 </template>
                 <template v-else>
-                  Estimated output: 5-12 panels for this scene.
+                  Estimated output: 5–12 panels for this scene.
                 </template>
+              </p>
+              <p
+                v-if="storyboardTimingWarning"
+                class="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
+              >
+                {{ storyboardTimingWarning }}
               </p>
             </div>
             <div class="shrink-0 flex items-center gap-2">
@@ -193,14 +203,30 @@
             <div class="p-4 pt-3 sm:p-5 space-y-3 grow">
               <div
                 v-if="framePreview[shot.id]"
-                class="relative w-full aspect-video rounded-lg border border-gray-200 overflow-hidden bg-gray-900"
+                :class="[framePreviewBoxClass, 'relative group']"
               >
-                <img
-                  :src="framePreview[shot.id]"
-                  alt=""
-                  class="absolute inset-0 w-full h-full object-cover object-center"
-                  loading="lazy"
+                <button
+                  type="button"
+                  class="absolute inset-0 w-full h-full cursor-zoom-in rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  :aria-label="`View full size: ${shot.title || 'storyboard frame'}`"
+                  @click="openFramePreview(shot)"
                 >
+                  <img
+                    :src="framePreview[shot.id]"
+                    alt=""
+                    class="absolute inset-0 w-full h-full object-contain object-center pointer-events-none"
+                    loading="lazy"
+                  >
+                </button>
+                <button
+                  type="button"
+                  class="absolute top-2 right-2 z-10 px-2 py-1 text-[11px] font-semibold rounded-md bg-gray-950/75 text-white hover:bg-red-700 border border-white/20 disabled:opacity-50"
+                  :disabled="frameDeletingId === shot.id"
+                  :aria-label="`Remove frame for ${shot.title || 'board'}`"
+                  @click.stop="clearStoryboardFrame(shot)"
+                >
+                  {{ frameDeletingId === shot.id ? 'Removing…' : 'Remove' }}
+                </button>
               </div>
               <div
                 v-else
@@ -341,6 +367,50 @@
           Timeline
         </NuxtLink>
       </div>
+    <Teleport to="body">
+      <div
+        v-if="expandedFrame"
+        class="fixed inset-0 z-[110] bg-black/92 flex flex-col p-4 sm:p-6"
+        role="dialog"
+        aria-modal="true"
+        :aria-label="expandedFrame.title"
+        tabindex="-1"
+        @click.self="closeFramePreview"
+        @keydown.escape="closeFramePreview"
+      >
+        <div class="max-w-6xl w-full mx-auto flex flex-col flex-1 min-h-0">
+          <div class="flex justify-between items-center gap-3 mb-3 text-white shrink-0">
+            <p class="text-sm font-medium truncate">
+              {{ expandedFrame.title }}
+            </p>
+            <div class="flex items-center gap-2 shrink-0">
+              <a
+                v-if="expandedFrame.downloadUrl"
+                :href="expandedFrame.downloadUrl"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
+              >
+                Download
+              </a>
+              <button
+                type="button"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
+                @click="closeFramePreview"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+          <img
+            :src="expandedFrame.url"
+            :alt="expandedFrame.title"
+            class="w-full flex-1 min-h-[40vh] max-h-[calc(100vh-5rem)] rounded-lg object-contain mx-auto"
+          >
+        </div>
+      </div>
+    </Teleport>
+
     </template>
   </div>
 </template>
@@ -349,6 +419,10 @@
 import type { CreativeShot } from '~/types/creative-shot'
 import type { ProjectAsset } from '~/types/project-asset'
 import { CHARACTER_CREATOR_IMAGE_MODELS } from '~/lib/character-creator-models'
+import {
+  perSceneShotCap,
+  resolveProjectDurationBudget
+} from '~/lib/project-duration-budget'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import {
   findCharactersInShot,
@@ -362,7 +436,10 @@ import {
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { pollGenerateShotsJob } from '~/lib/poll-generate-shots-job'
-import { normalizeStoryboardFrameImageUrl } from '~/lib/storyboard-frame-image'
+import {
+  normalizeStoryboardFrameImageUrl,
+  storyboardFramePreviewClasses
+} from '~/lib/storyboard-frame-image'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 
 const PB_SHOT_ID = /^[a-z0-9]{15}$/
@@ -401,6 +478,8 @@ const persistenceWarning = ref('')
 const shotsPersisted = ref(true)
 const imageGenId = ref<string | null>(null)
 const framePreview = reactive<Record<string, string>>({})
+const expandedFrame = ref<{ url: string; title: string; downloadUrl: string } | null>(null)
+const frameDeletingId = ref<string | null>(null)
 const isFullscreen = ref(false)
 const showImageSettings = ref(false)
 const imageModelOptions = CHARACTER_CREATOR_IMAGE_MODELS
@@ -409,10 +488,57 @@ const activeImageModelLabel = computed(
   () => imageModelOptions.find(m => m.id === selectedImageModelId.value)?.label || selectedImageModelId.value
 )
 
+const framePreviewBoxClass = computed(() =>
+  storyboardFramePreviewClasses(project.value?.aspectRatio)
+)
+
 const activeScene = computed(() => scenes.value.find(s => s.id === selectedSceneId.value))
 const activeSceneShotCount = computed(() => {
   const n = Number(activeScene.value?.shotCount || 0)
   return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0
+})
+
+const durationBudget = computed(() =>
+  project.value
+    ? resolveProjectDurationBudget({
+        targetDurationSeconds: project.value.targetDurationSeconds,
+        targetLength: project.value.targetLength,
+        goal: project.value.goal
+      })
+    : null
+)
+
+const activeSceneIndex = computed(() =>
+  Math.max(0, scenes.value.findIndex(s => s.id === selectedSceneId.value))
+)
+
+const activeSceneClipSeconds = computed(() =>
+  shots.value.reduce(
+    (sum, sh) => sum + snapToStoryboardClipSeconds(Number(sh.durationSeconds) || 5),
+    0
+  )
+)
+
+const activeScenePanelEstimate = computed(() => {
+  const budget = durationBudget.value
+  if (!budget || !scenes.value.length) return ''
+  const cap = perSceneShotCap(budget, scenes.value.length, activeSceneIndex.value)
+  if (cap.minShots === cap.maxShots) {
+    return `${cap.maxShots} panel${cap.maxShots === 1 ? '' : 's'}`
+  }
+  return `${cap.minShots}–${cap.maxShots} panels`
+})
+
+const storyboardTimingWarning = computed(() => {
+  const budget = durationBudget.value
+  if (!budget || !scenes.value.length) return ''
+  const totalPanels = scenes.value.reduce(
+    (sum, s) => sum + Math.max(0, Math.floor(Number(s.shotCount) || 0)),
+    0
+  )
+  if (totalPanels <= budget.maxPanelsTotal) return ''
+  const estSeconds = totalPanels * budget.clipSeconds
+  return `This project targets ~${budget.totalSeconds}s (${budget.maxPanelsTotal} panels at ${budget.clipSeconds}s each), but you have ${totalPanels} panels (~${estSeconds}s). Regenerate shots per scene with Generate Shots, or trim scenes on the Scenes tab.`
 })
 
 function scenePanelLabel (scene: SceneRow): string {
@@ -512,20 +638,76 @@ function storyboardFramePlaybackUrl (asset: ProjectAsset, projectPbId: string): 
   return asset.fileUrl || ''
 }
 
+function storyboardAssetMatchesShot (asset: ProjectAsset, shot: CreativeShot, sceneId: string): boolean {
+  if (!asset.fileUrl && !PB_SHOT_ID.test(asset.id)) return false
+  const meta = asset.metadata || {}
+  if (typeof meta.scene_id !== 'string' || meta.scene_id !== sceneId) return false
+  if (typeof meta.shot_id === 'string' && meta.shot_id === shot.id) return true
+  const sortMeta = Number(meta.sort_order)
+  if (Number.isFinite(sortMeta) && sortMeta === shot.sortOrder) return true
+  return false
+}
+
+function storyboardAssetForShot (shot: CreativeShot): ProjectAsset | null {
+  const sid = selectedSceneId.value
+  if (!sid) return null
+  const matches = storyboardAssets.value.filter(a => storyboardAssetMatchesShot(a, shot, sid))
+  if (!matches.length) return null
+  matches.sort((a, b) =>
+    String(b.updated || b.created).localeCompare(String(a.updated || a.created))
+  )
+  return matches[0]!
+}
+
+function openFramePreview (shot: CreativeShot) {
+  const url = framePreview[shot.id]
+  if (!url) return
+  expandedFrame.value = {
+    url,
+    title: shot.title || 'Storyboard frame',
+    downloadUrl: url
+  }
+}
+
+function closeFramePreview () {
+  expandedFrame.value = null
+}
+
+async function clearStoryboardFrame (shot: CreativeShot) {
+  const label = shot.title || 'this board'
+  if (!confirm(`Remove the generated image for “${label}”?`)) return
+  const pid = projectId.value
+  const token = getAuthToken()
+  frameDeletingId.value = shot.id
+  try {
+    const asset = storyboardAssetForShot(shot)
+    if (asset && pid && token) {
+      await $fetch(`/api/projects/${pid}/assets/${asset.id}`, {
+        method: 'DELETE',
+        headers: { Authorization: `Bearer ${token}` }
+      })
+      storyboardAssets.value = storyboardAssets.value.filter(a => a.id !== asset.id)
+    }
+    const previewUrl = framePreview[shot.id]
+    delete framePreview[shot.id]
+    if (expandedFrame.value?.url === previewUrl) {
+      closeFramePreview()
+    }
+    toast.showToast('Frame removed.', 'success')
+  } catch (e: unknown) {
+    const msg = formatApiFetchError(e, 'Could not remove frame')
+    toast.showToast(msg, 'error')
+  } finally {
+    frameDeletingId.value = null
+  }
+}
+
 async function applySavedFramesForCurrentScene () {
   const sid = selectedSceneId.value
   const pid = projectId.value
   if (!sid || !pid) return
   for (const s of shots.value) {
-    const hit = storyboardAssets.value.find((a) => {
-      if (!a.fileUrl && !PB_SHOT_ID.test(a.id)) return false
-      const meta = a.metadata || {}
-      if (typeof meta.scene_id !== 'string' || meta.scene_id !== sid) return false
-      if (typeof meta.shot_id === 'string' && meta.shot_id === s.id) return true
-      const sortMeta = Number(meta.sort_order)
-      if (Number.isFinite(sortMeta) && sortMeta === s.sortOrder) return true
-      return false
-    })
+    const hit = storyboardAssetForShot(s)
     if (hit) {
       const src = storyboardFramePlaybackUrl(hit, pid)
       if (src) await setFramePreviewFromUrl(s.id, src)

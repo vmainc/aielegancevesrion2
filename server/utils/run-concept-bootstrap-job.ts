@@ -1,5 +1,6 @@
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { bootstrapProjectFromConcept } from '~/server/utils/bootstrap-project-from-concept'
+import type { ProjectDirector } from '~/types/creative-project'
 import {
   completeScriptImportJob,
   failScriptImportJob
@@ -27,7 +28,9 @@ export async function runConceptBootstrapJob (input: {
       summary: input.summary,
       genre: input.genre,
       tone: input.tone,
-      characters: input.characters
+      characters: input.characters,
+      director: input.director,
+      visualReference: input.visualReference
     })
 
     completeScriptImportJob(input.jobId, {
