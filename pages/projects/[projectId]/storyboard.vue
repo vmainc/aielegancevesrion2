@@ -217,7 +217,7 @@
             </div>
             <div class="p-4 pt-3 sm:p-5 space-y-3 grow">
               <div
-                v-if="framePreview[shot.id]"
+                v-if="framePreview[shot.id] && !framePreviewFailed[shot.id]"
                 :class="[framePreviewBoxClass, 'relative group']"
               >
                 <button
@@ -227,10 +227,12 @@
                   @click="openFramePreview(shot)"
                 >
                   <img
+                    :key="`${shot.id}-${framePreview[shot.id]?.slice(0, 48)}`"
                     :src="framePreview[shot.id]"
                     alt=""
-                    class="absolute inset-0 w-full h-full object-contain object-center pointer-events-none"
-                    loading="lazy"
+                    class="absolute inset-0 w-full h-full object-contain object-center pointer-events-none bg-gray-900"
+                    loading="eager"
+                    @error="onFramePreviewImgError(shot.id)"
                   >
                 </button>
                 <button
@@ -247,7 +249,10 @@
                 v-else
                 :class="[framePreviewBoxClass, 'flex flex-col items-center justify-center gap-2 border-dashed border-gray-300 bg-white px-3 py-6']"
               >
-                <p class="text-xs text-gray-500 text-center max-w-[16rem]">
+                <p v-if="framePreviewFailed[shot.id]" class="text-xs text-amber-800 text-center max-w-[16rem]">
+                  Image was generated but could not be displayed. Try Generate image again.
+                </p>
+                <p v-else class="text-xs text-gray-500 text-center max-w-[16rem]">
                   Shots list only — generate the still frame here.
                 </p>
                 <button
@@ -469,6 +474,7 @@ import {
   normalizeStoryboardFrameImageUrl,
   storyboardFramePreviewClasses
 } from '~/lib/storyboard-frame-image'
+import { fetchImageAsDataUrl } from '~/lib/storyboard-frame-preview-url'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 
 const PB_SHOT_ID = /^[a-z0-9]{15}$/
@@ -508,6 +514,7 @@ const persistenceWarning = ref('')
 const shotsPersisted = ref(true)
 const imageGenId = ref<string | null>(null)
 const framePreview = reactive<Record<string, string>>({})
+const framePreviewFailed = reactive<Record<string, boolean>>({})
 const expandedFrame = ref<{ url: string; title: string; downloadUrl: string } | null>(null)
 const frameDeletingId = ref<string | null>(null)
 const isFullscreen = ref(false)
@@ -601,12 +608,30 @@ function firstImageUrl (urls: unknown[]): string {
   return ''
 }
 
+function onFramePreviewImgError (shotId: string) {
+  framePreviewFailed[shotId] = true
+}
+
 async function setFramePreviewFromUrl (shotId: string, rawUrl: string) {
   const aspect = project.value?.aspectRatio || '16:9'
+  framePreviewFailed[shotId] = false
+  const headers = await authHeaders()
+  let dataUrl = ''
   try {
-    framePreview[shotId] = await normalizeStoryboardFrameImageUrl(rawUrl, aspect)
+    dataUrl = await fetchImageAsDataUrl(rawUrl, headers || undefined)
   } catch {
-    framePreview[shotId] = rawUrl
+    if (rawUrl.startsWith('data:image/')) {
+      dataUrl = rawUrl
+    } else {
+      framePreviewFailed[shotId] = true
+      delete framePreview[shotId]
+      return
+    }
+  }
+  try {
+    framePreview[shotId] = await normalizeStoryboardFrameImageUrl(dataUrl, aspect)
+  } catch {
+    framePreview[shotId] = dataUrl
   }
 }
 
@@ -705,14 +730,14 @@ async function generateFrame (shot: CreativeShot) {
 
 function storyboardFramePlaybackUrl (asset: ProjectAsset, projectPbId: string): string {
   const token = getAuthToken()
-  if (PB_SHOT_ID.test(asset.id) && projectPbId) {
+  if (projectPbId && asset.id) {
     return appendPlaybackAccessToken(projectAssetMediaPath(projectPbId, asset.id), token)
   }
   return asset.fileUrl || ''
 }
 
 function storyboardAssetMatchesShot (asset: ProjectAsset, shot: CreativeShot, sceneId: string): boolean {
-  if (!asset.fileUrl && !PB_SHOT_ID.test(asset.id)) return false
+  if (!asset.id && !asset.fileUrl) return false
   const meta = asset.metadata || {}
   if (typeof meta.scene_id !== 'string' || meta.scene_id !== sceneId) return false
   if (typeof meta.shot_id === 'string' && meta.shot_id === shot.id) return true
@@ -763,6 +788,7 @@ async function clearStoryboardFrame (shot: CreativeShot) {
     }
     const previewUrl = framePreview[shot.id]
     delete framePreview[shot.id]
+    delete framePreviewFailed[shot.id]
     if (expandedFrame.value?.url === previewUrl) {
       closeFramePreview()
     }
@@ -858,7 +884,12 @@ async function autoSaveGeneratedFrame (
       body: fd
     })
     if (out.asset?.id) {
-      await setFramePreviewFromUrl(shot.id, storyboardFramePlaybackUrl(out.asset, id))
+      const playback = storyboardFramePlaybackUrl(out.asset, id)
+      try {
+        await setFramePreviewFromUrl(shot.id, playback)
+      } catch {
+        // Keep in-memory preview from generation if saved playback URL fails to load
+      }
       await loadStoryboardAssets()
       await applySavedFramesForCurrentScene()
       return null
