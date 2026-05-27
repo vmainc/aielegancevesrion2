@@ -5,6 +5,38 @@
       · Creative bible and continuity — separate from story drafting.
     </p>
 
+    <section
+      v-if="directorBootstrapPanelVisible"
+      class="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6 mb-8"
+    >
+      <h2 class="text-lg font-semibold text-gray-900 mb-1">
+        Build cast, scenes &amp; storyboard
+      </h2>
+      <p class="text-sm text-gray-600 mb-4">
+        Tune the director bible below if you want, then run this once. It fills screenplay structure, cast, scenes, and storyboard panels in the background and opens Characters when finished.
+      </p>
+      <div
+        v-if="conceptBootstrapRunning"
+        class="mb-4 rounded-xl border border-primary/20 bg-white p-5"
+      >
+        <FilmReelLoader
+          size="sm"
+          label="Building your project"
+          sub-label="Runs in the background — screenplay, director, cast, scenes, and storyboard panels."
+        />
+      </div>
+      <p v-if="conceptBootstrapError" class="text-sm text-red-700 mb-3">{{ conceptBootstrapError }}</p>
+      <button
+        v-if="showConceptBootstrapCta || conceptBootstrapRunning"
+        type="button"
+        class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-45"
+        :disabled="conceptBootstrapRunning"
+        @click="runConceptBootstrap({ director: { ...directorForm } })"
+      >
+        {{ conceptBootstrapRunning ? 'Building…' : 'Build cast, scenes & storyboard' }}
+      </button>
+    </section>
+
     <h2 class="text-lg font-semibold text-gray-900 mb-3">Director bible</h2>
     <p class="text-sm text-gray-500 mb-4">
       Used for shot generation and future tools. Pick a preset, then refine.
@@ -186,6 +218,14 @@ const directorContinuePath = computed(() => {
   if (storySatisfiedByImport.value || scratchWorkflow.value) return 'characters'
   return 'story'
 })
+
+const {
+  conceptBootstrapRunning,
+  conceptBootstrapError,
+  showConceptBootstrapCta,
+  directorBootstrapPanelVisible,
+  runConceptBootstrap
+} = useScratchConceptBootstrap()
 
 const continuityMemLocal = ref('')
 const directorForm = reactive<ProjectDirector>(defaultDirector())

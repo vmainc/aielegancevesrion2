@@ -329,8 +329,10 @@
         {{ scratchWorkflow ? 'Story saved' : 'Concept saved' }}
       </h2>
       <p class="text-sm text-gray-600 mb-4">
-        <template v-if="scratchWorkflow && showConceptBootstrapCta">
-          After you refine the Director tab, build screenplay, cast, scenes, and storyboard panels from this story — you’ll land on Characters to review next.
+        <template v-if="scratchNeedsDirectorBuild">
+          Continue to Director to tune your creative bible, then run
+          <span class="font-medium text-gray-800">Build cast, scenes &amp; storyboard</span>
+          at the top of that page — you’ll land on Characters when it finishes.
         </template>
         <template v-else>
           {{ scratchWorkflow
@@ -338,17 +340,19 @@
             : 'Try other models or remove this concept to start fresh.' }}
         </template>
       </p>
-      <div
-        v-if="conceptBootstrapRunning"
-        class="mb-4 rounded-xl border border-primary/20 bg-white p-5"
+      <p
+        v-if="conceptBootstrapRunning && scratchWorkflow"
+        class="text-sm text-gray-600 mb-3"
       >
-        <FilmReelLoader
-          size="sm"
-          label="Building your project"
-          sub-label="Runs in the background — screenplay, director, cast, scenes, and storyboard panels."
-        />
-      </div>
-      <p v-if="conceptBootstrapError" class="text-sm text-red-700 mb-3">{{ conceptBootstrapError }}</p>
+        Building cast, scenes, and storyboard…
+        <NuxtLink
+          :to="`/projects/${projectId}/director`"
+          class="text-primary font-medium hover:underline"
+        >
+          Open Director
+        </NuxtLink>
+        for status.
+      </p>
       <div class="flex flex-wrap gap-2 items-center">
         <NuxtLink
           v-if="scratchWorkflow"
@@ -357,15 +361,6 @@
         >
           Continue to Director →
         </NuxtLink>
-        <button
-          v-if="showConceptBootstrapCta"
-          type="button"
-          class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-45"
-          :disabled="conceptBootstrapRunning"
-          @click="runConceptBootstrap()"
-        >
-          {{ conceptBootstrapRunning ? 'Building…' : 'Build cast, scenes & storyboard' }}
-        </button>
         <button
           type="button"
           class="px-4 py-2 border border-gray-200 text-gray-800 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors"
@@ -711,12 +706,10 @@ import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import {
   conceptNotesHaveUserContent,
   formatStoredConceptNotes,
-  parseCharactersFromConceptNotes,
   parseLoglineFromConceptNotes,
   stripConceptMetadataMarkers
 } from '~/lib/format-stored-concept'
 import { defaultDurationSecondsForProject } from '~/lib/project-duration-budget'
-import { pollScriptImportJob } from '~/lib/poll-script-import-job'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import type { StoryIdeaApplyPayload } from '~/components/story/StoryIdeaGeneratorPanel.vue'
 import type { ConceptGeneratorResultItem, GeneratedConceptItem } from '~/types/concept-generator'
@@ -1027,9 +1020,6 @@ const conceptResults = ref<ConceptGeneratorResultItem[] | null>(null)
 const applyingModel = ref<string | null>(null)
 const showGeneratorForm = ref(true)
 const deletingConcept = ref(false)
-const conceptBootstrapRunning = ref(false)
-const conceptBootstrapError = ref('')
-const pipelineBuilt = ref<boolean | null>(null)
 const targetDurationSeconds = ref<string>('')
 const targetDurationTouched = ref(false)
 const scratchIdeaPanelRef = ref<{ clearApplying: () => void; clearResults: () => void } | null>(null)
@@ -1184,125 +1174,12 @@ async function persistTargetDuration () {
   }
 }
 
-const showConceptBootstrapCta = computed(
-  () =>
-    scratchWorkflow.value &&
-    canCloudImport.value &&
-    hasConcept.value &&
-    !showImportedScriptOverview.value &&
-    !conceptBootstrapRunning.value &&
-    pipelineBuilt.value === false
-)
-
-async function loadPipelineBuilt () {
-  const id = projectId.value
-  const token = getAuthToken()
-  if (!scratchWorkflow.value || !id || !token || !PB_ID.test(id)) {
-    pipelineBuilt.value = null
-    return
-  }
-  if (showImportedScriptOverview.value) {
-    pipelineBuilt.value = true
-    return
-  }
-  try {
-    const res = await $fetch<{ scenes: unknown[] }>(`/api/projects/${id}/scenes`, {
-      headers: { Authorization: `Bearer ${token}` }
-    })
-    pipelineBuilt.value = (res.scenes?.length ?? 0) > 0
-  } catch {
-    pipelineBuilt.value = false
-  }
-}
-
-watch(
-  () =>
-    [
-      projectId.value,
-      scratchWorkflow.value,
-      hasConcept.value,
-      showImportedScriptOverview.value,
-      canCloudImport.value
-    ] as const,
-  () => {
-    void loadPipelineBuilt()
-  },
-  { immediate: true }
-)
-
-function resolveBootstrapSummary (p: CreativeProject | null | undefined, override?: string): string {
-  const fromOverride = (override || '').trim()
-  if (fromOverride) return fromOverride
-  const syn = (p?.synopsis || '').trim()
-  if (syn) return syn
-  const logline = parseLoglineFromConceptNotes(p?.conceptNotes || '')
-  if (logline) return logline
-  return stripConceptMetadataMarkers(p?.conceptNotes || '')
-}
-
-async function runConceptBootstrap (opts?: {
-  title?: string
-  logline?: string
-  summary?: string
-  genre?: string
-  tone?: string
-  characters?: string[]
-  director?: import('~/types/creative-project').ProjectDirector
-  visualReference?: string
-}) {
-  const id = projectId.value
-  const token = getAuthToken()
-  if (!id || !token) return
-  const p = project.value
-  const title = (opts?.title || p?.name || '').trim()
-  const summary = resolveBootstrapSummary(p, opts?.summary)
-  if (!title || !summary) {
-    conceptBootstrapError.value =
-      'Add a story synopsis first (generate ideas and pick one, or paste your idea), then build again.'
-    toast.showToast(conceptBootstrapError.value, 'error')
-    return
-  }
-  await persistTargetDuration()
-  conceptBootstrapRunning.value = true
-  conceptBootstrapError.value = ''
-  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
-  try {
-    const body = {
-      title,
-      logline: opts?.logline || parseLoglineFromConceptNotes(p?.conceptNotes || '') || summary.split('\n')[0],
-      summary,
-      genre: opts?.genre || p?.genre,
-      tone: opts?.tone || p?.tone,
-      characters: opts?.characters?.length
-        ? opts.characters
-        : parseCharactersFromConceptNotes(p?.conceptNotes || ''),
-      ...(opts?.director ? { director: opts.director } : {}),
-      ...(opts?.visualReference ? { visual_reference: opts.visualReference } : {})
-    }
-    const started = await $fetch<{ async: boolean; jobId: string }>(
-      `/api/projects/${id}/bootstrap-from-concept`,
-      { method: 'POST', headers, body }
-    )
-    if (!started.jobId) {
-      throw new Error('Server did not start build job')
-    }
-    const polled = await pollScriptImportJob(started.jobId, headers, {
-      maxMs: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
-    })
-    registerImportedProject(polled.project)
-    pipelineBuilt.value = true
-    toast.showToast('Project built — review your cast on Characters.', 'success')
-    await navigateTo(withProjectQuery(`/projects/${id}/characters`))
-  } catch (e: unknown) {
-    conceptBootstrapError.value = formatApiFetchError(
-      e,
-      'Could not build project from this story. Try again or use Claude instead of Llama for faster results.'
-    )
-    toast.showToast(conceptBootstrapError.value, 'error')
-  } finally {
-    conceptBootstrapRunning.value = false
-  }
-}
+const {
+  conceptBootstrapRunning,
+  scratchNeedsDirectorBuild
+} = useScratchConceptBootstrap({
+  persistBeforeBootstrap: persistTargetDuration
+})
 
 async function loadOverviewMovies () {
   const id = projectId.value
