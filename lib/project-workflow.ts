@@ -45,10 +45,21 @@ export function workflowPathsForProject (
 
 export function workflowStepOf (
   path: string,
-  project: Pick<CreativeProject, 'treatment'> | null | undefined
+  project: Pick<CreativeProject, 'treatment' | 'workflowMode'> | null | undefined
 ): { current: number; total: number } | null {
   const paths = workflowPathsForProject(project)
   const idx = paths.indexOf(path)
   if (idx < 0) return null
   return { current: idx + 1, total: paths.length }
+}
+
+/** Next sidebar step after `current` (e.g. overview → director → characters …). */
+export function nextWorkflowPath (
+  current: string,
+  project: Pick<CreativeProject, 'treatment' | 'workflowMode'> | null | undefined
+): WorkflowPath | null {
+  const paths = workflowPathsForProject(project)
+  const idx = paths.indexOf(current)
+  if (idx < 0 || idx >= paths.length - 1) return null
+  return paths[idx + 1] as WorkflowPath
 }

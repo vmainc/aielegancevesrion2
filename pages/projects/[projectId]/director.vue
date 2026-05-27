@@ -156,10 +156,10 @@
         ← Story
       </NuxtLink>
       <NuxtLink
-        :to="`/projects/${projectId}/${storySatisfiedByImport ? 'characters' : 'story'}`"
+        :to="`/projects/${projectId}/${directorContinuePath}`"
         class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
       >
-        {{ storySatisfiedByImport ? 'Continue to Characters →' : 'Continue to Story →' }}
+        {{ directorContinuePath === 'characters' ? 'Continue to Characters →' : 'Continue to Script →' }}
       </NuxtLink>
     </div>
   </div>
@@ -167,7 +167,10 @@
 
 <script setup lang="ts">
 import { DIRECTOR_PRESETS, defaultDirector, presetToDirector } from '~/lib/director-presets'
-import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
+import {
+  isScratchWorkflowProject,
+  projectStorySatisfiedByScriptImport
+} from '~/lib/project-workflow'
 import type { ProjectDirector } from '~/types/creative-project'
 
 const { activeProject, activeProjectId, updateProject } = useCreativeProject()
@@ -178,6 +181,11 @@ const projectId = activeProjectId
 const project = activeProject
 
 const storySatisfiedByImport = computed(() => projectStorySatisfiedByScriptImport(project.value))
+const scratchWorkflow = computed(() => isScratchWorkflowProject(project.value))
+const directorContinuePath = computed(() => {
+  if (storySatisfiedByImport.value || scratchWorkflow.value) return 'characters'
+  return 'story'
+})
 
 const continuityMemLocal = ref('')
 const directorForm = reactive<ProjectDirector>(defaultDirector())

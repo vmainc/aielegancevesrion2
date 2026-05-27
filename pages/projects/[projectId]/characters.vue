@@ -115,7 +115,13 @@
       </NuxtLink>
     </div>
 
-    <div class="mt-10 pt-8 border-t border-gray-200">
+    <div class="mt-10 pt-8 border-t border-gray-200 flex flex-wrap gap-4">
+      <NuxtLink
+        :to="`/projects/${projectId}/director`"
+        class="text-sm text-gray-600 hover:text-gray-900 font-medium"
+      >
+        ← Director
+      </NuxtLink>
       <NuxtLink
         :to="`/projects/${projectId}/scenes`"
         class="text-sm text-primary font-medium hover:underline"

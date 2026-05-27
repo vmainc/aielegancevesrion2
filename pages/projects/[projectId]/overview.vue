@@ -330,7 +330,7 @@
       </h2>
       <p class="text-sm text-gray-600 mb-4">
         <template v-if="scratchWorkflow && showConceptBootstrapCta">
-          Build your screenplay, director bible, cast, scenes, and storyboard shot lists (with continuity prompts) from this story.
+          After you refine the Director tab, build screenplay, cast, scenes, and storyboard panels from this story — you’ll land on Characters to review next.
         </template>
         <template v-else>
           {{ scratchWorkflow
@@ -349,7 +349,14 @@
         />
       </div>
       <p v-if="conceptBootstrapError" class="text-sm text-red-700 mb-3">{{ conceptBootstrapError }}</p>
-      <div class="flex flex-wrap gap-2">
+      <div class="flex flex-wrap gap-2 items-center">
+        <NuxtLink
+          v-if="scratchWorkflow"
+          :to="`/projects/${projectId}/director`"
+          class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-semibold transition-colors inline-flex"
+        >
+          Continue to Director →
+        </NuxtLink>
         <button
           v-if="showConceptBootstrapCta"
           type="button"
@@ -1284,8 +1291,8 @@ async function runConceptBootstrap (opts?: {
     })
     registerImportedProject(polled.project)
     pipelineBuilt.value = true
-    toast.showToast('Project built — opening Storyboard.', 'success')
-    await navigateTo(withProjectQuery(`/projects/${id}/storyboard`))
+    toast.showToast('Project built — review your cast on Characters.', 'success')
+    await navigateTo(withProjectQuery(`/projects/${id}/characters`))
   } catch (e: unknown) {
     conceptBootstrapError.value = formatApiFetchError(
       e,

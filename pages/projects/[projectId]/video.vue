@@ -347,10 +347,16 @@
 
     <div class="pt-8 border-t border-gray-200 flex flex-wrap gap-4">
       <NuxtLink
+        :to="`/projects/${projectId}/storyboard`"
+        class="text-sm text-gray-600 hover:text-gray-900 font-medium"
+      >
+        ← Storyboard
+      </NuxtLink>
+      <NuxtLink
         :to="`/projects/${projectId}/timeline`"
         class="text-sm text-primary font-medium hover:underline"
       >
-        Open Timeline →
+        Next: Timeline →
       </NuxtLink>
       <NuxtLink
         to="/tools/script-wizard"
