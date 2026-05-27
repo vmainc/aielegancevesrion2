@@ -905,7 +905,10 @@ function unifiedPromptContext () {
     sceneSummary: activeScene.value?.summary,
     cast: characterRefs.value.map(c => ({
       name: c.name,
-      traitsRoleVisual: c.roleDescription
+      traitsRoleVisual: c.roleDescription,
+      portraitUrl: c.portraitUrl,
+      portraitNotes: c.portraitNotes,
+      portraitPromptUsed: c.portraitPromptUsed
     }))
   }
 }

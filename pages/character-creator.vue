@@ -768,6 +768,14 @@ async function resolveOrCreateCharacterForSave (
   )
   const hit = (existing.characters || []).find(c => normalize(c.name || '') === normalize(targetName))
   if (hit?.id) {
+    const visual = roleDescription.trim()
+    if (visual) {
+      await $fetch(`/api/projects/${projectId}/characters/${hit.id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: { roleDescription: visual.slice(0, 10_000) }
+      })
+    }
     return { id: hit.id, name: hit.name || targetName }
   }
   const created = await $fetch<{ character?: { id: string; name: string } }>(`/api/projects/${projectId}/characters`, {

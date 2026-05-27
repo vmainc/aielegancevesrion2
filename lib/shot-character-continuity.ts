@@ -13,6 +13,7 @@ import {
 } from '~/lib/storyboard-continuity-prompts'
 
 export { normalizeCharacterNameKey } from '~/lib/cast-name-convention'
+import { formatCastLineForProductionPrompt } from '~/lib/character-visual-description'
 import { SINGLE_STORYBOARD_FRAME_DIRECTIVE } from '~/lib/storyboard-frame-image'
 import { resolveFrameGenerationPrompt, resolveVideoGenerationPrompt } from '~/lib/unified-shot-prompt'
 import type { ProjectDirector, ProjectTargetLength } from '~/types/creative-project'
@@ -25,6 +26,20 @@ export interface ProjectCharacterRef {
   roleDescription: string
   /** Featured portrait URL when set in Assets / Character Creator. */
   portraitUrl: string | null
+  /** Visual notes from the featured portrait asset. */
+  portraitNotes?: string
+  /** Image prompt used to generate the featured portrait. */
+  portraitPromptUsed?: string
+}
+
+export function projectCharacterRefToCastMember (c: ProjectCharacterRef) {
+  return {
+    name: c.name,
+    traitsRoleVisual: c.roleDescription,
+    portraitUrl: c.portraitUrl,
+    portraitNotes: c.portraitNotes,
+    portraitPromptUsed: c.portraitPromptUsed
+  }
 }
 
 function shotRawText (
@@ -109,8 +124,14 @@ export function collectCharacterPortraitUrls (
 export function buildContinuityPromptBlock (matches: ProjectCharacterRef[]): string {
   if (!matches.length) return ''
   const lines = matches.map((c) => {
-    const desc = (c.roleDescription || '').trim() || 'See established character design.'
-    return `- ${formatCastNameForPrompt(c.name)}: ${desc}`
+    const line = formatCastLineForProductionPrompt({
+      name: c.name,
+      roleDescription: c.roleDescription,
+      portraitUrl: c.portraitUrl,
+      portraitNotes: c.portraitNotes,
+      portraitPromptUsed: c.portraitPromptUsed
+    })
+    return `- ${line}`
   })
   return [
     'CHARACTER CONTINUITY (mandatory — match these designs exactly in this frame; same face, body, materials, colors, and style as the cast bible):',
@@ -178,8 +199,14 @@ function buildSceneEnvironmentBlock (scene?: { heading: string; summary?: string
 export function buildCastBibleBlock (cast: ProjectCharacterRef[]): string {
   if (!cast.length) return ''
   const lines = cast.map((c) => {
-    const desc = (c.roleDescription || '').trim() || 'Use the established design from earlier panels.'
-    return `- ${formatCastNameForPrompt(c.name)}: ${desc}`
+    const line = formatCastLineForProductionPrompt({
+      name: c.name,
+      roleDescription: c.roleDescription,
+      portraitUrl: c.portraitUrl,
+      portraitNotes: c.portraitNotes,
+      portraitPromptUsed: c.portraitPromptUsed
+    })
+    return `- ${line}`
   })
   return [
     'CAST BIBLE (describe every named character exactly as below — same face, body, materials, colors, and proportions in every panel):',
@@ -241,10 +268,7 @@ export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): s
     aspectRatio: ctx.aspectRatio,
     sceneTitle: ctx.scene?.heading,
     sceneSummary: ctx.scene?.summary,
-    cast: ctx.cast.map(c => ({
-      name: c.name,
-      traitsRoleVisual: c.roleDescription
-    }))
+    cast: ctx.cast.map(c => projectCharacterRefToCastMember(c))
   })
   if (isMusicVideoTarget(ctx.targetLength)) {
     prompt += '\n\nMusic video: visuals only — no dialogue or synced soundtrack in the clip.'
@@ -259,9 +283,7 @@ export function buildStoryboardFramePrompt (
 ): string {
   if (!ctx?.shot) {
     const block = buildContinuityPromptBlock(matches)
-    const animalNote = isAnimalOnlyCast(
-      matches.map(c => ({ name: c.name, traitsRoleVisual: c.roleDescription }))
-    )
+    const animalNote = isAnimalOnlyCast(matches.map(c => projectCharacterRefToCastMember(c)))
       ? 'ANIMAL-ONLY: render only the named animal characters — no humans.'
       : ''
     const parts = [
@@ -288,10 +310,7 @@ export function buildStoryboardFramePrompt (
     aspectRatio: ctx.aspectRatio,
     sceneTitle: ctx.scene?.heading,
     sceneSummary: ctx.scene?.summary,
-    cast: (ctx.cast.length ? ctx.cast : matches).map(c => ({
-      name: c.name,
-      traitsRoleVisual: c.roleDescription
-    }))
+    cast: (ctx.cast.length ? ctx.cast : matches).map(c => projectCharacterRefToCastMember(c))
   })
 }
 

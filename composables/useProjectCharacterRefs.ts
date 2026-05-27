@@ -9,13 +9,19 @@ function normalizeName (v: string): string {
   return v.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
+type PortraitBundle = {
+  url: string
+  notes: string
+  promptUsed: string
+}
+
 function portraitMapFromAssets (
   characters: CreativeCharacter[],
   assets: ProjectAsset[],
   token: string | null
-): Map<string, string> {
-  const byCharacterId: Record<string, { url: string; ts: string; featured: boolean }> = {}
-  const byCharacterName: Record<string, { url: string; ts: string; featured: boolean }> = {}
+): Map<string, PortraitBundle> {
+  const byCharacterId: Record<string, PortraitBundle & { ts: string; featured: boolean }> = {}
+  const byCharacterName: Record<string, PortraitBundle & { ts: string; featured: boolean }> = {}
 
   for (const a of assets) {
     if (!a.fileUrl && !a.id) continue
@@ -24,35 +30,50 @@ function portraitMapFromAssets (
     const cname = typeof meta.character_name === 'string' ? normalizeName(meta.character_name) : ''
     const ts = a.updated || a.created || ''
     const featured = meta && typeof meta === 'object' && meta.featured === true
+    const notes = (a.notes || '').trim()
+    const promptUsed =
+      typeof meta.prompt_used === 'string'
+        ? meta.prompt_used.trim()
+        : typeof (meta as { promptUsed?: string }).promptUsed === 'string'
+          ? String((meta as { promptUsed?: string }).promptUsed).trim()
+          : ''
     const url =
       a.projectId && a.id && PB_ID.test(a.projectId)
         ? appendPlaybackAccessToken(projectAssetMediaPath(a.projectId, a.id), token)
         : (a.fileUrl || '').trim()
-    if (!url) continue
+    if (!url && !notes && !promptUsed) continue
+
+    const bundle = { url, notes, promptUsed }
 
     if (cid) {
       const prev = byCharacterId[cid]
       if (!prev || (featured && !prev.featured) || (featured === prev.featured && ts > prev.ts)) {
-        byCharacterId[cid] = { url, ts, featured }
+        byCharacterId[cid] = { ...bundle, ts, featured }
       }
     }
     if (cname) {
       const prev = byCharacterName[cname]
       if (!prev || (featured && !prev.featured) || (featured === prev.featured && ts > prev.ts)) {
-        byCharacterName[cname] = { url, ts, featured }
+        byCharacterName[cname] = { ...bundle, ts, featured }
       }
     }
   }
 
-  const out = new Map<string, string>()
+  const out = new Map<string, PortraitBundle>()
   for (const c of characters) {
     const hitById = byCharacterId[c.id]
-    if (hitById?.url) {
-      out.set(c.id, hitById.url)
+    if (hitById) {
+      out.set(c.id, { url: hitById.url, notes: hitById.notes, promptUsed: hitById.promptUsed })
       continue
     }
     const hitByName = byCharacterName[normalizeName(c.name)]
-    if (hitByName?.url) out.set(c.id, hitByName.url)
+    if (hitByName) {
+      out.set(c.id, {
+        url: hitByName.url,
+        notes: hitByName.notes,
+        promptUsed: hitByName.promptUsed
+      })
+    }
   }
   return out
 }
@@ -84,12 +105,17 @@ export function useProjectCharacterRefs (projectId: Ref<string> | ComputedRef<st
       ])
       const characters = charRes.characters || []
       const portraits = portraitMapFromAssets(characters, assetRes.items || [], token)
-      refs.value = characters.map(c => ({
-        id: c.id,
-        name: c.name,
-        roleDescription: c.roleDescription || '',
-        portraitUrl: portraits.get(c.id) || null
-      }))
+      refs.value = characters.map(c => {
+        const p = portraits.get(c.id)
+        return {
+          id: c.id,
+          name: c.name,
+          roleDescription: c.roleDescription || '',
+          portraitUrl: p?.url || null,
+          portraitNotes: p?.notes || '',
+          portraitPromptUsed: p?.promptUsed || ''
+        }
+      })
     } catch (e: unknown) {
       refs.value = []
       loadError.value =

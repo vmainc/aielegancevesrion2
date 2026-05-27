@@ -130,9 +130,11 @@ export function castNameConventionPromptBlock (cast: Array<{ name: string }>): s
   const speciesNote = cast.some(c => isSpeciesLikeCastName(c.name))
     ? ' Names like DOG or CAT are proper character identities from the cast bible — never render a generic stock animal when these tokens appear.'
     : ''
+  const portraitNote =
+    ' When a cast member has a featured portrait attached, that image is the authoritative visual design (face, markings, colors, proportions) — match it exactly.'
   return [
     'CAST NAME TOKENS (mandatory):',
-    `The tokens ${names.join(', ')} written in ALL CAPITAL LETTERS are this project's cast characters — use their exact visual design from the cast bible and reference portraits.${speciesNote}`,
+    `The tokens ${names.join(', ')} written in ALL CAPITAL LETTERS are this project's cast characters — use their exact visual design from the cast bible and reference portraits.${speciesNote}${portraitNote}`,
     'Lowercase species words alone (e.g. "a dog") must NOT replace a cast token; only the ALL CAPS name refers to the approved character design.'
   ].join('\n')
 }

@@ -4,11 +4,15 @@ import {
   castNameAppearsInText,
   formatCastNameForPrompt
 } from '~/lib/cast-name-convention'
+import { formatCastLineForProductionPrompt } from '~/lib/character-visual-description'
 import type { ProjectDirector } from '~/types/creative-project'
 
 export interface CastMemberForContinuity {
   name: string
   traitsRoleVisual: string
+  portraitUrl?: string | null
+  portraitNotes?: string
+  portraitPromptUsed?: string
 }
 
 const ANIMAL_SIGNAL =
@@ -82,10 +86,15 @@ export function buildDirectorBibleBlock (director: ProjectDirector | null | unde
 export function buildCastBibleParagraph (cast: CastMemberForContinuity[]): string {
   if (!cast.length) return ''
   return cast
-    .map(c => {
-      const desc = (c.traitsRoleVisual || '').trim() || 'use the established design from the cast bible'
-      return `${formatCastNameForPrompt(c.name)}: ${desc}`
-    })
+    .map(c =>
+      formatCastLineForProductionPrompt({
+        name: c.name,
+        roleDescription: c.traitsRoleVisual,
+        portraitUrl: c.portraitUrl,
+        portraitNotes: c.portraitNotes,
+        portraitPromptUsed: c.portraitPromptUsed
+      })
+    )
     .join('\n')
 }
 
@@ -132,8 +141,14 @@ export function buildCharacterLockForShot (
 ): string {
   if (!inShot.length) return ''
   const lines = inShot.map(c => {
-    const desc = (c.traitsRoleVisual || '').trim() || 'match the cast bible exactly'
-    return `- ${formatCastNameForPrompt(c.name)}: ${desc}`
+    const line = formatCastLineForProductionPrompt({
+      name: c.name,
+      roleDescription: c.traitsRoleVisual,
+      portraitUrl: c.portraitUrl,
+      portraitNotes: c.portraitNotes,
+      portraitPromptUsed: c.portraitPromptUsed
+    })
+    return `- ${line}`
   })
   const speciesRule = animalOnly
     ? 'Render ONLY these animal/creature characters — never add human figures or human anatomy.'

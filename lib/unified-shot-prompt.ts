@@ -25,7 +25,13 @@ export interface UnifiedShotPromptContext {
   sceneSummary?: string
   /** 0-based panel index in the current scene sequence (for distinct compositions). */
   panelIndex?: number
-  cast: Array<{ name: string; traitsRoleVisual: string }>
+  cast: Array<{
+    name: string
+    traitsRoleVisual: string
+    portraitUrl?: string | null
+    portraitNotes?: string
+    portraitPromptUsed?: string
+  }>
 }
 
 const UNIFIED_MARKERS =
@@ -221,7 +227,7 @@ export function applyUnifiedPromptsToShot (
   const negative = mergeNegativePromptParts(
     shotCanon.negativePrompt,
     buildProjectNegativePrompt({
-      cast: ctx.cast.map(c => ({ name: c.name, traitsRoleVisual: c.traitsRoleVisual }))
+      cast: ctx.cast
     })
   )
   return {

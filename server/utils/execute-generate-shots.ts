@@ -6,6 +6,7 @@ import {
 } from '~/lib/project-duration-budget'
 import type PocketBase from 'pocketbase'
 import { enrichGeneratedShotsForContinuity } from '~/server/utils/enrich-generated-shots'
+import { loadCastMembersForContinuity } from '~/server/utils/project-character-prompt-refs'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
@@ -163,10 +164,7 @@ export async function executeGenerateShots (opts: {
     sceneTitle: sceneRec.heading || 'Scene',
     sceneSummary: String(sceneRec.summary || ''),
     sceneScript: String(sceneRec.body || ''),
-    characters: characters.map(c => ({
-      name: c.name,
-      traitsRoleVisual: String(c.role_description || '')
-    })),
+    characters: await loadCastMembersForContinuity(pb, projectId),
     director,
     continuityMemory,
     openrouterModelId: pref.openrouterModelId,
