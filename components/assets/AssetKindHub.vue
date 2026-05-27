@@ -755,6 +755,7 @@
 
 <script setup lang="ts">
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { visualBriefForCharacterCreator } from '~/lib/character-visual-description'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
 import { groupProjectAssetsByProject, sortProjectAssetsWithinProjectByKind } from '~/lib/project-asset-sort'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
@@ -1021,9 +1022,19 @@ function dedupeCharacterAssets (list: ProjectAsset[]): ProjectAsset[] {
 
 function characterCreatorTo (a: ProjectAsset) {
   const m = characterMetaFromAsset(a)
+  const name = (m.name || (a.title || '').split('—')[0]?.trim() || a.title || '').slice(0, 200)
+  const meta = a.metadata && typeof a.metadata === 'object' ? (a.metadata as Record<string, unknown>) : null
+  const promptUsed =
+    meta && typeof meta.prompt_used === 'string' ? meta.prompt_used.trim() : ''
   const q: Record<string, string> = {
-    name: (m.name || (a.title || '').split('—')[0]?.trim() || a.title || '').slice(0, 200),
-    description: (a.notes || '').slice(0, 4000)
+    name,
+    description: visualBriefForCharacterCreator({
+      name,
+      roleDescription: '',
+      portraitUrl: a.fileUrl,
+      portraitNotes: (a.notes || '').trim(),
+      portraitPromptUsed: promptUsed
+    })
   }
   if (a.projectId && PB_ID.test(a.projectId)) q.projectId = a.projectId
   if (m.id && PB_ID.test(m.id)) q.characterId = m.id

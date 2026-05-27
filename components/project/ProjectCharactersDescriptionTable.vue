@@ -312,6 +312,7 @@
 </template>
 
 <script setup lang="ts">
+import { visualBriefForCharacterCreator } from '~/lib/character-visual-description'
 import type { CreativeCharacter } from '~/types/creative-project'
 
 const props = withDefaults(
@@ -335,6 +336,10 @@ const props = withDefaults(
     projectIdForCreatorLink?: string
     /** Character id -> portrait URL (typically from character assets). */
     portraitUrlByCharacterId?: Record<string, string>
+    /** Character id -> notes on the featured portrait asset (visual prompt). */
+    portraitNotesByCharacterId?: Record<string, string>
+    /** Character id -> metadata.prompt_used from the featured portrait asset. */
+    portraitPromptUsedByCharacterId?: Record<string, string>
     /** Show portrait image column. */
     showPortraits?: boolean
   }>(),
@@ -352,6 +357,8 @@ const props = withDefaults(
     showCharacterCreatorLink: false,
     projectIdForCreatorLink: '',
     portraitUrlByCharacterId: undefined,
+    portraitNotesByCharacterId: undefined,
+    portraitPromptUsedByCharacterId: undefined,
     showPortraits: false
   }
 )
@@ -364,7 +371,13 @@ function swatchColorFor (c: CreativeCharacter): string {
 function characterCreatorTo (c: CreativeCharacter) {
   const q: Record<string, string> = {
     name: c.name || '',
-    description: c.roleDescription || ''
+    description: visualBriefForCharacterCreator({
+      name: c.name,
+      roleDescription: c.roleDescription,
+      portraitUrl: props.portraitUrlByCharacterId?.[c.id],
+      portraitNotes: props.portraitNotesByCharacterId?.[c.id],
+      portraitPromptUsed: props.portraitPromptUsedByCharacterId?.[c.id]
+    })
   }
   if (props.projectIdForCreatorLink) q.projectId = props.projectIdForCreatorLink
   if (c.id) q.characterId = c.id

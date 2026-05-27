@@ -75,6 +75,8 @@
           :show-character-creator-link="true"
           :project-id-for-creator-link="projectId"
           :portrait-url-by-character-id="portraitUrlByCharacterId"
+          :portrait-notes-by-character-id="portraitNotesByCharacterId"
+          :portrait-prompt-used-by-character-id="portraitPromptUsedByCharacterId"
           :show-portraits="true"
           heading="Characters"
           subheading="Square colors match the dialogue-share chart. Use the button above to pull names from the screenplay and have AI write a visual prompt for each character."
@@ -189,10 +191,27 @@ const displayCharacters = computed<CreativeCharacter[]>(() => {
 const characterPieModel = computed(() => buildCharacterPieModel(displayCharacters.value))
 const pieSlices = computed(() => characterPieModel.value.slices)
 const chartSwatchColors = computed(() => pieModelToSwatchRecord(characterPieModel.value))
-const portraitUrlByCharacterId = computed<Record<string, string>>(() => {
-  const byCharacterId: Record<string, { url: string; ts: string; featured: boolean }> = {}
-  const byCharacterName: Record<string, { url: string; ts: string; featured: boolean }> = {}
-  const byTitleGuess: Record<string, { url: string; ts: string; featured: boolean }> = {}
+
+type PortraitPick = { url: string; notes: string; promptUsed: string; ts: string; featured: boolean }
+
+function promptUsedFromAssetMeta (metadata: Record<string, unknown> | null): string {
+  if (!metadata || typeof metadata !== 'object') return ''
+  const v = (metadata as { prompt_used?: unknown }).prompt_used
+  return typeof v === 'string' ? v.trim() : ''
+}
+
+function pickPortrait (prev: PortraitPick | undefined, next: PortraitPick): PortraitPick {
+  if (!prev) return next
+  if (next.featured && !prev.featured) return next
+  if (next.featured === prev.featured && next.ts > prev.ts) return next
+  return prev
+}
+
+/** Featured portrait file + Character Creator fields per character row (same winner as former URL-only map). */
+const characterPortraitFieldsById = computed<Record<string, { url: string; notes: string; promptUsed: string }>>(() => {
+  const byCharacterId: Record<string, PortraitPick> = {}
+  const byCharacterName: Record<string, PortraitPick> = {}
+  const byTitleGuess: Record<string, PortraitPick> = {}
   const normalize = (v: string) => v.trim().toLowerCase().replace(/\s+/g, ' ')
   for (const a of characterAssets.value) {
     if (!a.fileUrl) continue
@@ -201,17 +220,18 @@ const portraitUrlByCharacterId = computed<Record<string, string>>(() => {
     const cname = typeof meta.character_name === 'string' ? normalize(meta.character_name) : ''
     const ts = a.updated || a.created || ''
     const featured = meta && typeof meta === 'object' && meta.featured === true
+    const pick: PortraitPick = {
+      url: a.fileUrl,
+      notes: (a.notes || '').trim(),
+      promptUsed: promptUsedFromAssetMeta(meta as Record<string, unknown> | null),
+      ts,
+      featured
+    }
     if (cid) {
-      const prev = byCharacterId[cid]
-      if (!prev || (featured && !prev.featured) || (featured === prev.featured && ts > prev.ts)) {
-        byCharacterId[cid] = { url: a.fileUrl, ts, featured }
-      }
+      byCharacterId[cid] = pickPortrait(byCharacterId[cid], pick)
     }
     if (cname) {
-      const prev = byCharacterName[cname]
-      if (!prev || (featured && !prev.featured) || (featured === prev.featured && ts > prev.ts)) {
-        byCharacterName[cname] = { url: a.fileUrl, ts, featured }
-      }
+      byCharacterName[cname] = pickPortrait(byCharacterName[cname], pick)
     }
     const title = normalize(a.title || '')
     if (title) {
@@ -220,28 +240,47 @@ const portraitUrlByCharacterId = computed<Record<string, string>>(() => {
         .filter(Boolean)
       for (const n of candidates) {
         if (title.includes(n)) {
-          const prev = byTitleGuess[n]
-          if (!prev || (featured && !prev.featured) || (featured === prev.featured && ts > prev.ts)) {
-            byTitleGuess[n] = { url: a.fileUrl, ts, featured }
-          }
+          byTitleGuess[n] = pickPortrait(byTitleGuess[n], pick)
         }
       }
     }
   }
-  const out: Record<string, string> = {}
+  const out: Record<string, { url: string; notes: string; promptUsed: string }> = {}
   for (const c of characters.value) {
     const hitById = byCharacterId[c.id]
     if (hitById?.url) {
-      out[c.id] = hitById.url
+      out[c.id] = { url: hitById.url, notes: hitById.notes, promptUsed: hitById.promptUsed }
       continue
     }
     const normName = normalize(c.name)
     const hitByName = byCharacterName[normName]
-    if (hitByName?.url) out[c.id] = hitByName.url
-    else if (byTitleGuess[normName]?.url) out[c.id] = byTitleGuess[normName].url
+    if (hitByName?.url) {
+      out[c.id] = { url: hitByName.url, notes: hitByName.notes, promptUsed: hitByName.promptUsed }
+    } else if (byTitleGuess[normName]?.url) {
+      const g = byTitleGuess[normName]
+      out[c.id] = { url: g.url, notes: g.notes, promptUsed: g.promptUsed }
+    }
   }
   return out
 })
+
+const portraitUrlByCharacterId = computed<Record<string, string>>(() =>
+  Object.fromEntries(
+    Object.entries(characterPortraitFieldsById.value).map(([id, v]) => [id, v.url])
+  )
+)
+
+const portraitNotesByCharacterId = computed<Record<string, string>>(() =>
+  Object.fromEntries(
+    Object.entries(characterPortraitFieldsById.value).map(([id, v]) => [id, v.notes])
+  )
+)
+
+const portraitPromptUsedByCharacterId = computed<Record<string, string>>(() =>
+  Object.fromEntries(
+    Object.entries(characterPortraitFieldsById.value).map(([id, v]) => [id, v.promptUsed])
+  )
+)
 
 async function refreshCharactersList () {
   const token = getAuthToken()

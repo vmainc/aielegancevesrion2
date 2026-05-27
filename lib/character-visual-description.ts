@@ -64,6 +64,45 @@ export function resolveCharacterVisualDescription (input: CharacterVisualPromptI
   return role || 'Use the established design from the cast bible and any saved portraits.'
 }
 
+const LIKELY_NARRATIVE_BEAT =
+  /\b(accidentally\s+falls|with a splash|paddles|underwater|then emerges|remarks about|the mishap|approaches the (water|pond|edge)|explores a tranquil|climbs out|wide-eyed curiosity)\b/i
+
+const CREATOR_FALLBACK_NO_PORTRAIT =
+  'Physical appearance only — species or type, age feel, build, face, hair/fur/skin, colors, markings, and clothing. Skip story beats, scenes, and dialogue.'
+
+const CREATOR_FALLBACK_WITH_PORTRAIT =
+  'Featured portrait is saved for this character — match that look (species, markings, colors, face, body, wardrobe). Keep this box to physical design only, not plot.'
+
+/**
+ * Short text for Character Creator query `description` — look-focused, not screenplay/story summaries.
+ * Prefer portrait notes / image prompt; never dump long production-only “VISUAL LOCK” copy into the URL.
+ */
+export function visualBriefForCharacterCreator (input: CharacterVisualPromptInput): string {
+  const role = (input.roleDescription || '').trim()
+  const notes = (input.portraitNotes || '').trim()
+  const promptUsed = (input.portraitPromptUsed || '').trim()
+  const hasPortrait = Boolean((input.portraitUrl || '').trim())
+  const max = 1600
+
+  const clip = (s: string) => (s.length <= max ? s : `${s.slice(0, max).trimEnd()}…`)
+
+  for (const candidate of [promptUsed, notes]) {
+    if (candidate && !isStoryHeavyDescription(candidate) && !LIKELY_NARRATIVE_BEAT.test(candidate)) {
+      return clip(candidate)
+    }
+  }
+
+  if (role && !isStoryHeavyDescription(role) && !LIKELY_NARRATIVE_BEAT.test(role)) {
+    return clip(role)
+  }
+
+  if (hasPortrait) {
+    return CREATOR_FALLBACK_WITH_PORTRAIT
+  }
+
+  return CREATOR_FALLBACK_NO_PORTRAIT
+}
+
 /** One cast-bible / character-lock line with name token. */
 export function formatCastLineForProductionPrompt (input: CharacterVisualPromptInput): string {
   const visual = resolveCharacterVisualDescription(input)
