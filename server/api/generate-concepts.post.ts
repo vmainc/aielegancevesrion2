@@ -3,6 +3,7 @@ import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { CONCEPT_GENERATOR_MODELS, getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
+import { clampTargetDurationSeconds } from '~/lib/project-duration-budget'
 import { analyzeConceptReferenceImageBrief } from '~/server/utils/analyze-concept-reference-image'
 import { generateConceptWithOpenRouter } from '~/server/utils/generate-concept-ai'
 import { normalizeReferenceImageDataUrl } from '~/server/utils/reference-image-data-url'
@@ -35,6 +36,7 @@ export default defineEventHandler(async (event) => {
     goal?: string
     aspect_ratio?: string
     reference_image?: string
+    target_duration_seconds?: number
   } | null
 
   const projectId = typeof body?.project_id === 'string' ? body.project_id.trim() : ''
@@ -64,7 +66,8 @@ export default defineEventHandler(async (event) => {
 
   let projectGoal: ProjectGoal = 'film'
   let projectAspect: ProjectAspectRatio = '16:9'
-  let projectDurationSeconds: number | undefined
+  let projectDurationSeconds: number | undefined =
+    clampTargetDurationSeconds(body?.target_duration_seconds)
   if (typeof body?.goal === 'string' && GOALS.has(body.goal as ProjectGoal)) {
     projectGoal = body.goal as ProjectGoal
   }
@@ -83,12 +86,14 @@ export default defineEventHandler(async (event) => {
       const row = project as Record<string, unknown>
       projectGoal = projectGoalFromRecord(row)
       projectAspect = projectAspectFromRecord(row)
-      const d = Number(row.target_duration_seconds)
-      if (Number.isFinite(d) && d >= 15 && d <= 3600) {
-        projectDurationSeconds = Math.floor(d)
-      } else {
-        const fromNotes = parseDurationFromConceptNotes(String(row.concept_notes || ''))
-        if (fromNotes) projectDurationSeconds = fromNotes
+      if (!projectDurationSeconds) {
+        const d = Number(row.target_duration_seconds)
+        if (Number.isFinite(d) && d >= 15 && d <= 3600) {
+          projectDurationSeconds = Math.floor(d)
+        } else {
+          const fromNotes = parseDurationFromConceptNotes(String(row.concept_notes || ''))
+          if (fromNotes) projectDurationSeconds = fromNotes
+        }
       }
     } catch (e: unknown) {
       const err = e as { statusCode?: number; status?: number; response?: { status?: number } }

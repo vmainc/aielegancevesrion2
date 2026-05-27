@@ -348,13 +348,39 @@
                 :key="a.id"
                 class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 relative hover:z-10 focus-within:z-10"
               >
-                <div class="min-w-0 flex-1">
-                  <p class="font-medium text-gray-900">{{ a.title }}</p>
-                  <p v-if="scriptSourceLine(a)" class="text-xs font-medium text-primary mt-1">
-                    {{ scriptSourceLine(a) }}
-                  </p>
-                  <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
-                  <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
+                <div class="min-w-0 flex-1 flex items-start gap-3">
+                  <button
+                    v-if="props.kind === 'storyboard' && libraryImageSrc(a)"
+                    type="button"
+                    class="w-16 h-24 rounded-lg border border-gray-200 overflow-hidden bg-gray-900 shrink-0 cursor-zoom-in hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
+                    :aria-label="`View image: ${a.title}`"
+                    @click="openImagePreview(a)"
+                  >
+                    <img
+                      :src="libraryImageSrc(a)"
+                      alt=""
+                      class="w-full h-full object-contain pointer-events-none"
+                      loading="lazy"
+                    >
+                  </button>
+                  <div class="min-w-0 flex-1">
+                    <button
+                      v-if="props.kind === 'storyboard' && libraryImageSrc(a)"
+                      type="button"
+                      class="font-medium text-gray-900 text-left hover:text-primary hover:underline"
+                      @click="openImagePreview(a)"
+                    >
+                      {{ a.title }}
+                    </button>
+                    <p v-else class="font-medium text-gray-900">
+                      {{ a.title }}
+                    </p>
+                    <p v-if="scriptSourceLine(a)" class="text-xs font-medium text-primary mt-1">
+                      {{ scriptSourceLine(a) }}
+                    </p>
+                    <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
+                    <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
+                  </div>
                 </div>
                 <div class="shrink-0">
                   <details class="relative open:z-30">
@@ -365,6 +391,14 @@
                     </summary>
                     <div :class="ACTIONS_MENU_PANEL_CLASS">
                       <button
+                        v-if="props.kind === 'storyboard' && libraryImageSrc(a)"
+                        type="button"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                        @click="openImagePreview(a)"
+                      >
+                        View image
+                      </button>
+                      <button
                         v-if="props.kind === 'script'"
                         type="button"
                         class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
@@ -374,8 +408,8 @@
                         {{ readingScriptId === a.id ? 'Loading…' : 'Read script' }}
                       </button>
                       <a
-                        v-if="a.fileUrl"
-                        :href="a.fileUrl"
+                        v-if="libraryImageSrc(a)"
+                        :href="libraryImageSrc(a)"
                         target="_blank"
                         rel="noopener noreferrer"
                         class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
@@ -388,6 +422,13 @@
                         class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
                       >
                         Open project
+                      </NuxtLink>
+                      <NuxtLink
+                        v-if="props.kind === 'storyboard' && a.projectId && PB_ID.test(a.projectId)"
+                        :to="`/projects/${a.projectId}/storyboard`"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                      >
+                        Open storyboard
                       </NuxtLink>
                       <button
                         type="button"
@@ -812,12 +853,23 @@ function characterAssetPlaybackSrc (a: ProjectAsset): string {
   return assetMediaPlaybackSrc(a)
 }
 
+function libraryImageSrc (a: ProjectAsset): string {
+  if (!a.id) return (a.fileUrl || '').trim()
+  if (props.kind === 'storyboard' || props.kind === 'character') {
+    return assetMediaPlaybackSrc(a)
+  }
+  return (a.fileUrl || '').trim()
+}
+
 function openImagePreview (a: ProjectAsset) {
-  const url = characterAssetPlaybackSrc(a)
+  const url =
+    props.kind === 'character'
+      ? characterAssetPlaybackSrc(a)
+      : libraryImageSrc(a)
   if (!url) return
   expandedImage.value = {
     url,
-    title: a.title || 'Character image',
+    title: a.title || (props.kind === 'storyboard' ? 'Storyboard frame' : 'Character image'),
     downloadUrl: url
   }
 }

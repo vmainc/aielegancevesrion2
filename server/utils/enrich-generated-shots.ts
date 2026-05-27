@@ -22,7 +22,7 @@ export function enrichGeneratedShotsForContinuity (
     cast
   }
 
-  return shots.map((shot) => {
+  return shots.map((shot, index) => {
     const asCreativeShot = {
       title: shot.title,
       description: shot.description,
@@ -33,7 +33,11 @@ export function enrichGeneratedShotsForContinuity (
       negativePrompt: shot.negative_prompt
     } as import('~/types/creative-shot').CreativeShot
 
-    const applied = applyUnifiedPromptsToShot(asCreativeShot, unifiedCtx)
+    const panelIndex =
+      typeof shot.order === 'number' && Number.isFinite(shot.order)
+        ? Math.max(0, shot.order - 1)
+        : index
+    const applied = applyUnifiedPromptsToShot(asCreativeShot, { ...unifiedCtx, panelIndex })
 
     return {
       ...shot,

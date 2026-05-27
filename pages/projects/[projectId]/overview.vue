@@ -65,7 +65,7 @@
           Screenplay ready
         </p>
         <p class="text-sm text-gray-700 mb-3">
-          Run analysis to generate a clear synopsis refresh, director notes, and comparable movies from the saved screenplay.
+          Run analysis for a cold read of your saved screenplay — synopsis, tone, three-act map, and director notes faithful to what you wrote (no invented story beats).
         </p>
         <div class="mt-5 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <p class="text-sm font-semibold text-gray-900 mb-2">Choose your guide/director model</p>
@@ -103,7 +103,7 @@
           <FilmReelLoader
             size="sm"
             label="Analyzing script"
-            sub-label="Building synopsis, treatment, and director notes from your screenplay…"
+            sub-label="Reading your screenplay — synopsis, observations, three-act map, director notes…"
           />
         </div>
         <div v-if="analysisCandidates.length" class="mt-5 grid gap-4">
@@ -156,9 +156,9 @@
 
       <template v-if="showImportedScriptOverview">
         <div class="border-t border-gray-100 pt-6 mt-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-2">Three-act thematic breakdown</h2>
+          <h2 class="text-lg font-semibold text-gray-900 mb-2">Three-act breakdown</h2>
           <p class="text-sm text-gray-600 mb-3">
-            Same structure as Script Wizard: how the theme moves across acts after import.
+            Structural map from your screenplay as written — not a new version of the story.
           </p>
           <pre
             v-if="threeActBreakdown"
@@ -1593,6 +1593,7 @@ async function generateConcepts () {
   conceptResults.value = null
   try {
     await persistTargetDuration()
+    const runtimeSec = parsedTargetDurationSeconds()
     const res = await $fetch<ConceptGeneratorResultItem[]>('/api/generate-concepts', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
@@ -1602,6 +1603,7 @@ async function generateConcepts () {
         selected_models: [...selectedModelIds.value],
         goal: project.value?.goal,
         aspect_ratio: project.value?.aspectRatio,
+        ...(runtimeSec != null ? { target_duration_seconds: runtimeSec } : {}),
         ...(conceptReferenceImage.value ? { reference_image: conceptReferenceImage.value } : {})
       }
     })

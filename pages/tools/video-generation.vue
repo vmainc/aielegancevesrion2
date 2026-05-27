@@ -7,6 +7,12 @@
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
         Choose video-capable models and describe your shot. Clips can be saved to a project for your timeline and appear under Assets → Video.
       </p>
+      <p
+        v-if="prefillBanner"
+        class="mt-4 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-gray-800"
+      >
+        {{ prefillBanner }}
+      </p>
     </header>
 
     <div v-if="pending" class="text-sm text-gray-600 mb-6 animate-pulse">
@@ -261,6 +267,11 @@
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import {
+  clearVideoGenerationPrefill,
+  loadVideoGenerationPrefill,
+  type VideoGenerationPrefill
+} from '~/lib/video-generation-prefill'
+import {
   generateOpenRouterVideo,
   playbackUrlForProjectVideoAsset,
   saveVideoToProjectLibrary
@@ -288,6 +299,8 @@ type Slot = {
   error?: string
 }
 
+const route = useRoute()
+const router = useRouter()
 const toast = useToast()
 const { isAuthenticated, getAuthToken, initAuth } = useAuth()
 const authTokenState = useState<string | null>('auth_token')
@@ -314,6 +327,8 @@ const saveToProject = ref(true)
 const addToTimeline = ref(false)
 const selectedProjectId = ref('')
 const slotByModel = reactive<Record<string, Slot>>({})
+const panelPrefill = ref<VideoGenerationPrefill | null>(null)
+const prefillBanner = ref('')
 
 const pbProjects = computed(() =>
   projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
@@ -325,11 +340,56 @@ watch([pbProjects, clientReady], () => {
   }
 }, { immediate: true })
 
+function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
+  panelPrefill.value = p
+  prompt.value = p.prompt.trim()
+  if (p.startFrameUrl) startFrameUrl.value = p.startFrameUrl
+  if (p.aspectRatio) aspectRatio.value = p.aspectRatio
+  if (typeof p.durationSeconds === 'number' && (p.durationSeconds === 5 || p.durationSeconds === 10)) {
+    durationSeconds.value = p.durationSeconds
+  }
+  if (p.saveToProject !== undefined) saveToProject.value = p.saveToProject
+  if (p.addToTimeline !== undefined) addToTimeline.value = p.addToTimeline
+  if (p.projectId && PB_ID.test(p.projectId)) {
+    selectedProjectId.value = p.projectId
+  }
+  const label = (p.shotTitle || '').trim()
+  prefillBanner.value = label
+    ? `Opened from project storyboard — “${label}”. Prompt and seed frame are prefilled; pick one or more models below.`
+    : 'Opened from a project panel — prompt and seed frame are prefilled; pick one or more models below.'
+}
+
+function consumePrefillQuery () {
+  const raw = route.query.prefill
+  const id = typeof raw === 'string' ? raw.trim() : ''
+  if (!id) return
+  const payload = loadVideoGenerationPrefill(id)
+  clearVideoGenerationPrefill(id)
+  if (route.query.prefill) {
+    const q = { ...route.query }
+    delete q.prefill
+    void router.replace({ path: route.path, query: q })
+  }
+  if (!payload) {
+    toast.showToast('Prefill data expired — open Generate video from the project again.', 'info')
+    return
+  }
+  applyVideoGenerationPrefill(payload)
+}
+
 onMounted(() => {
+  consumePrefillQuery()
   if (isAuthenticated.value && clientReady.value) {
     void loadServerProjects()
   }
 })
+
+watch(
+  () => route.query.prefill,
+  () => {
+    consumePrefillQuery()
+  }
+)
 
 watch(isAuthenticated, (v) => {
   if (v) void loadServerProjects()
@@ -361,6 +421,8 @@ function authHeaders (): Record<string, string> | null {
 }
 
 function clipTitle (): string {
+  const fromPanel = (panelPrefill.value?.shotTitle || '').trim()
+  if (fromPanel) return `${fromPanel} — video`.slice(0, 500)
   const base = prompt.value.trim().slice(0, 80) || 'Generated clip'
   return `${base} — video`.slice(0, 500)
 }
@@ -382,16 +444,21 @@ async function runOneModel (modelId: string) {
     const headers = authHeaders()
 
     if (saveToProject.value && selectedProjectId.value && headers) {
+      const pre = panelPrefill.value
       const asset = await saveVideoToProjectLibrary({
         projectId: selectedProjectId.value,
         remoteUrl: videoUrl,
         title: clipTitle(),
-        notes: 'Generated from Video tools (standalone).',
+        notes: pre?.source === 'project_video_panel'
+          ? 'Generated from project Video step via Video tools.'
+          : 'Generated from Video tools (standalone).',
         metadata: {
           model_id: modelId,
-          source: 'standalone_video_tool',
+          source: pre?.source || 'standalone_video_tool',
           aspect_ratio: aspectRatio.value,
-          duration_seconds: durationSeconds.value
+          duration_seconds: durationSeconds.value,
+          ...(pre?.sceneId ? { scene_id: pre.sceneId } : {}),
+          ...(pre?.shotId ? { shot_id: pre.shotId } : {})
         },
         headers
       })
@@ -409,7 +476,9 @@ async function runOneModel (modelId: string) {
       const { addVideoClip } = useProjectTimeline(computed(() => selectedProjectId.value))
       addVideoClip({
         url: playbackSrc(playbackUrl),
-        label: clipTitle()
+        label: clipTitle(),
+        ...(panelPrefill.value?.sceneId ? { sceneId: panelPrefill.value.sceneId } : {}),
+        ...(panelPrefill.value?.shotId ? { shotId: panelPrefill.value.shotId } : {})
       })
     }
 

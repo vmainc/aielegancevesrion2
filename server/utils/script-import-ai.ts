@@ -126,28 +126,36 @@ function buildSynopsisField (logline: string, onePage: string): string {
   return L || P || ''
 }
 
-function buildTreatmentFromCreative (films: ComparableFilm[], themeExploration: string): string {
+function buildTreatmentFromScriptRead (e: {
+  themeExploration: string
+  themes: string[]
+  tone: string
+  genre: string
+}): string {
   const lines: string[] = [
-    'Imported script — creative development notes',
+    'Script analysis (cold read)',
     '',
-    'Comparable films',
-    'Use these references to clarify tone, audience, and market positioning — not to copy.',
+    'This section summarizes the uploaded screenplay as written. It does not add plot, characters, comparable titles, or story beats that are not on the page.',
     ''
   ]
-  if (!films.length) {
-    lines.push('(No comparable titles extracted — add your own references in Director or Story.)', '')
-  } else {
-    films.forEach((f, i) => {
-      const y = f.year ? ` (${f.year})` : ''
-      lines.push(`${i + 1}. ${f.title}${y}`)
-      if (f.parallel) lines.push(`   • In the same vein: ${f.parallel}`)
-      if (f.contrast) lines.push(`   • How this script diverges: ${f.contrast}`)
-      lines.push('')
-    })
+  const genre = e.genre.trim()
+  const tone = e.tone.trim()
+  if (genre || tone) {
+    lines.push('Tone and genre (from the script)')
+    if (genre) lines.push(`Genre: ${genre}`)
+    if (tone) lines.push(`Tone: ${tone}`)
+    lines.push('')
   }
-  lines.push('Theme exploration')
+  if (e.themes.length) {
+    lines.push('Themes (supported by the text)')
+    for (const t of e.themes) {
+      lines.push(`• ${t}`)
+    }
+    lines.push('')
+  }
+  lines.push('Observations')
   lines.push('')
-  lines.push(themeExploration.trim() || '(Expand themes on the Story or Director tab.)')
+  lines.push(e.themeExploration.trim() || '(No observations returned — run analysis again.)')
   return lines.join('\n').trim()
 }
 
@@ -186,32 +194,36 @@ export async function enrichScriptWithAi (input: {
   }
 
   try {
-  const system = `You are a senior film development executive and story analyst. Reply with ONLY valid JSON (no markdown code fences), shape:
+  const system = `You are a script coverage reader doing a COLD READ of an uploaded screenplay. Your job is to understand and report what the author wrote — not to repitch, improve, or reimagine the story.
+
+Reply with ONLY valid JSON (no markdown code fences), shape:
 {
-  "logline": "2–4 sentence pitch: who wants what, obstacle, stakes.",
-  "one_page_synopsis": "One page of prose (~400–650 words). Single narrative arc: world, protagonist, conflict, escalation, turn, resolution direction. Write for producers and writers — vivid but professional. No scene numbers.",
-  "comparable_films": [
-    {"title":"Exact Film Title","year":"YYYY","parallel":"Why it rhymes with this story (tone, structure, theme)","contrast":"How this script is distinct — avoid empty praise"}
-  ],
-  "theme_exploration": "3–5 short paragraphs (plain text, use \\n\\n between paragraphs). Dig into subtext: moral questions, motifs, genre expectations you subvert or embrace, who the story is for emotionally.",
-  "genre": "primary genre label",
-  "tone": "short tone description",
-  "themes": ["theme1","theme2","theme3"],
-  "sceneSummaries": [{"index":0,"summary":"one line"}, ...],
-  "characterRoles": [{"name":"EXACT_NAME","role_description":"one or two sentences"}, ...]
+  "logline": "2–4 sentences: factual summary of who, where, and what conflict exists AS WRITTEN in the scenes (no marketing spin, no invented stakes).",
+  "one_page_synopsis": "Neutral prose (~350–650 words) recounting the story events in order as they appear in the script. Present tense. Do not add scenes, twists, characters, or an ending that is not in the material. No scene numbers.",
+  "comparable_films": [],
+  "theme_exploration": "2–4 short paragraphs (plain text, use \\n\\n between paragraphs). Tone, motifs, and subtext that are supported by dialogue and action in the script. If something is inference, say so briefly; do not present guesses as plot facts.",
+  "genre": "primary genre label implied by the script",
+  "tone": "short tone description grounded in how the script reads on the page",
+  "themes": ["theme1","theme2"],
+  "sceneSummaries": [{"index":0,"summary":"one line — only this scene's events"}, ...],
+  "characterRoles": [{"name":"EXACT_NAME","role_description":"one or two sentences from script evidence only"}, ...]
 }
-Rules:
-- Include 3–5 comparable_films (well-known, real titles). Be specific on parallel vs contrast.
-- Use the same scene order as given (index 0 = first scene). Include every character name from the provided list in characterRoles (infer role from context).
-- Never use CAST, CREDITS, or section headings as character names in characterRoles.
+COLD READ RULES (strict):
+- Do NOT invent plot events, relationships, twists, dialogue, or endings absent from the supplied scenes.
+- Do NOT change the author's intent, "elevate" the premise, or suggest what the story should be.
+- comparable_films must be an empty array [] — do not name other movies unless the screenplay text explicitly references them.
+- sceneSummaries: one row per scene in the list below, same order and index (0 = first scene). Summarize only what happens in that scene block.
+- characterRoles: include every name from the provided list; use EXACT spelling; describe only what the script shows or states.
+- Never use CAST, CREDITS, or section headings as character names.
 - Escape quotes inside JSON strings properly.`
 
-  const user = `Project title: ${input.projectName}
+  const user = `Working title (file/project label — not necessarily the script's title card): ${input.projectName}
 
-Characters seen: ${input.characterNames.join(', ') || '(none detected)'}
+Character names detected in the screenplay (use exactly these in characterRoles):
+${input.characterNames.join(', ') || '(none detected)'}
 
-Scene list (numbered):
-${input.sceneOutline.slice(0, 12000)}`
+Screenplay material (scene headings and excerpts — your only source of truth):
+${input.sceneOutline.slice(0, 48_000)}`
 
   const body = buildOpenRouterChatCompletionBody({
     model: input.openrouterModelId || 'openai/gpt-4o',
@@ -219,8 +231,8 @@ ${input.sceneOutline.slice(0, 12000)}`
       { role: 'system', content: system },
       { role: 'user', content: user }
     ],
-    temperature: 0.55,
-    max_tokens: 1800
+    temperature: 0.2,
+    max_tokens: 2400
   })
 
   const res = await fetchWithTimeout(
@@ -338,7 +350,8 @@ ${input.sceneOutline.slice(0, 12000)}`
   if (!onePageSynopsis && legacySummary.length > 200) {
     onePageSynopsis = logline && legacySummary.startsWith(logline) ? legacySummary.slice(logline.length).trim() : legacySummary
   }
-  const comparableFilms = parseComparableFilms(parsed.comparable_films ?? parsed.comparableFilms)
+  // Cold read: never attach AI-suggested comparable titles to project import analyze.
+  const comparableFilms: ComparableFilm[] = []
   const themeExploration =
     asStr(parsed.theme_exploration) ||
     asStr(parsed.themeExploration) ||
@@ -377,7 +390,12 @@ export function enrichmentToProjectFields (e: ScriptAiEnrichment): {
 } {
   const synopsis =
     buildSynopsisField(e.logline, e.onePageSynopsis) || e.summary
-  const treatment = buildTreatmentFromCreative(e.comparableFilms, e.themeExploration)
+  const treatment = buildTreatmentFromScriptRead({
+    themeExploration: e.themeExploration,
+    themes: e.themes,
+    tone: e.tone,
+    genre: e.genre
+  })
   return { synopsis, treatment }
 }
 
@@ -394,14 +412,12 @@ export function scriptPreviewEnrichmentIsUsable (
   const t = String(enrichment.tone || '').trim().toLowerCase()
   const syn = prose.synopsis.trim()
   const fromScenes = enrichment.sceneSummaries?.map(s => s.summary).filter(Boolean).join(' ') || ''
-  const fromComps = enrichment.comparableFilms?.map(f => [f.title, f.parallel, f.contrast].filter(Boolean).join(' ')).filter(Boolean).join(' ') || ''
   const block = [
     enrichment.logline,
     enrichment.onePageSynopsis,
     syn,
     enrichment.themeExploration,
-    fromScenes,
-    fromComps
+    fromScenes
   ]
     .map(s => String(s || '').trim())
     .filter(Boolean)
@@ -447,32 +463,31 @@ export async function inferThreeActThemeBreakdown (input: {
   const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) return ''
 
-  const system = `You are a film story consultant focused on thematic analysis.
+  const system = `You are a script supervisor mapping an uploaded screenplay into three acts for production breakdown.
+
 Reply with ONLY valid JSON:
 {
-  "act_1": "3-6 bullet-style lines: setup, world, thematic question posed.",
-  "act_2": "4-8 bullet-style lines: escalation, midpoint pressure, theme under stress.",
-  "act_3": "3-6 bullet-style lines: climax/resolution and thematic payoff.",
-  "theme_arc": "1 short paragraph on how the core theme evolves across all three acts."
+  "act_1": "3–6 bullet lines: setup beats that occur in the script (use neutral coverage language).",
+  "act_2": "4–8 bullet lines: escalation and midpoint pressure as written — no invented set pieces.",
+  "act_3": "3–6 bullet lines: climax and resolution only if present in the material; otherwise note what the script actually ends on.",
+  "theme_arc": "1 short paragraph on how tone/theme shifts across acts, citing patterns from the text (not a new story)."
 }
 Rules:
-- Keep each act practical and specific to this script.
-- Avoid screenplay formatting jargon where possible.
+- COLD READ: every bullet must correspond to events in the scene outline / screenplay excerpt — do not add plot, characters, or twists the author did not write.
+- Choose act breaks at the script's own turning points when visible; if ambiguous, state the closest split without inventing a missing climax.
+- Do not reference other films or suggest changes to the story.
 - Escape quotes in JSON strings.`
 
-  const user = `Project: ${input.projectName}
+  const user = `Working title: ${input.projectName}
 
-Logline:
-${input.logline.slice(0, 1200)}
+Coverage synopsis (secondary context — prefer the scene material below if they disagree):
+${[input.logline, input.onePageSynopsis].filter(Boolean).join('\n\n').slice(0, 6000)}
 
-Synopsis:
-${input.onePageSynopsis.slice(0, 5000)}
+Observations from coverage:
+${input.themeExploration.slice(0, 3000)}
 
-Theme exploration notes:
-${input.themeExploration.slice(0, 4000)}
-
-Scene outline:
-${input.sceneOutline.slice(0, 10000)}`
+Screenplay scene material (primary source — map acts from this):
+${input.sceneOutline.slice(0, 48_000)}`
 
   const model = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
   const body = buildOpenRouterChatCompletionBody({
@@ -481,7 +496,7 @@ ${input.sceneOutline.slice(0, 10000)}`
       { role: 'system', content: system },
       { role: 'user', content: user }
     ],
-    temperature: 0.4,
+    temperature: 0.2,
     max_tokens: 2200
   })
 
@@ -513,7 +528,12 @@ ${input.sceneOutline.slice(0, 10000)}`
     const arc = asStr(parsed.theme_arc || parsed.themeArc).trim()
     if (!act1 && !act2 && !act3 && !arc) return ''
 
-    const lines: string[] = ['Three-act thematic breakdown', '']
+    const lines: string[] = [
+      'Three-act thematic breakdown',
+      '',
+      'Mapped from the uploaded screenplay (cold read — beats are from the author’s script, not invented).',
+      ''
+    ]
     if (act1) lines.push('Act I', act1, '')
     if (act2) lines.push('Act II', act2, '')
     if (act3) lines.push('Act III', act3, '')
@@ -568,20 +588,20 @@ export async function inferDirectorFromImportedScript (input: {
     return defaultDirector()
   }
 
-  const system = `You are an experienced film director and cinematographer. Given story material from an imported screenplay, propose a cohesive director bible for the project.
+  const system = `You document how this screenplay already reads on the page — for continuity with the writer’s intent, not a creative relaunch.
 
 Reply with ONLY valid JSON (no markdown fences), shape:
 {
-  "name": "Short label for this approach (e.g. 'Grounded intimacy' or 'High-contrast thriller') — not a real person's name unless the script names one.",
-  "style": "2–4 sentences: overall visual and storytelling approach, blocking, production design sensibility.",
-  "tone": "2–3 sentences: emotional register, audience experience, performance direction (distinct from genre — how it should feel).",
-  "camera_preferences": "2–4 sentences: focal lengths, movement, coverage philosophy, aspect-ratio-aware if relevant.",
-  "lighting_style": "2–3 sentences: key/fill/ratio, color temperature, practicals vs studio, night vs day bias from the script.",
-  "pacing": "2–3 sentences: scene rhythm, cutting philosophy, when to hold vs accelerate — tied to the story's beats."
+  "name": "Short label for the script’s existing feel (e.g. 'Sunlit domestic warmth') — not a real person's name unless the script names one.",
+  "style": "2–4 sentences: visual/staging qualities implied by sluglines, action lines, and settings in the excerpt (what is explicit vs sparse).",
+  "tone": "2–3 sentences: emotional register and performance temperature supported by dialogue and action — how it should feel when shot faithfully.",
+  "camera_preferences": "2–4 sentences: coverage implied by how scenes are written (intimacy, scope, movement) — do not impose a style absent from the text.",
+  "lighting_style": "2–3 sentences: day/night, interior/exterior, and mood cues stated or strongly implied in the script.",
+  "pacing": "2–3 sentences: rhythm of scenes and dialogue as written; when the script holds vs accelerates."
 }
 Rules:
-- Ground every field in the supplied synopsis and scene samples; be specific, not generic platitudes.
-- Each string should be usable as production guidance (concrete, visual).
+- COLD READ: infer only from supplied scene material; do not invent genre mash-ups, new subplots, or a different ending.
+- If the script is minimal on visual detail, say so and stick to what is on the page.
 - Escape quotes inside JSON strings properly.`
 
   const synopsisBlock = [input.logline.trim(), input.onePageSynopsis.trim()]
@@ -589,19 +609,19 @@ Rules:
     .join('\n\n')
     .slice(0, 8000)
 
-  const user = `Project title: ${input.projectName}
+  const user = `Working title: ${input.projectName}
 
-Genre (hint): ${input.genre}
-Tone tag (hint): ${input.tone}
+Screenplay scene material (primary source):
+${input.sceneOutline.slice(0, 48_000)}
+
+Genre (from coverage): ${input.genre}
+Tone tag (from coverage): ${input.tone}
 Themes: ${input.themes.length ? input.themes.join(', ') : '(none listed)'}
 
 Characters: ${input.characterNames.join(', ') || '(none listed)'}
 
-Synopsis / logline material:
-${synopsisBlock || '(none)'}
-
-Excerpted scene structure and dialogue samples (for visual and pacing cues):
-${input.sceneOutline.slice(0, 12000)}`
+Synopsis / logline (secondary — if this conflicts with the scenes above, follow the script):
+${synopsisBlock || '(none)'}`
 
   const model = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
   const body = buildOpenRouterChatCompletionBody({
@@ -610,7 +630,7 @@ ${input.sceneOutline.slice(0, 12000)}`
       { role: 'system', content: system },
       { role: 'user', content: user }
     ],
-    temperature: 0.45,
+    temperature: 0.25,
     max_tokens: 2048
   })
 
@@ -807,23 +827,23 @@ export async function inferCharactersWithScreenShareFromScript (input: {
   const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) return []
 
-  const system = `You are a screenplay analyst. From the script material, list the principal named characters (speaking roles and key non-speaking figures who drive scenes).
+  const system = `You are a screenplay analyst doing a cold read. List principal named characters present in the excerpt.
 
 Reply with ONLY valid JSON (no markdown fences), shape:
 {
   "characters": [
     {
       "name": "EXACT name as it appears in scene text (character cue / dialogue)",
-      "role_description": "2–4 sentences: who they are in the story, function in the plot, relationships — specific to this script.",
+      "role_description": "2–4 sentences describing who they are and what they do AS WRITTEN — relationships and function only when supported by dialogue/action.",
       "screen_share_percent": 0
     }
   ]
 }
 Rules:
-- screen_share_percent is your estimate of each character's share of total dialogue lines + meaningful on-screen presence in the excerpt (not runtime minutes). Principal cast should sum to about 100; tiny walk-ons can be 0.5–2 or grouped.
+- screen_share_percent: estimate share of dialogue lines + meaningful presence in the excerpt (principal cast ~100 total).
 - Include at most 18 rows; merge true extras into one "OTHER (extras)" row if needed with a small combined percent.
-- Use the parser hint list and scene text — do not invent characters never present in the excerpt.
-- Never use CAST, CREDITS, ENSEMBLE, or section headings as character names; only people/creatures who speak or act in scenes.
+- Do not invent characters, backstory, or motivations absent from the script text.
+- Never use CAST, CREDITS, ENSEMBLE, or section headings as character names.
 - Escape quotes inside JSON strings properly.`
 
   const hints =

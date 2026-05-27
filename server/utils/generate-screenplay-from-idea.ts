@@ -85,6 +85,8 @@ export async function generateScreenplayFromStoryIdea (input: {
   const durationBlock = budget
     ? `\n\n${screenplayDurationGuidance(budget, goal)}`
     : `\n\nTarget: ${goal === 'social' ? 'short social video (under 2 minutes on screen)' : goal === 'commercial' ? '30–60 second spot' : 'short film / proof-of-concept (about 3–8 pages)'}.`
+  const maxTokens =
+    budget && budget.totalSeconds <= 25 ? 1200 : budget && budget.totalSeconds <= 60 ? 2200 : 5500
 
   const system = `You are an experienced screenwriter drafting a short screenplay for development and automated import.
 
@@ -110,7 +112,9 @@ ${durationBlock}`
     'Story summary to adapt:',
     input.summary.trim(),
     '',
-    'Write the screenplay now. Begin with the title, then CAST, then slug lines and scenes.'
+    budget && budget.totalSeconds <= 60
+      ? `Write the screenplay now. Hard cap: ~${budget.totalSeconds}s on screen (~${budget.maxPanelsTotal} beats). Begin with title, CAST, then the minimum scenes needed — no extra acts.`
+      : 'Write the screenplay now. Begin with the title, then CAST, then slug lines and scenes.'
   ]
     .filter(Boolean)
     .join('\n')
@@ -123,7 +127,7 @@ ${durationBlock}`
         { role: 'user', content: userMsg }
       ],
       temperature: 0.65,
-      max_tokens: 5500
+      max_tokens: maxTokens
     })
 
     const headers: Record<string, string> = {

@@ -1,5 +1,9 @@
 /** Shared storyboard continuity helpers (client + server). */
 
+import {
+  castNameAppearsInText,
+  formatCastNameForPrompt
+} from '~/lib/cast-name-convention'
 import type { ProjectDirector } from '~/types/creative-project'
 
 export interface CastMemberForContinuity {
@@ -80,12 +84,12 @@ export function buildCastBibleParagraph (cast: CastMemberForContinuity[]): strin
   return cast
     .map(c => {
       const desc = (c.traitsRoleVisual || '').trim() || 'use the established design from the cast bible'
-      return `${c.name.toUpperCase()}: ${desc}`
+      return `${formatCastNameForPrompt(c.name)}: ${desc}`
     })
     .join('\n')
 }
 
-function shotTextBlob (shot: {
+function shotTextBlobRaw (shot: {
   title?: string
   description?: string
   image_prompt?: string
@@ -99,7 +103,6 @@ function shotTextBlob (shot: {
   ]
     .filter(Boolean)
     .join(' ')
-    .toLowerCase()
 }
 
 /** Characters whose names appear in this shot's copy. */
@@ -107,15 +110,15 @@ export function castMembersInShot (
   shot: { title?: string; description?: string; image_prompt?: string; imagePrompt?: string },
   cast: CastMemberForContinuity[]
 ): CastMemberForContinuity[] {
-  const hay = shotTextBlob(shot)
-  if (!hay.trim()) return cast
+  const raw = shotTextBlobRaw(shot)
+  if (!raw.trim()) return cast
   const sorted = [...cast].sort((a, b) => b.name.length - a.name.length)
   const hits: CastMemberForContinuity[] = []
   const seen = new Set<string>()
   for (const c of sorted) {
     const key = c.name.trim().toLowerCase()
     if (!key || seen.has(key)) continue
-    if (hay.includes(key)) {
+    if (castNameAppearsInText(c.name, raw)) {
       seen.add(key)
       hits.push(c)
     }
@@ -130,7 +133,7 @@ export function buildCharacterLockForShot (
   if (!inShot.length) return ''
   const lines = inShot.map(c => {
     const desc = (c.traitsRoleVisual || '').trim() || 'match the cast bible exactly'
-    return `- ${c.name.toUpperCase()}: ${desc}`
+    return `- ${formatCastNameForPrompt(c.name)}: ${desc}`
   })
   const speciesRule = animalOnly
     ? 'Render ONLY these animal/creature characters — never add human figures or human anatomy.'

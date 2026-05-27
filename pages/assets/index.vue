@@ -8,6 +8,19 @@
       </p>
     </div>
 
+    <ul class="grid gap-4 sm:grid-cols-2 mb-10">
+      <li v-for="card in cards" :key="card.to">
+        <NuxtLink
+          :to="card.to"
+          class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:border-primary/50 hover:bg-gray-50 transition-all p-6 h-full"
+        >
+          <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ card.title }}</h2>
+          <p class="text-sm text-gray-600 mb-4">{{ card.blurb }}</p>
+          <span class="text-sm text-primary font-medium">Open →</span>
+        </NuxtLink>
+      </li>
+    </ul>
+
     <ClientOnly>
       <div v-if="isAuthenticated" class="mb-10 rounded-xl border border-gray-200 bg-gray-50/80 p-5 sm:p-6">
         <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">Recent library items</h2>
@@ -18,7 +31,6 @@
             v-for="g in projectGroups"
             :key="g.key"
             class="rounded-lg border border-gray-200 bg-white overflow-hidden group"
-            open
           >
             <summary
               class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80"
@@ -62,19 +74,6 @@
         <div class="mb-10 text-sm text-gray-500">Sign in to see your asset library.</div>
       </template>
     </ClientOnly>
-
-    <ul class="grid gap-4 sm:grid-cols-2">
-      <li v-for="card in cards" :key="card.to">
-        <NuxtLink
-          :to="card.to"
-          class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:border-primary/50 hover:bg-gray-50 transition-all p-6 h-full"
-        >
-          <h2 class="text-lg font-semibold text-gray-900 mb-2">{{ card.title }}</h2>
-          <p class="text-sm text-gray-600 mb-4">{{ card.blurb }}</p>
-          <span class="text-sm text-primary font-medium">Open →</span>
-        </NuxtLink>
-      </li>
-    </ul>
 
     <div class="mt-10 pt-8 border-t border-gray-200">
       <p class="text-sm text-gray-500 mb-3">Assets are tied to projects.</p>

@@ -56,10 +56,14 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const openRouterKey = resolveOpenRouterApiKey(config)
 
+  const mediaKind =
+    kind === 'storyboard' || kind === 'character' ? ('image' as const) : ('video' as const)
+
   const { buffer, suggestedName } = await fetchBinaryFromUrlForIngest(sourceUrl, {
     openRouterApiKey: openRouterKey || undefined,
     maxBytes: MAX_FILE_BYTES,
-    timeoutMs: 180_000
+    timeoutMs: 180_000,
+    mediaKind
   })
 
   const safeFilename = suggestedName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 180) || 'video.mp4'

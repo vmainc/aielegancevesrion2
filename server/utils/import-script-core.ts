@@ -815,7 +815,7 @@ export async function runDirectorOnlyFromParsed (input: {
 
   const previewSceneCount = parsed.scenes.length
   const conceptNotes =
-    `Imported from ${filename}. Director pass: synopsis, treatment, and comparable-film notes on Overview — refine the bible on the Director tab. ` +
+    `Imported from ${filename}. Analyze pass: cold-read synopsis, observations, three-act map, and director bible on Overview — refine on the Director tab. ` +
     `Then generate cast (Characters), scene breakdown (Scenes), and optional panels (Storyboard). ${previewSceneCount} scene block(s) parsed from the file.`
 
   const projectPatch: Record<string, unknown> = {

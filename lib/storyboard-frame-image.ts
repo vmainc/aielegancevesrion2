@@ -27,7 +27,7 @@ export function storyboardFramePreviewClasses (aspectRatio?: string): string {
   const base =
     'relative w-full rounded-lg border border-gray-200 overflow-hidden bg-gray-900'
   if (ar === '9:16') {
-    return `${base} aspect-[9/16] max-w-[min(100%,300px)] mx-auto`
+    return `${base} aspect-[9/16] w-full min-h-[220px]`
   }
   if (ar === '1:1') {
     return `${base} aspect-square max-w-md mx-auto`

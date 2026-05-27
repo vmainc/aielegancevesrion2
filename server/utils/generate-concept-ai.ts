@@ -116,7 +116,10 @@ export async function generateConceptWithOpenRouter (options: {
   const body = buildOpenRouterChatCompletionBody({
     model: options.openrouterModelId,
     messages: [
-      { role: 'system', content: buildConceptSystemPrompt(goal, hasImage) },
+      {
+        role: 'system',
+        content: buildConceptSystemPrompt(goal, hasImage, options.targetDurationSeconds)
+      },
       { role: 'user', content: userContent }
     ],
     temperature: 0.75,

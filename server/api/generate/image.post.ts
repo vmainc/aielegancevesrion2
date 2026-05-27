@@ -39,6 +39,13 @@ export default defineEventHandler(async (event) => {
       : typeof body?.reference_image_url === 'string'
         ? body.reference_image_url.trim()
         : ''
+  const referenceImageUrlsRaw = body?.referenceImageUrls ?? body?.reference_image_urls
+  const referenceImageUrls: string[] = Array.isArray(referenceImageUrlsRaw)
+    ? referenceImageUrlsRaw
+        .filter((u): u is string => typeof u === 'string')
+        .map(u => u.trim())
+        .filter(Boolean)
+    : []
   const aspectRatio =
     typeof body?.aspectRatio === 'string'
       ? body.aspectRatio.trim()
@@ -71,12 +78,24 @@ export default defineEventHandler(async (event) => {
 
     const internalPb = String(config.pocketbaseInternalUrl || '').trim()
     const publicPb = String(config.public?.pocketbaseUrl || '').trim()
-    const resolvedRef = referenceImageUrl
-      ? await resolveReferenceImageUrlForServerFetch(referenceImageUrl, {
-          pocketbaseInternalUrl: internalPb,
-          publicPocketbaseUrl: publicPb || undefined
-        })
-      : ''
+    const fetchOpts = {
+      pocketbaseInternalUrl: internalPb,
+      publicPocketbaseUrl: publicPb || undefined
+    }
+    const refCandidates = [
+      ...referenceImageUrls,
+      ...(referenceImageUrl ? [referenceImageUrl] : [])
+    ].filter((u, i, arr) => arr.indexOf(u) === i).slice(0, 4)
+
+    const resolvedRefs: string[] = []
+    for (const raw of refCandidates) {
+      try {
+        const resolved = await resolveReferenceImageUrlForServerFetch(raw, fetchOpts)
+        if (resolved) resolvedRefs.push(resolved)
+      } catch {
+        /* skip */
+      }
+    }
 
     let lastErr: unknown = null
     for (let i = 0; i < candidates.length; i++) {
@@ -86,7 +105,8 @@ export default defineEventHandler(async (event) => {
           prompt,
           modelId: candidate,
           apiKey,
-          referenceImageUrl: resolvedRef || undefined,
+          referenceImageUrl: resolvedRefs[0],
+          referenceImageUrls: resolvedRefs.length ? resolvedRefs : undefined,
           aspectRatio
         })
         return { urls, model }

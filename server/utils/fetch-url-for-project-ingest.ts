@@ -1,10 +1,10 @@
 import { createError } from 'h3'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 
-function openRouterVideoHeaders (apiKey: string): Record<string, string> {
+function openRouterFetchHeaders (apiKey: string, accept: string): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey.trim()}`,
-    Accept: 'video/*,*/*'
+    Accept: accept
   }
   if (process.env.OPENROUTER_REFERER) headers['HTTP-Referer'] = process.env.OPENROUTER_REFERER
   if (process.env.OPENROUTER_TITLE) headers['X-Title'] = process.env.OPENROUTER_TITLE
@@ -22,33 +22,42 @@ function hostNeedsOpenRouterAuth (urlStr: string): boolean {
   }
 }
 
+export type IngestMediaKind = 'image' | 'video'
+
 export async function fetchBinaryFromUrlForIngest (
   urlStr: string,
-  options: { openRouterApiKey?: string; maxBytes: number; timeoutMs?: number }
+  options: {
+    openRouterApiKey?: string
+    maxBytes: number
+    timeoutMs?: number
+    mediaKind?: IngestMediaKind
+  }
 ): Promise<{ buffer: Buffer; contentType: string; suggestedName: string }> {
   const url = urlStr.trim()
   if (!url || !/^https?:\/\//i.test(url)) {
     throw createError({ statusCode: 400, message: 'A valid http(s) URL is required' })
   }
 
+  const mediaKind = options.mediaKind ?? 'video'
   const timeoutMs = options.timeoutMs ?? 120_000
-  const headers: Record<string, string> = { Accept: 'video/*,*/*' }
+  const accept = mediaKind === 'image' ? 'image/*,*/*' : 'video/*,*/*'
+  const headers: Record<string, string> = { Accept: accept }
   if (hostNeedsOpenRouterAuth(url)) {
     const k = options.openRouterApiKey?.trim()
     if (!k) {
       throw createError({
         statusCode: 500,
-        message: 'OPENROUTER_API_KEY is required to download OpenRouter-hosted video files.'
+        message: 'OPENROUTER_API_KEY is required to download OpenRouter-hosted files.'
       })
     }
-    Object.assign(headers, openRouterVideoHeaders(k))
+    Object.assign(headers, openRouterFetchHeaders(k, accept))
   }
 
   const res = await fetchWithTimeout(url, { method: 'GET', headers }, timeoutMs)
   if (!res.ok) {
     throw createError({
       statusCode: 502,
-      message: `Could not download video (HTTP ${res.status})`
+      message: `Could not download file (HTTP ${res.status})`
     })
   }
 
@@ -57,15 +66,20 @@ export async function fetchBinaryFromUrlForIngest (
     throw createError({ statusCode: 413, message: 'Downloaded file exceeds maximum size for library upload' })
   }
   if (buf.length < 64) {
-    throw createError({ statusCode: 502, message: 'Downloaded file is too small to be a valid video' })
+    throw createError({
+      statusCode: 502,
+      message: `Downloaded file is too small to be a valid ${mediaKind}`
+    })
   }
 
   const cd = res.headers.get('content-disposition') || ''
   const m = /filename\*?=(?:UTF-8''|")?([^";\n]+)/i.exec(cd)
   let suggestedName = (m?.[1] || '').trim().replace(/["']/g, '')
+  const defaultExt = mediaKind === 'image' ? 'png' : 'mp4'
+  const defaultCt = mediaKind === 'image' ? 'image/png' : 'video/mp4'
   if (!suggestedName || !/\.[a-z0-9]{2,5}$/i.test(suggestedName)) {
-    suggestedName = `generated_${Date.now()}.mp4`
+    suggestedName = `generated_${Date.now()}.${defaultExt}`
   }
-  const ct = (res.headers.get('content-type') || '').split(';')[0]?.trim() || 'video/mp4'
+  const ct = (res.headers.get('content-type') || '').split(';')[0]?.trim() || defaultCt
   return { buffer: buf, contentType: ct, suggestedName: suggestedName.slice(0, 180) }
 }

@@ -1,4 +1,8 @@
 import {
+  canonicalizeShotCastNames,
+  castNameConventionPromptBlock
+} from '~/lib/cast-name-convention'
+import {
   buildCastBibleParagraph,
   buildCharacterLockForShot,
   buildDirectorBibleBlock,
@@ -19,6 +23,8 @@ export interface UnifiedShotPromptContext {
   aspectRatio?: string
   sceneTitle?: string
   sceneSummary?: string
+  /** 0-based panel index in the current scene sequence (for distinct compositions). */
+  panelIndex?: number
   cast: Array<{ name: string; traitsRoleVisual: string }>
 }
 
@@ -81,6 +87,30 @@ export function buildMotionPromptForShot (shot: Pick<CreativeShot, 'title' | 'de
     .join('\n\n')
 }
 
+/** Lead image models with the unique beat for this panel; consistency blocks follow. */
+export function buildPanelActionEmphasis (
+  shot: Pick<CreativeShot, 'title' | 'description' | 'shotType' | 'cameraMove'>,
+  panelIndex?: number
+): string {
+  const title = (shot.title || 'Shot').trim()
+  const beat = (shot.description || '').trim()
+  const shotType = (shot.shotType || 'medium').trim()
+  const camera = (shot.cameraMove || '').trim()
+  const seq =
+    panelIndex != null && panelIndex >= 0
+      ? `Panel ${panelIndex + 1} in scene sequence.`
+      : ''
+  return [
+    '=== PRIMARY ACTION — THIS PANEL ONLY (must dominate the image) ===',
+    seq,
+    `"${title}" · ${shotType}${camera ? ` · camera: ${camera}` : ''}`,
+    beat || title,
+    'Visually distinct COMPOSITION from every other panel: unique action, pose, eyeline, and framing only — never change character face, species, body proportions, fur/materials, or wardrobe. Reuse identical character designs from the cast bible and reference images; never clone the same camera layout as another panel.'
+  ]
+    .filter(Boolean)
+    .join('\n')
+}
+
 /**
  * One production prompt: director, continuity, cast, scene, panel beat, exclusions.
  * Stored in `imagePrompt`; used for frame generation and as base for video.
@@ -93,12 +123,13 @@ export function buildUnifiedProductionPrompt (
   ctx: UnifiedShotPromptContext
 ): string {
   const cast = ctx.cast
+  const shotCanon = canonicalizeShotCastNames(shot, cast)
   const animalOnly = isAnimalOnlyCast(cast)
   const inShot = castMembersInShot(
     {
-      title: shot.title,
-      description: shot.description,
-      image_prompt: shot.imagePrompt
+      title: shotCanon.title,
+      description: shotCanon.description,
+      image_prompt: shotCanon.imagePrompt
     },
     cast
   )
@@ -117,35 +148,28 @@ export function buildUnifiedProductionPrompt (
     ? ['SETTING (locked across this scene):', ...sceneLines].join('\n')
     : ''
 
-  const panelBeat = (shot.description || shot.title || '').trim()
-  const title = (shot.title || 'Shot').trim()
-  const shotType = (shot.shotType || 'medium').trim()
+  const panelEmphasis = buildPanelActionEmphasis(shotCanon, ctx.panelIndex)
+  const castNaming = castNameConventionPromptBlock(cast)
 
   const negative = mergeNegativePromptParts(
-    shot.negativePrompt,
+    shotCanon.negativePrompt,
     buildProjectNegativePrompt({ cast })
   )
   const negBlock = formatNegativePromptForImageModel(negative)
 
   const parts = [
+    panelEmphasis,
+    SINGLE_STORYBOARD_FRAME_DIRECTIVE,
+    aspectLine,
+    castNaming,
     directorBible,
     mem ? `CONTINUITY MEMORY (do not contradict):\n${mem.slice(0, 2500)}` : '',
     sceneBlock,
-    fullCastBible ? `FULL CAST BIBLE (same designs every panel):\n${fullCastBible}` : '',
+    fullCastBible ? `FULL CAST BIBLE (same designs every panel — do not change faces/wardrobe):\n${fullCastBible}` : '',
     characterLock,
     animalOnly
       ? 'ANIMAL-ONLY STORY: only the named animal/creature cast — never humans or human silhouettes.'
       : '',
-    SINGLE_STORYBOARD_FRAME_DIRECTIVE,
-    aspectLine,
-    [
-      `STILL FRAME FOR THIS PANEL: "${title}" · ${shotType}`,
-      shot.cameraMove ? `Camera: ${shot.cameraMove}` : '',
-      '',
-      panelBeat
-    ]
-      .filter(Boolean)
-      .join('\n'),
     negBlock
   ]
 
@@ -157,11 +181,16 @@ export function resolveFrameGenerationPrompt (
   shot: CreativeShot,
   ctx: UnifiedShotPromptContext
 ): string {
-  const manual = mergeLegacyShotPromptsToUnified(shot)
+  const shotCanon = canonicalizeShotCastNames(shot, ctx.cast)
+  const manual = mergeLegacyShotPromptsToUnified(shotCanon)
+  const panelLead = buildPanelActionEmphasis(shotCanon, ctx.panelIndex)
   if (promptLooksUnified(manual)) {
-    return trimPromptForImageModel(manual)
+    if (/PRIMARY ACTION — THIS PANEL ONLY/i.test(manual)) {
+      return trimPromptForImageModel(manual)
+    }
+    return trimPromptForImageModel(`${panelLead}\n\n${manual}`)
   }
-  return buildUnifiedProductionPrompt(shot, ctx)
+  return buildUnifiedProductionPrompt(shotCanon, ctx)
 }
 
 /** Video API: production still + motion beat (no duplicate director/cast blocks). */
@@ -186,16 +215,21 @@ export function applyUnifiedPromptsToShot (
   shot: CreativeShot,
   ctx: UnifiedShotPromptContext
 ): Pick<CreativeShot, 'imagePrompt' | 'videoPrompt' | 'negativePrompt'> {
-  const production = buildUnifiedProductionPrompt(shot, ctx)
+  const cast = ctx.cast
+  const shotCanon = canonicalizeShotCastNames(shot, cast)
+  const production = buildUnifiedProductionPrompt(shotCanon, ctx)
   const negative = mergeNegativePromptParts(
-    shot.negativePrompt,
+    shotCanon.negativePrompt,
     buildProjectNegativePrompt({
       cast: ctx.cast.map(c => ({ name: c.name, traitsRoleVisual: c.traitsRoleVisual }))
     })
   )
   return {
     imagePrompt: production,
-    videoPrompt: buildMotionPromptForShot({ ...shot, description: shot.description }),
+    videoPrompt: buildMotionPromptForShot({
+      ...shotCanon,
+      description: shotCanon.description
+    }),
     negativePrompt: negative
   }
 }

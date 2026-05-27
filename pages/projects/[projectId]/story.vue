@@ -40,7 +40,7 @@
           Sign in and open a cloud project to sync length to your account. Local-only projects still use this choice for display until you save online.
         </p>
         <div
-          v-if="lengthModel === 'spot' || activeProject?.goal === 'social' || activeProject?.goal === 'commercial'"
+          v-if="showStandaloneRuntimeField"
           class="mt-4 pt-4 border-t border-gray-200"
         >
           <label for="target-duration-sec" class="block text-sm font-medium text-gray-700 mb-1">
@@ -52,7 +52,7 @@
           <ClientOnly>
             <input
               id="target-duration-sec"
-              v-model="durationSecondsModel"
+              v-model="targetDurationSeconds"
               type="number"
               min="15"
               max="3600"
@@ -60,7 +60,7 @@
               class="w-full max-w-[12rem] px-3 py-2 rounded-lg bg-white border border-gray-300 text-sm"
               :disabled="savingLength || !canPersist"
               placeholder="90"
-              @input="durationSecondsTouched = true"
+              @input="onTargetDurationInput"
               @change="onDurationSecondsChange"
             >
             <template #fallback>
@@ -69,6 +69,19 @@
           </ClientOnly>
         </div>
       </div>
+
+      <StoryIdeaGeneratorPanel
+        v-if="showStoryIdeaGenerator"
+        ref="storyIdeaGeneratorRef"
+        class="mb-8"
+        :project-id="activeProject.id"
+        :goal="activeProject.goal || 'film'"
+        :aspect-ratio="activeProject.aspectRatio || '16:9'"
+        heading="Generate story ideas"
+        subheading="Describe your idea, set target runtime, compare AI models, then save one as your synopsis."
+        apply-label="Use this story"
+        @apply="onStoryIdeaApply"
+      />
 
       <div
         class="rounded-xl border border-primary/25 bg-primary/5 p-5 sm:p-6 mb-8"
@@ -181,11 +194,11 @@
 </template>
 
 <script setup lang="ts">
-import { stripConceptMetadataMarkers } from '~/lib/format-stored-concept'
+import { formatStoredConceptNotes, stripConceptMetadataMarkers } from '~/lib/format-stored-concept'
 import { stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
-import { defaultDurationSecondsForProject } from '~/lib/project-duration-budget'
 import { TARGET_LENGTH_OPTIONS } from '~/lib/target-length'
+import type { StoryIdeaApplyPayload } from '~/components/story/StoryIdeaGeneratorPanel.vue'
 import type { CreativeProject, ProjectTargetLength } from '~/types/creative-project'
 
 const { activeProjectId, activeProject, updateProject, registerImportedProject } = useCreativeProject()
@@ -209,12 +222,34 @@ const projectId = activeProjectId
 const lengthOptions = TARGET_LENGTH_OPTIONS
 
 const lengthModel = ref<ProjectTargetLength>('short')
-const durationSecondsModel = ref<string>('')
-const durationSecondsTouched = ref(false)
 const savingLength = ref(false)
 const generatingKind = ref<'script' | 'treatment' | null>(null)
+const storyIdeaGeneratorRef = ref<{ clearApplying: () => void; clearResults: () => void } | null>(null)
 
 const PB_ID = /^[a-z0-9]{15}$/
+
+const {
+  targetDurationSeconds,
+  onTargetDurationInput,
+  persistTargetDuration
+} = useProjectTargetDuration(projectId)
+
+const scratchWorkflow = computed(
+  () => activeProject.value?.workflowMode === 'scratch'
+)
+
+const showStoryIdeaGenerator = computed(
+  () => scratchWorkflow.value && Boolean(activeProject.value?.id) && canPersist.value
+)
+
+/** Runtime field in “How long” block when idea generator is hidden (import workflow, etc.). */
+const showStandaloneRuntimeField = computed(
+  () =>
+    !showStoryIdeaGenerator.value &&
+    (lengthModel.value === 'spot' ||
+      activeProject.value?.goal === 'social' ||
+      activeProject.value?.goal === 'commercial')
+)
 
 const canPersist = computed(
   () => isAuthenticated.value && PB_ID.test(activeProject.value?.id || '')
@@ -247,57 +282,46 @@ watch(
   { immediate: true }
 )
 
-function syncDurationSecondsFromProject (forceDefault = false) {
-  const p = activeProject.value
-  if (!p) {
-    durationSecondsModel.value = ''
-    return
-  }
-  if (typeof p.targetDurationSeconds === 'number' && p.targetDurationSeconds > 0) {
-    durationSecondsModel.value = String(p.targetDurationSeconds)
-    return
-  }
-  if (!durationSecondsTouched.value || forceDefault) {
-    const def = defaultDurationSecondsForProject({
-      goal: p.goal,
-      targetLength: p.targetLength
-    })
-    durationSecondsModel.value = def != null ? String(def) : ''
-  }
+async function onDurationSecondsChange () {
+  if (!canPersist.value) return
+  savingLength.value = true
+  const ok = await persistTargetDuration()
+  savingLength.value = false
+  if (ok) toast.showToast('Runtime saved.', 'success')
 }
 
-watch(projectId, () => {
-  durationSecondsTouched.value = false
-  syncDurationSecondsFromProject(true)
-}, { immediate: true })
-
-watch(
-  () => activeProject.value?.targetDurationSeconds,
-  (v) => {
-    if (durationSecondsTouched.value) return
-    if (typeof v === 'number' && v > 0) {
-      durationSecondsModel.value = String(v)
-    }
-  }
-)
-
-async function onDurationSecondsChange () {
+async function onStoryIdeaApply (payload: StoryIdeaApplyPayload) {
   const p = activeProject.value
-  if (!p || !canPersist.value) return
-  const raw = String(durationSecondsModel.value || '').trim()
-  const n = raw ? Math.floor(Number(raw)) : null
-  const valid = n != null && Number.isFinite(n) && n >= 15 && n <= 3600 ? n : null
-  savingLength.value = true
+  if (!p || !canPersist.value) {
+    storyIdeaGeneratorRef.value?.clearApplying()
+    return
+  }
+  const { item } = payload
   try {
-    await updateProject(p.id, {
-      targetDurationSeconds: valid
+    const conceptNotes = formatStoredConceptNotes({
+      title: item.title,
+      logline: item.logline,
+      modelId: item.model,
+      modelLabel: item.model,
+      characters: item.characters
     })
-    durationSecondsTouched.value = true
-    toast.showToast('Runtime saved.', 'success')
+    const synopsis = (item.summary || item.logline || '').trim()
+    await updateProject(p.id, {
+      name: item.title.slice(0, 500),
+      synopsis,
+      genre: item.genre || undefined,
+      tone: item.tone || undefined,
+      conceptNotes,
+      goal: payload.goal,
+      aspectRatio: payload.aspectRatio,
+      ...(item.director ? { director: item.director } : {})
+    })
+    storyIdeaGeneratorRef.value?.clearResults()
+    toast.showToast('Story saved — generate script or treatment below.', 'success')
   } catch {
-    toast.showToast('Could not save runtime.', 'error')
+    toast.showToast('Could not save story.', 'error')
   } finally {
-    savingLength.value = false
+    storyIdeaGeneratorRef.value?.clearApplying()
   }
 }
 

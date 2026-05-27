@@ -50,8 +50,8 @@ function sceneOutlineForPreview (scenes: Array<{ heading: string; body: string }
 }
 
 /**
- * Director pass: synopsis, treatment, three-act notes, director bible — from the saved screenplay asset.
- * Scenes, cast, and storyboard are generated from the Characters / Scenes / Storyboard tabs.
+ * Cold-read analyze pass: synopsis, observations, three-act map, director bible — from the saved screenplay only.
+ * Scenes, cast, and storyboard are generated separately from the Characters / Scenes / Storyboard tabs.
  */
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')

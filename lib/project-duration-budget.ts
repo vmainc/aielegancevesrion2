@@ -112,6 +112,58 @@ export function fitShotsToSceneCap<T extends { duration_seconds: number }> (
   return shots.slice(0, cap).map(s => ({ ...s, duration_seconds: clipSeconds }))
 }
 
+/** Hard constraints for AI concept JSON (overview “Generate concepts”). */
+export function conceptDurationGuidance (
+  budget: ProjectDurationBudget,
+  goal?: ProjectGoal
+): string {
+  const { totalSeconds: secs, maxPanelsTotal: panels, maxScenesForImport: scenes, clipSeconds } = budget
+
+  if (secs <= 25) {
+    return [
+      `RUNTIME LAW (non-negotiable): ${secs} seconds total on screen — a MICRO spot, NOT a short film or series.`,
+      `Storyboard math: at most ${panels} beats × ${clipSeconds}s panels (${secs}s total). Max ${scenes} scene(s).`,
+      'FORBIDDEN: three-act structure, B-plots, “years later”, ensemble casts, episodic hooks, feature-length arcs.',
+      'summary: 2–4 short sentences describing ONLY what we see/hear in order (single moment, gag, or micro-arc).',
+      'logline: one brief sentence for that moment — not a franchise pitch.',
+      'characters: 1–2 ALL CAPS names maximum (0–1 if purely visual).',
+      'hook: what happens in the first second only.',
+      'If the user asks for a long story, compress it to fit this runtime — do not expand.'
+    ].join(' ')
+  }
+
+  if (secs <= 60) {
+    return [
+      `RUNTIME LAW: ${secs} seconds total (~${panels} panels at ${clipSeconds}s). Max ${scenes} scenes.`,
+      'One simple linear chain: setup → turn → payoff. No subplots or montage of unrelated beats.',
+      'summary: 2–4 sentences, only on-screen action. Not a treatment for a half-hour show.',
+      'characters: 2–3 names maximum.',
+      'hook: opening beat that fits a sub-minute spot.'
+    ].join(' ')
+  }
+
+  if (secs <= 120) {
+    return [
+      `RUNTIME LAW: ${secs} seconds (~${panels} panels). Max ${scenes} scenes.`,
+      'One clear problem and resolution; no act breaks beyond a single reversal.',
+      'summary: 3–5 tight sentences. No B-story.',
+      'characters: 2–4 maximum.',
+      goal === 'commercial'
+        ? 'Treat as a single ad spot — product/brand moment must land before time runs out.'
+        : ''
+    ]
+      .filter(Boolean)
+      .join(' ')
+  }
+
+  return [
+    `RUNTIME LAW: finished piece ~${secs}s (~${panels} storyboard panels at ${clipSeconds}s).`,
+    `Use at most ${scenes} scenes when produced.`,
+    screenplayDurationGuidance(budget, goal),
+    'summary: scale scope to the budget — do not outline a feature if runtime is under a few minutes.'
+  ].join(' ')
+}
+
 export function screenplayDurationGuidance (budget: ProjectDurationBudget, goal?: ProjectGoal): string {
   const kind =
     goal === 'social'
@@ -119,9 +171,21 @@ export function screenplayDurationGuidance (budget: ProjectDurationBudget, goal?
       : goal === 'commercial'
         ? 'commercial spot'
         : 'short-form piece'
-  return [
+  const lines = [
     `Write a ${kind} screenplay that cuts to exactly ~${budget.totalSeconds} seconds on screen.`,
     `Plan ~${budget.maxPanelsTotal} storyboard beats at ${budget.clipSeconds}s each.`,
     `Use only ${budget.maxScenesForImport} scenes or fewer; keep action simple and locations minimal.`
-  ].join(' ')
+  ]
+  if (budget.totalSeconds <= 25) {
+    lines.push(
+      'This is a MICRO spot: one scene slug line block, 1–2 characters, minimal dialogue (or none).',
+      'No montage, no “later”, no second location, no act headings — just the single beat.'
+    )
+  } else if (budget.totalSeconds <= 60) {
+    lines.push(
+      'Keep to one or two short scenes; every line must be shootable within the second budget.',
+      'No filler dialogue; cut before you exceed the runtime.'
+    )
+  }
+  return lines.join(' ')
 }

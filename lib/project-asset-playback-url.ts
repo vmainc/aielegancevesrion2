@@ -1,3 +1,5 @@
+import type { ProjectAsset } from '~/types/project-asset'
+
 /**
  * Browser `<video src>` cannot send `Authorization`, so project file playback
  * goes through Nitro with `?access_token=` (see `GET .../assets/:id/media`).
@@ -22,6 +24,20 @@ export function parseProjectAssetMediaIds (
   const m = /^\/api\/projects\/([^/]+)\/assets\/([^/]+)\/media$/.exec(pathOnly)
   if (!m) return null
   return { projectId: decodeURIComponent(m[1]), assetId: decodeURIComponent(m[2]) }
+}
+
+/** Browser-safe URL for a project asset file (PocketBase proxy or media API). */
+export function projectAssetPlaybackSrc (
+  asset: Pick<ProjectAsset, 'id' | 'projectId' | 'fileUrl'>,
+  token?: string | null
+): string {
+  const fileUrl = (asset.fileUrl || '').trim()
+  if (fileUrl.startsWith('/pb/')) return fileUrl
+  const pid = (asset.projectId || '').trim()
+  if (pid && asset.id) {
+    return appendPlaybackAccessToken(projectAssetMediaPath(pid, asset.id), token)
+  }
+  return fileUrl
 }
 
 export function appendPlaybackAccessToken (url: string, token: string | null | undefined): string {

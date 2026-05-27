@@ -1,3 +1,8 @@
+import {
+  castNameAppearsInText,
+  formatCastNameForPrompt,
+  normalizeCharacterNameKey
+} from '~/lib/cast-name-convention'
 import { isMusicVideoTarget } from '~/lib/project-video-audio'
 import {
   buildProjectNegativePrompt,
@@ -6,6 +11,8 @@ import {
   mergeNegativePromptParts,
   trimPromptForImageModel
 } from '~/lib/storyboard-continuity-prompts'
+
+export { normalizeCharacterNameKey } from '~/lib/cast-name-convention'
 import { SINGLE_STORYBOARD_FRAME_DIRECTIVE } from '~/lib/storyboard-frame-image'
 import { resolveFrameGenerationPrompt, resolveVideoGenerationPrompt } from '~/lib/unified-shot-prompt'
 import type { ProjectDirector, ProjectTargetLength } from '~/types/creative-project'
@@ -20,23 +27,10 @@ export interface ProjectCharacterRef {
   portraitUrl: string | null
 }
 
-export function normalizeCharacterNameKey (name: string): string {
-  return name.trim().toLowerCase().replace(/\s+/g, ' ')
-}
-
-function shotHaystack (
+function shotRawText (
   shot: Pick<CreativeShot, 'title' | 'description' | 'imagePrompt' | 'videoPrompt'>
 ): string {
-  return [shot.title, shot.description, shot.imagePrompt, shot.videoPrompt].join(' ').toLowerCase()
-}
-
-function nameAppearsInHaystack (name: string, haystack: string): boolean {
-  const key = normalizeCharacterNameKey(name)
-  if (!key) return false
-  if (haystack.includes(key)) return true
-  const tokens = key.split(' ').filter(t => t.length >= 3)
-  if (tokens.length > 1 && tokens.every(t => haystack.includes(t))) return true
-  return false
+  return [shot.title, shot.description, shot.imagePrompt, shot.videoPrompt].filter(Boolean).join(' ')
 }
 
 function isCharacterFocusedShot (
@@ -52,7 +46,7 @@ export function findCharactersInShot (
   cast: ProjectCharacterRef[],
   sceneSummary?: string
 ): ProjectCharacterRef[] {
-  const haystack = shotHaystack(shot)
+  const raw = shotRawText(shot)
   const sorted = [...cast].sort((a, b) => b.name.length - a.name.length)
   const hits: ProjectCharacterRef[] = []
   const seen = new Set<string>()
@@ -60,37 +54,63 @@ export function findCharactersInShot (
   const tryAdd = (c: ProjectCharacterRef, text: string) => {
     const key = normalizeCharacterNameKey(c.name)
     if (!key || seen.has(key)) return
-    if (nameAppearsInHaystack(c.name, text)) {
+    if (castNameAppearsInText(c.name, text)) {
       seen.add(key)
       hits.push(c)
     }
   }
 
-  if (haystack.trim()) {
-    for (const c of sorted) tryAdd(c, haystack)
+  if (raw.trim()) {
+    for (const c of sorted) tryAdd(c, raw)
   }
 
-  if (!hits.length && sceneSummary?.trim() && isCharacterFocusedShot(shot)) {
-    const sceneText = sceneSummary.toLowerCase()
-    for (const c of sorted) tryAdd(c, sceneText)
+  if (!hits.length && sceneSummary?.trim()) {
+    for (const c of sorted) tryAdd(c, sceneSummary)
+  }
+
+  // Small casts: always treat every character as in-scope (matches server castMembersInShot).
+  if (!hits.length && cast.length > 0 && cast.length <= 6) {
+    return cast
   }
 
   return hits
 }
 
+/** Same cast resolution as frame prompts — use for portrait attachment, not only name grep. */
+export function resolveCharactersForFrameGeneration (
+  shot: Pick<CreativeShot, 'title' | 'description' | 'imagePrompt' | 'videoPrompt' | 'shotType'>,
+  cast: ProjectCharacterRef[],
+  sceneSummary?: string
+): ProjectCharacterRef[] {
+  return findCharactersInShot(shot, cast, sceneSummary)
+}
+
 export function pickPrimaryCharacterPortrait (matches: ProjectCharacterRef[]): string | null {
-  for (const c of matches) {
+  return collectCharacterPortraitUrls(matches, 1)[0] ?? null
+}
+
+/** Portrait URLs for vision models (in-shot cast first, then remaining cast with portraits). */
+export function collectCharacterPortraitUrls (
+  characters: ProjectCharacterRef[],
+  max = 4
+): string[] {
+  const urls: string[] = []
+  const seen = new Set<string>()
+  const add = (c: ProjectCharacterRef) => {
     const u = (c.portraitUrl || '').trim()
-    if (u) return u
+    if (!u || seen.has(u)) return
+    seen.add(u)
+    urls.push(u)
   }
-  return null
+  for (const c of characters) add(c)
+  return urls.slice(0, max)
 }
 
 export function buildContinuityPromptBlock (matches: ProjectCharacterRef[]): string {
   if (!matches.length) return ''
   const lines = matches.map((c) => {
     const desc = (c.roleDescription || '').trim() || 'See established character design.'
-    return `- ${c.name.toUpperCase()}: ${desc}`
+    return `- ${formatCastNameForPrompt(c.name)}: ${desc}`
   })
   return [
     'CHARACTER CONTINUITY (mandatory — match these designs exactly in this frame; same face, body, materials, colors, and style as the cast bible):',
@@ -159,7 +179,7 @@ export function buildCastBibleBlock (cast: ProjectCharacterRef[]): string {
   if (!cast.length) return ''
   const lines = cast.map((c) => {
     const desc = (c.roleDescription || '').trim() || 'Use the established design from earlier panels.'
-    return `- ${c.name.toUpperCase()}: ${desc}`
+    return `- ${formatCastNameForPrompt(c.name)}: ${desc}`
   })
   return [
     'CAST BIBLE (describe every named character exactly as below — same face, body, materials, colors, and proportions in every panel):',

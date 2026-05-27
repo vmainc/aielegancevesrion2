@@ -172,10 +172,10 @@ export async function generateShotsWithAi (ctx: GenerateShotsContext): Promise<G
   const charBlock =
     ctx.characters.length > 0
       ? ctx.characters
-          .map(
-            c =>
-              `- ${c.name}: ${c.traitsRoleVisual || 'role and look to be inferred from script'}`
-          )
+          .map((c) => {
+            const token = c.name.trim().replace(/\s+/g, ' ').toUpperCase()
+            return `- ${token}: ${c.traitsRoleVisual || 'role and look to be inferred from script'}`
+          })
           .join('\n')
       : '(No characters listed — infer from scene.)'
 
@@ -231,10 +231,11 @@ Output ONLY valid JSON (no markdown), exactly this shape:
 {"shots":[{"order":1,"title":"short label","description":"story beat in plain language","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static","duration_seconds":5,"image_prompt":"LONG detailed still-frame prompt (see rules)","video_prompt":"LONG motion prompt (see rules)","negative_prompt":"comma-separated exclusions"}]}
 Rules:
 - Produce between ${shotMin} and ${shotMax} shots for THIS scene only; order 1..N; duration_seconds MUST be exactly 5 or 10 (integer).
-- image_prompt: MINIMUM ~120 words. Production-ready STILL frame. Must include: (1) which cast members appear and their COMPLETE visual design copied from CHARACTERS (materials, colors, proportions, wardrobe, expression) — never shorten to one adjective; (2) locked environment/props/lighting for this scene; (3) lens/framing for shot_type; (4) same art direction as director bible. Repeat identical character wording across shots — consistency beats brevity.
+- image_prompt: MINIMUM ~120 words. Production-ready STILL frame. START with the UNIQUE action, pose, and composition for THIS panel only (order N) — each panel must look like a different moment. Then include: (1) which cast members appear and their COMPLETE visual design copied from CHARACTERS (materials, colors, proportions, wardrobe, expression); (2) locked environment/props/lighting for this scene; (3) lens/framing for shot_type; (4) same art direction as director bible. Repeat the same character DESIGN wording across shots for consistency — never repeat the same pose, blocking, or framing.
 - video_prompt: MINIMUM ~80 words. Motion-only delta on the still: camera_move, subject action, lighting shifts — do NOT introduce new characters or redesign anyone.
 - negative_prompt: comma-separated forbidden elements (watermark, text, blurry, wrong species, extra characters, style drift).${animalRules}
 - Same character = SAME design in every panel; close-ups must match wide shots.
+- CAST NAMES IN ALL CAPS: In every image_prompt and video_prompt, refer to cast members only with their ALL CAPS token from CHARACTERS (e.g. DOG, CAT). These are proper character names — not generic animals. Never write lowercase "dog" or "cat" when you mean the cast character.
 - Vary shot scale on purpose (establish, medium, close-up, insert) but keep location palette and set dressing consistent unless the script changes location.
 - Interpret summary and script; imperfect formatting is OK.`
 

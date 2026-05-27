@@ -64,6 +64,36 @@
       </div>
     </div>
 
+    <div
+      v-if="showTargetRuntime"
+      class="mb-5 rounded-lg border border-gray-200 bg-white px-3 py-3"
+    >
+      <label for="idea-target-runtime" class="block text-sm font-medium text-gray-700 mb-1">
+        Target runtime (seconds)
+      </label>
+      <p class="text-xs text-gray-500 mb-2">
+        AI ideas and script scale to this length (e.g. 20s ≈ 4 panels at 5s each). Leave blank for no hard cap.
+      </p>
+      <ClientOnly>
+        <input
+          id="idea-target-runtime"
+          v-model="targetDurationSeconds"
+          type="number"
+          min="15"
+          max="3600"
+          step="5"
+          class="w-full max-w-[12rem] px-3 py-2 rounded-lg border border-gray-300 text-sm focus:outline-none focus:border-primary"
+          :disabled="generating"
+          placeholder="e.g. 90"
+          @input="onTargetDurationInput"
+          @change="persistTargetDuration"
+        >
+        <template #fallback>
+          <div class="w-full max-w-[12rem] h-10 rounded-lg bg-gray-100 border border-gray-200" aria-hidden="true" />
+        </template>
+      </ClientOnly>
+    </div>
+
     <div class="flex justify-between items-center gap-2 mb-2">
       <label class="text-sm font-medium text-gray-700">Your idea</label>
       <PromptEnhanceButton v-model="conceptPrompt" context="concept" />
@@ -178,6 +208,8 @@ const props = withDefaults(
     applyLabel?: string
     generateButtonLabel?: string
     showCancel?: boolean
+    /** Show target runtime field (synced to project when cloud-backed). */
+    showTargetRuntime?: boolean
   }>(),
   {
     goal: 'film',
@@ -186,7 +218,8 @@ const props = withDefaults(
     subheading: 'Describe your idea, compare AI models, then save the one you want to develop.',
     applyLabel: 'Use this story',
     generateButtonLabel: 'Generate story ideas',
-    showCancel: false
+    showCancel: false,
+    showTargetRuntime: true
   }
 )
 
@@ -202,7 +235,16 @@ const emit = defineEmits<{
 }>()
 
 const { isAuthenticated, getAuthToken } = useAuth()
+const { loadServerProjects, clientReady } = useCreativeProject()
 const toast = useToast()
+
+const projectIdRef = computed(() => props.projectId)
+const {
+  targetDurationSeconds,
+  parsedTargetDurationSeconds,
+  onTargetDurationInput,
+  persistTargetDuration
+} = useProjectTargetDuration(projectIdRef)
 
 const goalModel = ref<ProjectGoal>(props.goal)
 const aspectModel = ref<ProjectAspectRatio>(props.aspectRatio)
@@ -276,6 +318,8 @@ async function generateConcepts () {
   generating.value = true
   conceptResults.value = null
   try {
+    await persistTargetDuration()
+    const runtimeSec = parsedTargetDurationSeconds()
     const res = await $fetch<ConceptGeneratorResultItem[]>('/api/generate-concepts', {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },
@@ -285,6 +329,7 @@ async function generateConcepts () {
         selected_models: [...selectedModelIds.value],
         goal: goalModel.value,
         aspect_ratio: aspectModel.value,
+        ...(runtimeSec != null ? { target_duration_seconds: runtimeSec } : {}),
         ...(conceptReferenceImage.value ? { reference_image: conceptReferenceImage.value } : {})
       }
     })
@@ -334,5 +379,12 @@ defineExpose({ clearApplying, clearResults })
 
 onMounted(() => {
   void loadModelOptions()
+  if (isAuthenticated.value && clientReady.value) {
+    void loadServerProjects()
+  }
+})
+
+watch(isAuthenticated, (v) => {
+  if (v) void loadServerProjects()
 })
 </script>
