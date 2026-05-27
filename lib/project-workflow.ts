@@ -24,10 +24,20 @@ const WORKFLOW_PATHS = [
 
 export type WorkflowPath = (typeof WORKFLOW_PATHS)[number]
 
+export function isScratchWorkflowProject (
+  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
+): boolean {
+  return project?.workflowMode === 'scratch'
+}
+
 export function workflowPathsForProject (
-  project: Pick<CreativeProject, 'treatment'> | null | undefined
+  project: Pick<CreativeProject, 'treatment' | 'workflowMode'> | null | undefined
 ): readonly string[] {
   if (projectStorySatisfiedByScriptImport(project)) {
+    return WORKFLOW_PATHS.filter(p => p !== 'story')
+  }
+  if (isScratchWorkflowProject(project)) {
+    // Idea generation lives on overview (labeled “Story” in the nav).
     return WORKFLOW_PATHS.filter(p => p !== 'story')
   }
   return WORKFLOW_PATHS

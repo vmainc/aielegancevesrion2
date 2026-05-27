@@ -153,7 +153,7 @@
         :to="`/projects/${projectId}/overview`"
         class="text-sm text-gray-600 hover:text-gray-900 font-medium"
       >
-        ← Overview
+        ← Story
       </NuxtLink>
       <NuxtLink
         :to="`/projects/${projectId}/${storySatisfiedByImport ? 'characters' : 'story'}`"

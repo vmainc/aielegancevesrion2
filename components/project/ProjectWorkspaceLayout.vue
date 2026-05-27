@@ -150,9 +150,9 @@ watch(
 )
 
 const sectionLabels: Record<string, string> = {
-  overview: 'Overview',
+  overview: 'Story',
   director: 'Director',
-  story: 'Story',
+  story: 'Script',
   characters: 'Characters',
   scenes: 'Scenes',
   storyboard: 'Storyboard',

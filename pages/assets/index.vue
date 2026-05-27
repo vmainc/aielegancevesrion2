@@ -3,8 +3,7 @@
     <div class="mb-10">
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Assets</h1>
       <p class="text-gray-600 text-sm sm:text-base max-w-2xl">
-        Everything you upload or generate lives here—organized by type. Entries are stored in PocketBase per
-        project (<code class="text-xs bg-gray-100 px-1 py-0.5 rounded">project_assets</code>).
+        Everything you upload or generate lives here—organized by type.
       </p>
     </div>
 
