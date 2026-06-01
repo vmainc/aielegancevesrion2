@@ -2,75 +2,8 @@
   <div class="max-w-6xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Rendering and assembly (structure only for now).
+      · Turn storyboard panels into clips — open Video generation per panel, compare models, then assemble on Timeline.
     </p>
-
-    <div class="rounded-xl border border-gray-200 bg-gray-50 p-6 mb-8">
-      <h2 class="text-lg font-semibold text-gray-900 mb-2">Video pipeline</h2>
-      <p class="text-sm text-gray-600 mb-6">
-        Shot and scene renders will enqueue from storyboard frames. Project:
-        <span class="text-gray-800 font-medium">{{ project?.name }}</span>
-        ({{ project?.aspectRatio }}).
-      </p>
-      <div class="mb-5">
-        <label for="video-model" class="block text-sm font-medium text-gray-700 mb-1.5">
-          OpenRouter video model
-        </label>
-        <select
-          id="video-model"
-          v-model="selectedModelId"
-          class="w-full sm:max-w-xl px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-          :disabled="modelsPending || !videoModels.length"
-        >
-          <option v-if="modelsPending" value="">
-            Loading models…
-          </option>
-          <option v-else-if="!videoModels.length" value="">
-            No models loaded
-          </option>
-          <option
-            v-for="m in videoModelsForPicker"
-            :key="m.id"
-            :value="m.id"
-          >
-            {{ m.name }} ({{ m.id }}){{ videoModelAudioSuffix(m) }}
-          </option>
-        </select>
-        <p class="mt-2 text-xs text-gray-500">
-          <span class="font-medium text-gray-700">Audio:</span>
-          labels come from OpenRouter’s video catalog (<code class="text-[11px]">generate_audio</code>).
-          “No audio” means the provider does not synthesize a soundtrack in this API (video-only).
-        </p>
-        <p
-          v-if="isMusicVideoTarget(project?.targetLength)"
-          class="mt-2 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
-        >
-          Music video project: clips render without AI-generated audio. Prefer models labeled “no audio”; add your track on the Timeline.
-        </p>
-        <p v-if="modelsNotice" class="mt-1 text-xs text-gray-500">
-          {{ modelsNotice }}
-        </p>
-        <p v-else-if="modelsError" class="mt-2 text-xs text-red-600">
-          {{ modelsError }}
-        </p>
-      </div>
-      <div class="grid sm:grid-cols-2 gap-3">
-        <button
-          type="button"
-          class="px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg text-sm font-medium transition-colors text-left"
-          @click="runPlaceholder('Render Shot', selectedModelId)"
-        >
-          Render Shot
-        </button>
-        <button
-          type="button"
-          class="px-4 py-3 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg text-sm font-medium transition-colors text-left"
-          @click="runPlaceholder('Render Scene', selectedModelId)"
-        >
-          Render Scene
-        </button>
-      </div>
-    </div>
 
     <div class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-8">
       <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
@@ -374,7 +307,6 @@ import {
   projectAssetMediaPath,
   projectAssetPlaybackSrc
 } from '~/lib/project-asset-playback-url'
-import { isMusicVideoTarget } from '~/lib/project-video-audio'
 import { navigateToVideoGenerationTool } from '~/lib/video-generation-prefill'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { storyboardFramePreviewClasses } from '~/lib/storyboard-frame-image'
@@ -394,27 +326,8 @@ const toast = useToast()
 
 const PB_ID = /^[a-z0-9]{15}$/
 
-type VideoModel = {
-  id: string
-  name: string
-  description?: string
-  supportedDurations?: number[]
-  /** From OpenRouter video catalog when known. */
-  generateAudio?: boolean
-}
-type VideoModelsPayload = {
-  models?: VideoModel[]
-  notice?: string
-}
-
 const project = activeProject
 const projectId = activeProjectId
-
-const { data: videoModelsData, pending: modelsPending, error: modelsFetchError } = await useFetch<VideoModelsPayload>('/api/openrouter/video-models')
-const videoModels = computed(() => videoModelsData.value?.models || [])
-const selectedModelId = ref('')
-const modelsNotice = computed(() => videoModelsData.value?.notice || '')
-const modelsError = computed(() => (modelsFetchError.value ? 'Could not load OpenRouter models right now.' : ''))
 
 type SceneRow = {
   id: string
@@ -441,30 +354,6 @@ const { refs: characterRefs } = useProjectCharacterRefs(projectId)
 const canLoadBoards = computed(
   () => !!project.value && project.value.source === 'pocketbase' && PB_ID.test(projectId.value) && isAuthenticated.value
 )
-
-const videoModelsForPicker = computed(() => {
-  if (!isMusicVideoTarget(project.value?.targetLength)) return videoModels.value
-  const silent = videoModels.value.filter(m => m.generateAudio === false)
-  return silent.length ? silent : videoModels.value
-})
-
-watch(videoModelsForPicker, (rows) => {
-  if (!rows.length) return
-  if (!selectedModelId.value || !rows.some(r => r.id === selectedModelId.value)) {
-    selectedModelId.value = rows[0].id
-  }
-}, { immediate: true })
-
-function videoModelAudioSuffix (m: VideoModel): string {
-  if (m.generateAudio === true) return ' · audio'
-  if (m.generateAudio === false) return ' · no audio'
-  return ''
-}
-
-function runPlaceholder (label: string, modelId?: string) {
-  const suffix = modelId ? ` (model: ${modelId})` : ''
-  toast.showToast(`${label} is not wired yet — coming soon.${suffix}`, 'info')
-}
 
 function authHeaders () {
   const token = getAuthToken()

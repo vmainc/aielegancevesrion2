@@ -35,13 +35,40 @@ export function saveVideoGenerationPrefill (payload: VideoGenerationPrefill): st
       VIDEO_GEN_PREFILL_STORAGE_PREFIX + id,
       JSON.stringify(payload)
     )
+    try {
+      localStorage.setItem(
+        VIDEO_GEN_PREFILL_STORAGE_PREFIX + id,
+        JSON.stringify({ savedAt: Date.now(), payload })
+      )
+    } catch {
+      /* quota — sessionStorage is enough */
+    }
   }
   return id
 }
 
 export function loadVideoGenerationPrefill (id: string): VideoGenerationPrefill | null {
   if (!import.meta.client || !id.trim()) return null
-  const raw = sessionStorage.getItem(VIDEO_GEN_PREFILL_STORAGE_PREFIX + id.trim())
+  const key = VIDEO_GEN_PREFILL_STORAGE_PREFIX + id.trim()
+  const raw = sessionStorage.getItem(key)
+  const parsed = parseStoredPrefill(raw)
+  if (parsed) return parsed
+  try {
+    const localRaw = localStorage.getItem(key)
+    if (!localRaw) return null
+    const wrapped = JSON.parse(localRaw) as { savedAt?: number; payload?: VideoGenerationPrefill }
+    if (!wrapped?.payload || typeof wrapped.savedAt !== 'number') return null
+    if (Date.now() - wrapped.savedAt > 15 * 60 * 1000) {
+      localStorage.removeItem(key)
+      return null
+    }
+    return parseStoredPrefill(JSON.stringify(wrapped.payload))
+  } catch {
+    return null
+  }
+}
+
+function parseStoredPrefill (raw: string | null): VideoGenerationPrefill | null {
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as VideoGenerationPrefill
@@ -54,23 +81,13 @@ export function loadVideoGenerationPrefill (id: string): VideoGenerationPrefill 
 
 export function clearVideoGenerationPrefill (id: string): void {
   if (!import.meta.client || !id.trim()) return
-  sessionStorage.removeItem(VIDEO_GEN_PREFILL_STORAGE_PREFIX + id.trim())
-}
-
-/** Read prefill from navigation state or sessionStorage (clears both). */
-export function takeVideoGenerationPrefill (prefillId?: string): VideoGenerationPrefill | null {
-  const state = useVideoGenerationPrefillState()
-  if (state.value) {
-    const payload = state.value
-    state.value = null
-    if (prefillId?.trim()) clearVideoGenerationPrefill(prefillId)
-    return payload
+  const key = VIDEO_GEN_PREFILL_STORAGE_PREFIX + id.trim()
+  sessionStorage.removeItem(key)
+  try {
+    localStorage.removeItem(key)
+  } catch {
+    /* ignore */
   }
-  const id = (prefillId || '').trim()
-  if (!id) return null
-  const payload = loadVideoGenerationPrefill(id)
-  clearVideoGenerationPrefill(id)
-  return payload
 }
 
 export async function navigateToVideoGenerationTool (
