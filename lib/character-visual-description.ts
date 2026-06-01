@@ -67,11 +67,58 @@ export function resolveCharacterVisualDescription (input: CharacterVisualPromptI
 const LIKELY_NARRATIVE_BEAT =
   /\b(accidentally\s+falls|with a splash|paddles|underwater|then emerges|remarks about|the mishap|approaches the (water|pond|edge)|explores a tranquil|climbs out|wide-eyed curiosity)\b/i
 
-const CREATOR_FALLBACK_NO_PORTRAIT =
-  'Physical appearance only — species or type, age feel, build, face, hair/fur/skin, colors, markings, and clothing. Skip story beats, scenes, and dialogue.'
+/** Plot pivots — keep the opening phrase before these (often species + vibe, not the beat). */
+const NARRATIVE_PIVOT =
+  /\b(who\s+(explores|approaches|falls|experiences|discovers|watches|accidentally)|,\s*the\s+\w+\s+(approaches|falls|paddles)|accidentally\b|with a splash|paddles\b|then emerges|makes lighthearted|leading to)\b/i
 
-const CREATOR_FALLBACK_WITH_PORTRAIT =
-  'Featured portrait is saved for this character — match that look (species, markings, colors, face, body, wardrobe). Keep this box to physical design only, not plot.'
+/** Legacy meta copy we used to put in the URL — never prefill this again. */
+const CREATOR_META_INSTRUCTION =
+  /physical appearance only|skip story beats|featured portrait is saved for this character/i
+
+/** Short species/type line from the cast name when the role blurb is pure plot. */
+export function nameBasedVisualStub (name: string): string {
+  const n = (name || '').trim()
+  if (!n) return ''
+  const lower = n.toLowerCase()
+  if (/\bkitten|kitty\b/.test(lower)) {
+    return 'Young domestic kitten — fluffy, wide-eyed; add fur color, markings, and outfit.'
+  }
+  if (/\bcat|feline|tabby|calico\b/.test(lower)) {
+    return 'Domestic cat — fur pattern, eye color, build, and outfit.'
+  }
+  if (/\bpuppy|pup\b|dog|hound\b/.test(lower)) {
+    return 'Dog — breed look, coat color, size, and collar or outfit.'
+  }
+  if (/\bbunny|rabbit|hare\b/.test(lower)) {
+    return 'Rabbit — fur color, ear shape, and outfit.'
+  }
+  if (/\bbird|owl|parrot|duck|goose\b/.test(lower)) {
+    return 'Bird — species, plumage colors, and proportions.'
+  }
+  if (/\b(child|boy|girl|kid|teen|woman|man|person|human)\b/.test(lower)) {
+    return `${n} — age, build, skin tone, hair, face, and clothing for a portrait.`
+  }
+  return `${n} — species or type, face, body, colors, markings, and clothing.`
+}
+
+/** Trim a story-heavy role_description to an appearance-oriented opening (before the first plot beat). */
+export function extractVisualBriefFromNarrative (role: string, name: string): string {
+  let t = role.trim()
+  if (!t) return nameBasedVisualStub(name)
+
+  const pivot = t.search(NARRATIVE_PIVOT)
+  if (pivot > 16) {
+    t = t.slice(0, pivot).trim()
+  }
+  t = t.replace(/\s+who\s+(explores|is|was|are|experiences|discovers).+$/i, '').trim()
+  t = t.replace(/[,.\s]+$/, '').trim()
+
+  if (t.length >= 8 && !LIKELY_NARRATIVE_BEAT.test(t)) {
+    return t
+  }
+
+  return nameBasedVisualStub(name)
+}
 
 /**
  * Short text for Character Creator query `description` — look-focused, not screenplay/story summaries.
@@ -84,23 +131,34 @@ export function visualBriefForCharacterCreator (input: CharacterVisualPromptInpu
   const hasPortrait = Boolean((input.portraitUrl || '').trim())
   const max = 1600
 
-  const clip = (s: string) => (s.length <= max ? s : `${s.slice(0, max).trimEnd()}…`)
+  const clip = (s: string) => {
+    const out = s.trim()
+    if (!out || CREATOR_META_INSTRUCTION.test(out)) return ''
+    return out.length <= max ? out : `${out.slice(0, max).trimEnd()}…`
+  }
 
   for (const candidate of [promptUsed, notes]) {
     if (candidate && !isStoryHeavyDescription(candidate) && !LIKELY_NARRATIVE_BEAT.test(candidate)) {
-      return clip(candidate)
+      const c = clip(candidate)
+      if (c) return c
     }
   }
 
   if (role && !isStoryHeavyDescription(role) && !LIKELY_NARRATIVE_BEAT.test(role)) {
-    return clip(role)
+    const c = clip(role)
+    if (c) return c
+  }
+
+  if (role) {
+    const extracted = clip(extractVisualBriefFromNarrative(role, input.name))
+    if (extracted) return extracted
   }
 
   if (hasPortrait) {
-    return CREATOR_FALLBACK_WITH_PORTRAIT
+    return ''
   }
 
-  return CREATOR_FALLBACK_NO_PORTRAIT
+  return clip(nameBasedVisualStub(input.name))
 }
 
 /** One cast-bible / character-lock line with name token. */

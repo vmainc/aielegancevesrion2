@@ -35,7 +35,7 @@
             v-model="description"
             rows="4"
             class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-            placeholder="Describe your character (appearance, personality, clothing, setting)"
+            placeholder="Appearance only: species/type, age, build, face, fur or hair, colors, markings, and clothing — not story beats or scenes"
           />
         </div>
         <div>
@@ -400,7 +400,12 @@ watch(
     const incomingName = firstQueryString(q.name).trim()
     const incomingDescription = firstQueryString(q.description).trim()
     if (incomingName) name.value = incomingName.slice(0, 200)
-    if (incomingDescription) description.value = incomingDescription.slice(0, 4000)
+    if (incomingDescription) {
+      const d = incomingDescription.slice(0, 4000)
+      const meta =
+        /physical appearance only|skip story beats|featured portrait is saved for this character/i.test(d)
+      if (!meta) description.value = d
+    }
     const incomingProjectId = firstQueryString(q.projectId).trim()
     const incomingCharacterId = firstQueryString(q.characterId).trim()
     contextProjectId.value = PB_ID.test(incomingProjectId) ? incomingProjectId : ''

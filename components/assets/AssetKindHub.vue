@@ -1026,16 +1026,15 @@ function characterCreatorTo (a: ProjectAsset) {
   const meta = a.metadata && typeof a.metadata === 'object' ? (a.metadata as Record<string, unknown>) : null
   const promptUsed =
     meta && typeof meta.prompt_used === 'string' ? meta.prompt_used.trim() : ''
-  const q: Record<string, string> = {
+  const description = visualBriefForCharacterCreator({
     name,
-    description: visualBriefForCharacterCreator({
-      name,
-      roleDescription: '',
-      portraitUrl: a.fileUrl,
-      portraitNotes: (a.notes || '').trim(),
-      portraitPromptUsed: promptUsed
-    })
-  }
+    roleDescription: '',
+    portraitUrl: a.fileUrl,
+    portraitNotes: (a.notes || '').trim(),
+    portraitPromptUsed: promptUsed
+  })
+  const q: Record<string, string> = { name }
+  if (description) q.description = description
   if (a.projectId && PB_ID.test(a.projectId)) q.projectId = a.projectId
   if (m.id && PB_ID.test(m.id)) q.characterId = m.id
   return {

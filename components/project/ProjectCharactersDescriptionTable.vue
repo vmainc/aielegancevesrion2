@@ -369,16 +369,17 @@ function swatchColorFor (c: CreativeCharacter): string {
 }
 
 function characterCreatorTo (c: CreativeCharacter) {
+  const description = visualBriefForCharacterCreator({
+    name: c.name,
+    roleDescription: c.roleDescription,
+    portraitUrl: props.portraitUrlByCharacterId?.[c.id],
+    portraitNotes: props.portraitNotesByCharacterId?.[c.id],
+    portraitPromptUsed: props.portraitPromptUsedByCharacterId?.[c.id]
+  })
   const q: Record<string, string> = {
-    name: c.name || '',
-    description: visualBriefForCharacterCreator({
-      name: c.name,
-      roleDescription: c.roleDescription,
-      portraitUrl: props.portraitUrlByCharacterId?.[c.id],
-      portraitNotes: props.portraitNotesByCharacterId?.[c.id],
-      portraitPromptUsed: props.portraitPromptUsedByCharacterId?.[c.id]
-    })
+    name: c.name || ''
   }
+  if (description) q.description = description
   if (props.projectIdForCreatorLink) q.projectId = props.projectIdForCreatorLink
   if (c.id) q.characterId = c.id
   return {
