@@ -3,8 +3,7 @@
     <div class="flex items-start justify-between gap-3 mb-6">
       <p class="text-sm text-gray-500">
         <span class="text-primary font-medium">Storyboard</span>
-      · <span class="text-gray-700">Generate Shots</span>
-      builds the panel list (titles, beats, prompts). Use
+      · Panel lists come from your project build or script import. Use
       <span class="text-gray-700">Generate image</span>
       on each board (or <span class="text-gray-700">Generate all images</span>) to fill the frames — cast portraits are used when available.
       </p>
@@ -136,24 +135,15 @@
                     </option>
                   </select>
                   <p class="mt-2 text-xs text-gray-500">
-                    <strong>Generate Shots</strong> = panel list only (no pictures).
                     <strong>Generate image</strong> fills each board’s frame and saves to Assets → Storyboards.
                     Cast portraits from Assets → Characters are used when available.
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
-                :disabled="generating || !selectedSceneId"
-                @click="generateShots"
-              >
-                {{ generating ? 'Generating cinematic shots…' : 'Generate Shots' }}
-              </button>
             </div>
           </div>
           <div
-            v-if="shots.length && boardsMissingFrames > 0 && !generating && !generatingAllFrames"
+            v-if="shots.length && boardsMissingFrames > 0 && !generatingAllFrames"
             class="mt-4 flex flex-wrap items-center gap-3"
           >
             <button
@@ -169,16 +159,6 @@
             </p>
           </div>
           <p v-if="generateError" class="mt-3 text-sm text-red-600">{{ generateError }}</p>
-          <div
-            v-if="generating"
-            class="mt-4 rounded-xl border border-primary/20 bg-white p-5"
-          >
-            <FilmReelLoader
-              size="sm"
-              label="Generating shots"
-              sub-label="Continuity-aware pass for this scene…"
-            />
-          </div>
         </div>
 
         <div
@@ -192,14 +172,16 @@
           />
         </div>
 
-        <div v-else-if="!shots.length && !generating" class="text-sm text-gray-500">
-          No shots for this scene yet — it may be past the import auto-board limit, or generation failed. Click
-          <span class="text-gray-700">Generate Shots</span>
-          to build a list (replaces any previous shots for this scene).
+        <div v-else-if="!shots.length" class="text-sm text-gray-500">
+          No panels for this scene yet. Build cast and storyboard from the
+          <NuxtLink :to="`/projects/${projectId}/director`" class="text-primary font-medium hover:underline">Director</NuxtLink>
+          step, or add scenes on the
+          <NuxtLink :to="`/projects/${projectId}/scenes`" class="text-primary font-medium hover:underline">Scenes</NuxtLink>
+          tab.
         </div>
 
         <div
-          v-if="!shotsLoading && !generating && persistenceWarning"
+          v-if="!shotsLoading && persistenceWarning"
           class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
         >
           {{ persistenceWarning }}
@@ -592,7 +574,6 @@ import {
 } from '~/lib/unified-shot-prompt'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
-import { pollGenerateShotsJob } from '~/lib/poll-generate-shots-job'
 import {
   normalizeStoryboardFrameImageUrl,
   storyboardFramePreviewClasses
@@ -645,7 +626,6 @@ const shotStoryboardAssetMap = computed(() => {
   return mapStoryboardAssetsToShots(shots.value, storyboardAssets.value, sid)
 })
 const shotsLoading = ref(false)
-const generating = ref(false)
 const generatingAllFrames = ref(false)
 const generateError = ref('')
 const persistenceWarning = ref('')
@@ -731,7 +711,7 @@ const storyboardTimingWarning = computed(() => {
   )
   if (totalPanels <= budget.maxPanelsTotal) return ''
   const estSeconds = totalPanels * budget.clipSeconds
-  return `This project targets ~${budget.totalSeconds}s (${budget.maxPanelsTotal} panels at ${budget.clipSeconds}s each), but you have ${totalPanels} panels (~${estSeconds}s). Regenerate shots per scene with Generate Shots, or trim scenes on the Scenes tab.`
+  return `This project targets ~${budget.totalSeconds}s (${budget.maxPanelsTotal} panels at ${budget.clipSeconds}s each), but you have ${totalPanels} panels (~${estSeconds}s). Rebuild from Director or trim scenes on the Scenes tab.`
 })
 
 function scenePanelLabel (scene: SceneRow): string {
@@ -918,7 +898,7 @@ function unifiedPromptContext () {
 
 async function generateAllFrames () {
   if (!shotsPersisted.value) {
-    toast.showToast('Run Generate Shots again until the list saves (no amber warning).', 'error')
+    toast.showToast('Shot list is not saved yet — rebuild from Director or fix the warning above.', 'error')
     return
   }
   const pending = shots.value.filter(s => !hasDisplayableFrame(s))
@@ -1317,7 +1297,7 @@ async function autoSaveGeneratedFrame (
   const token = getAuthToken()
   if (!token) return 'not authenticated'
   if (!shotsPersisted.value && !shot.id.trim()) {
-    return 'Shot list was not saved to the cloud — run Generate Shots again (fix any warning above), then generate images.'
+    return 'Shot list was not saved to the cloud — rebuild from Director (fix any warning above), then generate images.'
   }
   const src = (imageUrl || '').trim()
   if (!src) return 'no image data to save'
@@ -1490,84 +1470,6 @@ async function loadShots (opts?: { preserveOnError?: boolean }) {
     return false
   } finally {
     shotsLoading.value = false
-  }
-}
-
-async function generateShots () {
-  const id = projectId.value
-  const sid = selectedSceneId.value
-  if (!id || !sid) return
-  const headers = await authHeaders()
-  if (!headers) {
-    generateError.value = 'Log in to generate shots.'
-    return
-  }
-  generating.value = true
-  generateError.value = ''
-  persistenceWarning.value = ''
-  shotsPersisted.value = true
-  try {
-    const started = await $fetch<{ async: boolean; jobId: string }>('/api/generate-shots', {
-      method: 'POST',
-      headers: { ...headers, 'Content-Type': 'application/json' },
-      body: { project_id: id, scene_id: sid },
-      timeout: 60_000
-    })
-    if (!started.jobId) {
-      throw new Error('Server did not start shot generation job')
-    }
-    toast.showToast('Generating shots — this can take a few minutes…', 'info')
-    const res = await pollGenerateShotsJob(started.jobId, headers, {
-      maxMs: 12 * 60 * 1000
-    })
-    const fromApi = applyCastNameConventionToShots(mapShotsFromApi(res.shots))
-    shotsPersisted.value = res.persisted !== false
-    if (!shotsPersisted.value) {
-      persistenceWarning.value = res.warning || 'Shots are preview-only right now and were not saved.'
-      shots.value = fromApi
-    } else {
-      persistenceWarning.value = ''
-      if (fromApi.length) shots.value = fromApi
-      const reloaded = await loadShots({ preserveOnError: true })
-      if (!shots.value.length && fromApi.length) {
-        shots.value = fromApi
-        persistenceWarning.value =
-          'Shots were saved but could not be reloaded from the server — showing the generated list.'
-      } else if (!reloaded && fromApi.length && shots.value.length) {
-        persistenceWarning.value =
-          res.warning ||
-          'Shots generated; reload from the server failed — list may be from the last response.'
-      }
-    }
-    if (!shots.value.length) {
-      generateError.value =
-        res.warning ||
-        'Generation finished but no shots were returned. Check OpenRouter and PocketBase creative_shots.'
-      toast.showToast(generateError.value, 'error')
-      return
-    }
-    await loadServerProjects()
-    await loadScenes()
-    const n = res.continuity?.issueCount ?? 0
-    const frameHint =
-      boardsMissingFrames.value > 0
-        ? ` Use Generate image on each board, or Generate all images (${boardsMissingFrames.value}).`
-        : ''
-    if (persistenceWarning.value) {
-      toast.showToast(persistenceWarning.value, 'warning')
-    } else if (n > 0) {
-      toast.showToast(
-        `Panel list saved — continuity adjusted ${n} issue(s).${frameHint}`,
-        'success'
-      )
-    } else {
-      toast.showToast(`Panel list saved.${frameHint}`, 'success')
-    }
-  } catch (e: unknown) {
-    generateError.value = formatApiFetchError(e, 'Generation failed.')
-    toast.showToast(generateError.value, 'error')
-  } finally {
-    generating.value = false
   }
 }
 

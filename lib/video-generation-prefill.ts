@@ -18,6 +18,13 @@ export interface VideoGenerationPrefill {
 
 export const VIDEO_GEN_PREFILL_STORAGE_PREFIX = 'aie_video_gen_prefill:'
 
+const PB_ID = /^[a-z0-9]{15}$/
+
+/** In-memory handoff for same-tab navigation (more reliable than sessionStorage alone). */
+export function useVideoGenerationPrefillState () {
+  return useState<VideoGenerationPrefill | null>('aie_video_generation_prefill', () => null)
+}
+
 export function saveVideoGenerationPrefill (payload: VideoGenerationPrefill): string {
   const id =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -50,12 +57,33 @@ export function clearVideoGenerationPrefill (id: string): void {
   sessionStorage.removeItem(VIDEO_GEN_PREFILL_STORAGE_PREFIX + id.trim())
 }
 
+/** Read prefill from navigation state or sessionStorage (clears both). */
+export function takeVideoGenerationPrefill (prefillId?: string): VideoGenerationPrefill | null {
+  const state = useVideoGenerationPrefillState()
+  if (state.value) {
+    const payload = state.value
+    state.value = null
+    if (prefillId?.trim()) clearVideoGenerationPrefill(prefillId)
+    return payload
+  }
+  const id = (prefillId || '').trim()
+  if (!id) return null
+  const payload = loadVideoGenerationPrefill(id)
+  clearVideoGenerationPrefill(id)
+  return payload
+}
+
 export async function navigateToVideoGenerationTool (
   payload: VideoGenerationPrefill
 ): Promise<void> {
+  useVideoGenerationPrefillState().value = payload
   const id = saveVideoGenerationPrefill(payload)
+  const query: Record<string, string> = { prefill: id }
+  if (payload.projectId && PB_ID.test(payload.projectId)) {
+    query.projectId = payload.projectId
+  }
   await navigateTo({
     path: '/tools/video-generation',
-    query: { prefill: id }
+    query
   })
 }

@@ -267,8 +267,8 @@
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import {
-  clearVideoGenerationPrefill,
-  loadVideoGenerationPrefill,
+  takeVideoGenerationPrefill,
+  useVideoGenerationPrefillState,
   type VideoGenerationPrefill
 } from '~/lib/video-generation-prefill'
 import {
@@ -329,18 +329,32 @@ const selectedProjectId = ref('')
 const slotByModel = reactive<Record<string, Slot>>({})
 const panelPrefill = ref<VideoGenerationPrefill | null>(null)
 const prefillBanner = ref('')
+/** Project id from project Video step — kept until the project list loads. */
+const pinnedProjectId = ref('')
 
 const pbProjects = computed(() =>
   projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
 )
 
+function syncSelectedProjectFromPin () {
+  const pin = pinnedProjectId.value.trim()
+  if (!pin || !PB_ID.test(pin)) return
+  if (pbProjects.value.some(p => p.id === pin)) {
+    selectedProjectId.value = pin
+  }
+}
+
 watch([pbProjects, clientReady], () => {
+  if (pinnedProjectId.value) {
+    syncSelectedProjectFromPin()
+    return
+  }
   if (!selectedProjectId.value && pbProjects.value.length) {
     selectedProjectId.value = pbProjects.value[0].id
   }
 }, { immediate: true })
 
-function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
+function applyVideoGenerationPrefill (p: VideoGenerationPrefill, queryProjectId?: string) {
   panelPrefill.value = p
   prompt.value = p.prompt.trim()
   if (p.startFrameUrl) startFrameUrl.value = p.startFrameUrl
@@ -350,8 +364,14 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   }
   if (p.saveToProject !== undefined) saveToProject.value = p.saveToProject
   if (p.addToTimeline !== undefined) addToTimeline.value = p.addToTimeline
-  if (p.projectId && PB_ID.test(p.projectId)) {
-    selectedProjectId.value = p.projectId
+  const pid =
+    (p.projectId && PB_ID.test(p.projectId) ? p.projectId : '') ||
+    (queryProjectId && PB_ID.test(queryProjectId) ? queryProjectId : '')
+  if (pid) {
+    pinnedProjectId.value = pid
+    selectedProjectId.value = pid
+    saveToProject.value = true
+    syncSelectedProjectFromPin()
   }
   const label = (p.shotTitle || '').trim()
   prefillBanner.value = label
@@ -362,37 +382,59 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
 function consumePrefillQuery () {
   const raw = route.query.prefill
   const id = typeof raw === 'string' ? raw.trim() : ''
-  if (!id) return
-  const payload = loadVideoGenerationPrefill(id)
-  clearVideoGenerationPrefill(id)
-  if (route.query.prefill) {
+  const queryProjectId =
+    typeof route.query.projectId === 'string' ? route.query.projectId.trim() : ''
+  const pendingState = useVideoGenerationPrefillState().value
+  if (!id && !pendingState && !queryProjectId) return
+
+  const payload = takeVideoGenerationPrefill(id || undefined)
+  if (route.query.prefill || route.query.projectId) {
     const q = { ...route.query }
     delete q.prefill
+    delete q.projectId
     void router.replace({ path: route.path, query: q })
   }
   if (!payload) {
-    toast.showToast('Prefill data expired — open Generate video from the project again.', 'info')
+    if (queryProjectId && PB_ID.test(queryProjectId)) {
+      pinnedProjectId.value = queryProjectId
+      selectedProjectId.value = queryProjectId
+      saveToProject.value = true
+      syncSelectedProjectFromPin()
+    }
+    if (id) {
+      toast.showToast('Prefill data expired — open Generate video from the project again.', 'info')
+    }
     return
   }
-  applyVideoGenerationPrefill(payload)
+  applyVideoGenerationPrefill(payload, queryProjectId)
+}
+
+if (import.meta.client) {
+  consumePrefillQuery()
 }
 
 onMounted(() => {
   consumePrefillQuery()
   if (isAuthenticated.value && clientReady.value) {
-    void loadServerProjects()
+    void loadServerProjects().then(() => {
+      syncSelectedProjectFromPin()
+    })
   }
 })
 
 watch(
-  () => route.query.prefill,
+  () => [route.query.prefill, route.query.projectId] as const,
   () => {
     consumePrefillQuery()
   }
 )
 
 watch(isAuthenticated, (v) => {
-  if (v) void loadServerProjects()
+  if (v) {
+    void loadServerProjects().then(() => {
+      syncSelectedProjectFromPin()
+    })
+  }
 })
 
 watch(saveToProject, (v) => {
