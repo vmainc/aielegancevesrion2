@@ -2,7 +2,10 @@ import {
   openRouterImageAspectRatio,
   SINGLE_STORYBOARD_FRAME_DIRECTIVE
 } from '~/lib/storyboard-frame-image'
-import { resolveOpenRouterImageSlug } from '~/server/utils/openrouter-image-models'
+import {
+  openRouterImageModalities,
+  resolveOpenRouterImageSlug
+} from '~/server/utils/openrouter-image-models'
 import { fetchReferenceImageAsDataUrl } from '~/server/utils/reference-image-data-url'
 
 export interface OpenRouterGenerateImageResult {
@@ -43,6 +46,7 @@ export async function openRouterGenerateImage (options: {
   }
 
   const openRouterModel = resolveOpenRouterImageSlug(options.modelId)
+  const modalities = openRouterImageModalities(openRouterModel)
   const apiKey = options.apiKey.trim()
 
   let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }> = prompt
@@ -91,7 +95,7 @@ export async function openRouterGenerateImage (options: {
     body: {
       model: openRouterModel,
       messages: [{ role: 'user', content: userContent }],
-      modalities: ['image'],
+      modalities,
       image_config: {
         aspect_ratio: aspect
       }

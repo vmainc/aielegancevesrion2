@@ -87,7 +87,10 @@
 </template>
 
 <script setup lang="ts">
-import { CHARACTER_CREATOR_IMAGE_MODELS } from '~/lib/character-creator-models'
+import {
+  CHARACTER_CREATOR_IMAGE_MODELS,
+  DEFAULT_IMAGE_MODEL_ID
+} from '~/lib/character-creator-models'
 import {
   blobToDataUrl,
   firstImageUrlFromGenerateResponse,
@@ -111,7 +114,7 @@ const emit = defineEmits<{
 
 const toast = useToast()
 const imageModels = CHARACTER_CREATOR_IMAGE_MODELS
-const imageModelId = ref('flux-klein')
+const imageModelId = ref(DEFAULT_IMAGE_MODEL_ID)
 const generatingFrame = ref(false)
 const frameLabel = ref('')
 const fileInputEl = ref<HTMLInputElement | null>(null)

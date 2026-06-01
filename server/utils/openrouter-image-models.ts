@@ -1,3 +1,5 @@
+import { DEFAULT_IMAGE_MODEL_ID } from '~/lib/character-creator-models'
+
 /**
  * Internal image route keys → OpenRouter model IDs (chat/completions + modalities: image).
  * @see https://openrouter.ai/collections/image-models
@@ -8,6 +10,10 @@ export const OPENROUTER_IMAGE_MODEL_SLUGS: Record<string, string> = {
   'flux-max': 'black-forest-labs/flux.2-max',
   'flux-flex': 'black-forest-labs/flux.2-flex',
   'gemini-flash': 'google/gemini-2.5-flash-image',
+  /** Google image models branded “Nano Banana” on OpenRouter. */
+  'nano-banana': 'google/gemini-2.5-flash-image',
+  'nano-banana-2': 'google/gemini-3.1-flash-image-preview',
+  'nano-banana-pro': 'google/gemini-3-pro-image-preview',
   'gemini-pro-image': 'google/gemini-3-pro-image-preview',
   'gpt-5-image': 'openai/gpt-5-image',
   'gpt-5-image-mini': 'openai/gpt-5-image-mini',
@@ -23,5 +29,13 @@ export const OPENROUTER_IMAGE_MODEL_SLUGS: Record<string, string> = {
 }
 
 export function resolveOpenRouterImageSlug (modelId: string): string {
-  return OPENROUTER_IMAGE_MODEL_SLUGS[modelId] ?? OPENROUTER_IMAGE_MODEL_SLUGS['flux-klein']
+  return OPENROUTER_IMAGE_MODEL_SLUGS[modelId] ?? OPENROUTER_IMAGE_MODEL_SLUGS[DEFAULT_IMAGE_MODEL_ID]
+}
+
+/** Gemini image models on OpenRouter require text + image output modalities. */
+export function openRouterImageModalities (openRouterSlug: string): Array<'image' | 'text'> {
+  if (openRouterSlug.startsWith('google/gemini')) {
+    return ['image', 'text']
+  }
+  return ['image']
 }

@@ -1,3 +1,4 @@
+import { DEFAULT_IMAGE_MODEL_ID, IMAGE_MODEL_FALLBACK_IDS } from '~/lib/character-creator-models'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { openRouterGenerateImage } from '~/server/utils/openrouter-generate-image'
 import { resolveReferenceImageUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
@@ -70,8 +71,9 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const requestedModel = typeof modelId === 'string' && modelId.trim() ? modelId : 'flux-klein'
-    const candidates = [requestedModel, 'flux-klein', 'flux-pro', 'gemini-flash']
+    const requestedModel =
+      typeof modelId === 'string' && modelId.trim() ? modelId.trim() : DEFAULT_IMAGE_MODEL_ID
+    const candidates = [requestedModel, ...IMAGE_MODEL_FALLBACK_IDS]
       .map(m => m.trim())
       .filter(Boolean)
       .filter((m, idx, arr) => arr.indexOf(m) === idx)

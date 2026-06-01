@@ -570,7 +570,10 @@
 <script setup lang="ts">
 import type { CreativeShot } from '~/types/creative-shot'
 import type { ProjectAsset } from '~/types/project-asset'
-import { CHARACTER_CREATOR_IMAGE_MODELS } from '~/lib/character-creator-models'
+import {
+  CHARACTER_CREATOR_IMAGE_MODELS,
+  DEFAULT_IMAGE_MODEL_ID
+} from '~/lib/character-creator-models'
 import {
   perSceneShotCap,
   resolveProjectDurationBudget
@@ -663,7 +666,7 @@ const uploadTargetShot = ref<CreativeShot | null>(null)
 const isFullscreen = ref(false)
 const showImageSettings = ref(false)
 const imageModelOptions = CHARACTER_CREATOR_IMAGE_MODELS
-const selectedImageModelId = ref<string>(imageModelOptions[0]?.id || 'dalle-3')
+const selectedImageModelId = ref<string>(DEFAULT_IMAGE_MODEL_ID)
 const activeImageModelLabel = computed(
   () => imageModelOptions.find(m => m.id === selectedImageModelId.value)?.label || selectedImageModelId.value
 )

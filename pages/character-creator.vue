@@ -323,7 +323,8 @@
 
 <script setup lang="ts">
 import {
-  CHARACTER_CREATOR_IMAGE_MODELS
+  CHARACTER_CREATOR_IMAGE_MODELS,
+  DEFAULT_IMAGE_MODEL_ID
 } from '~/lib/character-creator-models'
 import { buildCharacterImagePrompt, CHARACTER_STYLE_PRESETS } from '~/lib/character-image-prompt'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
@@ -347,7 +348,7 @@ const { projects, loadServerProjects, clientReady } = useCreativeProject()
 const name = ref('')
 const description = ref('')
 const stylePreset = ref<string>(CHARACTER_STYLE_PRESETS[0]!.value)
-const selectedModelIds = ref<string[]>([])
+const selectedModelIds = ref<string[]>([DEFAULT_IMAGE_MODEL_ID])
 const loading = ref(false)
 const formError = ref('')
 const lastPromptUsed = ref('')
