@@ -160,7 +160,6 @@ const {
   trimRight,
   addAudioClip,
   blendWithNextClip,
-  syncFromLegacy,
   reloadFromStorage,
   undo,
   redo,
@@ -273,7 +272,6 @@ function onEditorKeydown (e: KeyboardEvent) {
 }
 
 onMounted(() => {
-  syncFromLegacy()
   nextTick(bindPreviewVideo)
   if (import.meta.client) {
     window.addEventListener('keydown', onEditorKeydown)
@@ -523,7 +521,6 @@ onUnmounted(() => {
   playback.stop()
 })
 
-defineExpose({ syncFromLegacy })
 </script>
 
 <style scoped>

@@ -754,6 +754,7 @@
 </template>
 
 <script setup lang="ts">
+import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { visualBriefForCharacterCreator } from '~/lib/character-visual-description'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
@@ -1163,8 +1164,7 @@ function addVideoAssetToTimeline (a: ProjectAsset) {
   const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
   const sceneId = typeof meta.scene_id === 'string' ? meta.scene_id : undefined
   const shotId = typeof meta.shot_id === 'string' ? meta.shot_id : undefined
-  const { addVideoClip } = useProjectTimeline(computed(() => a.projectId))
-  addVideoClip({
+  appendVideoToProjectTimeline(a.projectId, {
     url: src,
     label: (a.title || 'Video clip').slice(0, 500),
     sceneId,

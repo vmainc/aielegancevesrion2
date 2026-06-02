@@ -15,7 +15,10 @@ import {
 import { applyCrossfadeWithNext } from '~/lib/timeline-editor/blend'
 import { totalTimelineDuration } from '~/lib/timeline-editor/geometry'
 import { applyProbedDurations, probeVideoDuration } from '~/lib/timeline-editor/media-probe'
-import { exportLegacyFromEditor, migrateLegacyTimeline, parseEditorDocument } from '~/lib/timeline-editor/migrate'
+import {
+  loadTimelineFromStorage,
+  saveTimelineToStorage
+} from '~/lib/timeline-editor/storage'
 import { useTimelineEditorHistory } from '~/composables/useTimelineEditorHistory'
 import type { TimelineHistorySnapshot } from '~/lib/timeline-editor/history'
 import {
@@ -25,14 +28,6 @@ import {
   type TimelineTransitionType
 } from '~/types/timeline-editor'
 
-interface LegacyTimelinePayload {
-  video?: Array<{ id: string; label: string; url: string; scene_id?: string; shot_id?: string; sceneId?: string; shotId?: string }>
-  audio?: Array<{ id: string; label: string; url: string }>
-}
-
-const EDITOR_KEY = 'aie_timeline_editor_v2_'
-const LEGACY_KEY = 'aie_timeline_v1_'
-
 export function useTimelineEditorState (
   projectId: Ref<string> | ComputedRef<string>,
   resolvePlaybackSrc: (raw: string) => string
@@ -41,9 +36,6 @@ export function useTimelineEditorState (
     const v = unref(projectId)
     return typeof v === 'string' ? v : ''
   })
-
-  const storageKey = computed(() => (pid.value ? `${EDITOR_KEY}${pid.value}` : ''))
-  const legacyKey = computed(() => (pid.value ? `${LEGACY_KEY}${pid.value}` : ''))
 
   const clips = ref<TimelineEditorClip[]>([])
   const zoom = ref(DEFAULT_ZOOM_PX_PER_SEC)
@@ -77,84 +69,41 @@ export function useTimelineEditorState (
   const history = useTimelineEditorHistory(getSnapshot, applySnapshot)
 
   function persist () {
-    if (!import.meta.client || !storageKey.value) return
-    const payload = {
-      version: 2 as const,
-      clips: clips.value,
-      zoom: zoom.value
-    }
-    localStorage.setItem(storageKey.value, JSON.stringify(payload))
-    const legacy = exportLegacyFromEditor(clips.value)
-    if (legacyKey.value) {
-      localStorage.setItem(
-        legacyKey.value,
-        JSON.stringify({
-          video: legacy.video.map(c => ({
-            id: c.id,
-            label: c.label,
-            url: c.url,
-            scene_id: c.sceneId,
-            shot_id: c.shotId
-          })),
-          audio: legacy.audio.map(c => ({ id: c.id, label: c.label, url: c.url }))
-        })
-      )
-    }
+    if (!pid.value) return
+    saveTimelineToStorage(pid.value, clips.value, zoom.value)
   }
 
-  function applyParsedDocument (parsed: ReturnType<typeof parseEditorDocument>) {
-    if (!parsed?.clips.length) return false
-    clips.value = parsed.clips
-    zoom.value = parsed.zoom
-    const max = totalTimelineDuration(clips.value)
-    if (playhead.value > max) playhead.value = max
-    void refreshDurations(false)
-    return true
+  function applyLoadedDocument () {
+    const doc = loadTimelineFromStorage(pid.value)
+    if (doc?.clips.length) {
+      clips.value = doc.clips
+      zoom.value = doc.zoom
+      void refreshDurations(false)
+      return
+    }
+    clips.value = []
+    zoom.value = DEFAULT_ZOOM_PX_PER_SEC
   }
 
   /** Re-read v2 document from localStorage (keeps undo stack). */
   function reloadFromStorage () {
-    if (!import.meta.client || !storageKey.value) return
-    const parsed = parseEditorDocument(localStorage.getItem(storageKey.value))
-    if (applyParsedDocument(parsed)) return
-    syncFromLegacy()
+    if (!import.meta.client || !pid.value) return
+    const doc = loadTimelineFromStorage(pid.value)
+    if (!doc?.clips.length) return
+    clips.value = doc.clips
+    zoom.value = doc.zoom
+    const max = totalTimelineDuration(clips.value)
+    if (playhead.value > max) playhead.value = max
+    void refreshDurations(false)
   }
 
   function load () {
     history.clearHistory()
-    if (!import.meta.client || !storageKey.value) {
+    if (!import.meta.client || !pid.value) {
       clips.value = []
       return
     }
-    const parsed = parseEditorDocument(localStorage.getItem(storageKey.value))
-    if (parsed?.clips.length) {
-      clips.value = parsed.clips
-      zoom.value = parsed.zoom
-      void refreshDurations(false)
-      return
-    }
-    const legacyRaw = legacyKey.value ? localStorage.getItem(legacyKey.value) : null
-    if (legacyRaw) {
-      try {
-        const j = JSON.parse(legacyRaw) as LegacyTimelinePayload
-        clips.value = migrateLegacyTimeline({
-          video: (Array.isArray(j.video) ? j.video : []).map(v => ({
-            id: v.id,
-            label: v.label,
-            url: v.url,
-            sceneId: v.sceneId ?? v.scene_id,
-            shotId: v.shotId ?? v.shot_id
-          })),
-          audio: Array.isArray(j.audio) ? j.audio : []
-        })
-        void refreshDurations(false)
-        persist()
-      } catch {
-        clips.value = []
-      }
-    } else {
-      clips.value = []
-    }
+    applyLoadedDocument()
   }
 
   async function refreshDurations (recordHistory = false) {
@@ -270,7 +219,6 @@ export function useTimelineEditorState (
     persist()
   }
 
-  /** Drag/trim: call beginGesture before pointer move, commitGesture on pointer up. */
   function dragClipTo (clipId: string, timelineStart: number) {
     clips.value = moveClipOnTrack(clips.value, clipId, timelineStart)
     persist()
@@ -295,27 +243,6 @@ export function useTimelineEditorState (
     clips.value = next
     persist()
     return true
-  }
-
-  function syncFromLegacy () {
-    if (!import.meta.client || !legacyKey.value) return
-    try {
-      const raw = localStorage.getItem(legacyKey.value)
-      if (!raw) return
-      const j = JSON.parse(raw) as LegacyTimelinePayload
-      const existingIds = new Set(clips.value.map(c => c.id))
-      const migrated = migrateLegacyTimeline({
-        video: (j.video || []).filter(v => !existingIds.has(v.id)),
-        audio: (j.audio || []).filter(a => !existingIds.has(a.id))
-      })
-      if (!migrated.length) return
-      history.recordHistory()
-      clips.value = [...clips.value, ...migrated]
-      clips.value = normalizeTrackLayout(normalizeTrackLayout(clips.value, 'video'), 'audio')
-      void refreshDurations(false)
-    } catch {
-      /* ignore */
-    }
   }
 
   return {
@@ -348,7 +275,6 @@ export function useTimelineEditorState (
     trimLeft,
     trimRight,
     blendWithNextClip,
-    syncFromLegacy,
     reloadFromStorage,
     refreshDurations,
     undo: history.undo,

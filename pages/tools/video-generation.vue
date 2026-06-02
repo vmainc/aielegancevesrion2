@@ -271,18 +271,17 @@
 
 <script setup lang="ts">
 definePageMeta({
-  /** Panel prefill uses useState + API — client-only avoids SSR clearing handoff. */
+  /** Panel prefill uses useState + API — client-only avoids SSR clearing query. */
   ssr: false,
-  key: route => `video-generation:${route.query.projectId || ''}:${route.query.sceneId || ''}:${route.query.shotId || ''}:${route.query.prefill || ''}`
+  key: route =>
+    `video-generation:${route.query.projectId || ''}:${route.query.sceneId || ''}:${route.query.shotId || ''}`
 })
 
 import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import {
-  clearVideoGenerationHandoff,
-  resolveVideoGenerationPrefill,
-  useVideoGenerationDraft,
+  clearVideoGenerationPanelPrefill,
   useVideoGenerationPrefillState,
   type VideoGenerationPrefill
 } from '~/lib/video-generation-prefill'
@@ -322,13 +321,10 @@ const authTokenState = useState<string | null>('auth_token')
 const { projects, loadServerProjects, clientReady } = useCreativeProject()
 
 const prefillState = useVideoGenerationPrefillState()
-const prefillDraft = useVideoGenerationDraft()
 
 function stashedPanelPrefill (): VideoGenerationPrefill | null {
   const fromState = prefillState.value
   if (fromState?.prompt?.trim()) return fromState
-  const fromDraft = prefillDraft.value
-  if (fromDraft?.prompt?.trim()) return fromDraft
   return null
 }
 
@@ -446,7 +442,7 @@ function stripPanelQueryFromRoute () {
   if (!import.meta.client) return
   const q = { ...route.query }
   let changed = false
-  for (const key of ['projectId', 'sceneId', 'shotId', 'addToTimeline', 'prefill'] as const) {
+  for (const key of ['projectId', 'sceneId', 'shotId', 'addToTimeline'] as const) {
     if (key in q) {
       delete q[key]
       changed = true
@@ -480,8 +476,7 @@ async function fetchPanelPrefillFromApi (): Promise<boolean> {
       addToTimeline: addFromQuery || res.addToTimeline
     })
     prefillApplied.value = true
-    prefillState.value = null
-    prefillDraft.value = null
+    clearVideoGenerationPanelPrefill()
     stripPanelQueryFromRoute()
     return true
   } catch (e: unknown) {
@@ -503,32 +498,9 @@ function tryApplyStashedPrefill (): boolean {
   if (!payload?.prompt?.trim()) return false
   applyVideoGenerationPrefill(payload)
   prefillApplied.value = true
-  prefillState.value = null
-  prefillDraft.value = null
+  clearVideoGenerationPanelPrefill()
   stripPanelQueryFromRoute()
   return true
-}
-
-function tryApplyPrefillFromHandoff (): boolean {
-  if (prefillApplied.value || !import.meta.client || hasPanelDeepLink.value) return false
-
-  const id = typeof route.query.prefill === 'string' ? route.query.prefill.trim() : ''
-  const payload = resolveVideoGenerationPrefill(id || undefined)
-  if (!payload?.prompt?.trim()) return false
-
-  applyVideoGenerationPrefill(payload)
-  prefillApplied.value = true
-  clearVideoGenerationHandoff(id)
-  stripPanelQueryFromRoute()
-  return true
-}
-
-function reportPrefillExpiredIfNeeded () {
-  if (prefillApplied.value || !import.meta.client || hasPanelDeepLink.value) return
-  const id = typeof route.query.prefill === 'string' ? route.query.prefill.trim() : ''
-  if (!id) return
-  toast.showToast('Prefill data expired — open Generate video from the project again.', 'info')
-  stripPanelQueryFromRoute()
 }
 
 onMounted(async () => {
@@ -539,12 +511,8 @@ onMounted(async () => {
       getAuthToken()
     )
   }
-  if (!tryApplyStashedPrefill()) {
-    if (hasPanelDeepLink.value) {
-      await fetchPanelPrefillFromApi()
-    } else if (!tryApplyPrefillFromHandoff()) {
-      reportPrefillExpiredIfNeeded()
-    }
+  if (!tryApplyStashedPrefill() && hasPanelDeepLink.value) {
+    await fetchPanelPrefillFromApi()
   }
   if (isAuthenticated.value && clientReady.value) {
     void loadServerProjects().then(() => {
@@ -574,20 +542,6 @@ watch(isAuthenticated, (v) => {
     })
   }
 })
-
-watch(
-  () => prefillState.value,
-  () => {
-    tryApplyPrefillFromHandoff()
-  }
-)
-
-watch(
-  () => route.query.prefill,
-  () => {
-    tryApplyPrefillFromHandoff()
-  }
-)
 
 watch(saveToProject, (v) => {
   if (!v) addToTimeline.value = false

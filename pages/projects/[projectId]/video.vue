@@ -5,6 +5,11 @@
       · Turn storyboard panels into clips — open Video generation per panel, compare models, then assemble on Timeline.
     </p>
 
+    <CloudProjectRequired
+      feature-label="Storyboard → video"
+      loading-label="Loading video workspace"
+      loading-sub-label="Preparing storyboard previews…"
+    >
     <div class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-8">
       <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
         <div>
@@ -41,26 +46,7 @@
       </div>
 
       <div
-        v-if="!clientReady"
-        class="rounded-xl border border-primary/20 bg-primary/5 px-6 py-10"
-      >
-        <FilmReelLoader
-          size="md"
-          label="Loading video workspace"
-          sub-label="Preparing storyboard previews…"
-        />
-      </div>
-
-      <div
-        v-else-if="project?.source !== 'pocketbase'"
-        class="rounded-xl border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900"
-      >
-        Storyboard previews are available for cloud projects. Open a PocketBase-backed project from
-        <NuxtLink to="/projects" class="underline font-medium text-primary">Projects</NuxtLink>.
-      </div>
-
-      <div
-        v-else-if="!isAuthenticated"
+        v-if="!isAuthenticated"
         class="rounded-xl border border-gray-200 bg-gray-50 p-5 text-sm text-gray-700"
       >
         <NuxtLink to="/login" class="text-primary font-medium underline">Log in</NuxtLink>
@@ -229,6 +215,7 @@
         </section>
       </div>
     </div>
+    </CloudProjectRequired>
 
     <div class="rounded-xl border border-gray-200 bg-white p-6 mb-8">
       <h2 class="text-lg font-semibold text-gray-900 mb-2">Timeline editor</h2>
@@ -312,6 +299,7 @@ import {
   projectAssetMediaPath,
   projectAssetPlaybackSrc
 } from '~/lib/project-asset-playback-url'
+import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
 import {
   navigateToVideoGenerationFromPanel,
   type VideoGenerationPrefill
@@ -358,7 +346,6 @@ const videoPreviewByKey = reactive<Record<string, string>>({})
 const expandedMedia = ref<{ kind: 'video' | 'image'; url: string; title: string } | null>(null)
 const openingVideoPanelKey = ref('')
 
-const { addVideoClip } = useProjectTimeline(projectId)
 const { refs: characterRefs } = useProjectCharacterRefs(projectId)
 
 const canLoadBoards = computed(
@@ -541,9 +528,10 @@ function openExpandedFrame (shot: CreativeShot, url: string) {
 
 function addClipToTimeline (scene: SceneRow, shot: CreativeShot, url: string) {
   const u = url.trim()
-  if (!u) return
-  addVideoClip({
-    url: u,
+  const pid = projectId.value
+  if (!u || !PB_ID.test(pid)) return
+  appendVideoToProjectTimeline(pid, {
+    url: playbackVideoSrc(u),
     label: `${shot.title || 'Clip'} — ${scene.heading || 'Scene'}`.slice(0, 500),
     sceneId: scene.id,
     shotId: shot.id

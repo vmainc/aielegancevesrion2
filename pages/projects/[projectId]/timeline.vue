@@ -24,27 +24,26 @@
       </NuxtLink>
     </div>
 
-    <div
-      class="rounded-2xl border border-gray-800 bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 p-4 sm:p-6 shadow-xl"
+    <CloudProjectRequired
+      feature-label="The timeline editor"
+      loading-label="Loading timeline"
+      loading-sub-label="Preparing project workspace…"
     >
-      <EditorTimelineEditor
-        v-if="projectId"
-        ref="editorRef"
-        :project-id="projectId"
-      />
-    </div>
+      <div
+        class="rounded-2xl border border-gray-800 bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 p-4 sm:p-6 shadow-xl"
+      >
+        <EditorTimelineEditor
+          v-if="projectId"
+          :project-id="projectId"
+        />
+      </div>
+    </CloudProjectRequired>
   </div>
 </template>
 
 <script setup lang="ts">
-const { activeProject, activeProjectId } = useCreativeProject()
+const { activeProjectId } = useCreativeProject()
 const { stepBadge } = useProjectWorkflowStep()
 
 const projectId = activeProjectId
-const project = activeProject
-const editorRef = ref<{ syncFromLegacy?: () => void } | null>(null)
-
-onActivated(() => {
-  editorRef.value?.syncFromLegacy?.()
-})
 </script>
