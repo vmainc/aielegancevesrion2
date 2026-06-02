@@ -25,6 +25,11 @@ export function useVideoGenerationPrefillState () {
   return useState<VideoGenerationPrefill | null>('aie_video_generation_prefill', () => null)
 }
 
+/** Duplicate handoff — survives if prefill state is cleared before the page setup runs. */
+export function useVideoGenerationDraft () {
+  return useState<VideoGenerationPrefill | null>('aie_video_generation_draft', () => null)
+}
+
 export function saveVideoGenerationPrefill (payload: VideoGenerationPrefill): string {
   const id =
     typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
@@ -90,10 +95,33 @@ export function clearVideoGenerationPrefill (id: string): void {
   }
 }
 
+/** Resolve prefill: Nuxt state → draft → browser storage (client only). */
+export function resolveVideoGenerationPrefill (prefillId?: string): VideoGenerationPrefill | null {
+  const fromState = useVideoGenerationPrefillState().value
+  if (fromState?.prompt) return fromState
+
+  const fromDraft = useVideoGenerationDraft().value
+  if (fromDraft?.prompt) return fromDraft
+
+  const id = (prefillId || '').trim()
+  if (id && import.meta.client) {
+    return loadVideoGenerationPrefill(id)
+  }
+  return null
+}
+
+export function clearVideoGenerationHandoff (prefillId?: string): void {
+  useVideoGenerationPrefillState().value = null
+  useVideoGenerationDraft().value = null
+  const id = (prefillId || '').trim()
+  if (id) clearVideoGenerationPrefill(id)
+}
+
 export async function navigateToVideoGenerationTool (
   payload: VideoGenerationPrefill
 ): Promise<void> {
   useVideoGenerationPrefillState().value = payload
+  useVideoGenerationDraft().value = payload
   const id = saveVideoGenerationPrefill(payload)
   const query: Record<string, string> = { prefill: id }
   if (payload.projectId && PB_ID.test(payload.projectId)) {

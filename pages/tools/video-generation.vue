@@ -264,11 +264,16 @@
 </template>
 
 <script setup lang="ts">
+definePageMeta({
+  /** Prefill uses sessionStorage + useState — client-only avoids SSR/hydration clearing the query. */
+  ssr: false
+})
+
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import {
-  clearVideoGenerationPrefill,
-  loadVideoGenerationPrefill,
+  clearVideoGenerationHandoff,
+  resolveVideoGenerationPrefill,
   useVideoGenerationPrefillState,
   type VideoGenerationPrefill
 } from '~/lib/video-generation-prefill'
@@ -307,6 +312,18 @@ const { isAuthenticated, getAuthToken, initAuth } = useAuth()
 const authTokenState = useState<string | null>('auth_token')
 const { projects, loadServerProjects, clientReady } = useCreativeProject()
 
+const prefillState = useVideoGenerationPrefillState()
+
+function prefillIdFromRoute (): string {
+  return typeof route.query.prefill === 'string' ? route.query.prefill.trim() : ''
+}
+
+function bootstrapPrefill (): VideoGenerationPrefill | null {
+  return resolveVideoGenerationPrefill(prefillIdFromRoute() || undefined)
+}
+
+const boot = bootstrapPrefill()
+
 const { data, pending, error: fetchError } = await useFetch<ApiPayload>('/api/openrouter/video-models')
 
 const error = computed(() => {
@@ -316,23 +333,38 @@ const error = computed(() => {
 
 const models = computed(() => data.value?.models ?? [])
 
-const prompt = ref('')
-const startFrameUrl = ref<string | null>(null)
-const aspectRatio = ref<'16:9' | '9:16' | '1:1'>('16:9')
-const durationSeconds = ref(5)
+const prompt = ref(boot?.prompt?.trim() ?? '')
+const startFrameUrl = ref<string | null>(boot?.startFrameUrl ?? null)
+const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(boot?.aspectRatio ?? '16:9')
+const durationSeconds = ref(
+  typeof boot?.durationSeconds === 'number' &&
+    (boot.durationSeconds === 5 || boot.durationSeconds === 10)
+    ? boot.durationSeconds
+    : 5
+)
 const selectedModelIds = ref<string[]>([])
 const formError = ref('')
 const generating = ref(false)
 const doneCount = ref(0)
-const saveToProject = ref(true)
-const addToTimeline = ref(false)
-const selectedProjectId = ref('')
+const saveToProject = ref(boot?.saveToProject ?? true)
+const addToTimeline = ref(boot?.addToTimeline ?? false)
+const selectedProjectId = ref(
+  boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : ''
+)
 const slotByModel = reactive<Record<string, Slot>>({})
-const panelPrefill = ref<VideoGenerationPrefill | null>(null)
-const prefillBanner = ref('')
+const panelPrefill = ref<VideoGenerationPrefill | null>(boot)
+const prefillBanner = ref(
+  boot?.shotTitle?.trim()
+    ? `Opened from project storyboard — “${boot.shotTitle.trim()}”. Prompt and seed frame are prefilled; pick one or more models below.`
+    : boot?.prompt?.trim()
+      ? 'Opened from a project panel — prompt and seed frame are prefilled; pick one or more models below.'
+      : ''
+)
 /** Project id from project Video step — kept until the project list loads. */
-const pinnedProjectId = ref('')
-const prefillApplied = ref(false)
+const pinnedProjectId = ref(
+  boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : ''
+)
+const prefillApplied = ref(Boolean(boot?.prompt?.trim()))
 
 const pbProjects = computed(() =>
   projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
@@ -381,9 +413,8 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill, queryProjectId?
     : 'Opened from a project panel — prompt and seed frame are prefilled; pick one or more models below.'
 }
 
-const prefillState = useVideoGenerationPrefillState()
-
 function stripPrefillFromRoute () {
+  if (!import.meta.client) return
   if (!route.query.prefill && !route.query.projectId) return
   const q = { ...route.query }
   delete q.prefill
@@ -391,28 +422,20 @@ function stripPrefillFromRoute () {
   void router.replace({ path: route.path, query: q })
 }
 
-function consumePrefillQuery () {
-  if (prefillApplied.value) return
+function tryApplyPrefillFromHandoff (): boolean {
+  if (prefillApplied.value || !import.meta.client) return false
 
   const id = typeof route.query.prefill === 'string' ? route.query.prefill.trim() : ''
   const queryProjectId =
     typeof route.query.projectId === 'string' ? route.query.projectId.trim() : ''
-  const statePayload = prefillState.value
 
-  if (!id && !statePayload && !queryProjectId) return
-
-  let payload: VideoGenerationPrefill | null = statePayload
-  if (!payload && id) {
-    payload = loadVideoGenerationPrefill(id)
-  }
-
-  if (payload) {
+  const payload = resolveVideoGenerationPrefill(id || undefined)
+  if (payload?.prompt?.trim()) {
     applyVideoGenerationPrefill(payload, queryProjectId)
     prefillApplied.value = true
-    prefillState.value = null
-    if (id) clearVideoGenerationPrefill(id)
+    clearVideoGenerationHandoff(id)
     stripPrefillFromRoute()
-    return
+    return true
   }
 
   if (queryProjectId && PB_ID.test(queryProjectId)) {
@@ -422,20 +445,32 @@ function consumePrefillQuery () {
     syncSelectedProjectFromPin()
     prefillApplied.value = true
     stripPrefillFromRoute()
-    return
+    return true
   }
 
-  if (id) {
-    toast.showToast('Prefill data expired — open Generate video from the project again.', 'info')
-    stripPrefillFromRoute()
-  }
+  return false
 }
 
-onBeforeMount(() => {
-  consumePrefillQuery()
-})
+function reportPrefillExpiredIfNeeded () {
+  if (prefillApplied.value || !import.meta.client) return
+  const id = typeof route.query.prefill === 'string' ? route.query.prefill.trim() : ''
+  if (!id) return
+  toast.showToast('Prefill data expired — open Generate video from the project again.', 'info')
+  stripPrefillFromRoute()
+}
+
+tryApplyPrefillFromHandoff()
+
+if (prefillApplied.value) {
+  clearVideoGenerationHandoff(prefillIdFromRoute())
+}
 
 onMounted(() => {
+  if (prefillApplied.value) {
+    stripPrefillFromRoute()
+  } else if (!tryApplyPrefillFromHandoff()) {
+    reportPrefillExpiredIfNeeded()
+  }
   if (isAuthenticated.value && clientReady.value) {
     void loadServerProjects().then(() => {
       syncSelectedProjectFromPin()
@@ -445,17 +480,15 @@ onMounted(() => {
 
 watch(
   () => prefillState.value,
-  (state) => {
-    if (state && !prefillApplied.value) consumePrefillQuery()
+  () => {
+    tryApplyPrefillFromHandoff()
   }
 )
 
 watch(
   () => route.query.prefill,
-  (prefill) => {
-    if (typeof prefill === 'string' && prefill.trim() && !prefillApplied.value) {
-      consumePrefillQuery()
-    }
+  () => {
+    tryApplyPrefillFromHandoff()
   }
 )
 
