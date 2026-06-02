@@ -1,51 +1,4 @@
-import { clipsOnTrack, createVideoClipFromUrl, normalizeTrackLayout } from '~/lib/timeline-editor/clip-ops'
-interface LegacyTimelineState {
-  video: Array<{ id: string; label: string; url: string; sceneId?: string; shotId?: string }>
-  audio: Array<{ id: string; label: string; url: string }>
-}
-import {
-  DEFAULT_CLIP_DURATION,
-  DEFAULT_ZOOM_PX_PER_SEC,
-  type TimelineEditorClip,
-  type TimelineEditorDocument
-} from '~/types/timeline-editor'
-
-export function migrateLegacyTimeline (legacy: LegacyTimelineState): TimelineEditorClip[] {
-  const clips: TimelineEditorClip[] = []
-  let t = 0
-  for (const v of legacy.video) {
-    clips.push(
-      createVideoClipFromUrl({
-        id: v.id,
-        src: v.url,
-        label: v.label,
-        timelineStart: t,
-        duration: DEFAULT_CLIP_DURATION,
-        sceneId: v.sceneId,
-        shotId: v.shotId
-      })
-    )
-    t += DEFAULT_CLIP_DURATION
-  }
-  let at = 0
-  for (const a of legacy.audio) {
-    clips.push({
-      id: a.id,
-      type: 'audio',
-      track: 'audio',
-      src: a.url,
-      label: a.label,
-      sourceStart: 0,
-      sourceEnd: DEFAULT_CLIP_DURATION,
-      timelineStart: at,
-      duration: DEFAULT_CLIP_DURATION,
-      transitionIn: null,
-      transitionOut: null
-    })
-    at += DEFAULT_CLIP_DURATION
-  }
-  return normalizeTrackLayout(normalizeTrackLayout(clips, 'video'), 'audio')
-}
+import { DEFAULT_CLIP_DURATION, DEFAULT_ZOOM_PX_PER_SEC, type TimelineEditorClip, type TimelineEditorDocument } from '~/types/timeline-editor'
 
 export function parseEditorDocument (raw: string | null): TimelineEditorDocument | null {
   if (!raw) return null
@@ -109,21 +62,3 @@ export function parseEditorDocument (raw: string | null): TimelineEditorDocument
   }
 }
 
-export function exportLegacyFromEditor (clips: TimelineEditorClip[]): LegacyTimelineState {
-  return {
-    video: clipsOnTrack(clips, 'video').map(c => ({
-      id: c.id,
-      kind: 'video' as const,
-      label: c.label,
-      url: c.src,
-      sceneId: c.sceneId,
-      shotId: c.shotId
-    })),
-    audio: clipsOnTrack(clips, 'audio').map(c => ({
-      id: c.id,
-      kind: 'audio' as const,
-      label: c.label,
-      url: c.src
-    }))
-  }
-}
