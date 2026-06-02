@@ -29,10 +29,16 @@
       loading-label="Loading timeline"
       loading-sub-label="Preparing project workspace…"
     >
-      <div
-        class="rounded-2xl border border-gray-800 bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 p-4 sm:p-6 shadow-xl"
-      >
-        <EditorTimelineEditor
+      <div class="space-y-6">
+        <div
+          class="rounded-2xl border border-gray-800 bg-gradient-to-b from-zinc-950 via-zinc-950 to-zinc-900 p-4 sm:p-6 shadow-xl"
+        >
+          <EditorTimelineEditor
+            v-if="projectId"
+            :project-id="projectId"
+          />
+        </div>
+        <ProjectVideoSceneAccordion
           v-if="projectId"
           :project-id="projectId"
         />

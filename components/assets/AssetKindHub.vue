@@ -85,83 +85,103 @@
                 Open Video step →
               </NuxtLink>
             </summary>
-            <ul class="divide-y divide-gray-200">
-              <li
-                v-for="a in g.items"
-                :key="a.id"
-                class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
+            <div class="divide-y divide-gray-200">
+              <details
+                v-for="scene in videoSceneGroupsForProject(g)"
+                :key="`${g.key}:${scene.key}`"
+                class="group"
               >
-                <div class="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-start gap-3">
-                  <div
-                    v-if="a.fileUrl"
-                    class="w-full max-w-[min(100%,20rem)] sm:max-w-xs rounded-lg border border-gray-200 overflow-hidden bg-black shrink-0"
+                <summary
+                  class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-white flex flex-wrap items-center justify-between gap-2 hover:bg-gray-50"
+                >
+                  <div class="flex items-center gap-2 min-w-0">
+                    <span
+                      class="text-gray-400 text-[10px] shrink-0 transition-transform group-open:rotate-90"
+                      aria-hidden="true"
+                    >▶</span>
+                    <span class="text-sm font-medium text-gray-900 truncate">{{ scene.title }}</span>
+                    <span class="text-xs text-gray-500">· {{ scene.items.length }} clip{{ scene.items.length === 1 ? '' : 's' }}</span>
+                  </div>
+                </summary>
+                <ul class="divide-y divide-gray-100 bg-gray-50/40">
+                  <li
+                    v-for="a in scene.items"
+                    :key="a.id"
+                    class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
                   >
-                    <video
-                      :src="videoAssetPlaybackSrc(a)"
-                      class="w-full aspect-video object-contain"
-                      controls
-                      playsinline
-                      preload="metadata"
-                    />
-                  </div>
-                  <div class="min-w-0 flex-1">
-                    <p class="font-medium text-gray-900">{{ a.title }}</p>
-                    <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
-                    <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
-                  </div>
-                </div>
-                <div class="shrink-0">
-                  <details class="relative open:z-30">
-                    <summary
-                      class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                    >
-                      Actions
-                    </summary>
-                    <div :class="ACTIONS_MENU_PANEL_CLASS">
-                      <a
+                    <div class="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-start gap-3">
+                      <div
                         v-if="a.fileUrl"
-                        :href="videoAssetPlaybackSrc(a)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                        class="w-full max-w-[min(100%,20rem)] sm:max-w-xs rounded-lg border border-gray-200 overflow-hidden bg-black shrink-0"
                       >
-                        Download file
-                      </a>
-                      <NuxtLink
-                        v-if="a.projectId"
-                        :to="`/projects/${a.projectId}/overview`"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                      >
-                        Open project
-                      </NuxtLink>
-                      <NuxtLink
-                        v-if="a.projectId && PB_ID.test(a.projectId)"
-                        :to="`/projects/${a.projectId}/timeline`"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                      >
-                        Open timeline
-                      </NuxtLink>
-                      <button
-                        v-if="a.projectId && a.fileUrl"
-                        type="button"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                        @click="addVideoAssetToTimeline(a)"
-                      >
-                        Add to timeline
-                      </button>
-                      <button
-                        type="button"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        :disabled="deletingId === a.id"
-                        @click="removeAsset(a)"
-                      >
-                        {{ deletingId === a.id ? 'Removing…' : 'Remove' }}
-                      </button>
+                        <video
+                          :src="videoAssetPlaybackSrc(a)"
+                          class="w-full aspect-video object-contain"
+                          controls
+                          playsinline
+                          preload="metadata"
+                        />
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <p class="font-medium text-gray-900">{{ a.title }}</p>
+                        <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
+                        <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
+                      </div>
                     </div>
-                  </details>
-                </div>
-              </li>
-            </ul>
+                    <div class="shrink-0">
+                      <details class="relative open:z-30">
+                        <summary
+                          class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
+                        >
+                          Actions
+                        </summary>
+                        <div :class="ACTIONS_MENU_PANEL_CLASS">
+                          <a
+                            v-if="a.fileUrl"
+                            :href="videoAssetPlaybackSrc(a)"
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                          >
+                            Download file
+                          </a>
+                          <NuxtLink
+                            v-if="a.projectId"
+                            :to="`/projects/${a.projectId}/overview`"
+                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                          >
+                            Open project
+                          </NuxtLink>
+                          <NuxtLink
+                            v-if="a.projectId && PB_ID.test(a.projectId)"
+                            :to="`/projects/${a.projectId}/timeline`"
+                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                          >
+                            Open timeline
+                          </NuxtLink>
+                          <button
+                            v-if="a.projectId && a.fileUrl"
+                            type="button"
+                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                            @click="addVideoAssetToTimeline(a)"
+                          >
+                            Add to timeline
+                          </button>
+                          <button
+                            type="button"
+                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
+                            :disabled="deletingId === a.id"
+                            @click="removeAsset(a)"
+                          >
+                            {{ deletingId === a.id ? 'Removing…' : 'Remove' }}
+                          </button>
+                        </div>
+                      </details>
+                    </div>
+                  </li>
+                </ul>
+              </details>
+            </div>
           </details>
         </template>
 
@@ -1082,6 +1102,12 @@ type AssetProjectGroup = {
   items: ProjectAsset[]
 }
 
+type AssetSceneGroup = {
+  key: string
+  title: string
+  items: ProjectAsset[]
+}
+
 function sortCharacterAssetsForDisplay (list: ProjectAsset[]): ProjectAsset[] {
   return [...list].sort((a, b) => {
     const af = isFeaturedCharacterAsset(a) ? 1 : 0
@@ -1134,6 +1160,41 @@ function sortVideoAssetsForDisplay (list: ProjectAsset[]): ProjectAsset[] {
   return [...list].sort((a, b) =>
     String(b.updated || b.created || '').localeCompare(String(a.updated || a.created || ''))
   )
+}
+
+function videoSceneKey (a: ProjectAsset): string {
+  const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
+  const sid = typeof meta.scene_id === 'string' ? meta.scene_id.trim() : ''
+  return sid || '__unassigned_scene__'
+}
+
+function videoSceneTitle (key: string): string {
+  if (key === '__unassigned_scene__') return 'Unassigned scene'
+  return `Scene ${key.slice(0, 8)}`
+}
+
+function videoSceneGroupsForProject (group: AssetProjectGroup): AssetSceneGroup[] {
+  const byScene = new Map<string, ProjectAsset[]>()
+  for (const a of group.items) {
+    const key = videoSceneKey(a)
+    const cur = byScene.get(key) || []
+    cur.push(a)
+    byScene.set(key, cur)
+  }
+  const out: AssetSceneGroup[] = []
+  for (const [key, rows] of byScene.entries()) {
+    out.push({
+      key,
+      title: videoSceneTitle(key),
+      items: sortVideoAssetsForDisplay(rows)
+    })
+  }
+  out.sort((a, b) => {
+    if (a.key === '__unassigned_scene__') return 1
+    if (b.key === '__unassigned_scene__') return -1
+    return a.key.localeCompare(b.key)
+  })
+  return out
 }
 
 const characterProjectGroups = computed<AssetProjectGroup[]>(() => {
