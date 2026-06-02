@@ -46,7 +46,9 @@ export function loadTimelineFromStorage (projectId: string): TimelineEditorDocum
   if (!import.meta.client || !projectId.trim()) return null
   const pid = projectId.trim()
   const parsed = parseEditorDocument(localStorage.getItem(timelineEditorStorageKey(pid)))
-  if (parsed?.clips.length) return parsed
+  // Important: if a v2 document exists (even with 0 clips), it is authoritative.
+  // Falling back to v1 here can "resurrect" deleted clips.
+  if (parsed) return parsed
   return migrateV1TimelineOnce(pid)
 }
 
