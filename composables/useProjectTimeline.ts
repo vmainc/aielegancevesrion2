@@ -1,5 +1,6 @@
 import { computed, ref, unref, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
+import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
 
 export type TimelineClipKind = 'video' | 'audio'
 
@@ -119,16 +120,15 @@ export function useProjectTimeline (projectId: Ref<string> | ComputedRef<string>
   )
 
   function addVideoClip (clip: Omit<TimelineClip, 'id' | 'kind'> & { id?: string }) {
-    const id = clip.id?.trim() || newClipId()
-    state.value.video.push({
-      id,
-      kind: 'video',
-      label: clip.label.slice(0, 500),
-      url: clip.url.trim(),
+    const id = appendVideoToProjectTimeline(pid.value, {
+      url: clip.url,
+      label: clip.label,
       sceneId: clip.sceneId,
-      shotId: clip.shotId
+      shotId: clip.shotId,
+      id: clip.id
     })
-    persist()
+    if (!id) return
+    load()
   }
 
   function addAudioClip (clip: { label: string; url: string; id?: string }) {

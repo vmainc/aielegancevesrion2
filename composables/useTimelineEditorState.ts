@@ -102,6 +102,24 @@ export function useTimelineEditorState (
     }
   }
 
+  function applyParsedDocument (parsed: ReturnType<typeof parseEditorDocument>) {
+    if (!parsed?.clips.length) return false
+    clips.value = parsed.clips
+    zoom.value = parsed.zoom
+    const max = totalTimelineDuration(clips.value)
+    if (playhead.value > max) playhead.value = max
+    void refreshDurations(false)
+    return true
+  }
+
+  /** Re-read v2 document from localStorage (keeps undo stack). */
+  function reloadFromStorage () {
+    if (!import.meta.client || !storageKey.value) return
+    const parsed = parseEditorDocument(localStorage.getItem(storageKey.value))
+    if (applyParsedDocument(parsed)) return
+    syncFromLegacy()
+  }
+
   function load () {
     history.clearHistory()
     if (!import.meta.client || !storageKey.value) {
@@ -324,6 +342,7 @@ export function useTimelineEditorState (
     trimRight,
     blendWithNextClip,
     syncFromLegacy,
+    reloadFromStorage,
     refreshDurations,
     undo: history.undo,
     redo: history.redo,

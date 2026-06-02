@@ -276,6 +276,7 @@ definePageMeta({
   key: route => `video-generation:${route.query.projectId || ''}:${route.query.sceneId || ''}:${route.query.shotId || ''}:${route.query.prefill || ''}`
 })
 
+import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import {
@@ -667,8 +668,7 @@ async function runOneModel (modelId: string) {
     }
 
     if (addToTimeline.value && selectedProjectId.value && playbackUrl) {
-      const { addVideoClip } = useProjectTimeline(computed(() => selectedProjectId.value))
-      addVideoClip({
+      appendVideoToProjectTimeline(selectedProjectId.value, {
         url: playbackSrc(playbackUrl),
         label: clipTitle(),
         ...(panelPrefill.value?.sceneId ? { sceneId: panelPrefill.value.sceneId } : {}),
@@ -722,8 +722,13 @@ async function onSubmit () {
 
   generating.value = false
   const anyOk = selectedModelIds.value.some(id => slotByModel[id]?.status === 'done')
-  if (anyOk && saveToProject.value) {
+  const addedTimeline = anyOk && addToTimeline.value && selectedProjectId.value
+  if (anyOk && saveToProject.value && addedTimeline) {
+    toast.showToast('Saved to library and added to project timeline.', 'success')
+  } else if (anyOk && saveToProject.value) {
     toast.showToast('Saved to project library — see Assets → Video.', 'success')
+  } else if (anyOk && addedTimeline) {
+    toast.showToast('Clips added to project timeline.', 'success')
   } else if (anyOk) {
     toast.showToast('Video generation finished.', 'success')
   }

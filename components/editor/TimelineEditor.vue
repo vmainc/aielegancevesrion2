@@ -109,6 +109,7 @@
 <script setup lang="ts">
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import { hasNextClipForBlend } from '~/lib/timeline-editor/blend'
+import { useTimelineClipPushedState } from '~/lib/append-project-timeline-video'
 import { formatTimecode, timeFromClientX, timeToPx, TRACK_LABEL_WIDTH } from '~/lib/timeline-editor/geometry'
 
 const props = defineProps<{
@@ -154,12 +155,15 @@ const {
   addAudioClip,
   blendWithNextClip,
   syncFromLegacy,
+  reloadFromStorage,
   undo,
   redo,
   beginGesture,
   commitGesture,
   cancelGesture
 } = useTimelineEditorState(projectIdRef, resolveSrc)
+
+const timelineClipPushed = useTimelineClipPushedState()
 
 const setPlaying = (v: boolean) => {
   isPlaying.value = v
@@ -262,6 +266,15 @@ onMounted(() => {
 })
 
 watch(previewRef, bindPreviewVideo)
+
+watch(
+  timelineClipPushed,
+  (ev) => {
+    if (!ev || ev.projectId !== props.projectId) return
+    reloadFromStorage()
+    timelineClipPushed.value = null
+  }
+)
 
 function unwrapVideoRef (r: unknown): HTMLVideoElement | null {
   if (!r) return null
