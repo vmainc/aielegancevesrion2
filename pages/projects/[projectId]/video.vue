@@ -206,11 +206,16 @@
                   class="mt-auto px-3 py-2 text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-gray-950 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
                   :disabled="
                     !finalVideoPrompt(shot, scene).trim() ||
-                    !panelStoryboardUrl(shot, scene.id)
+                    !panelStoryboardUrl(shot, scene.id) ||
+                    openingVideoPanelKey === genKey(scene.id, shot.id)
                   "
                   @click="openVideoGenerationForPanel(shot, scene)"
                 >
-                  Generate video
+                  {{
+                    openingVideoPanelKey === genKey(scene.id, shot.id)
+                      ? 'Opening video tool…'
+                      : 'Generate video'
+                  }}
                 </button>
                 <p
                   v-if="!panelStoryboardUrl(shot, scene.id)"
@@ -307,7 +312,11 @@ import {
   projectAssetMediaPath,
   projectAssetPlaybackSrc
 } from '~/lib/project-asset-playback-url'
-import { navigateToVideoGenerationFromPanel } from '~/lib/video-generation-prefill'
+import {
+  navigateToVideoGenerationFromPanel,
+  type VideoGenerationPrefill
+} from '~/lib/video-generation-prefill'
+import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { storyboardFramePreviewClasses } from '~/lib/storyboard-frame-image'
 import { mapStoryboardAssetsToShots } from '~/lib/storyboard-panel-assets'
@@ -347,6 +356,7 @@ const sceneShotsBySceneId = reactive<Record<string, CreativeShot[]>>({})
 const sceneShotsLoading = reactive<Record<string, boolean>>({})
 const videoPreviewByKey = reactive<Record<string, string>>({})
 const expandedMedia = ref<{ kind: 'video' | 'image'; url: string; title: string } | null>(null)
+const openingVideoPanelKey = ref('')
 
 const { addVideoClip } = useProjectTimeline(projectId)
 const { refs: characterRefs } = useProjectCharacterRefs(projectId)
@@ -558,12 +568,39 @@ async function openVideoGenerationForPanel (shot: CreativeShot, scene: SceneRow)
     toast.showToast('Save this project to the cloud before generating video.', 'info')
     return
   }
-  await navigateToVideoGenerationFromPanel({
-    projectId: pid,
-    sceneId: scene.id,
-    shotId: shot.id,
-    addToTimeline: addToTimelineOnSave.value
-  })
+  const headers = authHeaders()
+  if (!headers) {
+    toast.showToast('Sign in to generate video for this panel.', 'info')
+    return
+  }
+
+  const panelKey = genKey(scene.id, shot.id)
+  openingVideoPanelKey.value = panelKey
+  try {
+    const prefill = await $fetch<VideoGenerationPrefill>(
+      `/api/projects/${pid}/video-panel-prefill`,
+      {
+        query: { sceneId: scene.id, shotId: shot.id },
+        headers
+      }
+    )
+    await navigateToVideoGenerationFromPanel({
+      projectId: pid,
+      sceneId: scene.id,
+      shotId: shot.id,
+      addToTimeline: addToTimelineOnSave.value,
+      prefill
+    })
+  } catch (e: unknown) {
+    toast.showToast(
+      formatApiFetchError(e, 'Could not load this panel for video generation.'),
+      'error'
+    )
+  } finally {
+    if (openingVideoPanelKey.value === panelKey) {
+      openingVideoPanelKey.value = ''
+    }
+  }
 }
 
 watch(

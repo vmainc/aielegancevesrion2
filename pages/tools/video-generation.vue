@@ -271,8 +271,9 @@
 
 <script setup lang="ts">
 definePageMeta({
-  /** Panel prefill loads from API using query params — client-only avoids SSR clearing the route. */
-  ssr: false
+  /** Panel prefill uses useState + API — client-only avoids SSR clearing handoff. */
+  ssr: false,
+  key: route => `video-generation:${route.query.projectId || ''}:${route.query.sceneId || ''}:${route.query.shotId || ''}:${route.query.prefill || ''}`
 })
 
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
@@ -280,6 +281,7 @@ import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import {
   clearVideoGenerationHandoff,
   resolveVideoGenerationPrefill,
+  useVideoGenerationDraft,
   useVideoGenerationPrefillState,
   type VideoGenerationPrefill
 } from '~/lib/video-generation-prefill'
@@ -319,6 +321,17 @@ const authTokenState = useState<string | null>('auth_token')
 const { projects, loadServerProjects, clientReady } = useCreativeProject()
 
 const prefillState = useVideoGenerationPrefillState()
+const prefillDraft = useVideoGenerationDraft()
+
+function stashedPanelPrefill (): VideoGenerationPrefill | null {
+  const fromState = prefillState.value
+  if (fromState?.prompt?.trim()) return fromState
+  const fromDraft = prefillDraft.value
+  if (fromDraft?.prompt?.trim()) return fromDraft
+  return null
+}
+
+const boot = import.meta.client ? stashedPanelPrefill() : null
 
 const panelProjectId = computed(() => {
   const v = typeof route.query.projectId === 'string' ? route.query.projectId.trim() : ''
@@ -345,22 +358,41 @@ const error = computed(() => {
 
 const models = computed(() => data.value?.models ?? [])
 
-const prompt = ref('')
-const startFrameUrl = ref<string | null>(null)
-const aspectRatio = ref<'16:9' | '9:16' | '1:1'>('16:9')
-const durationSeconds = ref(5)
+const prompt = ref(boot?.prompt?.trim() ?? '')
+const startFrameUrl = ref<string | null>(
+  boot?.startFrameUrl
+    ? appendPlaybackAccessToken(boot.startFrameUrl.trim(), getAuthToken())
+    : null
+)
+const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(boot?.aspectRatio ?? '16:9')
+const durationSeconds = ref(
+  typeof boot?.durationSeconds === 'number' &&
+    (boot.durationSeconds === 5 || boot.durationSeconds === 10)
+    ? boot.durationSeconds
+    : 5
+)
 const selectedModelIds = ref<string[]>([])
 const formError = ref('')
 const generating = ref(false)
 const doneCount = ref(0)
-const saveToProject = ref(true)
-const addToTimeline = ref(false)
-const selectedProjectId = ref('')
+const saveToProject = ref(boot?.saveToProject ?? true)
+const addToTimeline = ref(boot?.addToTimeline ?? false)
+const selectedProjectId = ref(
+  boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : ''
+)
 const slotByModel = reactive<Record<string, Slot>>({})
-const panelPrefill = ref<VideoGenerationPrefill | null>(null)
-const prefillBanner = ref('')
-const pinnedProjectId = ref('')
-const prefillApplied = ref(false)
+const panelPrefill = ref<VideoGenerationPrefill | null>(boot)
+const prefillBanner = ref(
+  boot?.shotTitle?.trim()
+    ? `Opened from project storyboard — “${boot.shotTitle.trim()}”. Prompt and seed frame are prefilled; pick one or more models below.`
+    : boot?.prompt?.trim()
+      ? 'Opened from a project panel — prompt and seed frame are prefilled; pick one or more models below.'
+      : ''
+)
+const pinnedProjectId = ref(
+  boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : ''
+)
+const prefillApplied = ref(Boolean(boot?.prompt?.trim()))
 const loadingPanelPrefill = ref(false)
 
 const pbProjects = computed(() =>
@@ -427,11 +459,7 @@ async function fetchPanelPrefillFromApi (): Promise<boolean> {
 
   await initAuth()
   const token = getAuthToken()
-  if (!token) {
-    toast.showToast('Sign in to load this storyboard panel.', 'info')
-    stripPanelQueryFromRoute()
-    return false
-  }
+  if (!token) return false
 
   loadingPanelPrefill.value = true
   try {
@@ -451,18 +479,33 @@ async function fetchPanelPrefillFromApi (): Promise<boolean> {
       addToTimeline: addFromQuery || res.addToTimeline
     })
     prefillApplied.value = true
+    prefillState.value = null
+    prefillDraft.value = null
     stripPanelQueryFromRoute()
     return true
   } catch (e: unknown) {
-    toast.showToast(
-      formatApiFetchError(e, 'Could not load panel for video generation.'),
-      'error'
-    )
-    stripPanelQueryFromRoute()
+    if (!prefillApplied.value) {
+      toast.showToast(
+        formatApiFetchError(e, 'Could not load panel for video generation.'),
+        'error'
+      )
+    }
     return false
   } finally {
     loadingPanelPrefill.value = false
   }
+}
+
+function tryApplyStashedPrefill (): boolean {
+  if (prefillApplied.value || !import.meta.client) return false
+  const payload = stashedPanelPrefill()
+  if (!payload?.prompt?.trim()) return false
+  applyVideoGenerationPrefill(payload)
+  prefillApplied.value = true
+  prefillState.value = null
+  prefillDraft.value = null
+  stripPanelQueryFromRoute()
+  return true
 }
 
 function tryApplyPrefillFromHandoff (): boolean {
@@ -489,10 +532,18 @@ function reportPrefillExpiredIfNeeded () {
 
 onMounted(async () => {
   await initAuth()
-  if (hasPanelDeepLink.value) {
-    await fetchPanelPrefillFromApi()
-  } else if (!tryApplyPrefillFromHandoff()) {
-    reportPrefillExpiredIfNeeded()
+  if (prefillApplied.value && panelPrefill.value?.startFrameUrl?.trim()) {
+    startFrameUrl.value = appendPlaybackAccessToken(
+      panelPrefill.value.startFrameUrl.trim(),
+      getAuthToken()
+    )
+  }
+  if (!tryApplyStashedPrefill()) {
+    if (hasPanelDeepLink.value) {
+      await fetchPanelPrefillFromApi()
+    } else if (!tryApplyPrefillFromHandoff()) {
+      reportPrefillExpiredIfNeeded()
+    }
   }
   if (isAuthenticated.value && clientReady.value) {
     void loadServerProjects().then(() => {
@@ -502,13 +553,26 @@ onMounted(async () => {
 })
 
 watch(
-  () => [panelProjectId.value, panelSceneId.value, panelShotId.value] as const,
-  () => {
-    if (hasPanelDeepLink.value && !prefillApplied.value) {
-      void fetchPanelPrefillFromApi()
-    }
-  }
+  hasPanelDeepLink,
+  (ready) => {
+    if (!ready || prefillApplied.value || !import.meta.client) return
+    if (tryApplyStashedPrefill()) return
+    void fetchPanelPrefillFromApi()
+  },
+  { immediate: true }
 )
+
+watch(isAuthenticated, (v) => {
+  if (v && hasPanelDeepLink.value && !prefillApplied.value) {
+    if (tryApplyStashedPrefill()) return
+    void fetchPanelPrefillFromApi()
+  }
+  if (v) {
+    void loadServerProjects().then(() => {
+      syncSelectedProjectFromPin()
+    })
+  }
+})
 
 watch(
   () => prefillState.value,
@@ -523,14 +587,6 @@ watch(
     tryApplyPrefillFromHandoff()
   }
 )
-
-watch(isAuthenticated, (v) => {
-  if (v) {
-    void loadServerProjects().then(() => {
-      syncSelectedProjectFromPin()
-    })
-  }
-})
 
 watch(saveToProject, (v) => {
   if (!v) addToTimeline.value = false

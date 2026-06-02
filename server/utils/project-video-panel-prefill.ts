@@ -88,6 +88,63 @@ function projectAspectForVideo (aspect?: string): VideoGenerationPrefill['aspect
   return '16:9'
 }
 
+/** Match client video step: project storyboard assets + in-memory kind filter fallbacks. */
+async function loadStoryboardAssetsForPanelPrefill (
+  pb: PocketBase,
+  projectId: string,
+  userId: string
+): Promise<unknown[]> {
+  const byId = new Map<string, unknown>()
+
+  const ingest = (rows: unknown[]) => {
+    for (const r of rows) {
+      const row = r as Record<string, unknown>
+      const id = String(row.id || '')
+      if (!id) continue
+      const kind = String(row.kind || '')
+      if (kind && kind !== 'storyboard') continue
+      byId.set(id, r)
+    }
+  }
+
+  try {
+    ingest(await listProjectAssetsForProject(pb, projectId, userId, { kind: 'storyboard' }))
+  } catch {
+    /* try broader queries */
+  }
+
+  try {
+    ingest(await listProjectAssetsForProject(pb, projectId, userId))
+  } catch {
+    /* last resort below */
+  }
+
+  if (byId.size === 0) {
+    try {
+      const all = await pb.collection('project_assets').getFullList({
+        filter: `owned_by = "${userId}"`,
+        sort: '-created',
+        batch: 400
+      })
+      for (const r of all) {
+        const row = r as Record<string, unknown>
+        const pid =
+          typeof row.project === 'string'
+            ? row.project
+            : (row.project as { id?: string })?.id
+        if (pid !== projectId) continue
+        if (String(row.kind || '') !== 'storyboard') continue
+        const id = String(row.id || '')
+        if (id) byId.set(id, r)
+      }
+    } catch {
+      /* empty */
+    }
+  }
+
+  return [...byId.values()]
+}
+
 /** Build video-generation prefill from saved project panel ids (authoritative in production). */
 export async function buildVideoPanelPrefill (input: {
   pb: PocketBase
@@ -125,9 +182,7 @@ export async function buildVideoPanelPrefill (input: {
     .map(r => pbRecordToCreativeShot(r as Parameters<typeof pbRecordToCreativeShot>[0]))
     .sort((a, b) => a.sortOrder - b.sortOrder)
 
-  const storyboardRows = await listProjectAssetsForProject(pb, projectId, userId, {
-    kind: 'storyboard'
-  })
+  const storyboardRows = await loadStoryboardAssetsForPanelPrefill(pb, projectId, userId)
   const storyboardAssets = storyboardRows.map(r =>
     pbRecordToProjectAsset(r as Record<string, unknown>, pb)
   )

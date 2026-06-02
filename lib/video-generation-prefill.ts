@@ -79,13 +79,31 @@ export function clearVideoGenerationHandoff (prefillId?: string): void {
   if (prefillId?.trim()) clearVideoGenerationPrefill(prefillId.trim())
 }
 
-/** Open video tool for a storyboard panel — loads prompt + frame from the server via query params. */
+/** Stash panel prefill for the next visit to Tools → Video generation (same-tab navigation). */
+export function stashVideoGenerationPanelPrefill (payload: VideoGenerationPrefill): void {
+  useVideoGenerationPrefillState().value = payload
+  useVideoGenerationDraft().value = payload
+}
+
+/** Open video tool for a storyboard panel. Pass `prefill` when already loaded (recommended). */
 export async function navigateToVideoGenerationFromPanel (opts: {
   projectId: string
   sceneId: string
   shotId: string
   addToTimeline?: boolean
+  prefill?: VideoGenerationPrefill
 }): Promise<void> {
+  if (opts.prefill?.prompt?.trim()) {
+    stashVideoGenerationPanelPrefill({
+      ...opts.prefill,
+      projectId: opts.projectId,
+      sceneId: opts.sceneId,
+      shotId: opts.shotId,
+      addToTimeline: opts.addToTimeline ?? opts.prefill.addToTimeline,
+      saveToProject: opts.prefill.saveToProject ?? true,
+      source: opts.prefill.source ?? 'project_video_panel'
+    })
+  }
   const query: Record<string, string> = {
     projectId: opts.projectId,
     sceneId: opts.sceneId,
