@@ -21,6 +21,7 @@
         :active-tool="activeTool"
         :dragging="clip.id === draggingClipId"
         @select="$emit('select-clip', clip.id)"
+        @remove="$emit('remove-clip', clip.id)"
         @drag-start="(ev) => $emit('clip-drag-start', clip.id, ev)"
         @trim-start="(side, ev) => $emit('clip-trim-start', clip.id, side, ev)"
       />
@@ -46,6 +47,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   'select-clip': [id: string]
+  'remove-clip': [id: string]
   'clip-drag-start': [id: string, ev: PointerEvent]
   'clip-trim-start': [id: string, side: 'left' | 'right', ev: PointerEvent]
 }>()

@@ -11,8 +11,9 @@
         </h1>
         <p class="text-sm text-gray-600 mt-1 max-w-2xl">
           Arrange, trim, and split AI clips on a cinematic timeline. Add clips from
-          <NuxtLink :to="`/projects/${projectId}/video`" class="text-primary font-medium hover:underline">Video</NuxtLink>
-          — edits are metadata only (non-destructive).
+          <NuxtLink :to="`/projects/${projectId}/video`" class="text-primary font-medium hover:underline">Video</NuxtLink>.
+          Removing a clip here only edits the timeline — nothing is deleted from
+          <NuxtLink to="/assets/video" class="text-primary font-medium hover:underline">Assets → Video</NuxtLink>.
         </p>
       </div>
       <NuxtLink

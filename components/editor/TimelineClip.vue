@@ -34,6 +34,18 @@
       <div class="h-full w-full bg-gradient-to-r from-transparent via-primary/25 to-primary/45 rounded-r-lg" />
     </div>
 
+    <button
+      v-if="selected && activeTool === 'select'"
+      type="button"
+      class="absolute top-0.5 right-0.5 z-40 h-5 w-5 rounded-md bg-black/75 text-white/90 hover:bg-red-600 hover:text-white flex items-center justify-center text-sm leading-none pointer-events-auto"
+      title="Remove from timeline (library file unchanged)"
+      aria-label="Remove clip from timeline"
+      @pointerdown.stop
+      @click.stop="$emit('remove')"
+    >
+      ×
+    </button>
+
     <div class="px-2 py-1 h-full flex flex-col justify-center min-w-0 pointer-events-none relative z-[1]">
       <p class="text-[10px] font-semibold text-white truncate">
         {{ clip.label }}
@@ -77,6 +89,7 @@ const overlapOutPx = computed(() => props.overlapOutPx ?? 0)
 
 const emit = defineEmits<{
   select: []
+  remove: []
   'drag-start': [PointerEvent]
   'trim-start': [side: 'left' | 'right', ev: PointerEvent]
 }>()

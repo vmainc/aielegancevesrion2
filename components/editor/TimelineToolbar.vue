@@ -39,11 +39,12 @@
 
     <button
       type="button"
-      class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-red-500/20 hover:text-red-200 disabled:opacity-40"
+      class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-red-500/20 hover:text-red-200 disabled:opacity-40 disabled:cursor-not-allowed"
       :disabled="!hasSelection"
+      title="Remove from timeline only — does not delete files in Assets"
       @click="$emit('delete')"
     >
-      Delete
+      Remove clip
     </button>
 
     <div class="relative">

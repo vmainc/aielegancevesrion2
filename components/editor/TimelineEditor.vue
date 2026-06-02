@@ -32,7 +32,7 @@
       @set-tool="activeTool = $event"
       @undo="onUndo"
       @redo="onRedo"
-      @delete="removeSelected()"
+      @delete="onRemoveSelected()"
       @split="onSplit"
       @blend="onBlend"
       @detach-audio="detachAudio()"
@@ -73,6 +73,7 @@
               :active-tool="activeTool"
               :dragging-clip-id="draggingClipId"
               @select-clip="onSelectClip"
+              @remove-clip="onRemoveClip"
               @clip-drag-start="onClipDragStart"
               @clip-trim-start="onTrimStart"
             />
@@ -85,6 +86,7 @@
               :active-tool="activeTool"
               :dragging-clip-id="draggingClipId"
               @select-clip="onSelectClip"
+              @remove-clip="onRemoveClip"
               @clip-drag-start="onClipDragStart"
               @clip-trim-start="onTrimStart"
             />
@@ -100,7 +102,10 @@
     </div>
 
     <p class="text-[11px] text-zinc-500">
-      <span class="text-primary">⌘Z</span> undo · drag ruler or tracks to scrub — playhead stays where you release ·
+      <span class="text-primary">⌘Z</span> undo ·
+      <span class="text-primary">Delete</span> or
+      <span class="text-primary">Remove clip</span> to take a clip off the timeline (files stay in Assets → Video) ·
+      drag ruler or tracks to scrub ·
       <span class="text-primary">Blend with next</span> for crossfade. Saved in this browser.
     </p>
   </div>
@@ -146,6 +151,7 @@ const {
   setZoom,
   selectClip,
   removeSelected,
+  removeClipById,
   splitAtPlayhead,
   detachAudio,
   applyTransition,
@@ -248,6 +254,15 @@ function onEditorKeydown (e: KeyboardEvent) {
     playback.seekPreviewToPlayhead(true)
     return
   }
+  if (
+    (e.key === 'Delete' || e.key === 'Backspace') &&
+    selectedClipId.value &&
+    !isTypingTarget(e.target)
+  ) {
+    e.preventDefault()
+    onRemoveSelected()
+    return
+  }
   const mod = e.metaKey || e.ctrlKey
   if (!mod) return
   if (e.key === 'z' || e.key === 'Z') {
@@ -299,6 +314,44 @@ function timeAtPointer (ev: PointerEvent): number {
 function applyPlayheadAtPointer (ev: PointerEvent) {
   setPlayhead(timeAtPointer(ev))
   playback.scheduleSeek()
+}
+
+function isTypingTarget (target: EventTarget | null): boolean {
+  if (!target || !(target instanceof HTMLElement)) return false
+  const tag = target.tagName
+  if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true
+  return Boolean(target.isContentEditable || target.closest('[contenteditable="true"]'))
+}
+
+function onRemoveSelected () {
+  if (!selectedClipId.value) {
+    toast.showToast('Select a clip on the timeline first.', 'info')
+    return
+  }
+  const label = (selectedClip.value?.label || 'Clip').trim()
+  if (removeSelected()) {
+    playback.seekPreviewToPlayhead(true)
+    toast.showToast(
+      label
+        ? `Removed “${label}” from timeline. Assets → Video is unchanged.`
+        : 'Removed clip from timeline. Assets → Video is unchanged.',
+      'success'
+    )
+  }
+}
+
+function onRemoveClip (clipId: string) {
+  const clip = clips.value.find(c => c.id === clipId)
+  const label = (clip?.label || 'Clip').trim()
+  if (removeClipById(clipId)) {
+    playback.seekPreviewToPlayhead(true)
+    toast.showToast(
+      label
+        ? `Removed “${label}” from timeline. Assets → Video is unchanged.`
+        : 'Removed clip from timeline. Assets → Video is unchanged.',
+      'success'
+    )
+  }
 }
 
 function onBlend () {

@@ -233,12 +233,18 @@ export function useTimelineEditorState (
     persist()
   }
 
-  function removeSelected () {
-    if (!selectedClipId.value) return
+  function removeClipById (clipId: string) {
+    if (!clipId || !clips.value.some(c => c.id === clipId)) return false
     history.recordHistory()
-    clips.value = deleteClip(clips.value, selectedClipId.value)
-    selectedClipId.value = null
+    clips.value = deleteClip(clips.value, clipId)
+    if (selectedClipId.value === clipId) selectedClipId.value = null
     persist()
+    return true
+  }
+
+  function removeSelected () {
+    if (!selectedClipId.value) return false
+    return removeClipById(selectedClipId.value)
   }
 
   function splitAtPlayhead () {
@@ -334,6 +340,7 @@ export function useTimelineEditorState (
     addVideoFromLibrary,
     addAudioClip,
     removeSelected,
+    removeClipById,
     splitAtPlayhead,
     detachAudio,
     applyTransition,
