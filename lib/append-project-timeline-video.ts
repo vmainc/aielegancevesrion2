@@ -1,6 +1,6 @@
 import {
   clipsOnTrack,
-  createVideoClipFromUrl,
+  createLinkedVideoAudioClipsFromUrl,
   normalizeTrackLayout
 } from '~/lib/timeline-editor/clip-ops'
 import {
@@ -54,8 +54,8 @@ export function appendVideoToProjectTimeline (
       (m, c) => Math.max(m, c.timelineStart + c.duration),
       0
     )
-    const created = createVideoClipFromUrl({
-      id: clipId,
+    const linked = createLinkedVideoAudioClipsFromUrl({
+      videoId: clipId,
       src: url,
       label: clip.label,
       timelineStart: end,
@@ -63,7 +63,10 @@ export function appendVideoToProjectTimeline (
       sceneId: clip.sceneId,
       shotId: clip.shotId
     })
-    clips = normalizeTrackLayout([...clips, created], 'video')
+    clips = normalizeTrackLayout(
+      normalizeTrackLayout([...clips, linked.video, linked.audio], 'video'),
+      'audio'
+    )
     saveTimelineToStorage(pid, clips, zoom)
   }
 

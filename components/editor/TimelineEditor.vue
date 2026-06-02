@@ -94,6 +94,8 @@
             <EditorTimelinePlayhead
               class="!left-0"
               :left-px="TRACK_LABEL_WIDTH + timeToPx(playhead, zoom)"
+              :label="formatTimecode(playhead)"
+              :scrubbing="isScrubbing"
               @scrub="onPlayheadScrub"
             />
           </div>
@@ -212,6 +214,7 @@ const canBlend = computed(() => {
 const canSplit = computed(() => {
   if (!selectedClip.value) return false
   const c = selectedClip.value
+  if (c.linkedAudioId || c.linkedVideoId) return false
   const local = playhead.value - c.timelineStart
   return local > 0.25 && local < c.duration - 0.25
 })
@@ -370,7 +373,12 @@ function onSelectClip (id: string) {
 
 function onSplit () {
   if (!canSplit.value) {
-    toast.showToast('Move playhead inside the selected clip to split.', 'info')
+    const c = selectedClip.value
+    if (c?.linkedAudioId || c?.linkedVideoId) {
+      toast.showToast('Split is disabled for linked video/audio pairs right now.', 'info')
+    } else {
+      toast.showToast('Move playhead inside the selected clip to split.', 'info')
+    }
     return
   }
   splitAtPlayhead()

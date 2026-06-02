@@ -1,7 +1,7 @@
 import { computed, ref, unref, watch } from 'vue'
 import type { ComputedRef, Ref } from 'vue'
 import {
-  createVideoClipFromUrl,
+  createLinkedVideoAudioClipsFromUrl,
   deleteClip,
   detachAudioFromVideo,
   moveClipOnTrack,
@@ -143,23 +143,61 @@ export function useTimelineEditorState (
     history.recordHistory()
     const trackClips = clips.value.filter(c => c.track === 'video')
     const end = trackClips.reduce((m, c) => Math.max(m, c.timelineStart + c.duration), 0)
-    const created = createVideoClipFromUrl({
+    const linked = createLinkedVideoAudioClipsFromUrl({
       src: clip.url,
       label: clip.label,
       timelineStart: end,
       sceneId: clip.sceneId,
       shotId: clip.shotId,
-      id: clip.id
+      videoId: clip.id
     })
-    clips.value = normalizeTrackLayout([...clips.value, created], 'video')
-    selectedClipId.value = created.id
+    clips.value = normalizeTrackLayout(
+      normalizeTrackLayout([...clips.value, linked.video, linked.audio], 'video'),
+      'audio'
+    )
+    selectedClipId.value = linked.video.id
     persist()
-    void probeVideoDuration(resolvePlaybackSrc(created.src)).then((dur) => {
-      clips.value = clips.value.map(c =>
-        c.id === created.id ? { ...c, sourceStart: 0, sourceEnd: dur, duration: dur } : c
-      )
+    void probeVideoDuration(resolvePlaybackSrc(linked.video.src)).then((dur) => {
+      clips.value = clips.value.map((c) => {
+        if (c.id === linked.video.id || c.id === linked.audio.id) {
+          return { ...c, sourceStart: 0, sourceEnd: dur, duration: dur }
+        }
+        return c
+      })
       persist()
     })
+  }
+
+  function syncLinkedCompanion (next: TimelineEditorClip[], clipId: string): TimelineEditorClip[] {
+    const clip = next.find(c => c.id === clipId)
+    if (!clip) return next
+    if (clip.linkedAudioId) {
+      return next.map((c) =>
+        c.id === clip.linkedAudioId
+          ? {
+              ...c,
+              timelineStart: clip.timelineStart,
+              sourceStart: clip.sourceStart,
+              sourceEnd: clip.sourceEnd,
+              duration: clip.duration
+            }
+          : c
+      )
+    }
+    if (clip.linkedVideoId) {
+      return next.map((c) =>
+        c.id === clip.linkedVideoId
+          ? {
+              ...c,
+              timelineStart: clip.timelineStart,
+              sourceStart: clip.sourceStart,
+              sourceEnd: clip.sourceEnd,
+              duration: clip.duration
+            }
+          : c
+      )
+    }
+    return next
   }
 
   function addAudioClip (opts: { url: string; label: string }) {
@@ -220,17 +258,20 @@ export function useTimelineEditorState (
   }
 
   function dragClipTo (clipId: string, timelineStart: number) {
-    clips.value = moveClipOnTrack(clips.value, clipId, timelineStart)
+    clips.value = syncLinkedCompanion(
+      moveClipOnTrack(clips.value, clipId, timelineStart),
+      clipId
+    )
     persist()
   }
 
   function trimLeft (clipId: string, deltaSec: number) {
-    clips.value = trimClipLeft(clips.value, clipId, deltaSec)
+    clips.value = syncLinkedCompanion(trimClipLeft(clips.value, clipId, deltaSec), clipId)
     persist()
   }
 
   function trimRight (clipId: string, deltaSec: number) {
-    clips.value = trimClipRight(clips.value, clipId, deltaSec)
+    clips.value = syncLinkedCompanion(trimClipRight(clips.value, clipId, deltaSec), clipId)
     persist()
   }
 

@@ -138,7 +138,7 @@ export function deleteClip (clips: TimelineEditorClip[], clipId: string): Timeli
   }
   if (clip.linkedVideoId) {
     next = next.map(c =>
-      c.id === clip.linkedVideoId ? { ...c, linkedAudioId: undefined, hasAudio: true } : c
+      c.id === clip.linkedVideoId ? { ...c, linkedAudioId: undefined, hasAudio: false } : c
     )
   }
   return normalizeTrackLayout(next, clip.track)
@@ -226,5 +226,55 @@ export function createVideoClipFromUrl (opts: {
     transitionOut: null,
     sceneId: opts.sceneId,
     shotId: opts.shotId
+  }
+}
+
+export function createLinkedVideoAudioClipsFromUrl (opts: {
+  src: string
+  label: string
+  timelineStart?: number
+  duration?: number
+  sceneId?: string
+  shotId?: string
+  videoId?: string
+  audioId?: string
+}): { video: TimelineEditorClip; audio: TimelineEditorClip } {
+  const duration = opts.duration ?? DEFAULT_CLIP_DURATION
+  const videoId = opts.videoId ?? newTimelineClipId()
+  const audioId = opts.audioId ?? newTimelineClipId()
+  const timelineStart = opts.timelineStart ?? 0
+
+  return {
+    video: {
+      id: videoId,
+      type: 'video',
+      track: 'video',
+      src: opts.src,
+      label: opts.label,
+      sourceStart: 0,
+      sourceEnd: duration,
+      timelineStart,
+      duration,
+      hasAudio: false,
+      linkedAudioId: audioId,
+      transitionIn: null,
+      transitionOut: null,
+      sceneId: opts.sceneId,
+      shotId: opts.shotId
+    },
+    audio: {
+      id: audioId,
+      type: 'audio',
+      track: 'audio',
+      src: opts.src,
+      label: `${opts.label} (audio)`,
+      sourceStart: 0,
+      sourceEnd: duration,
+      timelineStart,
+      duration,
+      linkedVideoId: videoId,
+      transitionIn: null,
+      transitionOut: null
+    }
   }
 }
