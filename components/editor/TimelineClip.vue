@@ -91,6 +91,7 @@ const emit = defineEmits<{
   select: []
   remove: []
   'drag-start': [PointerEvent]
+  'scrub-seek': [PointerEvent]
   'trim-start': [side: 'left' | 'right', ev: PointerEvent]
 }>()
 
@@ -102,6 +103,10 @@ const transitionLabel = computed(() => {
 })
 
 function onClipPointerDown (ev: PointerEvent) {
+  if (ev.altKey) {
+    emit('scrub-seek', ev)
+    return
+  }
   emit('select')
   if (props.activeTool === 'select') {
     emit('drag-start', ev)

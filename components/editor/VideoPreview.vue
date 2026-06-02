@@ -20,6 +20,7 @@
           muted
           style="opacity: 0"
         />
+        <audio ref="audioRef" class="sr-only" preload="auto" />
       </template>
       <p v-else class="text-sm text-zinc-500 px-6 text-center relative z-10">
         Add clips from Video or drag them on the timeline — preview syncs with the playhead.
@@ -88,9 +89,11 @@ defineEmits<{
 
 const videoRefA = ref<HTMLVideoElement | null>(null)
 const videoRefB = ref<HTMLVideoElement | null>(null)
+const audioRef = ref<HTMLAudioElement | null>(null)
 
 defineExpose({
   videoRefA,
-  videoRefB
+  videoRefB,
+  audioRef
 })
 </script>

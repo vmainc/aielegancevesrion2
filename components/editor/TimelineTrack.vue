@@ -23,6 +23,7 @@
         @select="$emit('select-clip', clip.id)"
         @remove="$emit('remove-clip', clip.id)"
         @drag-start="(ev) => $emit('clip-drag-start', clip.id, ev)"
+        @scrub-seek="(ev) => $emit('clip-scrub-seek', ev)"
         @trim-start="(side, ev) => $emit('clip-trim-start', clip.id, side, ev)"
       />
       <slot />
@@ -49,6 +50,7 @@ const emit = defineEmits<{
   'select-clip': [id: string]
   'remove-clip': [id: string]
   'clip-drag-start': [id: string, ev: PointerEvent]
+  'clip-scrub-seek': [ev: PointerEvent]
   'clip-trim-start': [id: string, side: 'left' | 'right', ev: PointerEvent]
 }>()
 

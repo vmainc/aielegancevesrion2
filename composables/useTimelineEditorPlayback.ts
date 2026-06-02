@@ -24,8 +24,10 @@ export function useTimelineEditorPlayback (opts: {
 }) {
   const videoEl = ref<HTMLVideoElement | null>(null)
   const videoElB = ref<HTMLVideoElement | null>(null)
+  const audioEl = ref<HTMLAudioElement | null>(null)
   const isScrubbing = ref(false)
   const activeClipId = ref<string | null>(null)
+  const activeAudioClipId = ref<string | null>(null)
   const blendPreview = shallowRef<PreviewBlendState>({
     outgoing: null,
     incoming: null,
@@ -47,6 +49,32 @@ export function useTimelineEditorPlayback (opts: {
     videoElB.value = secondary ?? null
   }
 
+  function bindAudio (el: HTMLAudioElement | null) {
+    audioEl.value = el
+  }
+
+  /** Audio track clip at playhead, or linked audio for the active video clip. */
+  function resolveAudioClipAtTime (t: number): TimelineEditorClip | null {
+    const onTrack = findClipAtTime(opts.clips(), 'audio', t)
+    if (onTrack) return onTrack
+    const video = findClipAtTime(opts.clips(), 'video', t)
+    if (video?.linkedAudioId) {
+      return opts.clips().find(c => c.id === video.linkedAudioId) ?? null
+    }
+    return null
+  }
+
+  function syncVideoMuteForPlayhead () {
+    const t = opts.playhead()
+    const video = findClipAtTime(opts.clips(), 'video', t)
+    const useEmbeddedVideoAudio = Boolean(
+      video?.hasAudio && !video.linkedAudioId && !resolveAudioClipAtTime(t)
+    )
+    const unmute = opts.isPlaying() && !isScrubbing.value && useEmbeddedVideoAudio
+    if (videoEl.value) videoEl.value.muted = !unmute
+    if (videoElB.value) videoElB.value.muted = true
+  }
+
   function localSourceTime (clip: TimelineEditorClip, timelineT: number): number {
     const local = timelineT - clip.timelineStart
     return clip.sourceStart + Math.max(0, Math.min(local, clip.duration - 0.001))
@@ -61,7 +89,11 @@ export function useTimelineEditorPlayback (opts: {
     }
   }
 
-  function seekElement (el: HTMLVideoElement, seconds: number, force: boolean) {
+  function seekMediaElement (
+    el: HTMLVideoElement | HTMLAudioElement,
+    seconds: number,
+    force: boolean
+  ) {
     const threshold = isScrubbing.value || force ? 0.03 : 0.08
     if (!force && Math.abs(el.currentTime - seconds) < threshold) return
     try {
@@ -72,6 +104,49 @@ export function useTimelineEditorPlayback (opts: {
       }
     } catch {
       /* ignore seek race */
+    }
+  }
+
+  function seekElement (el: HTMLVideoElement, seconds: number, force: boolean) {
+    seekMediaElement(el, seconds, force)
+  }
+
+  function ensureClipOnAudioElement (el: HTMLAudioElement, clip: TimelineEditorClip) {
+    const src = opts.resolveSrc(clip.src)
+    if (el.dataset.clipId !== clip.id || el.src !== src) {
+      el.dataset.clipId = clip.id
+      el.src = src
+      el.load()
+    }
+  }
+
+  function seekAudioToPlayhead (force = false) {
+    const t = opts.playhead()
+    const clip = resolveAudioClipAtTime(t)
+    const el = audioEl.value
+
+    if (!clip || !el) {
+      activeAudioClipId.value = null
+      el?.pause()
+      syncVideoMuteForPlayhead()
+      return
+    }
+
+    const target = localSourceTime(clip, t)
+    if (activeAudioClipId.value !== clip.id) {
+      activeAudioClipId.value = clip.id
+      ensureClipOnAudioElement(el, clip)
+    }
+
+    if (isScrubbing.value) {
+      el.pause()
+    }
+
+    seekMediaElement(el, target, force || isScrubbing.value)
+    syncVideoMuteForPlayhead()
+
+    if (opts.isPlaying() && !isScrubbing.value) {
+      el.play().catch(() => {})
     }
   }
 
@@ -123,19 +198,37 @@ export function useTimelineEditorPlayback (opts: {
 
   function resumePreviewPlayback () {
     if (!opts.isPlaying() || isScrubbing.value) return
+    syncVideoMuteForPlayhead()
     videoEl.value?.play().catch(() => {})
     videoElB.value?.play().catch(() => {})
+    seekAudioToPlayhead(false)
+  }
+
+  function sortedAudioClips () {
+    return clipsOnTrack(opts.clips(), 'audio')
   }
 
   /** While playing, skip empty timeline gaps instead of stopping. */
   function snapPlayheadOverGaps (t: number): number {
-    if (findClipAtTime(opts.clips(), 'video', t) || getBlendAtTime(opts.clips(), 'video', t)) {
+    if (
+      findClipAtTime(opts.clips(), 'video', t) ||
+      findClipAtTime(opts.clips(), 'audio', t) ||
+      getBlendAtTime(opts.clips(), 'video', t)
+    ) {
       return t
     }
-    const upcoming = sortedVideoClips().find(c => c.timelineStart > t + 0.0005)
-    if (upcoming) return upcoming.timelineStart
-    const last = sortedVideoClips().at(-1)
-    if (last) return Math.min(t, clipTimelineEnd(last))
+    const upcomingStarts = [
+      sortedVideoClips().find(c => c.timelineStart > t + 0.0005)?.timelineStart,
+      sortedAudioClips().find(c => c.timelineStart > t + 0.0005)?.timelineStart
+    ].filter((n): n is number => n != null)
+    if (upcomingStarts.length) return Math.min(...upcomingStarts)
+    const lastVideo = sortedVideoClips().at(-1)
+    const lastAudio = sortedAudioClips().at(-1)
+    const lastEnd = Math.max(
+      lastVideo ? clipTimelineEnd(lastVideo) : 0,
+      lastAudio ? clipTimelineEnd(lastAudio) : 0
+    )
+    if (lastEnd > 0) return Math.min(t, lastEnd)
     return t
   }
 
@@ -147,6 +240,8 @@ export function useTimelineEditorPlayback (opts: {
     if (blend && videoElB.value) {
       applyBlendToPreview(blend)
       activeClipId.value = blend.mix < 0.5 ? blend.outgoing.id : blend.incoming.id
+      seekAudioToPlayhead(force)
+      syncVideoMuteForPlayhead()
       return
     }
 
@@ -171,6 +266,7 @@ export function useTimelineEditorPlayback (opts: {
     }
 
     seekElement(el, target, force || isScrubbing.value)
+    seekAudioToPlayhead(force)
     resumePreviewPlayback()
   }
 
@@ -194,9 +290,11 @@ export function useTimelineEditorPlayback (opts: {
       opts.setPlaying(false)
       videoEl.value?.pause()
       videoElB.value?.pause()
+      audioEl.value?.pause()
     }
     isScrubbing.value = true
     seekPreviewToPlayhead(true)
+    seekAudioToPlayhead(true)
   }
 
   function endScrub () {
@@ -210,8 +308,13 @@ export function useTimelineEditorPlayback (opts: {
       return false
     }
     next = snapPlayheadOverGaps(next)
-    const last = sortedVideoClips().at(-1)
-    if (last && next >= clipTimelineEnd(last) - 0.001) {
+    const lastVideo = sortedVideoClips().at(-1)
+    const lastAudio = sortedAudioClips().at(-1)
+    const lastEnd = Math.max(
+      lastVideo ? clipTimelineEnd(lastVideo) : 0,
+      lastAudio ? clipTimelineEnd(lastAudio) : 0
+    )
+    if (lastEnd > 0 && next >= lastEnd - 0.001) {
       opts.setPlayhead(opts.duration())
       return false
     }
@@ -240,6 +343,7 @@ export function useTimelineEditorPlayback (opts: {
     const blend = getBlendAtTime(opts.clips(), 'video', t)
     if (blend && videoElB.value) {
       applyBlendToPreview(blend)
+      seekAudioToPlayhead(false)
     } else {
       seekPreviewToPlayhead(false)
       if (!findClipAtTime(opts.clips(), 'video', t)) {
@@ -272,8 +376,10 @@ export function useTimelineEditorPlayback (opts: {
     opts.setPlaying(true)
     lastTick.value = 0
     isScrubbing.value = false
+    syncVideoMuteForPlayhead()
     videoEl.value?.play().catch(() => opts.setPlaying(false))
     videoElB.value?.play().catch(() => {})
+    seekAudioToPlayhead(true)
     rafId.value = requestAnimationFrame(tick)
   }
 
@@ -281,6 +387,7 @@ export function useTimelineEditorPlayback (opts: {
     stop()
     videoEl.value?.pause()
     videoElB.value?.pause()
+    audioEl.value?.pause()
   }
 
   function stop () {
@@ -314,7 +421,9 @@ export function useTimelineEditorPlayback (opts: {
     activeVideoClip,
     blendPreview,
     bindVideo,
+    bindAudio,
     seekPreviewToPlayhead,
+    seekAudioToPlayhead,
     beginScrub,
     endScrub,
     scheduleSeek,

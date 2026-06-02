@@ -42,7 +42,11 @@
 
     <div class="rounded-xl border border-white/10 bg-zinc-950/90 overflow-hidden">
       <div ref="scrollRef" class="overflow-x-auto overflow-y-hidden custom-scrollbar">
-        <div class="relative" :style="{ width: `${96 + laneWidthPx}px`, minWidth: '100%' }">
+        <div
+          class="relative"
+          :class="isScrubbing ? 'timeline-scrubbing' : ''"
+          :style="{ width: `${96 + laneWidthPx}px`, minWidth: '100%' }"
+        >
           <div
             class="flex border-b border-white/10 bg-zinc-900/80 cursor-grab active:cursor-grabbing"
             @pointerdown="onScrubAreaDown"
@@ -75,6 +79,7 @@
               @select-clip="onSelectClip"
               @remove-clip="onRemoveClip"
               @clip-drag-start="onClipDragStart"
+              @clip-scrub-seek="onPlayheadScrub"
               @clip-trim-start="onTrimStart"
             />
             <EditorTimelineTrack
@@ -88,17 +93,17 @@
               @select-clip="onSelectClip"
               @remove-clip="onRemoveClip"
               @clip-drag-start="onClipDragStart"
+              @clip-scrub-seek="onPlayheadScrub"
               @clip-trim-start="onTrimStart"
             />
-
-            <EditorTimelinePlayhead
-              class="!left-0"
-              :left-px="TRACK_LABEL_WIDTH + timeToPx(playhead, zoom)"
-              :label="formatTimecode(playhead)"
-              :scrubbing="isScrubbing"
-              @scrub="onPlayheadScrub"
-            />
           </div>
+
+          <EditorTimelinePlayhead
+            :left-px="TRACK_LABEL_WIDTH + timeToPx(playhead, zoom)"
+            :label="formatTimecode(playhead)"
+            :scrubbing="isScrubbing"
+            @scrub="onPlayheadScrub"
+          />
         </div>
       </div>
     </div>
@@ -107,7 +112,7 @@
       <span class="text-primary">⌘Z</span> undo ·
       <span class="text-primary">Delete</span> or
       <span class="text-primary">Remove clip</span> to take a clip off the timeline (files stay in Assets → Video) ·
-      drag the teal playhead, ruler, or empty track to scrub ·
+      drag the teal playhead line (or time ruler) to scrub — preview updates frame-by-frame ·
       Space to play/pause ·
       <span class="text-primary">Blend with next</span> for crossfade. Saved in this browser.
     </p>
@@ -190,6 +195,7 @@ const playback = useTimelineEditorPlayback({
 const previewRef = ref<{
   videoRefA: HTMLVideoElement | null
   videoRefB: HTMLVideoElement | null
+  audioRef: HTMLAudioElement | null
 } | null>(null)
 const scrollRef = ref<HTMLElement | null>(null)
 const draggingClipId = ref<string | null>(null)
@@ -321,6 +327,7 @@ function bindPreviewVideo () {
   const p = previewRef.value
   if (!p) return
   playback.bindVideo(unwrapVideoRef(p.videoRefA), unwrapVideoRef(p.videoRefB))
+  playback.bindAudio(unwrapVideoRef(p.audioRef) as HTMLAudioElement | null)
 }
 
 function timeAtPointer (ev: PointerEvent): number {
@@ -331,7 +338,12 @@ function timeAtPointer (ev: PointerEvent): number {
 
 function applyPlayheadAtPointer (ev: PointerEvent) {
   setPlayhead(timeAtPointer(ev))
-  playback.scheduleSeek()
+  if (dragMode === 'scrub') {
+    playback.seekPreviewToPlayhead(true)
+    playback.seekAudioToPlayhead(true)
+  } else {
+    playback.scheduleSeek()
+  }
 }
 
 function isTypingTarget (target: EventTarget | null): boolean {
@@ -549,6 +561,10 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.timeline-scrubbing :deep([data-clip-block]) {
+  pointer-events: none;
+}
+
 .custom-scrollbar::-webkit-scrollbar {
   height: 8px;
 }
