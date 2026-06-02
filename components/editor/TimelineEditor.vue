@@ -113,6 +113,8 @@
       <span class="text-primary">Delete</span> or
       <span class="text-primary">Remove clip</span> to take a clip off the timeline (files stay in Assets → Video) ·
       drag the teal playhead line (or time ruler) to scrub — preview updates frame-by-frame ·
+      <span class="text-primary">C</span> razor tool ·
+      <span class="text-primary">V</span> select tool ·
       Space to play/pause ·
       <span class="text-primary">Blend with next</span> for crossfade. Saved in this browser.
     </p>
@@ -263,6 +265,19 @@ function onTogglePlay () {
 }
 
 function onEditorKeydown (e: KeyboardEvent) {
+  if (!isTypingTarget(e.target) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (e.key === 'c' || e.key === 'C') {
+      e.preventDefault()
+      activeTool.value = 'split'
+      toast.showToast('Razor tool active — click a clip to cut at the playhead.', 'info')
+      return
+    }
+    if (e.key === 'v' || e.key === 'V') {
+      e.preventDefault()
+      activeTool.value = 'select'
+      return
+    }
+  }
   if (e.key === ' ' && !isTypingTarget(e.target)) {
     e.preventDefault()
     onTogglePlay()

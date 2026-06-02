@@ -96,10 +96,10 @@
       type="button"
       class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
       :disabled="!canSplit"
-      title="Split selected clip at playhead"
+      title="Cut selected clip at playhead"
       @click="$emit('split')"
     >
-      Split at playhead
+      ✂ Cut at playhead
     </button>
 
     <div class="ml-auto flex items-center gap-2">
@@ -145,8 +145,8 @@ const emit = defineEmits<{
 const showFade = ref(false)
 
 const tools: { id: TimelineEditorTool; label: string; hint: string }[] = [
-  { id: 'select', label: 'Select', hint: 'Move and trim clips' },
-  { id: 'split', label: 'Split', hint: 'Click clip then split at playhead' }
+  { id: 'select', label: 'Select (V)', hint: 'Move and trim clips' },
+  { id: 'split', label: '✂ Razor (C)', hint: 'Razor tool: click clip to cut at the playhead' }
 ]
 
 const fadeOptions = [
