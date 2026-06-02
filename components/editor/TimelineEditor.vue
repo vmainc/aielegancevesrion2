@@ -139,6 +139,8 @@ const {
   duration,
   videoClips,
   audioClips,
+  canUndo,
+  canRedo,
   setPlayhead,
   setZoom,
   selectClip,
@@ -151,7 +153,12 @@ const {
   trimRight,
   addAudioClip,
   blendWithNextClip,
-  syncFromLegacy
+  syncFromLegacy,
+  undo,
+  redo,
+  beginGesture,
+  commitGesture,
+  cancelGesture
 } = useTimelineEditorState(projectIdRef, resolveSrc)
 
 const setPlaying = (v: boolean) => {
@@ -339,6 +346,7 @@ function onClipDragStart (clipId: string, ev: PointerEvent) {
   dragStartTimeline = clip.timelineStart
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp, { once: true })
+  window.addEventListener('pointercancel', onPointerUp, { once: true })
 }
 
 function onTrimStart (clipId: string, side: 'left' | 'right', ev: PointerEvent) {
@@ -352,6 +360,7 @@ function onTrimStart (clipId: string, side: 'left' | 'right', ev: PointerEvent) 
   dragStartDuration = clip.duration
   window.addEventListener('pointermove', onPointerMove)
   window.addEventListener('pointerup', onPointerUp, { once: true })
+  window.addEventListener('pointercancel', onPointerUp, { once: true })
 }
 
 function onScrubAreaDown (ev: PointerEvent) {
