@@ -307,7 +307,7 @@ import {
   projectAssetMediaPath,
   projectAssetPlaybackSrc
 } from '~/lib/project-asset-playback-url'
-import { navigateToVideoGenerationTool } from '~/lib/video-generation-prefill'
+import { navigateToVideoGenerationFromPanel } from '~/lib/video-generation-prefill'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { storyboardFramePreviewClasses } from '~/lib/storyboard-frame-image'
 import { mapStoryboardAssetsToShots } from '~/lib/storyboard-panel-assets'
@@ -548,11 +548,6 @@ function projectAspectForVideo (): '16:9' | '9:16' | '1:1' {
 }
 
 async function openVideoGenerationForPanel (shot: CreativeShot, scene: SceneRow) {
-  const prompt = finalVideoPrompt(shot, scene).trim()
-  if (!prompt) {
-    toast.showToast('This panel has no prompt yet.', 'info')
-    return
-  }
   const frame = panelStoryboardUrl(shot, scene.id)
   if (!frame) {
     toast.showToast('Generate a storyboard image for this panel first.', 'info')
@@ -563,18 +558,11 @@ async function openVideoGenerationForPanel (shot: CreativeShot, scene: SceneRow)
     toast.showToast('Save this project to the cloud before generating video.', 'info')
     return
   }
-  await navigateToVideoGenerationTool({
-    prompt,
-    startFrameUrl: frame,
-    aspectRatio: projectAspectForVideo(),
-    durationSeconds: snapToStoryboardClipSeconds(Number(shot.durationSeconds) || 5),
+  await navigateToVideoGenerationFromPanel({
     projectId: pid,
-    saveToProject: true,
-    addToTimeline: addToTimelineOnSave.value,
-    shotTitle: shot.title || undefined,
     sceneId: scene.id,
     shotId: shot.id,
-    source: 'project_video_panel'
+    addToTimeline: addToTimelineOnSave.value
   })
 }
 

@@ -8,15 +8,21 @@
         Choose video-capable models and describe your shot. Clips can be saved to a project for your timeline and appear under Assets → Video.
       </p>
       <p
-        v-if="prefillBanner"
+        v-if="loadingPanelPrefill"
+        class="mt-4 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-gray-800 animate-pulse"
+      >
+        Loading storyboard panel — prompt and starting frame…
+      </p>
+      <p
+        v-else-if="prefillBanner"
         class="mt-4 rounded-lg border border-primary/30 bg-primary/5 px-4 py-3 text-sm text-gray-800"
       >
         {{ prefillBanner }}
       </p>
     </header>
 
-    <div v-if="pending" class="text-sm text-gray-600 mb-6 animate-pulse">
-      Loading models…
+    <div v-if="pending || loadingPanelPrefill" class="text-sm text-gray-600 mb-6 animate-pulse">
+      {{ loadingPanelPrefill ? 'Loading panel from project…' : 'Loading models…' }}
     </div>
 
     <div
@@ -265,7 +271,7 @@
 
 <script setup lang="ts">
 definePageMeta({
-  /** Prefill uses sessionStorage + useState — client-only avoids SSR/hydration clearing the query. */
+  /** Panel prefill loads from API using query params — client-only avoids SSR clearing the route. */
   ssr: false
 })
 
@@ -314,15 +320,21 @@ const { projects, loadServerProjects, clientReady } = useCreativeProject()
 
 const prefillState = useVideoGenerationPrefillState()
 
-function prefillIdFromRoute (): string {
-  return typeof route.query.prefill === 'string' ? route.query.prefill.trim() : ''
-}
-
-function bootstrapPrefill (): VideoGenerationPrefill | null {
-  return resolveVideoGenerationPrefill(prefillIdFromRoute() || undefined)
-}
-
-const boot = bootstrapPrefill()
+const panelProjectId = computed(() => {
+  const v = typeof route.query.projectId === 'string' ? route.query.projectId.trim() : ''
+  return PB_ID.test(v) ? v : ''
+})
+const panelSceneId = computed(() => {
+  const v = typeof route.query.sceneId === 'string' ? route.query.sceneId.trim() : ''
+  return v || ''
+})
+const panelShotId = computed(() => {
+  const v = typeof route.query.shotId === 'string' ? route.query.shotId.trim() : ''
+  return v || ''
+})
+const hasPanelDeepLink = computed(() =>
+  Boolean(panelProjectId.value && panelSceneId.value && panelShotId.value)
+)
 
 const { data, pending, error: fetchError } = await useFetch<ApiPayload>('/api/openrouter/video-models')
 
@@ -333,38 +345,23 @@ const error = computed(() => {
 
 const models = computed(() => data.value?.models ?? [])
 
-const prompt = ref(boot?.prompt?.trim() ?? '')
-const startFrameUrl = ref<string | null>(boot?.startFrameUrl ?? null)
-const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(boot?.aspectRatio ?? '16:9')
-const durationSeconds = ref(
-  typeof boot?.durationSeconds === 'number' &&
-    (boot.durationSeconds === 5 || boot.durationSeconds === 10)
-    ? boot.durationSeconds
-    : 5
-)
+const prompt = ref('')
+const startFrameUrl = ref<string | null>(null)
+const aspectRatio = ref<'16:9' | '9:16' | '1:1'>('16:9')
+const durationSeconds = ref(5)
 const selectedModelIds = ref<string[]>([])
 const formError = ref('')
 const generating = ref(false)
 const doneCount = ref(0)
-const saveToProject = ref(boot?.saveToProject ?? true)
-const addToTimeline = ref(boot?.addToTimeline ?? false)
-const selectedProjectId = ref(
-  boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : ''
-)
+const saveToProject = ref(true)
+const addToTimeline = ref(false)
+const selectedProjectId = ref('')
 const slotByModel = reactive<Record<string, Slot>>({})
-const panelPrefill = ref<VideoGenerationPrefill | null>(boot)
-const prefillBanner = ref(
-  boot?.shotTitle?.trim()
-    ? `Opened from project storyboard — “${boot.shotTitle.trim()}”. Prompt and seed frame are prefilled; pick one or more models below.`
-    : boot?.prompt?.trim()
-      ? 'Opened from a project panel — prompt and seed frame are prefilled; pick one or more models below.'
-      : ''
-)
-/** Project id from project Video step — kept until the project list loads. */
-const pinnedProjectId = ref(
-  boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : ''
-)
-const prefillApplied = ref(Boolean(boot?.prompt?.trim()))
+const panelPrefill = ref<VideoGenerationPrefill | null>(null)
+const prefillBanner = ref('')
+const pinnedProjectId = ref('')
+const prefillApplied = ref(false)
+const loadingPanelPrefill = ref(false)
 
 const pbProjects = computed(() =>
   projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
@@ -388,22 +385,21 @@ watch([pbProjects, clientReady], () => {
   }
 }, { immediate: true })
 
-function applyVideoGenerationPrefill (p: VideoGenerationPrefill, queryProjectId?: string) {
+function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   panelPrefill.value = p
   prompt.value = p.prompt.trim()
-  if (p.startFrameUrl) startFrameUrl.value = p.startFrameUrl
+  if (p.startFrameUrl) {
+    startFrameUrl.value = appendPlaybackAccessToken(p.startFrameUrl.trim(), getAuthToken())
+  }
   if (p.aspectRatio) aspectRatio.value = p.aspectRatio
   if (typeof p.durationSeconds === 'number' && (p.durationSeconds === 5 || p.durationSeconds === 10)) {
     durationSeconds.value = p.durationSeconds
   }
   if (p.saveToProject !== undefined) saveToProject.value = p.saveToProject
   if (p.addToTimeline !== undefined) addToTimeline.value = p.addToTimeline
-  const pid =
-    (p.projectId && PB_ID.test(p.projectId) ? p.projectId : '') ||
-    (queryProjectId && PB_ID.test(queryProjectId) ? queryProjectId : '')
-  if (pid) {
-    pinnedProjectId.value = pid
-    selectedProjectId.value = pid
+  if (p.projectId && PB_ID.test(p.projectId)) {
+    pinnedProjectId.value = p.projectId
+    selectedProjectId.value = p.projectId
     saveToProject.value = true
     syncSelectedProjectFromPin()
   }
@@ -413,61 +409,88 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill, queryProjectId?
     : 'Opened from a project panel — prompt and seed frame are prefilled; pick one or more models below.'
 }
 
-function stripPrefillFromRoute () {
+function stripPanelQueryFromRoute () {
   if (!import.meta.client) return
-  if (!route.query.prefill && !route.query.projectId) return
   const q = { ...route.query }
-  delete q.prefill
-  delete q.projectId
-  void router.replace({ path: route.path, query: q })
+  let changed = false
+  for (const key of ['projectId', 'sceneId', 'shotId', 'addToTimeline', 'prefill'] as const) {
+    if (key in q) {
+      delete q[key]
+      changed = true
+    }
+  }
+  if (changed) void router.replace({ path: route.path, query: q })
+}
+
+async function fetchPanelPrefillFromApi (): Promise<boolean> {
+  if (!hasPanelDeepLink.value || prefillApplied.value || !import.meta.client) return false
+
+  await initAuth()
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Sign in to load this storyboard panel.', 'info')
+    stripPanelQueryFromRoute()
+    return false
+  }
+
+  loadingPanelPrefill.value = true
+  try {
+    const res = await $fetch<VideoGenerationPrefill>(
+      `/api/projects/${panelProjectId.value}/video-panel-prefill`,
+      {
+        query: {
+          sceneId: panelSceneId.value,
+          shotId: panelShotId.value
+        },
+        headers: { Authorization: `Bearer ${token}` }
+      }
+    )
+    const addFromQuery = route.query.addToTimeline === '1'
+    applyVideoGenerationPrefill({
+      ...res,
+      addToTimeline: addFromQuery || res.addToTimeline
+    })
+    prefillApplied.value = true
+    stripPanelQueryFromRoute()
+    return true
+  } catch (e: unknown) {
+    toast.showToast(
+      formatApiFetchError(e, 'Could not load panel for video generation.'),
+      'error'
+    )
+    stripPanelQueryFromRoute()
+    return false
+  } finally {
+    loadingPanelPrefill.value = false
+  }
 }
 
 function tryApplyPrefillFromHandoff (): boolean {
-  if (prefillApplied.value || !import.meta.client) return false
+  if (prefillApplied.value || !import.meta.client || hasPanelDeepLink.value) return false
 
   const id = typeof route.query.prefill === 'string' ? route.query.prefill.trim() : ''
-  const queryProjectId =
-    typeof route.query.projectId === 'string' ? route.query.projectId.trim() : ''
-
   const payload = resolveVideoGenerationPrefill(id || undefined)
-  if (payload?.prompt?.trim()) {
-    applyVideoGenerationPrefill(payload, queryProjectId)
-    prefillApplied.value = true
-    clearVideoGenerationHandoff(id)
-    stripPrefillFromRoute()
-    return true
-  }
+  if (!payload?.prompt?.trim()) return false
 
-  if (queryProjectId && PB_ID.test(queryProjectId)) {
-    pinnedProjectId.value = queryProjectId
-    selectedProjectId.value = queryProjectId
-    saveToProject.value = true
-    syncSelectedProjectFromPin()
-    prefillApplied.value = true
-    stripPrefillFromRoute()
-    return true
-  }
-
-  return false
+  applyVideoGenerationPrefill(payload)
+  prefillApplied.value = true
+  clearVideoGenerationHandoff(id)
+  stripPanelQueryFromRoute()
+  return true
 }
 
 function reportPrefillExpiredIfNeeded () {
-  if (prefillApplied.value || !import.meta.client) return
+  if (prefillApplied.value || !import.meta.client || hasPanelDeepLink.value) return
   const id = typeof route.query.prefill === 'string' ? route.query.prefill.trim() : ''
   if (!id) return
   toast.showToast('Prefill data expired — open Generate video from the project again.', 'info')
-  stripPrefillFromRoute()
+  stripPanelQueryFromRoute()
 }
 
-tryApplyPrefillFromHandoff()
-
-if (prefillApplied.value) {
-  clearVideoGenerationHandoff(prefillIdFromRoute())
-}
-
-onMounted(() => {
-  if (prefillApplied.value) {
-    stripPrefillFromRoute()
+onMounted(async () => {
+  await initAuth()
+  if (hasPanelDeepLink.value) {
+    await fetchPanelPrefillFromApi()
   } else if (!tryApplyPrefillFromHandoff()) {
     reportPrefillExpiredIfNeeded()
   }
@@ -477,6 +500,15 @@ onMounted(() => {
     })
   }
 })
+
+watch(
+  () => [panelProjectId.value, panelSceneId.value, panelShotId.value] as const,
+  () => {
+    if (hasPanelDeepLink.value && !prefillApplied.value) {
+      void fetchPanelPrefillFromApi()
+    }
+  }
+)
 
 watch(
   () => prefillState.value,
@@ -508,6 +540,7 @@ const hasAnySlot = computed(() => Object.keys(slotByModel).length > 0)
 
 const canSubmit = computed(() =>
   !generating.value &&
+  !loadingPanelPrefill.value &&
   selectedModelIds.value.length > 0 &&
   prompt.value.trim().length > 0 &&
   !pending.value &&

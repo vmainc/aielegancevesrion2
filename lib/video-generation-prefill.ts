@@ -1,6 +1,6 @@
 export type VideoGenerationAspectRatio = '16:9' | '9:16' | '1:1'
 
-/** Payload stored in sessionStorage and opened on Tools → Video generation. */
+/** Payload for Tools → Video generation (from API or legacy handoff). */
 export interface VideoGenerationPrefill {
   prompt: string
   startFrameUrl?: string | null
@@ -20,12 +20,11 @@ export const VIDEO_GEN_PREFILL_STORAGE_PREFIX = 'aie_video_gen_prefill:'
 
 const PB_ID = /^[a-z0-9]{15}$/
 
-/** In-memory handoff for same-tab navigation (more reliable than sessionStorage alone). */
+/** Legacy in-memory handoff (sessionStorage fallback only). */
 export function useVideoGenerationPrefillState () {
   return useState<VideoGenerationPrefill | null>('aie_video_generation_prefill', () => null)
 }
 
-/** Duplicate handoff — survives if prefill state is cleared before the page setup runs. */
 export function useVideoGenerationDraft () {
   return useState<VideoGenerationPrefill | null>('aie_video_generation_draft', () => null)
 }
@@ -40,40 +39,13 @@ export function saveVideoGenerationPrefill (payload: VideoGenerationPrefill): st
       VIDEO_GEN_PREFILL_STORAGE_PREFIX + id,
       JSON.stringify(payload)
     )
-    try {
-      localStorage.setItem(
-        VIDEO_GEN_PREFILL_STORAGE_PREFIX + id,
-        JSON.stringify({ savedAt: Date.now(), payload })
-      )
-    } catch {
-      /* quota — sessionStorage is enough */
-    }
   }
   return id
 }
 
 export function loadVideoGenerationPrefill (id: string): VideoGenerationPrefill | null {
   if (!import.meta.client || !id.trim()) return null
-  const key = VIDEO_GEN_PREFILL_STORAGE_PREFIX + id.trim()
-  const raw = sessionStorage.getItem(key)
-  const parsed = parseStoredPrefill(raw)
-  if (parsed) return parsed
-  try {
-    const localRaw = localStorage.getItem(key)
-    if (!localRaw) return null
-    const wrapped = JSON.parse(localRaw) as { savedAt?: number; payload?: VideoGenerationPrefill }
-    if (!wrapped?.payload || typeof wrapped.savedAt !== 'number') return null
-    if (Date.now() - wrapped.savedAt > 15 * 60 * 1000) {
-      localStorage.removeItem(key)
-      return null
-    }
-    return parseStoredPrefill(JSON.stringify(wrapped.payload))
-  } catch {
-    return null
-  }
-}
-
-function parseStoredPrefill (raw: string | null): VideoGenerationPrefill | null {
+  const raw = sessionStorage.getItem(VIDEO_GEN_PREFILL_STORAGE_PREFIX + id.trim())
   if (!raw) return null
   try {
     const parsed = JSON.parse(raw) as VideoGenerationPrefill
@@ -86,49 +58,69 @@ function parseStoredPrefill (raw: string | null): VideoGenerationPrefill | null 
 
 export function clearVideoGenerationPrefill (id: string): void {
   if (!import.meta.client || !id.trim()) return
-  const key = VIDEO_GEN_PREFILL_STORAGE_PREFIX + id.trim()
-  sessionStorage.removeItem(key)
-  try {
-    localStorage.removeItem(key)
-  } catch {
-    /* ignore */
-  }
+  sessionStorage.removeItem(VIDEO_GEN_PREFILL_STORAGE_PREFIX + id.trim())
 }
 
-/** Resolve prefill: Nuxt state → draft → browser storage (client only). */
+/** Legacy handoff: useState → draft → sessionStorage (?prefill=uuid). */
 export function resolveVideoGenerationPrefill (prefillId?: string): VideoGenerationPrefill | null {
-  const fromState = useVideoGenerationPrefillState().value
-  if (fromState?.prompt) return fromState
-
-  const fromDraft = useVideoGenerationDraft().value
-  if (fromDraft?.prompt) return fromDraft
-
-  const id = (prefillId || '').trim()
-  if (id && import.meta.client) {
-    return loadVideoGenerationPrefill(id)
+  const state = useVideoGenerationPrefillState().value
+  if (state?.prompt?.trim()) return state
+  const draft = useVideoGenerationDraft().value
+  if (draft?.prompt?.trim()) return draft
+  if (prefillId?.trim()) {
+    const loaded = loadVideoGenerationPrefill(prefillId.trim())
+    if (loaded?.prompt?.trim()) return loaded
   }
   return null
 }
 
 export function clearVideoGenerationHandoff (prefillId?: string): void {
   useVideoGenerationPrefillState().value = null
-  useVideoGenerationDraft().value = null
-  const id = (prefillId || '').trim()
-  if (id) clearVideoGenerationPrefill(id)
+  if (prefillId?.trim()) clearVideoGenerationPrefill(prefillId.trim())
 }
 
-export async function navigateToVideoGenerationTool (
-  payload: VideoGenerationPrefill
-): Promise<void> {
-  useVideoGenerationPrefillState().value = payload
-  useVideoGenerationDraft().value = payload
-  const id = saveVideoGenerationPrefill(payload)
-  const query: Record<string, string> = { prefill: id }
-  if (payload.projectId && PB_ID.test(payload.projectId)) {
-    query.projectId = payload.projectId
+/** Open video tool for a storyboard panel — loads prompt + frame from the server via query params. */
+export async function navigateToVideoGenerationFromPanel (opts: {
+  projectId: string
+  sceneId: string
+  shotId: string
+  addToTimeline?: boolean
+}): Promise<void> {
+  const query: Record<string, string> = {
+    projectId: opts.projectId,
+    sceneId: opts.sceneId,
+    shotId: opts.shotId
   }
+  if (opts.addToTimeline) query.addToTimeline = '1'
   await navigateTo({
     path: '/tools/video-generation',
     query
+  })
+}
+
+/** @deprecated Prefer navigateToVideoGenerationFromPanel — kept for callers passing a full payload. */
+export async function navigateToVideoGenerationTool (
+  payload: VideoGenerationPrefill
+): Promise<void> {
+  if (
+    payload.projectId &&
+    payload.sceneId &&
+    payload.shotId &&
+    PB_ID.test(payload.projectId)
+  ) {
+    await navigateToVideoGenerationFromPanel({
+      projectId: payload.projectId,
+      sceneId: payload.sceneId,
+      shotId: payload.shotId,
+      addToTimeline: payload.addToTimeline
+    })
+    return
+  }
+  useVideoGenerationPrefillState().value = payload
+  useVideoGenerationDraft().value = payload
+  const id = saveVideoGenerationPrefill(payload)
+  await navigateTo({
+    path: '/tools/video-generation',
+    query: { prefill: id }
   })
 }
