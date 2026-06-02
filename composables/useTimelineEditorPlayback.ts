@@ -1,6 +1,6 @@
 import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { clipTimelineEnd } from '~/lib/timeline-editor/geometry'
-import { findClipAtTime } from '~/lib/timeline-editor/clip-ops'
+import { clipsOnTrack, findClipAtTime } from '~/lib/timeline-editor/clip-ops'
 import { getBlendAtTime, type TimelineBlendFrame } from '~/lib/timeline-editor/blend'
 import type { TimelineEditorClip } from '~/types/timeline-editor'
 
@@ -117,6 +117,28 @@ export function useTimelineEditorPlayback (opts: {
     }
   }
 
+  function sortedVideoClips () {
+    return clipsOnTrack(opts.clips(), 'video')
+  }
+
+  function resumePreviewPlayback () {
+    if (!opts.isPlaying() || isScrubbing.value) return
+    videoEl.value?.play().catch(() => {})
+    videoElB.value?.play().catch(() => {})
+  }
+
+  /** While playing, skip empty timeline gaps instead of stopping. */
+  function snapPlayheadOverGaps (t: number): number {
+    if (findClipAtTime(opts.clips(), 'video', t) || getBlendAtTime(opts.clips(), 'video', t)) {
+      return t
+    }
+    const upcoming = sortedVideoClips().find(c => c.timelineStart > t + 0.0005)
+    if (upcoming) return upcoming.timelineStart
+    const last = sortedVideoClips().at(-1)
+    if (last) return Math.min(t, clipTimelineEnd(last))
+    return t
+  }
+
   function seekPreviewToPlayhead (force = false) {
     const t = opts.playhead()
     const blend = getBlendAtTime(opts.clips(), 'video', t)
@@ -144,11 +166,12 @@ export function useTimelineEditorPlayback (opts: {
       videoElB.value.pause()
     }
 
-    if (isScrubbing.value || force) {
+    if (isScrubbing.value) {
       el.pause()
     }
 
     seekElement(el, target, force || isScrubbing.value)
+    resumePreviewPlayback()
   }
 
   function scheduleSeek () {
@@ -180,49 +203,57 @@ export function useTimelineEditorPlayback (opts: {
     isScrubbing.value = false
   }
 
+  function advancePlayheadByDelta (dt: number): boolean {
+    let next = opts.playhead() + dt
+    if (next >= opts.duration()) {
+      opts.setPlayhead(opts.duration())
+      return false
+    }
+    next = snapPlayheadOverGaps(next)
+    const last = sortedVideoClips().at(-1)
+    if (last && next >= clipTimelineEnd(last) - 0.001) {
+      opts.setPlayhead(opts.duration())
+      return false
+    }
+    opts.setPlayhead(next)
+    return true
+  }
+
   function tick (now: number) {
     if (!opts.isPlaying()) return
-    const blend = getBlendAtTime(opts.clips(), 'video', opts.playhead())
     const el = videoEl.value
     if (!el) {
       stop()
       return
     }
 
-    if (blend && videoElB.value) {
-      applyBlendToPreview(blend)
-      if (lastTick.value) {
-        const dt = (now - lastTick.value) / 1000
-        const next = opts.playhead() + dt
-        if (next >= opts.duration()) {
-          opts.setPlayhead(opts.duration())
-          stop()
-          return
-        }
-        opts.setPlayhead(next)
-      }
-      lastTick.value = now
-      rafId.value = requestAnimationFrame(tick)
-      return
-    }
-
-    const clip = activeVideoClip.value
-    if (!clip) {
-      stop()
-      return
-    }
-
     if (lastTick.value) {
       const dt = (now - lastTick.value) / 1000
-      const next = opts.playhead() + dt
-      if (next >= opts.duration()) {
-        opts.setPlayhead(opts.duration())
+      if (!advancePlayheadByDelta(dt)) {
         stop()
         return
       }
-      opts.setPlayhead(next)
     }
     lastTick.value = now
+
+    const t = opts.playhead()
+    const blend = getBlendAtTime(opts.clips(), 'video', t)
+    if (blend && videoElB.value) {
+      applyBlendToPreview(blend)
+    } else {
+      seekPreviewToPlayhead(false)
+      if (!findClipAtTime(opts.clips(), 'video', t)) {
+        const upcoming = sortedVideoClips().find(c => c.timelineStart >= t - 0.001)
+        if (upcoming) {
+          opts.setPlayhead(upcoming.timelineStart)
+          seekPreviewToPlayhead(false)
+        } else {
+          stop()
+          return
+        }
+      }
+    }
+
     rafId.value = requestAnimationFrame(tick)
   }
 
@@ -267,27 +298,9 @@ export function useTimelineEditorPlayback (opts: {
   }
 
   watch(activeVideoClip, () => {
-    if (!opts.isPlaying() && !isScrubbing.value) return
-    scheduleSeek()
+    if (opts.isPlaying()) return
+    if (!isScrubbing.value) scheduleSeek()
   })
-
-  watch(
-    () => opts.playhead(),
-    (t) => {
-      if (!opts.isPlaying()) return
-      const clip = findClipAtTime(opts.clips(), 'video', t)
-      if (!clip) return
-      const end = clipTimelineEnd(clip)
-      if (t >= end - 0.02) {
-        const next = opts
-          .clips()
-          .filter(c => c.track === 'video')
-          .sort((a, b) => a.timelineStart - b.timelineStart)
-          .find(c => c.timelineStart >= end - 0.01 && c.id !== clip.id)
-        if (next) opts.setPlayhead(next.timelineStart)
-      }
-    }
-  )
 
   onUnmounted(() => {
     stop()
