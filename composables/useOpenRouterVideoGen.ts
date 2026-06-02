@@ -19,7 +19,7 @@ export type OpenRouterVideoGenerateInput = {
   durationSeconds?: number
   frameImageUrl?: string
   supportedDurations?: number[]
-  /** Pass false for music videos (external audio track). */
+  /** Rare opt-in: OpenRouter model-synthesized audio. Default false — add music on the timeline. */
   generateAudio?: boolean
 }
 
@@ -63,7 +63,7 @@ export async function generateOpenRouterVideo (
       resolution: input.resolution || '720p',
       durationSeconds,
       frameImageUrl: input.frameImageUrl?.trim() || undefined,
-      ...(input.generateAudio === false ? { generateAudio: false } : {})
+      generateAudio: input.generateAudio === true
     }
   })
 

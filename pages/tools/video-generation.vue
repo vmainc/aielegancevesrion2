@@ -5,7 +5,7 @@
         Video generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Choose video-capable models and describe your shot. Clips can be saved to a project for your timeline and appear under Assets → Video.
+        Choose video-capable models and describe your shot. Generated clips are visuals only (no AI background music) — add score or tracks on the project timeline later. Clips can be saved under Assets → Video.
       </p>
       <p
         v-if="loadingPanelPrefill"
@@ -55,7 +55,7 @@
               v-model="prompt"
               rows="4"
               class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-              placeholder="Describe the scene, motion, camera, mood, and duration you want"
+              placeholder="Motion, camera, lighting, mood — no music (add score on the timeline later)"
             />
           </div>
           <VideoStartFramePicker
@@ -88,6 +88,7 @@
             </div>
           </div>
           <p class="text-xs text-gray-500">
+            Prompts exclude background music so your score stays consistent — upload or generate music separately and place it on the timeline audio track.
             Video on OpenRouter is API-only and may be in alpha.
             <a
               href="https://openrouter.ai/models?fmt=cards&output_modalities=video"

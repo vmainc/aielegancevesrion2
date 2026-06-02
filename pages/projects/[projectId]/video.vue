@@ -23,6 +23,9 @@
             with the full production prompt and frame prefilled — pick multiple models there.
             When a clip is ready it replaces the still here (play inline or fullscreen).
             Clips are <span class="font-medium text-gray-800">5s or 10s</span> per shot; the server snaps to what the model supports.
+            Generated video has <span class="font-medium text-gray-800">no AI background music</span> — add music on the
+            <NuxtLink :to="`/projects/${projectId}/timeline`" class="text-primary font-medium hover:underline">timeline</NuxtLink>
+            audio track.
             Saved clips appear under
             <NuxtLink to="/assets/video" class="text-primary font-medium hover:underline">Assets → Video</NuxtLink>.
           </p>
@@ -220,7 +223,7 @@
     <div class="rounded-xl border border-gray-200 bg-white p-6 mb-8">
       <h2 class="text-lg font-semibold text-gray-900 mb-2">Timeline editor</h2>
       <p class="text-sm text-gray-600 mb-4">
-        Drag clips on a two-track layout (video + audio), reorder shots, and preview the sequence in order.
+        Drag clips on a two-track layout (video + audio). Add your own music or diegetic audio on the audio track — AI clips are generated without a score.
       </p>
       <NuxtLink
         :to="`/projects/${projectId}/timeline`"

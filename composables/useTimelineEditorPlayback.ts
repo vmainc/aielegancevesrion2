@@ -227,7 +227,15 @@ export function useTimelineEditorPlayback (opts: {
   }
 
   function play () {
-    const clip = findClipAtTime(opts.clips(), 'video', opts.playhead())
+    let clip = findClipAtTime(opts.clips(), 'video', opts.playhead())
+    if (!clip) {
+      const sorted = opts
+        .clips()
+        .filter(c => c.track === 'video')
+        .sort((a, b) => a.timelineStart - b.timelineStart)
+      clip = sorted[0] ?? null
+      if (clip) opts.setPlayhead(clip.timelineStart)
+    }
     if (!clip) return
     seekPreviewToPlayhead(true)
     opts.setPlaying(true)

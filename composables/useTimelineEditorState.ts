@@ -19,6 +19,7 @@ import {
   loadTimelineFromStorage,
   saveTimelineToStorage
 } from '~/lib/timeline-editor/storage'
+import { cloneTimelineClips } from '~/lib/timeline-editor/clone'
 import { useTimelineEditorHistory } from '~/composables/useTimelineEditorHistory'
 import type { TimelineHistorySnapshot } from '~/lib/timeline-editor/history'
 import {
@@ -51,14 +52,14 @@ export function useTimelineEditorState (
 
   function getSnapshot (): TimelineHistorySnapshot {
     return {
-      clips: structuredClone(clips.value),
+      clips: cloneTimelineClips(clips.value),
       zoom: zoom.value,
       selectedClipId: selectedClipId.value
     }
   }
 
   function applySnapshot (s: TimelineHistorySnapshot) {
-    clips.value = structuredClone(s.clips)
+    clips.value = cloneTimelineClips(s.clips)
     zoom.value = s.zoom
     selectedClipId.value = s.selectedClipId
     const max = totalTimelineDuration(clips.value)

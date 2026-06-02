@@ -1,3 +1,4 @@
+import { cloneTimelineClips } from '~/lib/timeline-editor/clone'
 import type { TimelineEditorClip } from '~/types/timeline-editor'
 
 export interface TimelineHistorySnapshot {
@@ -10,7 +11,7 @@ export const MAX_TIMELINE_HISTORY = 50
 
 export function cloneTimelineSnapshot (s: TimelineHistorySnapshot): TimelineHistorySnapshot {
   return {
-    clips: structuredClone(s.clips),
+    clips: cloneTimelineClips(s.clips),
     zoom: s.zoom,
     selectedClipId: s.selectedClipId
   }

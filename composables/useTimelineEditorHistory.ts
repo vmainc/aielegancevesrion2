@@ -1,4 +1,5 @@
 import { computed, ref } from 'vue'
+import { cloneTimelineClips } from '~/lib/timeline-editor/clone'
 import {
   cloneTimelineSnapshot,
   MAX_TIMELINE_HISTORY,
@@ -90,7 +91,7 @@ export function useTimelineEditorHistory (getState: () => TimelineHistorySnapsho
   function mutate (fn: (clips: TimelineEditorClip[]) => TimelineEditorClip[], opts?: { record?: boolean }) {
     if (opts?.record !== false) recordHistory()
     const state = getState()
-    const nextClips = fn(structuredClone(state.clips))
+    const nextClips = fn(cloneTimelineClips(state.clips))
     applyState({ ...state, clips: nextClips })
   }
 

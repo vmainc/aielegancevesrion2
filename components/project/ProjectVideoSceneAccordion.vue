@@ -86,6 +86,7 @@
 
 <script setup lang="ts">
 import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
+import { buildVideoSceneGroups } from '~/lib/project-scene-groups'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import type { ProjectAsset } from '~/types/project-asset'
@@ -97,13 +98,11 @@ const props = defineProps<{
 const { isAuthenticated, getAuthToken, initAuth } = useAuth()
 const authTokenState = useState<string | null>('auth_token')
 const toast = useToast()
+const sceneHydration = useProjectScenesHydration()
 
 const loading = ref(false)
 const error = ref('')
 const items = ref<ProjectAsset[]>([])
-const scenes = ref<Array<{ id: string; heading?: string; sortOrder?: number }>>([])
-
-type SceneGroup = { key: string; title: string; sortOrder: number; items: ProjectAsset[] }
 
 function formatDate (iso: string): string {
   if (!iso) return ''
@@ -120,47 +119,15 @@ function videoSrc (a: ProjectAsset): string {
   return appendPlaybackAccessToken(projectAssetMediaPath(props.projectId, a.id), getAuthToken())
 }
 
-const sceneMap = computed(() => {
-  const map = new Map<string, { heading: string; sortOrder: number }>()
-  for (const s of scenes.value) {
-    map.set(s.id, {
-      heading: (s.heading || '').trim() || 'Scene',
-      sortOrder: Number.isFinite(Number(s.sortOrder)) ? Number(s.sortOrder) : 9_999
-    })
-  }
-  return map
-})
-
-const sceneGroups = computed<SceneGroup[]>(() => {
-  const byScene = new Map<string, ProjectAsset[]>()
-  for (const a of items.value) {
-    const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
-    const sid = typeof meta.scene_id === 'string' ? meta.scene_id.trim() : ''
-    const key = sid || '__unassigned_scene__'
-    const cur = byScene.get(key) || []
-    cur.push(a)
-    byScene.set(key, cur)
-  }
-  const out: SceneGroup[] = []
-  for (const [key, rows] of byScene.entries()) {
-    const info = sceneMap.value.get(key)
-    out.push({
-      key,
-      title: key === '__unassigned_scene__'
-        ? 'Unassigned scene'
-        : `${info?.heading || 'Scene'} (${key.slice(0, 8)})`,
-      sortOrder: info?.sortOrder ?? 9_999,
-      items: [...rows].sort((a, b) =>
-        String(b.updated || b.created || '').localeCompare(String(a.updated || a.created || ''))
-      )
-    })
-  }
-  return out.sort((a, b) => {
-    if (a.key === '__unassigned_scene__') return 1
-    if (b.key === '__unassigned_scene__') return -1
-    if (a.sortOrder !== b.sortOrder) return a.sortOrder - b.sortOrder
-    return a.title.localeCompare(b.title)
-  })
+const sceneGroups = computed(() => {
+  void sceneHydration.revision.value
+  return buildVideoSceneGroups(
+    items.value,
+    sceneHydration.getSceneMap(props.projectId),
+    list => [...list].sort((a, b) =>
+      String(b.updated || b.created || '').localeCompare(String(a.updated || a.created || ''))
+    )
+  )
 })
 
 function addToTimeline (a: ProjectAsset) {
@@ -184,17 +151,14 @@ async function fetchData () {
     await initAuth()
     const token = getAuthToken()
     if (!token) throw new Error('Missing auth token')
-    const [assetRes, sceneRes] = await Promise.all([
+    sceneHydration.invalidateProject(props.projectId)
+    const [assetRes] = await Promise.all([
       $fetch<{ items: ProjectAsset[] }>(`/api/projects/${props.projectId}/assets?kind=video`, {
         headers: { Authorization: `Bearer ${token}` }
       }),
-      $fetch<{ scenes: Array<{ id: string; heading?: string; sortOrder?: number }> }>(
-        `/api/projects/${props.projectId}/scenes`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      ).catch(() => ({ scenes: [] }))
+      sceneHydration.ensureProject(props.projectId)
     ])
     items.value = assetRes.items || []
-    scenes.value = sceneRes.scenes || []
   } catch (e: unknown) {
     error.value = formatApiFetchError(e, 'Could not load project videos.')
   } finally {

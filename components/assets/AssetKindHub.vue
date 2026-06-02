@@ -775,6 +775,7 @@
 
 <script setup lang="ts">
 import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
+import { buildVideoSceneGroups } from '~/lib/project-scene-groups'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { visualBriefForCharacterCreator } from '~/lib/character-visual-description'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
@@ -818,6 +819,7 @@ const { isAuthenticated, initAuth, getAuthToken } = useAuth()
 const authTokenState = useState<string | null>('auth_token')
 const { projects, loadServerProjects, clientReady } = useCreativeProject()
 const toast = useToast()
+const sceneHydration = useProjectScenesHydration()
 const route = useRoute()
 
 const loading = ref(true)
@@ -1162,39 +1164,12 @@ function sortVideoAssetsForDisplay (list: ProjectAsset[]): ProjectAsset[] {
   )
 }
 
-function videoSceneKey (a: ProjectAsset): string {
-  const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
-  const sid = typeof meta.scene_id === 'string' ? meta.scene_id.trim() : ''
-  return sid || '__unassigned_scene__'
-}
-
-function videoSceneTitle (key: string): string {
-  if (key === '__unassigned_scene__') return 'Unassigned scene'
-  return `Scene ${key.slice(0, 8)}`
-}
-
 function videoSceneGroupsForProject (group: AssetProjectGroup): AssetSceneGroup[] {
-  const byScene = new Map<string, ProjectAsset[]>()
-  for (const a of group.items) {
-    const key = videoSceneKey(a)
-    const cur = byScene.get(key) || []
-    cur.push(a)
-    byScene.set(key, cur)
-  }
-  const out: AssetSceneGroup[] = []
-  for (const [key, rows] of byScene.entries()) {
-    out.push({
-      key,
-      title: videoSceneTitle(key),
-      items: sortVideoAssetsForDisplay(rows)
-    })
-  }
-  out.sort((a, b) => {
-    if (a.key === '__unassigned_scene__') return 1
-    if (b.key === '__unassigned_scene__') return -1
-    return a.key.localeCompare(b.key)
-  })
-  return out
+  void sceneHydration.revision.value
+  const sceneMap = group.projectId && PB_ID.test(group.projectId)
+    ? sceneHydration.getSceneMap(group.projectId)
+    : new Map()
+  return buildVideoSceneGroups(group.items, sceneMap, sortVideoAssetsForDisplay)
 }
 
 const characterProjectGroups = computed<AssetProjectGroup[]>(() => {
@@ -1206,6 +1181,18 @@ const videoProjectGroups = computed<AssetProjectGroup[]>(() => {
   if (props.kind !== 'video') return []
   return buildProjectAssetGroups(visibleItems.value, sortVideoAssetsForDisplay)
 })
+
+watch(
+  [videoProjectGroups, () => props.kind, isAuthenticated],
+  () => {
+    if (props.kind !== 'video' || !isAuthenticated.value) return
+    const ids = videoProjectGroups.value
+      .map(g => g.projectId)
+      .filter((id): id is string => Boolean(id && PB_ID.test(id)))
+    void sceneHydration.ensureProjects(ids)
+  },
+  { immediate: true }
+)
 
 const libraryKindProjectGroups = computed(() => {
   if (props.kind === 'character' || props.kind === 'video') return []

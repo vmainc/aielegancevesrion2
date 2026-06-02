@@ -14,7 +14,7 @@ const CONTEXT_HINTS: Record<string, string> = {
   character:
     'Character portrait / reference image for film or games. Keep names and key facts if present; add lighting, wardrobe, and camera-friendly detail.',
   video:
-    'AI video generation: motion, camera, lighting, time, mood. Be specific and film-literate.',
+    'AI video generation: motion, camera, lighting, time, mood. Be specific and film-literate. Never add background music, score, or soundtrack — music is added on the timeline later. Diegetic ambient sound or dialogue only if the user asks.',
   image:
     'Text-to-image prompt: composition, style, lighting, subject detail.',
   concept:
@@ -28,7 +28,7 @@ const CONTEXT_HINTS: Record<string, string> = {
   shot_image:
     'Single-frame image prompt for a storyboard shot.',
   shot_video:
-    'Motion/video prompt for a storyboard shot.',
+    'Motion/video prompt for a storyboard shot. No background music or score unless the user explicitly requests it.',
   question:
     'Question to AI models: clear, specific, one main ask.',
   comment:

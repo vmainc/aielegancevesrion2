@@ -7,6 +7,10 @@ import {
   getOpenRouterVideoModelSupportedDurations,
   snapVideoDurationToOpenRouterModel
 } from '~/server/utils/openrouter-video-model-durations'
+import {
+  applyVideoNoBackgroundMusicPolicy,
+  openRouterWantsGeneratedVideoAudio
+} from '~/lib/video-generation-audio-policy'
 import { registerVideoGenerationJob } from '~/server/utils/video-generation-job-registry'
 
 type Aspect =
@@ -90,23 +94,19 @@ export default defineEventHandler(async (event) => {
   }
   const durationSeconds = snapVideoDurationToOpenRouterModel(durationRaw, supportedDurations)
 
-  const generateAudio =
-    body?.generateAudio === false ||
-    body?.generate_audio === false ||
-    body?.generateAudio === 'false' ||
-    body?.generate_audio === 'false'
-      ? false
-      : undefined
+  const generateAudio = openRouterWantsGeneratedVideoAudio(
+    body?.generateAudio ?? body?.generate_audio
+  )
 
   const jobArgs = {
-    prompt,
+    prompt: applyVideoNoBackgroundMusicPolicy(prompt),
     model,
     apiKey,
     aspectRatio,
     resolution,
     durationSeconds,
     firstFrameImageUrl: resolvedFrame || undefined,
-    ...(generateAudio === false ? { generateAudio: false as const } : {})
+    generateAudio
   }
 
   try {

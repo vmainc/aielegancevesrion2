@@ -15,6 +15,7 @@ import {
 export { normalizeCharacterNameKey } from '~/lib/cast-name-convention'
 import { formatCastLineForProductionPrompt } from '~/lib/character-visual-description'
 import { SINGLE_STORYBOARD_FRAME_DIRECTIVE } from '~/lib/storyboard-frame-image'
+import { applyVideoNoBackgroundMusicPolicy } from '~/lib/video-generation-audio-policy'
 import { resolveFrameGenerationPrompt, resolveVideoGenerationPrompt } from '~/lib/unified-shot-prompt'
 import type { ProjectDirector, ProjectTargetLength } from '~/types/creative-project'
 import type { CreativeShot } from '~/types/creative-shot'
@@ -271,9 +272,10 @@ export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): s
     cast: ctx.cast.map(c => projectCharacterRefToCastMember(c))
   })
   if (isMusicVideoTarget(ctx.targetLength)) {
-    prompt += '\n\nMusic video: visuals only — no dialogue or synced soundtrack in the clip.'
+    prompt +=
+      '\n\nMusic video: visuals only — sync to the external track on the timeline; no dialogue or vocals in the clip.'
   }
-  return prompt
+  return applyVideoNoBackgroundMusicPolicy(prompt)
 }
 
 export function buildStoryboardFramePrompt (

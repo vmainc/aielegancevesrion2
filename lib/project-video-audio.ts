@@ -4,7 +4,7 @@ export function isMusicVideoTarget (targetLength?: ProjectTargetLength): boolean
   return targetLength === 'music_video'
 }
 
-/** Music videos use an external track — do not ask OpenRouter to synthesize audio in the clip. */
-export function projectWantsGeneratedVideoAudio (targetLength?: ProjectTargetLength): boolean {
-  return !isMusicVideoTarget(targetLength)
+/** Score and music belong on the timeline — not in AI-generated clips. */
+export function projectWantsGeneratedVideoAudio (_targetLength?: ProjectTargetLength): boolean {
+  return false
 }

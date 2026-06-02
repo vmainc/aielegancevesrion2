@@ -9,7 +9,7 @@
       :timecode-duration="formatTimecode(duration)"
       :active-label="activeVideoClip?.label"
       :blend-label="blendPreviewLabel"
-      @toggle-play="playback.togglePlay()"
+        @toggle-play="onTogglePlay"
       @stop="onStop"
     >
       <template #extra>
@@ -107,7 +107,8 @@
       <span class="text-primary">⌘Z</span> undo ·
       <span class="text-primary">Delete</span> or
       <span class="text-primary">Remove clip</span> to take a clip off the timeline (files stay in Assets → Video) ·
-      drag ruler or tracks to scrub ·
+      drag the teal playhead, ruler, or empty track to scrub ·
+      Space to play/pause ·
       <span class="text-primary">Blend with next</span> for crossfade. Saved in this browser.
     </p>
   </div>
@@ -247,7 +248,20 @@ function onRedo () {
   }
 }
 
+function onTogglePlay () {
+  if (!videoClips.value.length) {
+    toast.showToast('Add a video clip to the timeline first.', 'info')
+    return
+  }
+  playback.togglePlay()
+}
+
 function onEditorKeydown (e: KeyboardEvent) {
+  if (e.key === ' ' && !isTypingTarget(e.target)) {
+    e.preventDefault()
+    onTogglePlay()
+    return
+  }
   if (e.key === 'Escape' && (dragMode === 'move' || dragMode === 'trim-left' || dragMode === 'trim-right')) {
     cancelGesture()
     dragMode = null
@@ -282,6 +296,9 @@ onMounted(() => {
 })
 
 watch(previewRef, bindPreviewVideo)
+watch(() => clips.value.length, () => {
+  nextTick(bindPreviewVideo)
+})
 
 watch(
   timelineClipPushed,
