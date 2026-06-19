@@ -1,5 +1,8 @@
 <template>
-  <div class="timeline-editor flex flex-col gap-4 text-zinc-100">
+  <div
+    class="timeline-editor flex flex-col gap-4 text-zinc-100"
+    :class="{ 'timeline-editor--razor': activeTool === 'split' }"
+  >
     <EditorVideoPreview
       ref="previewRef"
       :has-clips="videoClips.length > 0"
@@ -28,6 +31,9 @@
       :can-blend="canBlend"
       :can-undo="canUndo"
       :can-redo="canRedo"
+      :can-export="videoClips.length > 0"
+      :exporting="exporting"
+      :export-label="exportLabel"
       :zoom="zoom"
       @set-tool="activeTool = $event"
       @undo="onUndo"
@@ -38,10 +44,27 @@
       @detach-audio="detachAudio()"
       @set-transition="applyTransition"
       @set-zoom="setZoom"
+      @export="onExportVideo"
     />
 
-    <div class="rounded-xl border border-white/10 bg-zinc-950/90 overflow-hidden">
-      <div ref="scrollRef" class="overflow-x-auto overflow-y-hidden custom-scrollbar">
+    <div class="rounded-xl border border-white/10 bg-zinc-950/90 overflow-hidden" data-timeline-surface>
+      <div
+        v-if="exporting"
+        class="mx-4 mt-3 mb-0 rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-4 py-3 text-sm text-emerald-100"
+        role="status"
+      >
+        <p class="font-medium">{{ exportLabel }}</p>
+        <p class="text-xs text-emerald-200/80 mt-1">
+          Export records your edit in real time — keep this tab open until it finishes.
+        </p>
+        <div class="mt-2 h-1.5 rounded-full bg-emerald-950 overflow-hidden">
+          <div
+            class="h-full bg-emerald-400 transition-all duration-300"
+            :style="{ width: `${Math.round(exportProgress * 100)}%` }"
+          />
+        </div>
+      </div>
+      <div ref="scrollRef" class="overflow-x-auto overflow-y-hidden custom-scrollbar" data-timeline-surface>
         <div
           class="relative"
           :class="isScrubbing ? 'timeline-scrubbing' : ''"
@@ -80,6 +103,7 @@
               @remove-clip="onRemoveClip"
               @clip-drag-start="onClipDragStart"
               @clip-scrub-seek="onPlayheadScrub"
+              @clip-razor-cut="onRazorCutClip"
               @clip-trim-start="onTrimStart"
             />
             <EditorTimelineTrack
@@ -94,6 +118,7 @@
               @remove-clip="onRemoveClip"
               @clip-drag-start="onClipDragStart"
               @clip-scrub-seek="onPlayheadScrub"
+              @clip-razor-cut="onRazorCutClip"
               @clip-trim-start="onTrimStart"
             />
           </div>
@@ -115,6 +140,7 @@
       drag the teal playhead line (or time ruler) to scrub — preview updates frame-by-frame ·
       <span class="text-primary">C</span> razor tool ·
       <span class="text-primary">V</span> select tool ·
+      <span class="text-primary">Export video</span> downloads WebM ·
       Space to play/pause ·
       <span class="text-primary">Blend with next</span> for crossfade. Saved in this browser.
     </p>
@@ -124,6 +150,17 @@
 <script setup lang="ts">
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import { hasNextClipForBlend } from '~/lib/timeline-editor/blend'
+import {
+  canSplitClipAtPlayhead,
+  clampCutTimeForClip
+} from '~/lib/timeline-editor/clip-ops'
+import { TIMELINE_RAZOR_CURSOR } from '~/lib/timeline-editor/razor-cursor'
+import {
+  defaultTimelineExportFilename,
+  downloadTimelineExport,
+  exportTimelineToVideo
+} from '~/lib/timeline-editor/export-video'
+import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { useTimelineClipPushedState } from '~/lib/append-project-timeline-video'
 import { formatTimecode, timeFromClientX, timeToPx, TRACK_LABEL_WIDTH } from '~/lib/timeline-editor/geometry'
 
@@ -163,6 +200,8 @@ const {
   removeSelected,
   removeClipById,
   splitAtPlayhead,
+  splitClipAtTime,
+  razorCutAllAtTime,
   detachAudio,
   applyTransition,
   dragClipTo,
@@ -201,6 +240,9 @@ const previewRef = ref<{
 } | null>(null)
 const scrollRef = ref<HTMLElement | null>(null)
 const draggingClipId = ref<string | null>(null)
+const exporting = ref(false)
+const exportProgress = ref(0)
+const exportLabel = ref('Export video')
 
 const laneWidthPx = computed(() => Math.max(640, duration.value * zoom.value + 80))
 const isScrubbing = playback.isScrubbing
@@ -221,11 +263,9 @@ const canBlend = computed(() => {
 })
 
 const canSplit = computed(() => {
-  if (!selectedClip.value) return false
-  const c = selectedClip.value
-  if (c.linkedAudioId || c.linkedVideoId) return false
-  const local = playhead.value - c.timelineStart
-  return local > 0.25 && local < c.duration - 0.25
+  const id = selectedClipId.value
+  if (!id) return false
+  return canSplitClipAtPlayhead(clips.value, id, playhead.value)
 })
 
 const canDetach = computed(() => {
@@ -269,7 +309,7 @@ function onEditorKeydown (e: KeyboardEvent) {
     if (e.key === 'c' || e.key === 'C') {
       e.preventDefault()
       activeTool.value = 'split'
-      toast.showToast('Razor tool active — click a clip to cut at the playhead.', 'info')
+      toast.showToast('Razor active — click a clip where the playhead crosses it to cut.', 'info')
       return
     }
     if (e.key === 'v' || e.key === 'V') {
@@ -402,37 +442,132 @@ function onRemoveClip (clipId: string) {
 function onBlend () {
   if (!selectedClipId.value) return
   if (blendWithNextClip(selectedClipId.value)) {
-    toast.showToast('Crossfade applied — drag the timeline through the overlap to preview the blend.', 'success')
+    playback.seekPreviewToPlayhead(true)
+    toast.showToast('Crossfade applied — scrub or play through the overlap to preview the blend.', 'success')
   } else {
     toast.showToast('Select a video clip with another clip after it.', 'info')
   }
 }
 
 function onSelectClip (id: string) {
+  if (activeTool.value === 'split') return
   selectClip(id)
-  if (activeTool.value === 'split') {
-    onSplit()
+}
+
+function onRazorCutClip (clipId: string, ev: PointerEvent) {
+  if (activeTool.value !== 'split') return
+  ev.preventDefault()
+  ev.stopPropagation()
+  playback.stop()
+
+  const cutTime = clampCutTimeForClip(clips.value, clipId, timeAtPointer(ev))
+  if (cutTime == null) {
+    toast.showToast('Click nearer the middle of the clip to cut (not the first or last instant).', 'info')
+    return
+  }
+
+  setPlayhead(cutTime)
+  selectClip(clipId)
+
+  if (splitClipAtTime(clipId, cutTime)) {
+    playback.seekPreviewToPlayhead(true)
+    toast.showToast('Clip cut into two.', 'success')
+  } else {
+    toast.showToast('Could not cut here — try another spot on the clip.', 'info')
   }
 }
 
-function onSplit () {
-  if (!canSplit.value) {
-    const c = selectedClip.value
-    if (c?.linkedAudioId || c?.linkedVideoId) {
-      toast.showToast('Split is disabled for linked video/audio pairs right now.', 'info')
-    } else {
-      toast.showToast('Move playhead inside the selected clip to split.', 'info')
-    }
+function onRazorCutAtPointer (ev: PointerEvent) {
+  if (activeTool.value !== 'split') return
+  ev.preventDefault()
+  playback.stop()
+
+  const t = timeAtPointer(ev)
+  setPlayhead(t)
+
+  const cuts = razorCutAllAtTime(t)
+  if (!cuts) {
+    toast.showToast('No clip to cut here — click on a clip (not the very edge).', 'info')
     return
   }
-  splitAtPlayhead()
-  toast.showToast('Clip split.', 'success')
+
+  playback.seekPreviewToPlayhead(true)
+  toast.showToast(
+    cuts === 1 ? 'Clip cut into two.' : `Cut ${cuts} clips at playhead.`,
+    'success'
+  )
+}
+
+function onSplit () {
+  if (!selectedClipId.value) {
+    toast.showToast('Click a clip with the razor tool to cut.', 'info')
+    return
+  }
+  if (!canSplit.value) {
+    toast.showToast('Move the playhead inside the clip, or click the clip where you want to cut.', 'info')
+    return
+  }
+  if (splitAtPlayhead()) {
+    playback.seekPreviewToPlayhead(true)
+    toast.showToast('Clip cut into two.', 'success')
+  } else {
+    toast.showToast('Could not cut here — try another spot on the clip.', 'info')
+  }
 }
 
 function onStop () {
   playback.stop()
   setPlayhead(0)
   playback.seekPreviewToPlayhead()
+}
+
+async function onExportVideo () {
+  if (exporting.value || !videoClips.value.length) return
+  bindPreviewVideo()
+  const p = previewRef.value
+  const videoA = unwrapVideoRef(p?.videoRefA)
+  const videoB = unwrapVideoRef(p?.videoRefB)
+  const audio = unwrapVideoRef(p?.audioRef) as HTMLAudioElement | null
+  if (!videoA || !videoB || !audio) {
+    toast.showToast('Preview not ready — wait a moment and try again.', 'warning')
+    return
+  }
+  playback.stop()
+  exporting.value = true
+  exportProgress.value = 0
+  exportLabel.value = 'Preparing export…'
+  try {
+    const blob = await exportTimelineToVideo({
+      clips: clips.value,
+      duration: duration.value,
+      resolveSrc,
+      preview: {
+        videoA,
+        videoB,
+        audio
+      },
+      setPlayhead,
+      seekPreview: (force) => playback.seekPreviewToPlayhead(force),
+      startPlayback: () => playback.play(),
+      stopPlayback: () => playback.stop(),
+      getPlayhead: () => playhead.value,
+      getIsPlaying: () => isPlaying.value,
+      onProgress: (prog) => {
+        exportProgress.value = prog.progress
+        exportLabel.value = prog.message
+      }
+    })
+    downloadTimelineExport(blob, defaultTimelineExportFilename(props.projectId))
+    toast.showToast('Timeline exported — check your Downloads folder.', 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Export failed'), 'error')
+  } finally {
+    exporting.value = false
+    exportProgress.value = 0
+    exportLabel.value = 'Export video'
+    setPlayhead(0)
+    playback.seekPreviewToPlayhead(true)
+  }
 }
 
 function onAudioFile (ev: Event) {
@@ -483,11 +618,19 @@ function onScrubAreaDown (ev: PointerEvent) {
   if (ev.button !== 0) return
   if ((ev.target as HTMLElement).closest('[data-clip-block]')) return
   if ((ev.target as HTMLElement).closest('[data-playhead]')) return
+  if (activeTool.value === 'split') {
+    onRazorCutAtPointer(ev)
+    return
+  }
   startScrub(ev)
 }
 
 function onPlayheadScrub (ev: PointerEvent) {
   if (ev.button !== 0) return
+  if (activeTool.value === 'split') {
+    onRazorCutAtPointer(ev)
+    return
+  }
   startScrub(ev)
 }
 
@@ -576,6 +719,16 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
+.timeline-editor--razor :deep([data-timeline-surface]),
+.timeline-editor--razor :deep([data-timeline-surface] *) {
+  cursor: v-bind(TIMELINE_RAZOR_CURSOR) !important;
+}
+
+/* Playhead sits above clips; let razor clicks reach clip blocks underneath. */
+.timeline-editor--razor :deep([data-playhead]) {
+  pointer-events: none;
+}
+
 .timeline-scrubbing :deep([data-clip-block]) {
   pointer-events: none;
 }

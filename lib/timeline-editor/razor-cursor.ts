@@ -1,0 +1,2 @@
+/** 24×24 razor cursor (hotspot near blade tip). */
+export const TIMELINE_RAZOR_CURSOR = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none'%3E%3Cpath d='M3 17.5 19.5 4.5' stroke='%232dd4bf' stroke-width='2.5' stroke-linecap='round'/%3E%3Cpath d='M2.5 16.2 8.8 18.6 8.1 20.4 1.8 18Z' fill='%232dd4bf'/%3E%3Ccircle cx='19.8' cy='4.7' r='1.5' fill='%232dd4bf'/%3E%3C/svg%3E") 5 19, crosshair`

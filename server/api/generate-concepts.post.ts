@@ -6,7 +6,7 @@ import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
 import { clampTargetDurationSeconds } from '~/lib/project-duration-budget'
 import { analyzeConceptReferenceImageBrief } from '~/server/utils/analyze-concept-reference-image'
 import { generateConceptWithOpenRouter } from '~/server/utils/generate-concept-ai'
-import { normalizeReferenceImageDataUrl } from '~/server/utils/reference-image-data-url'
+import { resolveReferenceImageInputForServer } from '~/server/utils/reference-image-data-url'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 import type { ConceptGeneratorResultItem } from '~/types/concept-generator'
@@ -46,7 +46,7 @@ export default defineEventHandler(async (event) => {
   if (!projectId) {
     throw createError({ statusCode: 400, message: 'project_id is required' })
   }
-  const referenceImage = normalizeReferenceImageDataUrl(body?.reference_image)
+  const referenceImage = await resolveReferenceImageInputForServer(body?.reference_image)
   if (!userPrompt && !referenceImage) {
     throw createError({ statusCode: 400, message: 'user_prompt or reference_image is required' })
   }

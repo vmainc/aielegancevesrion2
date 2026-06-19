@@ -18,6 +18,8 @@ const PB_ID = /^[a-z0-9]{15}$/
 export function useScratchConceptBootstrap (options?: {
   /** e.g. persist target runtime from Story step form before server build */
   persistBeforeBootstrap?: () => Promise<void>
+  /** Seconds cap passed to bootstrap job (backup if PB field missing). */
+  resolveTargetDurationSeconds?: () => number | null
 }) {
   const { activeProject, activeProjectId, registerImportedProject, withProjectQuery } =
     useCreativeProject()
@@ -148,7 +150,10 @@ export function useScratchConceptBootstrap (options?: {
           ? opts.characters
           : parseCharactersFromConceptNotes(p?.conceptNotes || ''),
         ...(opts?.director ? { director: opts.director } : {}),
-        ...(opts?.visualReference ? { visual_reference: opts.visualReference } : {})
+        ...(opts?.visualReference ? { visual_reference: opts.visualReference } : {}),
+        ...(options?.resolveTargetDurationSeconds?.() != null
+          ? { target_duration_seconds: options.resolveTargetDurationSeconds() }
+          : {})
       }
       const started = await $fetch<{ async: boolean; jobId: string }>(
         `/api/projects/${id}/bootstrap-from-concept`,

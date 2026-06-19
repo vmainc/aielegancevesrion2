@@ -1,5 +1,7 @@
 import { createError } from 'h3'
+import { parseConceptReferenceImageRef } from '~/lib/concept-reference-image-ref'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
+import { readConceptReferenceImage } from '~/server/utils/concept-reference-image-store'
 
 const DATA_URL_RE = /^data:(image\/[a-z0-9.+-]+);base64,([a-z0-9+/=\s]+)$/i
 
@@ -20,6 +22,33 @@ export function normalizeReferenceImageDataUrl (raw: unknown, maxBytes = 4_000_0
       throw createError({ statusCode: 400, message: 'Reference image is too large (max ~4MB)' })
     }
     return `data:${m[1]};base64,${b64}`
+  }
+
+  return null
+}
+
+/** Resolve staged ref, data URL, or remote URL to a data URL for vision APIs. */
+export async function resolveReferenceImageInputForServer (
+  raw: unknown,
+  maxBytes = 4_000_000
+): Promise<string | null> {
+  if (typeof raw !== 'string') return null
+  const u = raw.trim()
+  if (!u) return null
+
+  const dataUrl = normalizeReferenceImageDataUrl(u, maxBytes)
+  if (dataUrl) return dataUrl
+
+  const stagedId = parseConceptReferenceImageRef(u)
+  if (stagedId) {
+    const image = await readConceptReferenceImage(stagedId)
+    if (!image) {
+      throw createError({ statusCode: 400, message: 'Reference image expired or not found — re-upload it.' })
+    }
+    if (image.data.length > maxBytes) {
+      throw createError({ statusCode: 400, message: 'Reference image is too large (max ~4MB)' })
+    }
+    return `data:${image.mime};base64,${image.data.toString('base64')}`
   }
 
   return fetchReferenceImageAsDataUrl(u, maxBytes)

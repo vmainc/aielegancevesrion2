@@ -5,6 +5,7 @@ import { parseDirectorField, pbRecordToCreativeProject } from '~/server/utils/cr
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { CONCEPT_GENERATOR_MODELS } from '~/lib/concept-generator-models'
 import { stripWorkflowMarker, WORKFLOW_SCRATCH_MARKER } from '~/lib/project-workflow-mode'
+import { upsertDurationMarkerInConceptNotes } from '~/lib/format-stored-concept'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -57,6 +58,8 @@ export default defineEventHandler(async (event) => {
     const n = Math.floor(Number(body.targetDurationSeconds))
     const valid = Number.isFinite(n) && n >= 15 && n <= 3600 ? n : null
     patch.target_duration_seconds = valid
+    const prevNotes = String((existing as { concept_notes?: string }).concept_notes || '')
+    patch.concept_notes = upsertDurationMarkerInConceptNotes(prevNotes, valid).slice(0, 50_000)
   }
 
   if (body.director === null) {

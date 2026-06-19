@@ -1,5 +1,4 @@
 import PocketBase from 'pocketbase'
-import { getCurrentInstance, onMounted } from 'vue'
 import { resolveBrowserPocketBaseUrl } from '~/lib/resolve-browser-pocketbase-url'
 
 // Create a shared PocketBase instance
@@ -21,28 +20,22 @@ const getPocketBaseInstance = () => {
 
 export const useAuth = () => {
   const pb = getPocketBaseInstance()
-  
+
   // Initialize with null, will be set by initAuth
   const user = useState('auth_user', () => null)
   const authToken = useState<string | null>('auth_token', () => null)
+  /** False until after first client mount + initAuth — layout stays on guest SSR markup during hydration. */
+  const authReady = useState('auth_ready', () => false)
   const isAuthenticated = computed(() => !!user.value || !!authToken.value)
+  /** Use in templates: true only when session is known and user is signed in. */
+  const showAuthenticatedUi = computed(() => authReady.value && isAuthenticated.value)
 
   if (import.meta.client && !authStoreListenerAttached) {
     authStoreListenerAttached = true
-    const syncFromPb = () => {
-      user.value = pb.authStore.model || null
-      authToken.value = pb.authStore.token || null
-      pb.authStore.onChange((_token, model) => {
-        user.value = model
-        authToken.value = _token || null
-      })
-    }
-    // Plugins and route middleware call useAuth() with no active component — onMounted would warn.
-    if (getCurrentInstance()) {
-      onMounted(syncFromPb)
-    } else {
-      syncFromPb()
-    }
+    pb.authStore.onChange((_token, model) => {
+      user.value = model
+      authToken.value = _token || null
+    })
   }
 
   // Initialize auth from stored token
@@ -287,7 +280,9 @@ export const useAuth = () => {
 
   return {
     user: readonly(user),
+    authReady: readonly(authReady),
     isAuthenticated,
+    showAuthenticatedUi,
     login,
     signup,
     logout,

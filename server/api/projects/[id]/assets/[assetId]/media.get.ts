@@ -89,6 +89,8 @@ export default defineEventHandler(async (event) => {
       outHeaders.set(k, v)
     }
   }
+  // Allow canvas export (drawImage) when clips are loaded with crossOrigin="anonymous".
+  outHeaders.set('Access-Control-Allow-Origin', '*')
 
   return new Response(upstream.body, {
     status: upstream.status,

@@ -91,13 +91,14 @@ export async function seedStoryboardsAfterScriptImport (params: {
       const sceneCap = budget
         ? perSceneShotCap(budget, toProcess.length, sceneIndex)
         : null
-      const remaining = budget ? budget.maxPanelsTotal - panelsUsed : sceneCap?.maxShots ?? 12
+      const remaining = budget ? Math.max(0, budget.maxPanelsTotal - panelsUsed) : sceneCap?.maxShots ?? 6
       const maxShots = sceneCap
-        ? Math.min(sceneCap.maxShots, Math.max(1, remaining))
-        : 12
+        ? Math.min(sceneCap.maxShots, remaining)
+        : Math.min(6, remaining)
+      if (maxShots < 1) return 'empty'
       const sceneShotCap = sceneCap
         ? { minShots: Math.min(sceneCap.minShots, maxShots), maxShots }
-        : null
+        : { minShots: 1, maxShots }
       const shots = await generateShotsWithAi({
         projectName: String(project.name || 'Project'),
         aspectRatio: String(project.aspect_ratio || '16:9'),

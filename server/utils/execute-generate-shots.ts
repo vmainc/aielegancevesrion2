@@ -149,10 +149,18 @@ export async function executeGenerateShots (opts: {
       otherPanels = 0
     }
     const remaining = Math.max(0, durationBudget.maxPanelsTotal - otherPanels)
-    const maxShots = Math.min(cap.maxShots, remaining || cap.maxShots)
+    const maxShots = Math.min(cap.maxShots, remaining)
+    if (maxShots < 1) {
+      throwApiError(
+        400,
+        ApiErrorCode.VALIDATION_ERROR,
+        `Runtime budget is ~${durationBudget.totalSeconds}s (${durationBudget.maxPanelsTotal} panels at ${durationBudget.clipSeconds}s). Other scenes already use the panel cap — trim shots or raise target runtime on Overview.`,
+        { projectId, sceneId, maxPanelsTotal: durationBudget.maxPanelsTotal }
+      )
+    }
     sceneShotCap = {
       minShots: Math.min(cap.minShots, maxShots),
-      maxShots: Math.max(1, maxShots)
+      maxShots
     }
   }
 

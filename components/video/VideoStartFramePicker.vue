@@ -19,6 +19,7 @@
     </div>
     <p v-if="!compact" class="text-xs text-gray-500">
       Upload a still or generate one from your prompt. Video models use this as the first frame (image-to-video).
+      Generated and uploaded frames are compressed to fit video limits (~900KB).
     </p>
     <p v-else class="text-[11px] text-gray-500 leading-snug">
       Upload or generate a still to animate when no storyboard frame is set.
@@ -91,21 +92,20 @@ import {
   CHARACTER_CREATOR_IMAGE_MODELS,
   DEFAULT_IMAGE_MODEL_ID
 } from '~/lib/character-creator-models'
-import {
-  blobToDataUrl,
-  firstImageUrlFromGenerateResponse,
-  maybeCompressImageBlob
-} from '~/lib/image-blob-client'
+import { firstImageUrlFromGenerateResponse } from '~/lib/image-blob-client'
+import { parseVideoStartFrameRef } from '~/lib/video-start-frame-ref'
+import { ensureVideoStartFrameUrl, uploadVideoStartFrameFile } from '~/lib/video-start-frame-upload'
 
 const props = withDefaults(
   defineProps<{
     /** Text prompt used when generating a starting frame. */
     prompt: string
     compact?: boolean
-    /** v-model: URL for video API (`data:` or `http`). */
+    aspectRatio?: string
+    /** v-model: staged `/api/generate/video/start-frame/…` URL or remote still URL. */
     frameImageUrl?: string | null
   }>(),
-  { compact: false, frameImageUrl: null }
+  { compact: false, aspectRatio: '16:9', frameImageUrl: null }
 )
 
 const emit = defineEmits<{
@@ -120,6 +120,20 @@ const frameLabel = ref('')
 const fileInputEl = ref<HTMLInputElement | null>(null)
 
 const previewUrl = computed(() => props.frameImageUrl || null)
+
+onMounted(async () => {
+  const current = props.frameImageUrl
+  if (!current?.startsWith('data:')) return
+  try {
+    const staged = await ensureVideoStartFrameUrl(current)
+    if (staged && staged !== current) {
+      syncEmit(staged, frameLabel.value || 'Starting frame')
+    }
+  } catch {
+    clearFrame()
+    toast.showToast('Previous starting frame was too large — generate or upload again.', 'warning')
+  }
+})
 
 function syncEmit (url: string | null, label: string) {
   frameLabel.value = label
@@ -139,12 +153,15 @@ async function onFileChange (event: Event) {
     return
   }
   try {
-    const blob = file.size > 3_500_000 ? await maybeCompressImageBlob(file) : file
-    const dataUrl = await blobToDataUrl(blob)
-    syncEmit(dataUrl, `Uploaded: ${file.name}`)
+    const url = await uploadVideoStartFrameFile(file)
+    syncEmit(url, `Uploaded: ${file.name}`)
     toast.showToast('Starting frame attached.', 'success')
-  } catch {
-    toast.showToast('Could not read that image.', 'error')
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? String((e as { data?: { message?: string } }).data?.message || 'Could not upload that image.')
+        : 'Could not upload that image.'
+    toast.showToast(msg, 'error')
     if (fileInputEl.value) fileInputEl.value.value = ''
   }
 }
@@ -157,23 +174,44 @@ async function generateFrame () {
   }
   generatingFrame.value = true
   try {
-    const res = await $fetch<{ urls?: unknown[] }>('/api/generate/image', {
+    const res = await $fetch<{ urls?: unknown[]; videoStartFrame?: boolean }>('/api/generate/image', {
       method: 'POST',
-      body: { prompt: p, model: imageModelId.value }
+      body: {
+        prompt: p,
+        model: imageModelId.value,
+        aspectRatio: props.aspectRatio || '16:9',
+        purpose: 'video_start_frame'
+      }
     })
     const url = firstImageUrlFromGenerateResponse(res.urls || [])
     if (!url) {
       toast.showToast('No image returned — try another model.', 'warning')
       return
     }
+    if (!parseVideoStartFrameRef(url) && !res.videoStartFrame) {
+      toast.showToast('Image was too large for video — try Flux Klein or Gemini Flash.', 'warning')
+      return
+    }
     syncEmit(url, `Generated (${imageModelId.value})`)
     toast.showToast('Starting frame ready — generate video when ready.', 'success')
   } catch (e: unknown) {
+    const status =
+      e && typeof e === 'object' && 'statusCode' in e
+        ? (e as { statusCode?: number }).statusCode
+        : e && typeof e === 'object' && 'status' in e
+          ? (e as { status?: number }).status
+          : undefined
     const msg =
       e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message || 'Image generation failed')
-        : 'Image generation failed'
-    toast.showToast(msg, 'error')
+        ? String((e as { data?: { message?: string } }).data?.message || '')
+        : ''
+    toast.showToast(
+      msg ||
+        (status === 413
+          ? 'Generated image is too large for video — try Flux Klein or Gemini Flash.'
+          : 'Image generation failed'),
+      'error'
+    )
   } finally {
     generatingFrame.value = false
   }

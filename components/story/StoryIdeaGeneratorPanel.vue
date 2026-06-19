@@ -101,19 +101,58 @@
     <textarea
       v-model="conceptPrompt"
       rows="4"
-      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-5"
+      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-3"
       :placeholder="promptPlaceholder"
-      :disabled="generating || !projectId"
+      :disabled="generating || savingOwnPrompt || !projectId"
     />
+
+    <div v-if="allowUseOwnPrompt" class="mb-5">
+      <label for="idea-working-title" class="block text-xs font-medium text-gray-600 mb-1">
+        Working title
+        <span class="font-normal text-gray-500">(optional)</span>
+      </label>
+      <input
+        id="idea-working-title"
+        v-model="storyTitle"
+        type="text"
+        maxlength="500"
+        class="w-full max-w-md px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary mb-3"
+        :placeholder="deriveTitleFromPrompt(conceptPrompt, 'Untitled project')"
+        :disabled="generating || savingOwnPrompt || !projectId"
+      >
+      <button
+        type="button"
+        class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        :disabled="!canUseOwnPrompt"
+        @click="useOwnPrompt"
+      >
+        {{ savingOwnPrompt ? 'Saving…' : useOwnPromptLabel }}
+      </button>
+      <p class="mt-2 text-xs text-gray-500">
+        Skip AI generation — save your text as the project story and continue to Director.
+      </p>
+    </div>
 
     <ConceptReferenceImageUpload
       v-model="conceptReferenceImage"
-      :disabled="generating || !projectId"
+      :disabled="generating || savingOwnPrompt || !projectId"
     />
 
-    <fieldset class="mb-5" :disabled="generating || !modelOptions.length || !projectId">
+    <div
+      v-if="allowUseOwnPrompt"
+      class="flex items-center gap-3 my-6"
+      aria-hidden="true"
+    >
+      <div class="flex-1 border-t border-gray-200" />
+      <span class="text-xs font-medium uppercase tracking-wide text-gray-400 shrink-0">
+        Or compare AI variations
+      </span>
+      <div class="flex-1 border-t border-gray-200" />
+    </div>
+
+    <fieldset class="mb-5" :disabled="generating || savingOwnPrompt || !modelOptions.length || !projectId">
       <legend class="text-sm font-medium text-gray-700 mb-2">AI models</legend>
-      <p class="text-xs text-gray-500 mb-3">Select one or more; each model returns a different take on your idea.</p>
+      <p class="text-xs text-gray-500 mb-3">Optional — select one or more models for alternate takes on your idea.</p>
       <div class="flex flex-wrap gap-3">
         <label
           v-for="m in modelOptions"
@@ -195,6 +234,7 @@
 </template>
 
 <script setup lang="ts">
+import { deriveTitleFromPrompt } from '~/lib/format-stored-concept'
 import type { ConceptGeneratorResultItem, GeneratedConceptItem } from '~/types/concept-generator'
 import type { ProjectAspectRatio, ProjectGoal } from '~/types/creative-project'
 
@@ -210,6 +250,10 @@ const props = withDefaults(
     showCancel?: boolean
     /** Show target runtime field (synced to project when cloud-backed). */
     showTargetRuntime?: boolean
+    /** Allow saving the textarea as-is without AI generation. */
+    allowUseOwnPrompt?: boolean
+    useOwnPromptLabel?: string
+    promptPlaceholder?: string
   }>(),
   {
     goal: 'film',
@@ -219,7 +263,10 @@ const props = withDefaults(
     applyLabel: 'Use this story',
     generateButtonLabel: 'Generate story ideas',
     showCancel: false,
-    showTargetRuntime: true
+    showTargetRuntime: true,
+    allowUseOwnPrompt: true,
+    useOwnPromptLabel: 'Continue with my idea →',
+    promptPlaceholder: 'Describe your film or video idea — genre, mood, characters, and what happens…'
   }
 )
 
@@ -229,8 +276,16 @@ export type StoryIdeaApplyPayload = {
   aspectRatio: ProjectAspectRatio
 }
 
+export type StoryOwnIdeaApplyPayload = {
+  prompt: string
+  title: string
+  goal: ProjectGoal
+  aspectRatio: ProjectAspectRatio
+}
+
 const emit = defineEmits<{
   apply: [payload: StoryIdeaApplyPayload]
+  applyOwn: [payload: StoryOwnIdeaApplyPayload]
   cancel: []
 }>()
 
@@ -249,7 +304,9 @@ const {
 const goalModel = ref<ProjectGoal>(props.goal)
 const aspectModel = ref<ProjectAspectRatio>(props.aspectRatio)
 const conceptPrompt = ref('')
+const storyTitle = ref('')
 const conceptReferenceImage = ref<string | null>(null)
+const savingOwnPrompt = ref(false)
 const modelOptions = ref<Array<{ id: string; label: string }>>([])
 const modelsLoadError = ref('')
 const selectedModelIds = ref<string[]>([])
@@ -266,18 +323,15 @@ watch(
   (a) => { if (a) aspectModel.value = a }
 )
 
-const promptPlaceholder = computed(() => {
-  if (goalModel.value === 'social') {
-    return 'e.g. Anthropomorphic egg sandwich wakes up in a diner, realizes it is today’s special — 30s vertical comedy…'
-  }
-  if (goalModel.value === 'commercial') {
-    return 'e.g. Launch spot for a cold-brew brand — morning ritual, product hero, upbeat 15s vertical…'
-  }
-  return 'Describe your film or video idea — genre, mood, characters, and what happens…'
+const promptPlaceholder = computed(() => props.promptPlaceholder)
+
+const canUseOwnPrompt = computed(() => {
+  if (generating.value || savingOwnPrompt.value || !isAuthenticated.value || !props.projectId) return false
+  return Boolean(conceptPrompt.value.trim())
 })
 
 const canGenerate = computed(() => {
-  if (generating.value || !isAuthenticated.value || !props.projectId) return false
+  if (generating.value || savingOwnPrompt.value || !isAuthenticated.value || !props.projectId) return false
   if (!conceptPrompt.value.trim() && !conceptReferenceImage.value) return false
   if (!selectedModelIds.value.length) return false
   return true
@@ -367,6 +421,27 @@ function onApply (r: ConceptGeneratorResultItem) {
   })
 }
 
+async function useOwnPrompt () {
+  if (!canUseOwnPrompt.value) return
+  const prompt = conceptPrompt.value.trim()
+  if (!prompt) return
+  savingOwnPrompt.value = true
+  try {
+    await persistTargetDuration()
+    const title =
+      storyTitle.value.trim() ||
+      deriveTitleFromPrompt(prompt, 'Untitled project')
+    emit('applyOwn', {
+      prompt,
+      title: title.slice(0, 500),
+      goal: goalModel.value,
+      aspectRatio: aspectModel.value
+    })
+  } finally {
+    savingOwnPrompt.value = false
+  }
+}
+
 function clearApplying () {
   applyingModel.value = null
 }
@@ -375,7 +450,7 @@ function clearResults () {
   conceptResults.value = null
 }
 
-defineExpose({ clearApplying, clearResults })
+defineExpose({ clearApplying, clearResults, clearSavingOwn: () => { savingOwnPrompt.value = false } })
 
 onMounted(() => {
   void loadModelOptions()

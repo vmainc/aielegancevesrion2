@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { parseProjectAssetMediaIds } from '~/lib/project-asset-playback-url'
+import { parseVideoStartFrameRef } from '~/lib/video-start-frame-ref'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 
@@ -99,6 +100,7 @@ export async function resolveReferenceImageUrlForServerFetch (
 ): Promise<string> {
   const u = url.trim()
   if (!u) return ''
+  if (parseVideoStartFrameRef(u)) return u
   if (u.startsWith('data:') || /^https?:\/\//i.test(u)) return u
   if (parseProjectAssetMediaIds(u)) {
     return resolveProjectAssetMediaToFileUrl(u, opts)

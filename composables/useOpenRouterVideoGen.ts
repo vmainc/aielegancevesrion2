@@ -1,4 +1,5 @@
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { ensureVideoStartFrameUrl } from '~/lib/video-start-frame-upload'
 import { projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { snapDurationToModelSupported } from '~/lib/storyboard-video-duration'
 import type { ProjectAsset } from '~/types/project-asset'
@@ -54,6 +55,8 @@ export async function generateOpenRouterVideo (
       ? snapDurationToModelSupported(baseSec, input.supportedDurations)
       : baseSec
 
+  const frameImageUrl = await ensureVideoStartFrameUrl(input.frameImageUrl)
+
   const res = await $fetch<VideoJobPostResponse>('/api/generate/video', {
     method: 'POST',
     body: {
@@ -62,7 +65,7 @@ export async function generateOpenRouterVideo (
       aspectRatio: input.aspectRatio || '16:9',
       resolution: input.resolution || '720p',
       durationSeconds,
-      frameImageUrl: input.frameImageUrl?.trim() || undefined,
+      frameImageUrl,
       generateAudio: input.generateAudio === true
     }
   })

@@ -8,7 +8,7 @@ import {
   snapVideoDurationToOpenRouterModel
 } from '~/server/utils/openrouter-video-model-durations'
 import {
-  applyVideoNoBackgroundMusicPolicy,
+  applyVideoGenerationPromptPolicy,
   openRouterWantsGeneratedVideoAudio
 } from '~/lib/video-generation-audio-policy'
 import { registerVideoGenerationJob } from '~/server/utils/video-generation-job-registry'
@@ -67,6 +67,13 @@ export default defineEventHandler(async (event) => {
   if (!model.trim()) {
     throw createError({ statusCode: 400, message: 'Model is required' })
   }
+  if (frameImageUrl.startsWith('data:')) {
+    throw createError({
+      statusCode: 400,
+      message:
+        'Starting frame image is too large to send inline. Remove it and generate or upload the frame again (we compress it automatically).'
+    })
+  }
 
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -99,7 +106,7 @@ export default defineEventHandler(async (event) => {
   )
 
   const jobArgs = {
-    prompt: applyVideoNoBackgroundMusicPolicy(prompt),
+    prompt: applyVideoGenerationPromptPolicy(prompt, generateAudio),
     model,
     apiKey,
     aspectRatio,

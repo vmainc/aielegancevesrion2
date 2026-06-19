@@ -7,7 +7,8 @@
         ? 'bg-gradient-to-br from-primary/35 to-teal-900/50 border-primary/40'
         : 'bg-gradient-to-br from-violet-900/50 to-zinc-800/80 border-violet-500/30',
       selected ? 'ring-2 ring-primary shadow-lg shadow-primary/20 z-20' : 'hover:border-white/30 z-10',
-      dragging ? 'opacity-90 shadow-xl scale-[1.02]' : ''
+      dragging ? 'opacity-90 shadow-xl scale-[1.02]' : '',
+      activeTool === 'split' ? 'cursor-[inherit]' : ''
     ]"
     :style="{ left: `${leftPx}px`, width: `${widthPx}px` }"
     :title="clip.label"
@@ -32,6 +33,13 @@
       :style="{ width: `${overlapOutPx}px` }"
     >
       <div class="h-full w-full bg-gradient-to-r from-transparent via-primary/25 to-primary/45 rounded-r-lg" />
+    </div>
+    <div
+      v-if="overlapInPx > 0"
+      class="absolute top-0 bottom-0 left-0 pointer-events-none z-0"
+      :style="{ width: `${overlapInPx}px` }"
+    >
+      <div class="h-full w-full bg-gradient-to-l from-transparent via-primary/25 to-primary/45 rounded-l-lg" />
     </div>
 
     <button
@@ -80,18 +88,21 @@ const props = defineProps<{
   leftPx: number
   widthPx: number
   overlapOutPx?: number
+  overlapInPx?: number
   selected: boolean
   activeTool: TimelineEditorTool
   dragging: boolean
 }>()
 
 const overlapOutPx = computed(() => props.overlapOutPx ?? 0)
+const overlapInPx = computed(() => props.overlapInPx ?? 0)
 
 const emit = defineEmits<{
   select: []
   remove: []
   'drag-start': [PointerEvent]
   'scrub-seek': [PointerEvent]
+  'razor-cut': [PointerEvent]
   'trim-start': [side: 'left' | 'right', ev: PointerEvent]
 }>()
 
@@ -105,6 +116,10 @@ const transitionLabel = computed(() => {
 function onClipPointerDown (ev: PointerEvent) {
   if (ev.altKey) {
     emit('scrub-seek', ev)
+    return
+  }
+  if (props.activeTool === 'split') {
+    emit('razor-cut', ev)
     return
   }
   emit('select')

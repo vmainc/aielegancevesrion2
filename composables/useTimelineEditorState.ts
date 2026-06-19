@@ -8,7 +8,9 @@ import {
   newTimelineClipId,
   normalizeTrackLayout,
   setClipTransition,
+  clipIdsToCutAtTime,
   splitClipAtPlayhead,
+  splitResultChanged,
   trimClipLeft,
   trimClipRight
 } from '~/lib/timeline-editor/clip-ops'
@@ -235,11 +237,38 @@ export function useTimelineEditorState (
     return removeClipById(selectedClipId.value)
   }
 
-  function splitAtPlayhead () {
-    if (!selectedClipId.value) return
+  function splitClipAtTime (clipId: string, cutTimeSec: number): boolean {
+    if (!clipId) return false
+    const before = clips.value
+    const next = splitClipAtPlayhead(before, clipId, cutTimeSec)
+    if (!splitResultChanged(before, next)) return false
     history.recordHistory()
-    clips.value = splitClipAtPlayhead(clips.value, selectedClipId.value, playhead.value)
+    clips.value = next
     persist()
+    return true
+  }
+
+  function splitAtPlayhead (): boolean {
+    if (!selectedClipId.value) return false
+    return splitClipAtTime(selectedClipId.value, playhead.value)
+  }
+
+  /** Cut every clip (and linked pair) that spans `t`. Returns number of cuts made. */
+  function razorCutAllAtTime (t: number): number {
+    const ids = clipIdsToCutAtTime(clips.value, t)
+    if (!ids.length) return 0
+    history.recordHistory()
+    let next = clips.value
+    let cuts = 0
+    for (const id of ids) {
+      const before = next
+      next = splitClipAtPlayhead(next, id, t)
+      if (splitResultChanged(before, next)) cuts++
+    }
+    if (!cuts) return 0
+    clips.value = next
+    persist()
+    return cuts
   }
 
   function detachAudio () {
@@ -251,10 +280,28 @@ export function useTimelineEditorState (
     persist()
   }
 
+  function applyCrossfadePair (videoClipId: string): boolean {
+    let next = applyCrossfadeWithNext(clips.value, videoClipId)
+    if (next === clips.value) return false
+    const video = next.find(c => c.id === videoClipId)
+    if (video?.linkedAudioId) {
+      const audioBlend = applyCrossfadeWithNext(next, video.linkedAudioId)
+      if (audioBlend !== next) next = audioBlend
+    }
+    clips.value = next
+    return true
+  }
+
   function applyTransition (which: 'in' | 'out', t: TimelineTransitionType) {
     if (!selectedClipId.value) return
     history.recordHistory()
-    clips.value = setClipTransition(clips.value, selectedClipId.value, which, t)
+    if (t === 'crossfade' && which === 'out') {
+      if (!applyCrossfadePair(selectedClipId.value)) {
+        clips.value = setClipTransition(clips.value, selectedClipId.value, which, t)
+      }
+    } else {
+      clips.value = setClipTransition(clips.value, selectedClipId.value, which, t)
+    }
     persist()
   }
 
@@ -279,10 +326,10 @@ export function useTimelineEditorState (
   function blendWithNextClip (clipId?: string) {
     const id = clipId ?? selectedClipId.value
     if (!id) return false
-    const next = applyCrossfadeWithNext(clips.value, id)
-    if (next === clips.value) return false
+    const clip = clips.value.find(c => c.id === id)
+    if (!clip || clip.track !== 'video') return false
     history.recordHistory()
-    clips.value = next
+    if (!applyCrossfadePair(id)) return false
     persist()
     return true
   }
@@ -311,6 +358,8 @@ export function useTimelineEditorState (
     removeSelected,
     removeClipById,
     splitAtPlayhead,
+    splitClipAtTime,
+    razorCutAllAtTime,
     detachAudio,
     applyTransition,
     dragClipTo,

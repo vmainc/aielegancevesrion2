@@ -2,6 +2,7 @@ import {
   openRouterImageAspectRatio,
   SINGLE_STORYBOARD_FRAME_DIRECTIVE
 } from '~/lib/storyboard-frame-image'
+import { VIDEO_SEED_IMAGE_GENERATION_DIRECTIVE } from '~/lib/video-start-frame-limits'
 import {
   openRouterImageModalities,
   resolveOpenRouterImageSlug
@@ -25,6 +26,8 @@ export async function openRouterGenerateImage (options: {
   /** Multiple cast portraits / prior frames (preferred over single referenceImageUrl). */
   referenceImageUrls?: string[]
   aspectRatio?: string
+  /** When set, prompt and downstream staging target video image-to-video seed limits. */
+  purpose?: 'video_start_frame'
 }): Promise<OpenRouterGenerateImageResult> {
   const aspect = openRouterImageAspectRatio(options.aspectRatio)
   const aspectHint =
@@ -34,7 +37,9 @@ export async function openRouterGenerateImage (options: {
         ? 'Output one 1:1 square frame.'
         : 'Output one 16:9 landscape frame.'
   const prompt = [
-    SINGLE_STORYBOARD_FRAME_DIRECTIVE,
+    options.purpose === 'video_start_frame'
+      ? VIDEO_SEED_IMAGE_GENERATION_DIRECTIVE
+      : SINGLE_STORYBOARD_FRAME_DIRECTIVE,
     aspectHint,
     options.prompt.trim()
   ]

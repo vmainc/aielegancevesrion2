@@ -2,6 +2,7 @@ import { DEFAULT_IMAGE_MODEL_ID, IMAGE_MODEL_FALLBACK_IDS } from '~/lib/characte
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { openRouterGenerateImage } from '~/server/utils/openrouter-generate-image'
 import { resolveReferenceImageUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
+import { stageImageForVideoStartFrame } from '~/server/utils/stage-image-for-video-start-frame'
 
 function imageErrorMessage (err: unknown): string {
   const anyErr = err as { data?: { error?: { message?: string } }; message?: string }
@@ -53,6 +54,10 @@ export default defineEventHandler(async (event) => {
       : typeof body?.aspect_ratio === 'string'
         ? body.aspect_ratio.trim()
         : '16:9'
+  const purpose =
+    body?.purpose === 'video_start_frame' || body?.purpose === 'video_seed'
+      ? 'video_start_frame' as const
+      : undefined
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
     throw createError({
@@ -109,8 +114,16 @@ export default defineEventHandler(async (event) => {
           apiKey,
           referenceImageUrl: resolvedRefs[0],
           referenceImageUrls: resolvedRefs.length ? resolvedRefs : undefined,
-          aspectRatio
+          aspectRatio,
+          purpose
         })
+        if (purpose === 'video_start_frame') {
+          const staged: string[] = []
+          for (const raw of urls) {
+            staged.push(await stageImageForVideoStartFrame(raw))
+          }
+          return { urls: staged, model, videoStartFrame: true }
+        }
         return { urls, model }
       } catch (err: unknown) {
         lastErr = err

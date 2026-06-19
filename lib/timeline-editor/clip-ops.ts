@@ -102,6 +102,170 @@ export function trimClipRight (
   return normalizeTrackLayout(next, clip.track)
 }
 
+function splitOffsetValid (local: number, duration: number): boolean {
+  return local > MIN_CLIP_DURATION && local < duration - MIN_CLIP_DURATION
+}
+
+/** True when playhead is inside clip (and linked partner, if any). */
+export function canSplitClipAtPlayhead (
+  clips: TimelineEditorClip[],
+  clipId: string,
+  playheadSec: number
+): boolean {
+  const clip = clips.find(c => c.id === clipId)
+  if (!clip) return false
+  const local = playheadSec - clip.timelineStart
+  if (!splitOffsetValid(local, clip.duration)) return false
+
+  const video = clip.type === 'video' ? clip : clips.find(c => c.id === clip.linkedVideoId)
+  const audio = clip.type === 'audio' ? clip : clips.find(c => c.id === clip.linkedAudioId)
+  if (video && audio && video.linkedAudioId === audio.id && audio.linkedVideoId === video.id) {
+    const localA = playheadSec - audio.timelineStart
+    return splitOffsetValid(localA, audio.duration)
+  }
+  return true
+}
+
+function splitSingleClipAtPlayhead (
+  clips: TimelineEditorClip[],
+  clip: TimelineEditorClip,
+  playheadSec: number
+): TimelineEditorClip[] {
+  const local = playheadSec - clip.timelineStart
+  if (!splitOffsetValid(local, clip.duration)) return clips
+
+  const splitSource = clip.sourceStart + local
+  const first: TimelineEditorClip = {
+    ...clip,
+    sourceEnd: splitSource,
+    duration: local,
+    transitionOut: null
+  }
+  const second: TimelineEditorClip = {
+    ...clip,
+    id: newTimelineClipId(),
+    sourceStart: splitSource,
+    timelineStart: clip.timelineStart + local,
+    duration: clip.duration - local,
+    transitionIn: null,
+    linkedAudioId: undefined,
+    linkedVideoId: undefined
+  }
+  const rest = clips.filter(c => c.id !== clip.id)
+  return normalizeTrackLayout([...rest, first, second], clip.track)
+}
+
+function splitLinkedPairAtPlayhead (
+  clips: TimelineEditorClip[],
+  video: TimelineEditorClip,
+  audio: TimelineEditorClip,
+  playheadSec: number
+): TimelineEditorClip[] {
+  const local = playheadSec - video.timelineStart
+  if (!splitOffsetValid(local, video.duration)) return clips
+  const localA = playheadSec - audio.timelineStart
+  if (!splitOffsetValid(localA, audio.duration)) return clips
+
+  const splitAt = video.sourceStart + local
+  const v2Id = newTimelineClipId()
+  const a2Id = newTimelineClipId()
+
+  const v1: TimelineEditorClip = {
+    ...video,
+    sourceEnd: splitAt,
+    duration: local,
+    linkedAudioId: audio.id,
+    transitionOut: null
+  }
+  const v2: TimelineEditorClip = {
+    ...video,
+    id: v2Id,
+    sourceStart: splitAt,
+    sourceEnd: video.sourceEnd,
+    timelineStart: video.timelineStart + local,
+    duration: video.duration - local,
+    hasAudio: false,
+    linkedAudioId: a2Id,
+    transitionIn: null
+  }
+  const a1: TimelineEditorClip = {
+    ...audio,
+    sourceEnd: splitAt,
+    duration: local,
+    linkedVideoId: video.id,
+    transitionOut: null
+  }
+  const a2: TimelineEditorClip = {
+    ...audio,
+    id: a2Id,
+    sourceStart: splitAt,
+    sourceEnd: audio.sourceEnd,
+    timelineStart: audio.timelineStart + local,
+    duration: audio.duration - local,
+    linkedVideoId: v2Id,
+    transitionIn: null
+  }
+
+  let next = clips.filter(c => c.id !== video.id && c.id !== audio.id)
+  next = [...next, v1, v2, a1, a2]
+  next = normalizeTrackLayout(next, 'video')
+  next = normalizeTrackLayout(next, 'audio')
+  return next
+}
+
+/** Clamp pointer time to a splittable point inside clip (or linked pair). */
+export function clampCutTimeForClip (
+  clips: TimelineEditorClip[],
+  clipId: string,
+  pointerTimeSec: number
+): number | null {
+  const clip = clips.find(c => c.id === clipId)
+  if (!clip) return null
+
+  const video = clip.type === 'video' ? clip : clips.find(c => c.id === clip.linkedVideoId)
+  const audio = clip.type === 'audio' ? clip : clips.find(c => c.id === clip.linkedAudioId)
+  const anchor = video ?? clip
+
+  const cut = Math.min(
+    anchor.timelineStart + anchor.duration - MIN_CLIP_DURATION,
+    Math.max(anchor.timelineStart + MIN_CLIP_DURATION, pointerTimeSec)
+  )
+
+  return canSplitClipAtPlayhead(clips, clipId, cut) ? cut : null
+}
+
+/** Clip ids to cut at timeline time `t` (one entry per video / standalone clip). */
+export function clipIdsToCutAtTime (clips: TimelineEditorClip[], t: number): string[] {
+  const ids: string[] = []
+  for (const c of clips) {
+    if (c.linkedVideoId) continue
+    const local = t - c.timelineStart
+    if (!splitOffsetValid(local, c.duration)) continue
+    if (c.linkedAudioId) {
+      const audio = clips.find(x => x.id === c.linkedAudioId)
+      if (audio) {
+        const localA = t - audio.timelineStart
+        if (!splitOffsetValid(localA, audio.duration)) continue
+      }
+    }
+    ids.push(c.id)
+  }
+  return ids.sort((a, b) => {
+    const ca = clips.find(c => c.id === a)!
+    const cb = clips.find(c => c.id === b)!
+    return ca.timelineStart - cb.timelineStart
+  })
+}
+
+export function splitResultChanged (
+  before: TimelineEditorClip[],
+  after: TimelineEditorClip[]
+): boolean {
+  if (after.length !== before.length) return true
+  const beforeIds = new Set(before.map(c => c.id))
+  return after.some(c => !beforeIds.has(c.id))
+}
+
 export function splitClipAtPlayhead (
   clips: TimelineEditorClip[],
   clipId: string,
@@ -109,24 +273,19 @@ export function splitClipAtPlayhead (
 ): TimelineEditorClip[] {
   const clip = clips.find(c => c.id === clipId)
   if (!clip) return clips
-  const local = playheadSec - clip.timelineStart
-  if (local <= MIN_CLIP_DURATION || local >= clip.duration - MIN_CLIP_DURATION) return clips
 
-  const splitSource = clip.sourceStart + local
-  const first: TimelineEditorClip = {
-    ...clip,
-    sourceEnd: splitSource,
-    duration: local
+  const video = clip.type === 'video' ? clip : clips.find(c => c.id === clip.linkedVideoId)
+  const audio = clip.type === 'audio' ? clip : clips.find(c => c.id === clip.linkedAudioId)
+  if (
+    video &&
+    audio &&
+    video.linkedAudioId === audio.id &&
+    audio.linkedVideoId === video.id
+  ) {
+    return splitLinkedPairAtPlayhead(clips, video, audio, playheadSec)
   }
-  const second: TimelineEditorClip = {
-    ...clip,
-    id: newTimelineClipId(),
-    sourceStart: splitSource,
-    timelineStart: clip.timelineStart + local,
-    duration: clip.duration - local
-  }
-  const rest = clips.filter(c => c.id !== clipId)
-  return normalizeTrackLayout([...rest, first, second], clip.track)
+
+  return splitSingleClipAtPlayhead(clips, clip, playheadSec)
 }
 
 export function deleteClip (clips: TimelineEditorClip[], clipId: string): TimelineEditorClip[] {

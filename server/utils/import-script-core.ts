@@ -963,6 +963,16 @@ export async function generateScenesFromScriptForProject (input: {
   const tone = String((projectRow as { tone?: string }).tone || '')
   const pref = resolveProjectPreferredOpenRouterModel(projectRow as Record<string, unknown>)
 
+  const durationBudget = resolveProjectDurationBudget({
+    targetDurationSeconds:
+      typeof (projectRow as { target_duration_seconds?: number }).target_duration_seconds === 'number' &&
+      (projectRow as { target_duration_seconds: number }).target_duration_seconds > 0
+        ? (projectRow as { target_duration_seconds: number }).target_duration_seconds
+        : parseDurationFromConceptNotes(String((projectRow as { concept_notes?: string }).concept_notes || '')),
+    targetLength: (projectRow as { target_length?: string }).target_length as import('~/types/creative-project').ProjectTargetLength | undefined,
+    goal: String((projectRow as { goal?: string }).goal || 'film') as import('~/types/creative-project').ProjectGoal
+  })
+
   const claudeInferredScenes = await inferScenesFromScriptWithClaude({
     projectName: noteTitle,
     genre,
@@ -970,7 +980,8 @@ export async function generateScenesFromScriptForProject (input: {
     characterNames: mergedCharacterNames,
     fullScriptText,
     directorContext,
-    openrouterModelId: pref.openrouterModelId
+    openrouterModelId: pref.openrouterModelId,
+    durationBudget
   })
 
   const usedClaudeScenes = claudeInferredScenes.length > 0
@@ -986,10 +997,15 @@ export async function generateScenesFromScriptForProject (input: {
         body: s.body.slice(0, 100_000)
       }))
 
+  let scenesToCreate = sceneRowsForCreate
+  if (durationBudget && scenesToCreate.length > durationBudget.maxScenesForImport) {
+    scenesToCreate = scenesToCreate.slice(0, durationBudget.maxScenesForImport)
+  }
+
   await deleteProjectScenesOnly(pb, projectId)
 
-  for (let i = 0; i < sceneRowsForCreate.length; i++) {
-    const s = normalizeCreativeSceneForPb(i, sceneRowsForCreate[i]!)
+  for (let i = 0; i < scenesToCreate.length; i++) {
+    const s = normalizeCreativeSceneForPb(i, scenesToCreate[i]!)
     try {
       await pb.collection('creative_scenes').create({
         owned_by: userId,
@@ -1017,13 +1033,13 @@ export async function generateScenesFromScriptForProject (input: {
 
   const scriptAsset = await updateScriptAssetAfterAnalysis(pb, assetId, {
     noteTitle,
-    sceneCount: sceneRowsForCreate.length,
+    sceneCount: scenesToCreate.length,
     filename
   })
 
   const append = usedClaudeScenes
-    ? ` Scenes: ${sceneRowsForCreate.length} generated (Claude breakdown).`
-    : ` Scenes: ${sceneRowsForCreate.length} from screenplay parser.`
+    ? ` Scenes: ${scenesToCreate.length} generated (Claude breakdown).`
+    : ` Scenes: ${scenesToCreate.length} from screenplay parser.`
   const prevNotes = String((projectRow as { concept_notes?: string }).concept_notes || '')
   await pb.collection('creative_projects').update(projectId, {
     concept_notes: (prevNotes + append).slice(0, 50_000)
@@ -1033,7 +1049,7 @@ export async function generateScenesFromScriptForProject (input: {
   return {
     project: pbRecordToCreativeProject(full as Parameters<typeof pbRecordToCreativeProject>[0]),
     scriptAsset,
-    sceneCount: sceneRowsForCreate.length
+    sceneCount: scenesToCreate.length
   }
 }
 
@@ -1265,6 +1281,16 @@ export async function runFullImportFromParsed (input: {
     .map(s => `${s.heading}\n\n${s.body}`)
     .join('\n\n---\n\n')
 
+  const importDurationBudget = resolveProjectDurationBudget({
+    targetDurationSeconds:
+      typeof projectRowForPref.target_duration_seconds === 'number' &&
+      projectRowForPref.target_duration_seconds > 0
+        ? projectRowForPref.target_duration_seconds
+        : parseDurationFromConceptNotes(String(projectRowForPref.concept_notes || '')),
+    targetLength: projectRowForPref.target_length as import('~/types/creative-project').ProjectTargetLength | undefined,
+    goal
+  })
+
   const [directorBible, claudeCharacterRows, claudeInferredScenes] = await Promise.all([
     inferDirectorFromImportedScript({
       projectName: noteTitle,
@@ -1294,7 +1320,8 @@ export async function runFullImportFromParsed (input: {
       tone: enrichment.tone,
       characterNames: mergedCharacterNames,
       fullScriptText,
-      openrouterModelId: pref.openrouterModelId
+      openrouterModelId: pref.openrouterModelId,
+      durationBudget: importDurationBudget
     })
   ])
 

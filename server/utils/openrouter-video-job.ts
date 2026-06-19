@@ -1,5 +1,7 @@
 import { createError } from 'h3'
+import { parseVideoStartFrameRef } from '~/lib/video-start-frame-ref'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
+import { readVideoStartFrame } from '~/server/utils/video-start-frame-store'
 
 type VideoJobResponse = {
   id?: string
@@ -42,6 +44,35 @@ async function readJsonOrText (res: Response): Promise<{ json: unknown | null; t
 }
 
 export async function fetchImageAsDataUrlForVideo (imageUrl: string, maxBytes: number): Promise<string> {
+  const stagedId = parseVideoStartFrameRef(imageUrl)
+  if (stagedId) {
+    const staged = await readVideoStartFrame(stagedId)
+    if (!staged) {
+      throw createError({ statusCode: 404, message: 'Starting frame not found — re-upload the image and try again.' })
+    }
+    if (staged.data.length > maxBytes) {
+      throw createError({ statusCode: 400, message: 'Reference image is too large for video generation' })
+    }
+    const b64 = staged.data.toString('base64')
+    return `data:${staged.mime};base64,${b64}`
+  }
+
+  if (imageUrl.trim().startsWith('data:')) {
+    const raw = imageUrl.trim()
+    const comma = raw.indexOf(',')
+    if (comma < 0) {
+      throw createError({ statusCode: 400, message: 'Invalid reference image data URL' })
+    }
+    const meta = raw.slice(0, comma)
+    const b64 = raw.slice(comma + 1)
+    const approxBytes = Math.floor((b64.length * 3) / 4)
+    if (approxBytes > maxBytes) {
+      throw createError({ statusCode: 400, message: 'Reference image is too large for video generation' })
+    }
+    const mime = meta.match(/^data:([^;]+)/i)?.[1] || 'image/jpeg'
+    return `data:${mime};base64,${b64}`
+  }
+
   const res = await fetchWithTimeout(
     imageUrl,
     { method: 'GET', headers: { Accept: 'image/*' } },

@@ -17,6 +17,7 @@
         :left-px="timeToPx(clip.timelineStart, pxPerSec)"
         :width-px="Math.max(24, timeToPx(clip.duration, pxPerSec))"
         :overlap-out-px="overlapOutPx(clip, idx)"
+        :overlap-in-px="overlapInPx(clip, idx)"
         :selected="clip.id === selectedClipId"
         :active-tool="activeTool"
         :dragging="clip.id === draggingClipId"
@@ -24,6 +25,7 @@
         @remove="$emit('remove-clip', clip.id)"
         @drag-start="(ev) => $emit('clip-drag-start', clip.id, ev)"
         @scrub-seek="(ev) => $emit('clip-scrub-seek', ev)"
+        @razor-cut="(ev) => $emit('clip-razor-cut', clip.id, ev)"
         @trim-start="(side, ev) => $emit('clip-trim-start', clip.id, side, ev)"
       />
       <slot />
@@ -51,6 +53,7 @@ const emit = defineEmits<{
   'remove-clip': [id: string]
   'clip-drag-start': [id: string, ev: PointerEvent]
   'clip-scrub-seek': [ev: PointerEvent]
+  'clip-razor-cut': [id: string, ev: PointerEvent]
   'clip-trim-start': [id: string, side: 'left' | 'right', ev: PointerEvent]
 }>()
 
@@ -60,6 +63,13 @@ function overlapOutPx (clip: TimelineEditorClip, idx: number): number {
   if (clip.transitionOut !== 'crossfade') return 0
   const next = props.clips[idx + 1]
   if (!next || next.transitionIn !== 'crossfade') return 0
+  return timeToPx(clipTransitionDuration(clip), props.pxPerSec)
+}
+
+function overlapInPx (clip: TimelineEditorClip, idx: number): number {
+  if (clip.transitionIn !== 'crossfade') return 0
+  const prev = props.clips[idx - 1]
+  if (!prev || prev.transitionOut !== 'crossfade') return 0
   return timeToPx(clipTransitionDuration(clip), props.pxPerSec)
 }
 

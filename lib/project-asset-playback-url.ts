@@ -16,11 +16,19 @@ export function isProjectAssetMediaPath (url: string): boolean {
   return /^\/api\/projects\/[^/]+\/assets\/[^/]+\/media$/.test(projectAssetMediaPathOnly(url))
 }
 
-/** Parse `projectAssetMediaPath` URLs (query/hash stripped). */
+/** Parse `projectAssetMediaPath` URLs (absolute or relative; query/hash stripped). */
 export function parseProjectAssetMediaIds (
   url: string
 ): { projectId: string; assetId: string } | null {
-  const pathOnly = projectAssetMediaPathOnly(url)
+  let pathOnly = url.trim()
+  if (/^https?:\/\//i.test(pathOnly)) {
+    try {
+      pathOnly = new URL(pathOnly).pathname
+    } catch {
+      return null
+    }
+  }
+  pathOnly = projectAssetMediaPathOnly(pathOnly)
   const m = /^\/api\/projects\/([^/]+)\/assets\/([^/]+)\/media$/.exec(pathOnly)
   if (!m) return null
   return { projectId: decodeURIComponent(m[1]), assetId: decodeURIComponent(m[2]) }

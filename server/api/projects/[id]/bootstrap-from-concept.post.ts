@@ -3,6 +3,7 @@ import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-t
 import { createScriptImportJob } from '~/server/utils/script-import-job-registry'
 import { runConceptBootstrapJob } from '~/server/utils/run-concept-bootstrap-job'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
+import { clampTargetDurationSeconds } from '~/lib/project-duration-budget'
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 
 /**
@@ -26,6 +27,7 @@ export default defineEventHandler(async (event) => {
     director?: unknown
     visual_reference?: string
     visualReference?: string
+    target_duration_seconds?: number
   } | null
 
   const characters = Array.isArray(body?.characters)
@@ -52,7 +54,8 @@ export default defineEventHandler(async (event) => {
     tone: typeof body?.tone === 'string' ? body.tone : undefined,
     characters,
     director,
-    visualReference: visualReference || undefined
+    visualReference: visualReference || undefined,
+    targetDurationSeconds: clampTargetDurationSeconds(body?.target_duration_seconds)
   })
 
   setResponseStatus(event, 202)

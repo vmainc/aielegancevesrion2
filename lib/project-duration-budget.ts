@@ -39,11 +39,14 @@ export function defaultDurationSecondsForProject (opts: {
 
 export function buildDurationBudgetFromSeconds (totalSeconds: number): ProjectDurationBudget {
   const total = clampTargetDurationSeconds(totalSeconds) || 90
-  const clipSeconds: 5 | 10 = total <= 50 ? 5 : 5
-  const maxPanelsTotal = Math.max(3, Math.floor(total / clipSeconds))
-  const maxScenesForImport = Math.min(14, Math.max(2, Math.ceil(maxPanelsTotal / 4)))
-  const maxShotsPerScene = Math.min(12, Math.max(1, Math.ceil(maxPanelsTotal / maxScenesForImport)))
-  const minShotsPerScene = Math.min(1, maxShotsPerScene)
+  const clipSeconds: 5 | 10 = 5
+  const maxPanelsTotal = Math.max(1, Math.floor(total / clipSeconds))
+  const maxScenesForImport =
+    total <= 45
+      ? Math.min(2, Math.max(1, Math.ceil(maxPanelsTotal / 3)))
+      : Math.min(14, Math.max(2, Math.ceil(maxPanelsTotal / 4)))
+  const maxShotsPerScene = Math.min(maxPanelsTotal, Math.max(1, Math.ceil(maxPanelsTotal / maxScenesForImport)))
+  const minShotsPerScene = 1
   return {
     totalSeconds: total,
     clipSeconds,
@@ -78,11 +81,10 @@ export function perSceneShotCap (
   const idx = Math.max(0, Math.min(n - 1, Math.floor(sceneIndex)))
   const base = Math.floor(budget.maxPanelsTotal / n)
   const extra = budget.maxPanelsTotal % n
-  const maxShots = base + (idx < extra ? 1 : 0)
-  const capped = Math.max(1, Math.min(maxShots, budget.maxShotsPerScene))
+  const maxShots = Math.min(base + (idx < extra ? 1 : 0), budget.maxShotsPerScene)
   return {
-    minShots: Math.min(1, capped),
-    maxShots: capped
+    minShots: maxShots > 0 ? 1 : 0,
+    maxShots: Math.max(0, maxShots)
   }
 }
 
@@ -92,12 +94,13 @@ export function durationBudgetPromptBlock (
 ): string {
   const minS = sceneCap?.minShots ?? budget.minShotsPerScene
   const maxS = sceneCap?.maxShots ?? budget.maxShotsPerScene
+  const panelWord = minS === maxS ? `exactly ${maxS}` : `${minS}–${maxS}`
   return [
     `RUNTIME BUDGET (strict): Finished piece must be ~${budget.totalSeconds} seconds total.`,
-    `Storyboard panels use only ${budget.clipSeconds}s or 10s clips.`,
-    `Across the ENTIRE project use at most ${budget.maxPanelsTotal} panels (≈${budget.totalSeconds}s when played in order).`,
-    `For THIS scene return exactly ${minS === maxS ? maxS : `${minS}–${maxS}`} panel(s) — not more.`,
-    'Prefer duration_seconds 5 on every panel unless one beat truly needs 10.',
+    `Storyboard panels use only ${budget.clipSeconds}s clips (minimum clip length).`,
+    `Across the ENTIRE project use at most ${budget.maxPanelsTotal} panels total (≈${budget.totalSeconds}s when played in order).`,
+    `For THIS scene return ${panelWord} panel(s) — not one more.`,
+    `Every panel MUST use duration_seconds ${budget.clipSeconds} unless one beat truly needs 10.`,
     'Trim story beats to fit — no filler, no extra characters, no epilogue beyond the budget.'
   ].join(' ')
 }

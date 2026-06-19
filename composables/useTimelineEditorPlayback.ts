@@ -2,6 +2,7 @@ import { computed, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { clipTimelineEnd } from '~/lib/timeline-editor/geometry'
 import { clipsOnTrack, findClipAtTime } from '~/lib/timeline-editor/clip-ops'
 import { getBlendAtTime, type TimelineBlendFrame } from '~/lib/timeline-editor/blend'
+import { applyCrossOriginForMediaSrc } from '~/lib/timeline-editor/media-cross-origin'
 import type { TimelineEditorClip } from '~/types/timeline-editor'
 
 export interface PreviewBlendState {
@@ -84,6 +85,7 @@ export function useTimelineEditorPlayback (opts: {
     const src = opts.resolveSrc(clip.src)
     if (el.dataset.clipId !== clipKey || el.src !== src) {
       el.dataset.clipId = clipKey
+      applyCrossOriginForMediaSrc(el, src)
       el.src = src
       el.load()
     }
@@ -115,6 +117,7 @@ export function useTimelineEditorPlayback (opts: {
     const src = opts.resolveSrc(clip.src)
     if (el.dataset.clipId !== clip.id || el.src !== src) {
       el.dataset.clipId = clip.id
+      applyCrossOriginForMediaSrc(el, src)
       el.src = src
       el.load()
     }

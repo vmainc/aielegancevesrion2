@@ -130,6 +130,20 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
         console.log('  ✓ preferred_model_id exists');
       }
 
+      if (!fieldExists(col, 'target_duration_seconds')) {
+        fieldsToAdd.push(
+          flattenField({
+            name: 'target_duration_seconds',
+            type: 'number',
+            required: false,
+            options: { min: 15, max: 3600, onlyInt: true }
+          })
+        );
+        console.log('  ➕ Will add: target_duration_seconds (number 15–3600)');
+      } else {
+        console.log('  ✓ target_duration_seconds exists');
+      }
+
       if (fieldsToAdd.length > 0) {
         await pb.collections.update(col.id, {
           fields: [...currentSchema, ...fieldsToAdd.map(flattenField)]

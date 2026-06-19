@@ -3,7 +3,7 @@
     <p v-if="!scriptUploadedAwaitingAnalyze" class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
       <template v-if="scratchWorkflow && !hasConcept">
-        · Describe your idea, set target runtime, compare AI models, then pick a story and open Director.
+        · Paste your own idea and continue to Director, or optionally compare AI-generated variations.
       </template>
       <template v-else-if="scratchWorkflow">
         · Your synopsis lives here; refine the director bible on the Director tab, then build cast and storyboard when ready.
@@ -386,14 +386,16 @@
       :project-id="projectId"
       :goal="project?.goal || 'film'"
       :aspect-ratio="project?.aspectRatio || '16:9'"
-      :heading="hasConcept ? 'Compare new story ideas' : 'Generate story ideas'"
+      :heading="hasConcept ? 'Compare new story ideas' : scratchGeneratorHeading"
       :subheading="hasConcept
         ? 'Your saved story stays below until you pick a new idea.'
-        : 'Describe your idea, set target runtime, compare AI models, then save one and continue to Director.'"
+        : 'Paste your story below and continue, or use AI models below for alternate takes.'"
+      :prompt-placeholder="scratchPromptPlaceholder"
       :show-cancel="hasConcept"
       apply-label="Use this story"
       :generate-button-label="generateIdeasButtonLabel"
       @apply="onScratchIdeaApply"
+      @apply-own="onScratchOwnIdeaApply"
       @cancel="cancelGeneratorPanel"
     />
 
@@ -706,12 +708,17 @@ import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import {
   conceptNotesHaveUserContent,
   formatStoredConceptNotes,
+  formatUserProvidedConceptNotes,
   parseLoglineFromConceptNotes,
-  stripConceptMetadataMarkers
+  stripConceptMetadataMarkers,
+  upsertDurationMarkerInConceptNotes
 } from '~/lib/format-stored-concept'
 import { defaultDurationSecondsForProject } from '~/lib/project-duration-budget'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
-import type { StoryIdeaApplyPayload } from '~/components/story/StoryIdeaGeneratorPanel.vue'
+import type {
+  StoryIdeaApplyPayload,
+  StoryOwnIdeaApplyPayload
+} from '~/components/story/StoryIdeaGeneratorPanel.vue'
 import type { ConceptGeneratorResultItem, GeneratedConceptItem } from '~/types/concept-generator'
 import type { CreativeCharacter, CreativeProject } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
@@ -1178,7 +1185,8 @@ const {
   conceptBootstrapRunning,
   scratchNeedsDirectorBuild
 } = useScratchConceptBootstrap({
-  persistBeforeBootstrap: persistTargetDuration
+  persistBeforeBootstrap: persistTargetDuration,
+  resolveTargetDurationSeconds: parsedTargetDurationSeconds
 })
 
 async function loadOverviewMovies () {
@@ -1378,6 +1386,35 @@ function isSuccessResult (r: ConceptGeneratorResultItem): r is GeneratedConceptI
 async function onScratchIdeaApply (payload: StoryIdeaApplyPayload) {
   await useThisConcept(payload.item, payload)
   scratchIdeaPanelRef.value?.clearResults()
+}
+
+async function onScratchOwnIdeaApply (payload: StoryOwnIdeaApplyPayload) {
+  const id = projectId.value
+  if (!id) return
+  const prompt = payload.prompt.trim()
+  if (!prompt) return
+  try {
+    const notesBase = formatUserProvidedConceptNotes(prompt)
+    const runtime = parsedTargetDurationSeconds()
+    const conceptNotes = runtime != null
+      ? upsertDurationMarkerInConceptNotes(notesBase, runtime)
+      : notesBase
+    await updateProject(id, {
+      name: payload.title.slice(0, 500),
+      synopsis: prompt.slice(0, 20_000),
+      conceptNotes,
+      goal: payload.goal,
+      aspectRatio: payload.aspectRatio
+    })
+    conceptResults.value = null
+    showGeneratorForm.value = false
+    toast.showToast('Story saved — open Director to refine your bible.', 'success')
+    await navigateTo(`/projects/${id}/director`)
+  } catch {
+    toast.showToast('Could not save your story.', 'error')
+  } finally {
+    scratchIdeaPanelRef.value?.clearSavingOwn()
+  }
 }
 
 async function useThisConcept (

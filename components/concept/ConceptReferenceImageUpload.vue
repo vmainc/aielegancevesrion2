@@ -14,7 +14,7 @@
         v-if="previewUrl"
         type="button"
         class="text-xs font-medium text-gray-600 hover:text-red-700"
-        :disabled="disabled"
+        :disabled="disabled || uploading"
         @click="clear"
       >
         Remove
@@ -25,7 +25,7 @@
       <button
         type="button"
         class="shrink-0 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 hover:ring-2 hover:ring-primary/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-        :disabled="disabled"
+        :disabled="disabled || uploading"
         @click="openPreview"
       >
         <img
@@ -44,9 +44,10 @@
       type="file"
       accept="image/jpeg,image/png,image/webp,image/gif"
       class="block w-full text-xs text-gray-700 file:mr-2 file:py-1.5 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-gray-950 hover:file:bg-primary/90 disabled:opacity-50"
-      :disabled="disabled"
+      :disabled="disabled || uploading"
       @change="onFileChange"
     >
+    <p v-if="uploading" class="mt-2 text-xs text-gray-500">Uploading reference image…</p>
     <p v-if="error" class="mt-2 text-xs text-red-600">{{ error }}</p>
   </div>
 
@@ -81,7 +82,7 @@
 </template>
 
 <script setup lang="ts">
-import { blobToDataUrl, maybeCompressImageBlob } from '~/lib/image-blob-client'
+import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 
 const props = defineProps<{
   disabled?: boolean
@@ -89,10 +90,13 @@ const props = defineProps<{
 
 const model = defineModel<string | null>({ default: null })
 
+const { getAuthToken } = useAuth()
+
 const fileInputEl = ref<HTMLInputElement | null>(null)
 const previewUrl = ref('')
 const error = ref('')
 const expanded = ref(false)
+const uploading = ref(false)
 
 watch(
   () => model.value,
@@ -122,14 +126,31 @@ async function onFileChange (ev: Event) {
     error.value = 'Please choose a JPEG, PNG, WebP, or GIF image.'
     return
   }
+  const token = getAuthToken()
+  if (!token) {
+    error.value = 'Log in to attach a reference image.'
+    return
+  }
+  uploading.value = true
   try {
-    const compressed = await maybeCompressImageBlob(file, 3_500_000)
-    const dataUrl = await blobToDataUrl(compressed)
-    model.value = dataUrl
-    previewUrl.value = dataUrl
-  } catch {
-    error.value = 'Could not read that image.'
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await $fetch<{ url?: string }>('/api/concept-reference/stage', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd
+    })
+    const url = (res.url || '').trim()
+    if (!url) {
+      throw new Error('Upload did not return a URL')
+    }
+    model.value = url
+    previewUrl.value = url
+  } catch (e: unknown) {
+    error.value = formatApiFetchError(e, 'Could not upload reference image.')
     clear()
+  } finally {
+    uploading.value = false
   }
 }
 </script>

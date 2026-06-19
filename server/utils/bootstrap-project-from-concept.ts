@@ -4,9 +4,10 @@ import {
   parseCharactersFromConceptNotes,
   parseDurationFromConceptNotes,
   parseLoglineFromConceptNotes,
-  stripConceptMetadataMarkers
+  stripConceptMetadataMarkers,
+  upsertDurationMarkerInConceptNotes
 } from '~/lib/format-stored-concept'
-import { resolveProjectDurationBudget } from '~/lib/project-duration-budget'
+import { clampTargetDurationSeconds, resolveProjectDurationBudget } from '~/lib/project-duration-budget'
 import { sanitizeCharacterNameList } from '~/lib/screenplay-format'
 import { generateScreenplayFromStoryIdea } from '~/server/utils/generate-screenplay-from-idea'
 import {
@@ -36,6 +37,7 @@ export interface BootstrapFromConceptInput {
   characters?: string[]
   director?: ProjectDirector
   visualReference?: string
+  targetDurationSeconds?: number
 }
 
 export interface BootstrapFromConceptResult {
@@ -113,11 +115,36 @@ export async function bootstrapProjectFromConcept (
     projectRow = { ...projectRow, director: directorPatch }
   }
 
+  const runtimeFromInput = clampTargetDurationSeconds(input.targetDurationSeconds)
+  const runtimeFromRow =
+    typeof projectRow.target_duration_seconds === 'number' && projectRow.target_duration_seconds > 0
+      ? Math.floor(projectRow.target_duration_seconds)
+      : parseDurationFromConceptNotes(conceptNotes)
+  const resolvedRuntime = runtimeFromInput ?? runtimeFromRow
+  if (resolvedRuntime) {
+    const notesWithDuration = upsertDurationMarkerInConceptNotes(conceptNotes, resolvedRuntime)
+    try {
+      await pb.collection('creative_projects').update(projectId, {
+        target_duration_seconds: resolvedRuntime,
+        concept_notes: notesWithDuration.slice(0, 50_000)
+      })
+    } catch {
+      await pb.collection('creative_projects').update(projectId, {
+        concept_notes: notesWithDuration.slice(0, 50_000)
+      })
+    }
+    projectRow = {
+      ...projectRow,
+      target_duration_seconds: resolvedRuntime,
+      concept_notes: notesWithDuration
+    }
+  }
+
   const durationBudget = resolveProjectDurationBudget({
     targetDurationSeconds:
       typeof projectRow.target_duration_seconds === 'number' && projectRow.target_duration_seconds > 0
         ? projectRow.target_duration_seconds
-        : parseDurationFromConceptNotes(conceptNotes),
+        : parseDurationFromConceptNotes(String(projectRow.concept_notes || conceptNotes)),
     targetLength: projectRow.target_length as import('~/types/creative-project').ProjectTargetLength | undefined,
     goal
   })

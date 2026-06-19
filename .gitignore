@@ -8,6 +8,9 @@ app.log
 # Large local brand source (cropped logo is in assets/img/logo.png)
 AI Elegance logo design.png
 
+# Staged uploads (video start frames, etc.)
+.data/
+
 # PocketBase
 pocketbase/pb_data/
 pocketbase/pb_migrations/

@@ -23,9 +23,9 @@
             with the full production prompt and frame prefilled — pick multiple models there.
             When a clip is ready it replaces the still here (play inline or fullscreen).
             Clips are <span class="font-medium text-gray-800">5s or 10s</span> per shot; the server snaps to what the model supports.
-            Generated video has <span class="font-medium text-gray-800">no AI background music</span> — add music on the
+            Generated video has <span class="font-medium text-gray-800">no AI background music</span> by default — add music on the
             <NuxtLink :to="`/projects/${projectId}/timeline`" class="text-primary font-medium hover:underline">timeline</NuxtLink>
-            audio track.
+            audio track. For quick talking clips, enable <span class="font-medium text-gray-800">spoken dialogue</span> in Video generation.
             Saved clips appear under
             <NuxtLink to="/assets/video" class="text-primary font-medium hover:underline">Assets → Video</NuxtLink>.
           </p>

@@ -3,6 +3,7 @@ import { filterCastCharacterRows, isMetaCastCharacterEntry } from '~/lib/screenp
 import { defaultDirector } from '~/lib/director-presets'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import type { ProjectDirector } from '~/types/creative-project'
+import type { ProjectDurationBudget } from '~/lib/project-duration-budget'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
 import { OPENROUTER_TEXT_MODEL_MAP } from '~/server/utils/openrouter-text-models'
@@ -1164,6 +1165,7 @@ export async function inferScenesFromScriptWithClaude (input: {
   /** Director-tab notes — influences scene boundaries and emphasis. */
   directorContext?: string
   openrouterModelId?: string
+  durationBudget?: ProjectDurationBudget | null
 }): Promise<InferredImportScene[]> {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -1172,8 +1174,19 @@ export async function inferScenesFromScriptWithClaude (input: {
   const script = input.fullScriptText.trim().slice(0, MAX_SCRIPT_CHARS_FOR_SCENES)
   if (!script) return []
 
-  const sceneBand =
-    script.length < 4000 ? '1–8' : script.length < 20000 ? 'about 4–18' : 'about 8–36'
+  const budget = input.durationBudget
+  const sceneBand = budget
+    ? `at most ${budget.maxScenesForImport} scene(s) for a ~${budget.totalSeconds}s piece (~${budget.maxPanelsTotal} storyboard panels at ${budget.clipSeconds}s each)`
+    : script.length < 4000
+      ? '1–8'
+      : script.length < 20000
+        ? 'about 4–18'
+        : 'about 8–36'
+
+  const budgetRules = budget
+    ? `- RUNTIME BUDGET: This project targets ~${budget.totalSeconds}s total. Use ${sceneBand}. Merge beats aggressively — fewer scenes is better than coverage sprawl.
+- Do NOT create more scenes than the runtime can support (${budget.maxScenesForImport} max).`
+    : ''
 
   const system = `You are a storyboard supervisor and assistant director. Read the screenplay and break it into SCENES that work for storyboarding: each scene is one continuous time/place/beat (or one clear montage unit).
 
@@ -1191,8 +1204,8 @@ Rules:
 - "body" must be copied from the supplied screenplay only (no invented dialogue).
 - Merge consecutive sluglines when it is clearly the same uninterrupted moment; split on location/time changes or major turns.
 - Include enough body text that a storyboard artist can plan coverage (not a single line unless the beat is truly one line).
-- Order must follow the screenplay. Aim for ${sceneBand} scenes when the material supports it; fewer is fine for very short scripts.
-- Hard maximum ${MAX_INFERRED_SCENES} scenes.
+- Order must follow the screenplay. Aim for ${sceneBand} when the material supports it; fewer is fine for very short scripts.
+${budgetRules ? `${budgetRules}\n` : ''}- Hard maximum ${budget ? Math.min(MAX_INFERRED_SCENES, budget.maxScenesForImport) : MAX_INFERRED_SCENES} scenes.
 - Escape quotes inside JSON strings properly.`
 
   const dir = (input.directorContext || '').trim()
@@ -1257,6 +1270,9 @@ ${script}`
   if (script.length > 20_000 && norm.length === 1) {
     console.warn('[script-import-ai] Claude returned a single scene for a long script; using parser scenes instead.')
     return []
+  }
+  if (budget && norm.length > budget.maxScenesForImport) {
+    return norm.slice(0, budget.maxScenesForImport)
   }
   return norm
 }

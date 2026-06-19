@@ -3,9 +3,17 @@
     <div class="flex items-start justify-between gap-3 mb-6">
       <p class="text-sm text-gray-500">
         <span class="text-primary font-medium">Storyboard</span>
-      · Panel lists come from your project build or script import. Use
-      <span class="text-gray-700">Generate image</span>
-      on each board (or <span class="text-gray-700">Generate all images</span>) to fill the frames — cast portraits are used when available.
+        <template v-if="builderMode">
+          · Build this scene board-by-board. Add panels, fill in beats, then upload or generate frames.
+          <NuxtLink to="/tools/storyboard-builder" class="text-primary font-medium hover:underline ml-1">
+            Storyboard Builder
+          </NuxtLink>
+        </template>
+        <template v-else>
+          · Add boards manually per scene, or use panels from script import / project build. Use
+          <span class="text-gray-700">Generate image</span>
+          on each board (or <span class="text-gray-700">Generate all images</span>) to fill the frames — cast portraits are used when available.
+        </template>
       </p>
       <button
         type="button"
@@ -57,9 +65,22 @@
       >
         <h2 class="text-lg font-semibold text-gray-800 mb-2">No scenes yet</h2>
         <p class="text-sm text-gray-500 mb-6">
-          Run director analysis on Overview, generate scenes on the Scenes tab, then return here to batch panels or generate shots per scene.
+          <template v-if="builderMode">
+            Start a scene from Storyboard Builder — it begins with one blank board.
+          </template>
+          <template v-else>
+            Run director analysis on Overview, generate scenes on the Scenes tab, then return here to batch panels or generate shots per scene.
+          </template>
         </p>
         <NuxtLink
+          v-if="builderMode"
+          to="/tools/storyboard-builder"
+          class="inline-flex px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors"
+        >
+          Open Storyboard Builder
+        </NuxtLink>
+        <NuxtLink
+          v-else
           to="/projects"
           class="inline-flex px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors"
         >
@@ -101,13 +122,22 @@
                 </template>
               </p>
               <p
-                v-if="storyboardTimingWarning"
+                v-if="storyboardTimingWarning && !builderMode"
                 class="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2"
               >
                 {{ storyboardTimingWarning }}
               </p>
             </div>
             <div class="shrink-0 flex items-center gap-2">
+              <button
+                v-if="selectedSceneId && !shotsLoading"
+                type="button"
+                class="px-3 py-2 text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-gray-950 disabled:opacity-50"
+                :disabled="addingBoard"
+                @click="addBoard"
+              >
+                {{ addingBoard ? 'Adding…' : shots.length ? '+ Add board' : 'Add first board' }}
+              </button>
               <div class="relative">
                 <button
                   type="button"
@@ -172,12 +202,22 @@
           />
         </div>
 
-        <div v-else-if="!shots.length" class="text-sm text-gray-500">
-          No panels for this scene yet. Build cast and storyboard from the
-          <NuxtLink :to="`/projects/${projectId}/director`" class="text-primary font-medium hover:underline">Director</NuxtLink>
-          step, or add scenes on the
-          <NuxtLink :to="`/projects/${projectId}/scenes`" class="text-primary font-medium hover:underline">Scenes</NuxtLink>
-          tab.
+        <div v-else-if="!shots.length" class="text-sm text-gray-500 space-y-4">
+          <p>No panels for this scene yet.</p>
+          <button
+            type="button"
+            class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 text-sm font-semibold rounded-lg disabled:opacity-50"
+            :disabled="addingBoard"
+            @click="addBoard"
+          >
+            {{ addingBoard ? 'Adding…' : 'Add first board' }}
+          </button>
+          <p class="text-xs text-gray-500 max-w-md">
+            Each board is one storyboard panel — add a title, description, and production prompt, then upload or generate a frame.
+            You can also build panels from the
+            <NuxtLink :to="`/projects/${projectId}/director`" class="text-primary font-medium hover:underline">Director</NuxtLink>
+            step or import a script on Overview.
+          </p>
         </div>
 
         <div
@@ -215,7 +255,18 @@
           >
             <div class="px-3 py-2 border-b border-gray-200 flex items-center justify-between gap-2 bg-gray-50 shrink-0">
               <span class="text-xs font-mono text-primary">BOARD {{ idx + 1 }}</span>
-              <span class="text-xs text-gray-500 truncate max-w-[55%] text-right">{{ shot.title || 'Untitled' }}</span>
+              <div class="flex items-center gap-2 min-w-0">
+                <span class="text-xs text-gray-500 truncate max-w-[12rem] sm:max-w-[55%] text-right">{{ shot.title || 'Untitled' }}</span>
+                <button
+                  v-if="shots.length > 1"
+                  type="button"
+                  class="shrink-0 px-2 py-0.5 text-[10px] font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
+                  :disabled="deletingBoardId === shot.id"
+                  @click="deleteBoard(shot)"
+                >
+                  {{ deletingBoardId === shot.id ? '…' : 'Delete' }}
+                </button>
+              </div>
             </div>
             <div
               :class="[
@@ -377,6 +428,7 @@
                   v-model="shot.title"
                   type="text"
                   class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+                  @blur="saveShot(shot)"
                 >
               </div>
               <div>
@@ -391,6 +443,7 @@
                   v-model="shot.description"
                   rows="2"
                   class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y min-h-[3rem]"
+                  @blur="saveShot(shot)"
                 />
               </div>
               <div class="grid grid-cols-3 gap-2">
@@ -400,6 +453,7 @@
                     v-model="shot.shotType"
                     type="text"
                     class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+                    @blur="saveShot(shot)"
                   >
                 </div>
                 <div>
@@ -408,6 +462,7 @@
                     v-model="shot.cameraMove"
                     type="text"
                     class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+                    @blur="saveShot(shot)"
                   >
                 </div>
                 <div>
@@ -415,6 +470,7 @@
                   <select
                     v-model.number="shot.durationSeconds"
                     class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+                    @change="saveShot(shot)"
                   >
                     <option :value="5">
                       5s
@@ -450,6 +506,7 @@
                     rows="10"
                     placeholder="Director bible, cast, scene, still-frame description, and exclusions…"
                     class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y font-mono text-[13px] leading-relaxed"
+                    @blur="saveShot(shot)"
                   />
                   <p class="mt-1.5 text-[11px] text-gray-500 leading-snug">
                     Used for Generate image and the Video step.
@@ -459,10 +516,32 @@
             </details>
           </li>
         </ul>
+
+        <div
+          v-if="!shotsLoading && selectedSceneId && shots.length"
+          class="flex flex-wrap items-center gap-3 pt-2"
+        >
+          <button
+            type="button"
+            class="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 text-sm font-semibold rounded-lg disabled:opacity-50"
+            :disabled="addingBoard"
+            @click="addBoard"
+          >
+            {{ addingBoard ? 'Adding board…' : '+ Add board' }}
+          </button>
+        </div>
       </div>
 
       <div class="pt-8 border-t border-gray-200 flex flex-wrap gap-4">
         <NuxtLink
+          v-if="builderMode"
+          to="/tools/storyboard-builder"
+          class="text-sm text-gray-600 hover:text-gray-900 font-medium"
+        >
+          ← Storyboard Builder
+        </NuxtLink>
+        <NuxtLink
+          v-else
           :to="`/projects/${projectId}/scenes`"
           class="text-sm text-gray-600 hover:text-gray-900 font-medium"
         >
@@ -601,6 +680,9 @@ const {
 } = useCreativeProject()
 const { isAuthenticated, getAuthToken } = useAuth()
 const toast = useToast()
+const route = useRoute()
+
+const builderMode = computed(() => route.query.builder === '1')
 
 const projectId = activeProjectId
 const project = activeProject
@@ -639,6 +721,9 @@ const expandedFrame = ref<{ url: string; title: string; downloadUrl: string } | 
 const framePreviewDialogEl = ref<HTMLElement | null>(null)
 const frameDeletingId = ref<string | null>(null)
 const frameUploadingId = ref<string | null>(null)
+const addingBoard = ref(false)
+const deletingBoardId = ref<string | null>(null)
+const savingShotId = ref<string | null>(null)
 /** Per-board accordion; unset = collapsed so frames align in the grid. */
 const boardDetailsOpenByShotId = ref<Record<string, boolean>>({})
 const storyboardFrameFileInput = ref<HTMLInputElement | null>(null)
@@ -719,7 +804,15 @@ function scenePanelLabel (scene: SceneRow): string {
   if (Number.isFinite(existing) && existing > 0) {
     return `${Math.floor(existing)} panel${Math.floor(existing) === 1 ? '' : 's'}`
   }
-  return 'est. 5-12 panels'
+  const budget = durationBudget.value
+  if (budget && scenes.value.length) {
+    const idx = scenes.value.findIndex(s => s.id === scene.id)
+    const cap = perSceneShotCap(budget, scenes.value.length, Math.max(0, idx))
+    if (cap.maxShots < 1) return 'over budget'
+    if (cap.minShots === cap.maxShots) return `${cap.maxShots} panel${cap.maxShots === 1 ? '' : 's'}`
+    return `${cap.minShots}–${cap.maxShots} panels`
+  }
+  return 'est. 1–6 panels'
 }
 
 function shotCharacterMatches (shot: CreativeShot) {
@@ -1404,7 +1497,10 @@ async function loadScenes () {
       shots.value = []
       return
     }
-    if (!selectedSceneId.value || !scenes.value.some(s => s.id === selectedSceneId.value)) {
+    const sceneFromQuery = typeof route.query.scene === 'string' ? route.query.scene : ''
+    if (sceneFromQuery && scenes.value.some(s => s.id === sceneFromQuery)) {
+      selectedSceneId.value = sceneFromQuery
+    } else if (!selectedSceneId.value || !scenes.value.some(s => s.id === selectedSceneId.value)) {
       selectedSceneId.value = scenes.value[0].id
     }
   } catch (e: any) {
@@ -1413,6 +1509,87 @@ async function loadScenes () {
     shots.value = []
     scenesLoadError.value =
       e?.data?.message || e?.message || 'Could not load scenes.'
+  }
+}
+
+async function saveShot (shot: CreativeShot) {
+  const id = projectId.value
+  const sid = selectedSceneId.value
+  const token = getAuthToken()
+  if (!id || !sid || !token || !shot.id) return
+  savingShotId.value = shot.id
+  try {
+    await $fetch(`/api/projects/${id}/scenes/${sid}/shots/${shot.id}`, {
+      method: 'PATCH',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        title: shot.title,
+        description: shot.description,
+        shotType: shot.shotType,
+        cameraMove: shot.cameraMove,
+        durationSeconds: shot.durationSeconds,
+        imagePrompt: shot.imagePrompt,
+        videoPrompt: shot.videoPrompt,
+        negativePrompt: shot.negativePrompt
+      }
+    })
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not save board'), 'error')
+  } finally {
+    if (savingShotId.value === shot.id) savingShotId.value = null
+  }
+}
+
+async function addBoard () {
+  const id = projectId.value
+  const sid = selectedSceneId.value
+  const token = getAuthToken()
+  if (!id || !sid || !token) return
+  addingBoard.value = true
+  try {
+    const res = await $fetch<{ shot: CreativeShot }>(`/api/projects/${id}/scenes/${sid}/shots`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    const mapped = applyCastNameConventionToShots(mapShotsFromApi([res.shot]))
+    if (mapped[0]) {
+      shots.value = [...shots.value, mapped[0]]
+      boardDetailsOpenByShotId.value = {
+        ...boardDetailsOpenByShotId.value,
+        [mapped[0].id]: true
+      }
+      await loadScenes()
+      toast.showToast('Board added.', 'success')
+    }
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not add board'), 'error')
+  } finally {
+    addingBoard.value = false
+  }
+}
+
+async function deleteBoard (shot: CreativeShot) {
+  const label = shot.title || `Board ${shots.value.findIndex(s => s.id === shot.id) + 1}`
+  if (!confirm(`Delete “${label}” from this scene?`)) return
+  const id = projectId.value
+  const sid = selectedSceneId.value
+  const token = getAuthToken()
+  if (!id || !sid || !token) return
+  deletingBoardId.value = shot.id
+  try {
+    await $fetch(`/api/projects/${id}/scenes/${sid}/shots/${shot.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    shots.value = shots.value.filter(s => s.id !== shot.id)
+    delete framePreview[shot.id]
+    delete framePreviewFailed[shot.id]
+    await loadScenes()
+    toast.showToast('Board deleted.', 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not delete board'), 'error')
+  } finally {
+    deletingBoardId.value = null
   }
 }
 

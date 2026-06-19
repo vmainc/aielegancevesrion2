@@ -211,8 +211,15 @@ ${mem.slice(0, 8000)}
     : ''
 
   const budget = ctx.durationBudget
-  const shotMax = ctx.sceneShotCap?.maxShots ?? (budget ? Math.min(12, budget.maxShotsPerScene) : 12)
-  const shotMin = ctx.sceneShotCap?.minShots ?? (budget ? Math.min(budget.minShotsPerScene, shotMax) : 3)
+  const shotMax = ctx.sceneShotCap?.maxShots ?? (budget ? budget.maxShotsPerScene : 6)
+  const shotMin = ctx.sceneShotCap?.minShots ?? (budget ? Math.min(budget.minShotsPerScene, shotMax) : 1)
+  if (shotMax < 1) {
+    throw new Error(
+      budget
+        ? `This scene is outside the ${budget.totalSeconds}s runtime budget (${budget.maxPanelsTotal} panels max). Remove extra scenes or raise target runtime on Overview.`
+        : 'No shots to generate for this scene'
+    )
+  }
 
   const animalOnly = isAnimalOnlyCast(
     ctx.characters.map(c => ({ name: c.name, traitsRoleVisual: c.traitsRoleVisual }))
@@ -230,7 +237,7 @@ ANIMAL-ONLY CAST (critical):
 Output ONLY valid JSON (no markdown), exactly this shape:
 {"shots":[{"order":1,"title":"short label","description":"story beat in plain language","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static","duration_seconds":5,"image_prompt":"LONG detailed still-frame prompt (see rules)","video_prompt":"LONG motion prompt (see rules)","negative_prompt":"comma-separated exclusions"}]}
 Rules:
-- Produce between ${shotMin} and ${shotMax} shots for THIS scene only; order 1..N; duration_seconds MUST be exactly 5 or 10 (integer).
+- Produce ${shotMin === shotMax ? `exactly ${shotMax}` : `between ${shotMin} and ${shotMax}`} shots for THIS scene only; order 1..N; duration_seconds MUST be exactly 5 or 10 (integer).
 - image_prompt: MINIMUM ~120 words. Production-ready STILL frame. START with the UNIQUE action, pose, and composition for THIS panel only (order N) — each panel must look like a different moment. Then include: (1) which cast members appear and their COMPLETE visual design copied from CHARACTERS (materials, colors, proportions, wardrobe, expression); (2) locked environment/props/lighting for this scene; (3) lens/framing for shot_type; (4) same art direction as director bible. Repeat the same character DESIGN wording across shots for consistency — never repeat the same pose, blocking, or framing.
 - video_prompt: MINIMUM ~80 words. Motion-only delta on the still: camera_move, subject action, lighting shifts — do NOT introduce new characters or redesign anyone.
 - negative_prompt: comma-separated forbidden elements (watermark, text, blurry, wrong species, extra characters, style drift).${animalRules}

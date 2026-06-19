@@ -168,6 +168,14 @@
                             Add to timeline
                           </button>
                           <button
+                            v-if="a.projectId && moveTargetProjects(a).length"
+                            type="button"
+                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
+                            @click="openMoveVideo(a)"
+                          >
+                            Move to project…
+                          </button>
+                          <button
                             type="button"
                             class="block w-full text-left px-3 py-2 rounded-md text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
                             :disabled="deletingId === a.id"
@@ -694,6 +702,71 @@
       </div>
 
       <div
+        v-if="openMove"
+        class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/50"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="asset-move-title"
+        @click.self="closeMove"
+      >
+        <div
+          class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
+          @click.stop
+        >
+          <h2 id="asset-move-title" class="text-lg font-semibold text-gray-900 mb-1">
+            Move video clip
+          </h2>
+          <p v-if="moveTarget" class="text-sm text-gray-600 mb-4 truncate">
+            {{ moveTarget.title }}
+          </p>
+          <p v-if="!moveTargetProjects(moveTarget).length" class="text-sm text-amber-800 mb-4">
+            Create another project first — there is nowhere to move this clip.
+          </p>
+          <form v-else class="space-y-4" @submit.prevent="submitMove">
+            <div>
+              <label class="block text-sm font-medium text-gray-700 mb-1" for="move-project">Destination project</label>
+              <select
+                id="move-project"
+                v-model="moveProjectId"
+                required
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm"
+              >
+                <option value="" disabled>Select project</option>
+                <option
+                  v-for="p in moveTargetProjects(moveTarget)"
+                  :key="p.id"
+                  :value="p.id"
+                >
+                  {{ p.name }}
+                </option>
+              </select>
+            </div>
+            <p class="text-xs text-gray-500">
+              The file stays in your library — only the project folder changes. Timeline clips already placed are not updated.
+            </p>
+            <p v-if="moveError" class="text-sm text-red-700">{{ moveError }}</p>
+            <div class="flex justify-end gap-2 pt-2">
+              <button
+                type="button"
+                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
+                :disabled="moving"
+                @click="closeMove"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm disabled:opacity-50"
+                :disabled="moving"
+              >
+                {{ moving ? 'Moving…' : 'Move clip' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div
         v-if="openAdd"
         class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/50"
         role="dialog"
@@ -836,6 +909,11 @@ const featuringId = ref('')
 const uploadingCharacterAssetId = ref('')
 const characterImageFileInput = ref<HTMLInputElement | null>(null)
 const uploadTargetAsset = ref<ProjectAsset | null>(null)
+const openMove = ref(false)
+const moveTarget = ref<ProjectAsset | null>(null)
+const moveProjectId = ref('')
+const moving = ref(false)
+const moveError = ref('')
 
 const addForm = reactive({
   projectId: '',
@@ -1268,6 +1346,51 @@ watch(isAuthenticated, (v) => {
     loading.value = false
   }
 })
+
+function moveTargetProjects (a: ProjectAsset | null): CreativeProject[] {
+  if (!a?.projectId) return pbProjects.value
+  return pbProjects.value.filter(p => p.id !== a.projectId)
+}
+
+function openMoveVideo (a: ProjectAsset) {
+  moveTarget.value = a
+  moveProjectId.value = moveTargetProjects(a)[0]?.id || ''
+  moveError.value = ''
+  openMove.value = true
+}
+
+function closeMove () {
+  openMove.value = false
+  moveTarget.value = null
+  moveProjectId.value = ''
+  moveError.value = ''
+}
+
+async function submitMove () {
+  const a = moveTarget.value
+  const token = getAuthToken()
+  if (!a?.id || !token || !moveProjectId.value) return
+  moving.value = true
+  moveError.value = ''
+  try {
+    await $fetch(`/api/assets/${a.id}/move`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: { projectId: moveProjectId.value }
+    })
+    const dest = pbProjects.value.find(p => p.id === moveProjectId.value)
+    toast.showToast(
+      dest ? `Moved to “${dest.name}”.` : 'Moved to project.',
+      'success'
+    )
+    closeMove()
+    await fetchItems()
+  } catch (e) {
+    moveError.value = formatApiFetchError(e, 'Could not move clip')
+  } finally {
+    moving.value = false
+  }
+}
 
 function closeAdd () {
   if (adding.value) return

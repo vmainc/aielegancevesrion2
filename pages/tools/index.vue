@@ -30,6 +30,11 @@ const cards = [
     blurb: 'Standalone script workspace: upload, analyze, and reuse scripts across projects.',
   },
   {
+    to: '/tools/storyboard-builder',
+    title: 'Storyboard Builder',
+    blurb: 'Build a scene board-by-board — starts with one panel, add more as you go.',
+  },
+  {
     to: '/character-creator',
     title: 'Character Creator',
     blurb: 'Generate character portraits and references with image models.',

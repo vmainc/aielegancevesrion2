@@ -1,17 +1,27 @@
 <template>
   <div class="flex flex-wrap items-center gap-2 px-3 py-2 rounded-xl border border-white/10 bg-zinc-900/80 backdrop-blur-sm">
     <button
-      v-for="tool in tools"
-      :key="tool.id"
       type="button"
       class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
-      :class="activeTool === tool.id
+      :class="activeTool === 'select'
         ? 'bg-primary text-gray-950 shadow-md'
         : 'text-zinc-300 hover:bg-white/10 hover:text-white'"
-      :title="tool.hint"
-      @click="$emit('set-tool', tool.id)"
+      title="Move and trim clips (V)"
+      @click="$emit('set-tool', 'select')"
     >
-      {{ tool.label }}
+      Select (V)
+    </button>
+    <button
+      type="button"
+      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
+      :class="activeTool === 'split'
+        ? 'bg-primary text-gray-950 shadow-md'
+        : 'text-zinc-300 hover:bg-white/10 hover:text-white'"
+      title="Razor tool: click a clip to cut at the playhead (C)"
+      @click="$emit('set-tool', 'split')"
+    >
+      <EditorTimelineRazorIcon />
+      Razor (C)
     </button>
 
     <span class="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
@@ -94,12 +104,23 @@
 
     <button
       type="button"
-      class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
+      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
       :disabled="!canSplit"
       title="Cut selected clip at playhead"
       @click="$emit('split')"
     >
-      ✂ Cut at playhead
+      <EditorTimelineRazorIcon />
+      Cut at playhead
+    </button>
+
+    <button
+      type="button"
+      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-950 bg-emerald-400/90 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
+      :disabled="!canExport || exporting"
+      :title="exporting ? exportLabel : 'Download finished edit as WebM (records in real time)'"
+      @click="$emit('export')"
+    >
+      {{ exporting ? exportLabel : 'Export video' }}
     </button>
 
     <div class="ml-auto flex items-center gap-2">
@@ -127,6 +148,9 @@ defineProps<{
   canBlend: boolean
   canUndo: boolean
   canRedo: boolean
+  canExport: boolean
+  exporting?: boolean
+  exportLabel?: string
   zoom: number
 }>()
 
@@ -140,14 +164,10 @@ const emit = defineEmits<{
   'detach-audio': []
   'set-transition': [which: 'in' | 'out', type: TimelineTransitionType]
   'set-zoom': [number]
+  export: []
 }>()
 
 const showFade = ref(false)
-
-const tools: { id: TimelineEditorTool; label: string; hint: string }[] = [
-  { id: 'select', label: 'Select (V)', hint: 'Move and trim clips' },
-  { id: 'split', label: '✂ Razor (C)', hint: 'Razor tool: click clip to cut at the playhead' }
-]
 
 const fadeOptions = [
   { id: 'in-cross', which: 'in' as const, type: 'fade-in' as TimelineTransitionType, label: 'Fade in' },

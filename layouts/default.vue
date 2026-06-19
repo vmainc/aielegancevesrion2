@@ -19,12 +19,12 @@
             </NuxtLink>
             <!-- Desktop: workspace nav (logged in) or marketing anchors (guest) -->
             <ClientOnly>
-              <div v-if="isAuthenticated" class="hidden lg:flex items-center space-x-8">
+              <div v-if="showAuthenticatedUi" class="hidden lg:flex items-center space-x-8">
                 <NuxtLink
                   to="/projects"
                   class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                 >
-                  Workflow
+                  Projects
                 </NuxtLink>
                 <div ref="assetsMenuRef" class="relative">
                   <button
@@ -112,6 +112,13 @@
                       @click="closeToolsDropdown"
                     >
                       Script Wizard
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/tools/storyboard-builder"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
+                      @click="closeToolsDropdown"
+                    >
+                      Storyboard Builder
                     </NuxtLink>
                     <NuxtLink
                       to="/character-creator"
@@ -215,7 +222,7 @@
 
             <ClientOnly>
               <div class="flex items-center space-x-2 sm:space-x-4">
-                <template v-if="isAuthenticated">
+                <template v-if="showAuthenticatedUi">
                   <div class="relative flex items-center">
                     <button
                       @click="toggleDropdown"
@@ -246,16 +253,9 @@
                       class="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
                     >
                       <NuxtLink
-                        to="/projects"
-                        @click="closeDropdown"
-                        class="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors first:rounded-t-lg"
-                      >
-                        My Projects
-                      </NuxtLink>
-                      <NuxtLink
                         to="/account"
                         @click="closeDropdown"
-                        class="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
+                        class="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors first:rounded-t-lg"
                       >
                         Settings
                       </NuxtLink>
@@ -320,13 +320,13 @@
         >
           <div class="px-4 py-4 space-y-2">
             <ClientOnly>
-              <template v-if="isAuthenticated">
+              <template v-if="showAuthenticatedUi">
                 <NuxtLink
                   to="/projects"
                   @click="closeMobileMenu"
                   class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
                 >
-                  Workflow
+                  Projects
                 </NuxtLink>
                 <div class="rounded-lg border border-gray-200 overflow-hidden">
                   <NuxtLink
@@ -386,6 +386,13 @@
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
                   >
                     Script Wizard
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/tools/storyboard-builder"
+                    @click="closeMobileMenu"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                  >
+                    Storyboard Builder
                   </NuxtLink>
                   <NuxtLink
                     to="/tools/video-generation"
@@ -465,7 +472,7 @@
               </template>
             </ClientOnly>
             <ClientOnly>
-              <template v-if="!isAuthenticated">
+              <template v-if="!showAuthenticatedUi">
                 <div class="pt-2 border-t border-gray-200 mt-2">
                   <NuxtLink
                     to="/login"
@@ -497,7 +504,7 @@
 <script setup>
 import logo from '~/assets/img/logo.png'
 
-const { isAuthenticated, logout, user } = useAuth()
+const { showAuthenticatedUi, logout, user } = useAuth()
 
 const dropdownOpen = ref(false)
 const dropdownRef = ref(null)

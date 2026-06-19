@@ -209,6 +209,12 @@ async function createCollections(adminEmail, adminPassword) {
               values: ['spot', 'short', 'music_video', 'episode', 'feature']
             }
           },
+          {
+            name: 'target_duration_seconds',
+            type: 'number',
+            required: false,
+            options: { min: 15, max: 3600, onlyInt: true }
+          },
           { name: 'synopsis', type: 'text', required: false, options: { max: 20000 } },
           { name: 'treatment', type: 'text', required: false, options: { max: 50000 } },
           { name: 'concept_notes', type: 'text', required: false, options: { max: 50000 } },

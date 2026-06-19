@@ -16,6 +16,9 @@ export async function runConceptBootstrapJob (input: {
   genre?: string
   tone?: string
   characters?: string[]
+  director?: import('~/types/creative-project').ProjectDirector
+  visualReference?: string
+  targetDurationSeconds?: number
 }): Promise<void> {
   try {
     const pb = await getAuthenticatedPocketBase()
@@ -30,7 +33,8 @@ export async function runConceptBootstrapJob (input: {
       tone: input.tone,
       characters: input.characters,
       director: input.director,
-      visualReference: input.visualReference
+      visualReference: input.visualReference,
+      targetDurationSeconds: input.targetDurationSeconds
     })
 
     completeScriptImportJob(input.jobId, {

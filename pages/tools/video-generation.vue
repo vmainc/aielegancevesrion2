@@ -5,7 +5,7 @@
         Video generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Choose video-capable models and describe your shot. Generated clips are visuals only (no AI background music) — add score or tracks on the project timeline later. Clips can be saved under Assets → Video.
+        Choose video-capable models and describe your shot. Clips are silent by default (no AI background music) — add score on the timeline, or turn on <span class="font-medium text-gray-800">spoken dialogue</span> for quick talking clips.
       </p>
       <p
         v-if="loadingPanelPrefill"
@@ -188,8 +188,45 @@
               </select>
             </div>
           </div>
+
+          <div class="rounded-lg border border-gray-200 bg-white px-4 py-3 space-y-3">
+            <label class="inline-flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+              <input
+                v-model="includeSpokenDialogue"
+                type="checkbox"
+                class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
+              >
+              <span>
+                <span class="font-medium text-gray-900">Include spoken dialogue</span>
+                <span class="block text-xs text-gray-500 mt-0.5">
+                  Quick talking clips — the model synthesizes speech in the video file (no background music).
+                  Works best with models marked <span class="font-medium text-gray-700">Audio</span> below.
+                </span>
+              </span>
+            </label>
+            <div v-if="includeSpokenDialogue">
+              <label for="vg-dialogue" class="block text-sm font-medium text-gray-700 mb-1.5">What they say</label>
+              <textarea
+                id="vg-dialogue"
+                v-model="dialogueLine"
+                rows="2"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                placeholder='e.g. "We have to leave — now."'
+              />
+              <p class="mt-1.5 text-xs text-gray-500">
+                Optional if the line is already in your prompt above. Lip-sync quality varies by model.
+              </p>
+              <p
+                v-if="spokenDialogueModelWarning"
+                class="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2"
+              >
+                {{ spokenDialogueModelWarning }}
+              </p>
+            </div>
+          </div>
+
           <p class="text-xs text-gray-500">
-            Prompts exclude background music so your score stays consistent — upload or generate music separately and place it on the timeline audio track.
+            By default clips are silent — add score on the timeline later. With spoken dialogue on, the model may include voice in the file (still no AI background music).
             Video on OpenRouter is API-only and may be in alpha.
             <a
               href="https://openrouter.ai/models?fmt=cards&output_modalities=video"
@@ -277,7 +314,13 @@
                 class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
               >
               <span class="min-w-0">
-                <span class="block text-sm text-gray-800 font-medium leading-snug">{{ m.name }}</span>
+                <span class="block text-sm text-gray-800 font-medium leading-snug">
+                  {{ m.name }}
+                  <span
+                    v-if="m.generateAudio"
+                    class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/15 text-primary border border-primary/25 align-middle"
+                  >Audio</span>
+                </span>
                 <span class="block text-xs font-mono text-gray-500 truncate mt-0.5" :title="m.id">{{ m.id }}</span>
                 <span
                   v-if="m.description"
@@ -392,6 +435,7 @@ import {
   playbackUrlForProjectVideoAsset,
   saveVideoToProjectLibrary
 } from '~/composables/useOpenRouterVideoGen'
+import { resolveVideoGenerationPrompt } from '~/lib/video-generation-audio-policy'
 import type { CreativeProject } from '~/types/creative-project'
 
 const PB_ID = /^[a-z0-9]{15}$/
@@ -401,6 +445,7 @@ type VideoModel = {
   name: string
   description?: string
   supportedDurations?: number[]
+  generateAudio?: boolean
 }
 
 type ApiPayload = {
@@ -473,6 +518,8 @@ const durationSeconds = ref(
     ? boot.durationSeconds
     : 5
 )
+const includeSpokenDialogue = ref(false)
+const dialogueLine = ref('')
 const selectedModelIds = ref<string[]>([])
 const formError = ref('')
 const generating = ref(false)
@@ -709,6 +756,27 @@ const keepButtonLabel = computed(() => {
   return 'Keep clip'
 })
 
+const spokenDialogueModelWarning = computed(() => {
+  if (!includeSpokenDialogue.value || !selectedModelIds.value.length) return ''
+  const picked = selectedModelIds.value
+    .map(id => models.value.find(m => m.id === id))
+    .filter(Boolean) as VideoModel[]
+  const withoutAudio = picked.filter(m => m.generateAudio !== true)
+  if (!withoutAudio.length) return ''
+  if (withoutAudio.length === picked.length) {
+    return 'None of your selected models are marked for native audio — try Wan 2.6, Seedance 1.5 Pro, or Veo 3.1, or turn off spoken dialogue for silent clips.'
+  }
+  return `${withoutAudio.map(m => m.name).join(', ')} may not synthesize speech — prefer models with the Audio badge.`
+})
+
+function resolvedGenerationPrompt (): string {
+  return resolveVideoGenerationPrompt({
+    prompt: prompt.value,
+    dialogueLine: dialogueLine.value,
+    includeSpokenDialogue: includeSpokenDialogue.value
+  })
+}
+
 const canSubmit = computed(() =>
   uiPhase.value === 'form' &&
   !generating.value &&
@@ -742,12 +810,13 @@ async function runOneModel (modelId: string) {
   slotByModel[modelId] = { status: 'loading' }
   try {
     const { videoUrl } = await generateOpenRouterVideo({
-      prompt: prompt.value,
+      prompt: resolvedGenerationPrompt(),
       model: modelId,
       aspectRatio: aspectRatio.value,
       durationSeconds: durationSeconds.value,
       frameImageUrl: startFrameUrl.value || undefined,
-      supportedDurations: model?.supportedDurations
+      supportedDurations: model?.supportedDurations,
+      generateAudio: includeSpokenDialogue.value
     })
 
     let playbackUrl = videoUrl
@@ -767,6 +836,10 @@ async function runOneModel (modelId: string) {
           source: pre?.source || 'standalone_video_tool',
           aspect_ratio: aspectRatio.value,
           duration_seconds: durationSeconds.value,
+          generate_audio: includeSpokenDialogue.value,
+          ...(includeSpokenDialogue.value && dialogueLine.value.trim()
+            ? { dialogue_line: dialogueLine.value.trim().slice(0, 500) }
+            : {}),
           ...(pre?.sceneId ? { scene_id: pre.sceneId } : {}),
           ...(pre?.shotId ? { shot_id: pre.shotId } : {})
         },

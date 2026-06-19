@@ -1,0 +1,55 @@
+import { createError, getRouterParam, readBody } from 'h3'
+import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
+import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
+import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { createSceneShot } from '~/server/utils/persist-scene-shots'
+
+export default defineEventHandler(async (event) => {
+  const projectId = getRouterParam(event, 'id')
+  const sceneId = getRouterParam(event, 'sceneId')
+  if (!projectId || !sceneId) {
+    throw createError({ statusCode: 400, message: 'Missing ids' })
+  }
+  const userId = await getPocketBaseUserIdFromRequest(event)
+  const body = await readBody(event).catch(() => null) as Record<string, unknown> | null
+  const pb = await getAuthenticatedPocketBase()
+
+  const project = await pb.collection('creative_projects').getOne(projectId)
+  const owner = pbRecordOwnerId(project as { owner?: unknown; user?: unknown })
+  if (owner !== userId) {
+    throw createError({ statusCode: 403, message: 'Forbidden' })
+  }
+
+  const scene = await pb.collection('creative_scenes').getOne(sceneId)
+  const sceneProject =
+    typeof scene.project === 'string' ? scene.project : (scene.project as { id?: string })?.id
+  if (sceneProject !== projectId) {
+    throw createError({ statusCode: 400, message: 'Scene does not belong to this project' })
+  }
+
+  const durationRaw =
+    body && typeof body.durationSeconds === 'number' && Number.isFinite(body.durationSeconds)
+      ? body.durationSeconds
+      : 5
+
+  try {
+    const shot = await createSceneShot(pb, userId, projectId, sceneId, {
+      title: typeof body?.title === 'string' ? body.title : undefined,
+      description: typeof body?.description === 'string' ? body.description : undefined,
+      shot_type: typeof body?.shotType === 'string' ? body.shotType : undefined,
+      camera_move: typeof body?.cameraMove === 'string' ? body.cameraMove : undefined,
+      duration_seconds: snapToStoryboardClipSeconds(durationRaw),
+      image_prompt: typeof body?.imagePrompt === 'string' ? body.imagePrompt : undefined,
+      video_prompt: typeof body?.videoPrompt === 'string' ? body.videoPrompt : undefined,
+      negative_prompt: typeof body?.negativePrompt === 'string' ? body.negativePrompt : undefined
+    })
+    return { shot }
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e)
+    if (/forbidden/i.test(msg)) {
+      throw createError({ statusCode: 403, message: 'Forbidden' })
+    }
+    throw createError({ statusCode: 400, message: msg || 'Could not add board' })
+  }
+})
