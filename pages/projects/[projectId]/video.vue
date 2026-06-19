@@ -111,7 +111,11 @@
             <li
               v-for="(shot, idx) in sceneShotsBySceneId[scene.id] || []"
               :key="shot.id"
-              class="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col"
+              :id="panelDomId(scene.id, shot.id)"
+              class="rounded-xl border bg-white overflow-hidden flex flex-col transition-shadow"
+              :class="highlightPanelKey === genKey(scene.id, shot.id)
+                ? 'border-primary ring-2 ring-primary/35 shadow-md'
+                : 'border-gray-200'"
             >
               <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between gap-2 bg-gray-50 shrink-0">
                 <span class="text-xs font-mono text-primary">PANEL {{ idx + 1 }}</span>
@@ -318,6 +322,8 @@ import {
 import type { CreativeShot } from '~/types/creative-shot'
 import type { ProjectAsset } from '~/types/project-asset'
 
+const route = useRoute()
+const router = useRouter()
 const { activeProject, activeProjectId, clientReady } = useCreativeProject()
 const { isAuthenticated, getAuthToken } = useAuth()
 const authTokenState = useState<string | null>('auth_token')
@@ -348,6 +354,7 @@ const sceneShotsLoading = reactive<Record<string, boolean>>({})
 const videoPreviewByKey = reactive<Record<string, string>>({})
 const expandedMedia = ref<{ kind: 'video' | 'image'; url: string; title: string } | null>(null)
 const openingVideoPanelKey = ref('')
+const highlightPanelKey = ref('')
 
 const { refs: characterRefs } = useProjectCharacterRefs(projectId)
 
@@ -455,6 +462,7 @@ async function reloadStoryboardBoards () {
   await loadStoryboardAssetsForVideo()
   await loadVideoAssetsForPanels()
   await Promise.all(scenes.value.map(s => loadShotsForScene(s.id)))
+  await scrollToPanelFromQuery()
 }
 
 function storyboardAssetMapForScene (sceneId: string): Map<string, ProjectAsset> {
@@ -500,6 +508,25 @@ function finalVideoPrompt (shot: CreativeShot, scene?: SceneRow): string {
 
 function genKey (sceneId: string, shotId: string) {
   return `${sceneId}:${shotId}`
+}
+
+function panelDomId (sceneId: string, shotId: string) {
+  return `video-panel-${sceneId}-${shotId}`
+}
+
+async function scrollToPanelFromQuery () {
+  const sceneId = typeof route.query.sceneId === 'string' ? route.query.sceneId.trim() : ''
+  const shotId = typeof route.query.shotId === 'string' ? route.query.shotId.trim() : ''
+  if (!sceneId || !shotId) return
+
+  highlightPanelKey.value = genKey(sceneId, shotId)
+  await nextTick()
+  document.getElementById(panelDomId(sceneId, shotId))?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+
+  const q = { ...route.query }
+  delete q.sceneId
+  delete q.shotId
+  await router.replace({ query: q })
 }
 
 function playbackVideoSrc (raw: string | undefined): string {

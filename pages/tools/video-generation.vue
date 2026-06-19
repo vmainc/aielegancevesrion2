@@ -34,13 +34,113 @@
 
     <template v-else>
       <p
-        v-if="data?.notice"
+        v-if="data?.notice && uiPhase === 'form'"
         class="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700"
       >
         {{ data.notice }}
       </p>
 
-      <form class="space-y-8 mb-10" @submit.prevent="onSubmit">
+      <!-- Generating: hide all options -->
+      <div
+        v-if="uiPhase === 'generating'"
+        class="rounded-xl border border-primary/25 bg-primary/5 px-6 py-14 mb-10"
+      >
+        <FilmReelLoader
+          size="lg"
+          label="Generating video"
+          :sub-label="generatingSubLabel"
+        />
+        <p class="mt-6 text-center text-sm text-gray-600 max-w-md mx-auto">
+          Models are rendering in parallel. This can take a few minutes — please keep this tab open.
+        </p>
+      </div>
+
+      <!-- Complete: preview + keep or discard -->
+      <div
+        v-else-if="uiPhase === 'complete'"
+        class="space-y-8 mb-10"
+      >
+        <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-5">
+          <div>
+            <h2 class="text-lg font-semibold text-gray-900">
+              {{ successfulResults.length === 1 ? 'Your clip is ready' : 'Pick a clip to keep' }}
+            </h2>
+            <p class="text-sm text-gray-600 mt-1">
+              <template v-if="panelPrefill?.sceneId && panelPrefill?.shotId">
+                Keep saves this clip to your storyboard panel on the Video step. Discard removes it so you can adjust settings and try again.
+              </template>
+              <template v-else>
+                Keep saves to your project library. Discard removes generated clips from this run.
+              </template>
+            </p>
+          </div>
+
+          <p v-if="!successfulResults.length" class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            All models failed. Adjust your prompt or try a different model.
+          </p>
+
+          <div v-else class="grid grid-cols-1 sm:grid-cols-2 gap-5">
+            <label
+              v-for="r in successfulResults"
+              :key="r.modelId"
+              class="rounded-xl overflow-hidden border cursor-pointer transition-colors"
+              :class="selectedKeepModelId === r.modelId
+                ? 'border-primary ring-2 ring-primary/30'
+                : 'border-gray-200 hover:border-primary/40'"
+            >
+              <div class="px-3 py-2 border-b border-gray-200 bg-gray-50 flex items-center gap-2">
+                <input
+                  v-if="successfulResults.length > 1"
+                  v-model="selectedKeepModelId"
+                  type="radio"
+                  :value="r.modelId"
+                  class="text-primary focus:ring-primary"
+                >
+                <span class="text-sm font-semibold text-gray-900">{{ r.modelName }}</span>
+              </div>
+              <div class="aspect-video bg-black">
+                <video
+                  v-if="r.playbackUrl"
+                  :src="playbackSrc(r.playbackUrl)"
+                  class="w-full h-full object-contain"
+                  controls
+                  playsinline
+                  preload="metadata"
+                />
+              </div>
+            </label>
+          </div>
+
+          <div
+            v-for="r in failedResults"
+            :key="`err-${r.modelId}`"
+            class="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+          >
+            <span class="font-semibold">{{ r.modelName }}:</span> {{ r.error }}
+          </div>
+
+          <div class="flex flex-wrap gap-3 pt-2">
+            <button
+              type="button"
+              class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50"
+              :disabled="!successfulResults.length || keepingClip || discardingRun"
+              @click="keepClipAndContinue"
+            >
+              {{ keepingClip ? 'Saving…' : keepButtonLabel }}
+            </button>
+            <button
+              type="button"
+              class="px-5 py-2.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-lg text-sm transition-colors disabled:opacity-50"
+              :disabled="keepingClip || discardingRun"
+              @click="discardRunAndRetry"
+            >
+              {{ discardingRun ? 'Removing…' : 'Discard & try again' }}
+            </button>
+          </div>
+        </section>
+      </div>
+
+      <form v-else class="space-y-8 mb-10" @submit.prevent="onSubmit">
         <section class="rounded-xl border border-gray-200 bg-gray-50/80 p-5 sm:p-6 space-y-4">
           <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
             Video
@@ -61,6 +161,7 @@
           <VideoStartFramePicker
             v-model:frame-image-url="startFrameUrl"
             :prompt="prompt"
+            :aspect-ratio="aspectRatio"
           />
           <div class="grid sm:grid-cols-2 gap-4">
             <div>
@@ -202,7 +303,7 @@
         </div>
       </form>
 
-      <section v-if="hasAnySlot" class="space-y-4">
+      <section v-if="uiPhase === 'form' && hasAnySlot" class="space-y-4">
         <h2 class="text-lg font-semibold text-gray-900">Results</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <article
@@ -258,7 +359,7 @@
         </div>
       </section>
 
-      <section v-else class="space-y-4">
+      <section v-else-if="uiPhase === 'form'" class="space-y-4">
         <h2 class="text-lg font-semibold text-gray-900">Results</h2>
         <div
           class="rounded-xl border border-dashed border-gray-300 bg-gray-50/80 px-6 py-12 text-center text-sm text-gray-500"
@@ -311,8 +412,11 @@ type ApiPayload = {
 type Slot = {
   status: 'loading' | 'done' | 'error'
   playbackUrl?: string
+  assetId?: string
   error?: string
 }
+
+type UiPhase = 'form' | 'generating' | 'complete'
 
 const route = useRoute()
 const router = useRouter()
@@ -376,9 +480,18 @@ const doneCount = ref(0)
 const saveToProject = ref(boot?.saveToProject ?? true)
 const addToTimeline = ref(boot?.addToTimeline ?? false)
 const selectedProjectId = ref(
-  boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : ''
+  panelProjectId.value ||
+    (boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : '')
+)
+const pinnedProjectId = ref(
+  panelProjectId.value ||
+    (boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : '')
 )
 const slotByModel = reactive<Record<string, Slot>>({})
+const uiPhase = ref<UiPhase>('form')
+const selectedKeepModelId = ref('')
+const keepingClip = ref(false)
+const discardingRun = ref(false)
 const panelPrefill = ref<VideoGenerationPrefill | null>(boot)
 const prefillBanner = ref(
   boot?.shotTitle?.trim()
@@ -386,9 +499,6 @@ const prefillBanner = ref(
     : boot?.prompt?.trim()
       ? 'Opened from a project panel — prompt and seed frame are prefilled; pick one or more models below.'
       : ''
-)
-const pinnedProjectId = ref(
-  boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : ''
 )
 const prefillApplied = ref(Boolean(boot?.prompt?.trim()))
 const loadingPanelPrefill = ref(false)
@@ -402,10 +512,22 @@ function syncSelectedProjectFromPin () {
   if (!pin || !PB_ID.test(pin)) return
   if (pbProjects.value.some(p => p.id === pin)) {
     selectedProjectId.value = pin
+    return
+  }
+  pinnedProjectId.value = ''
+}
+
+function dropStaleSelectedProject () {
+  const id = selectedProjectId.value.trim()
+  if (!id || !PB_ID.test(id)) return
+  if (pbProjects.value.length && !pbProjects.value.some(p => p.id === id)) {
+    selectedProjectId.value = pbProjects.value[0]?.id || ''
+    if (pinnedProjectId.value === id) pinnedProjectId.value = ''
   }
 }
 
 watch([pbProjects, clientReady], () => {
+  dropStaleSelectedProject()
   if (pinnedProjectId.value) {
     syncSelectedProjectFromPin()
     return
@@ -550,7 +672,45 @@ watch(saveToProject, (v) => {
 
 const hasAnySlot = computed(() => Object.keys(slotByModel).length > 0)
 
+const successfulResults = computed(() =>
+  selectedModelIds.value
+    .filter(id => slotByModel[id]?.status === 'done' && slotByModel[id]?.playbackUrl)
+    .map(id => ({
+      modelId: id,
+      modelName: models.value.find(m => m.id === id)?.name || id,
+      playbackUrl: slotByModel[id]!.playbackUrl!,
+      assetId: slotByModel[id]?.assetId
+    }))
+)
+
+const failedResults = computed(() =>
+  selectedModelIds.value
+    .filter(id => slotByModel[id]?.status === 'error')
+    .map(id => ({
+      modelId: id,
+      modelName: models.value.find(m => m.id === id)?.name || id,
+      error: slotByModel[id]?.error || 'Generation failed'
+    }))
+)
+
+const generatingSubLabel = computed(() => {
+  const total = selectedModelIds.value.length
+  if (!total) return 'Starting…'
+  return `Finished ${doneCount.value} of ${total} model${total === 1 ? '' : 's'}…`
+})
+
+const keepButtonLabel = computed(() => {
+  if (panelPrefill.value?.sceneId && panelPrefill.value?.shotId) {
+    return 'Keep clip & view storyboard panel'
+  }
+  if (selectedProjectId.value && saveToProject.value) {
+    return 'Keep clip & open project video'
+  }
+  return 'Keep clip'
+})
+
 const canSubmit = computed(() =>
+  uiPhase.value === 'form' &&
   !generating.value &&
   !loadingPanelPrefill.value &&
   selectedModelIds.value.length > 0 &&
@@ -614,24 +774,22 @@ async function runOneModel (modelId: string) {
       })
       if (asset?.id) {
         playbackUrl = playbackUrlForProjectVideoAsset(selectedProjectId.value, asset.id)
+        slotByModel[modelId] = {
+          status: 'done',
+          playbackUrl,
+          assetId: asset.id
+        }
       } else {
         toast.showToast(
           'Video rendered but saving to your library failed — clip may not play in-browser without saving.',
           'warning'
         )
+        slotByModel[modelId] = { status: 'done', playbackUrl }
       }
+    } else {
+      slotByModel[modelId] = { status: 'done', playbackUrl }
     }
 
-    if (addToTimeline.value && selectedProjectId.value && playbackUrl) {
-      appendVideoToProjectTimeline(selectedProjectId.value, {
-        url: playbackSrc(playbackUrl),
-        label: clipTitle(),
-        ...(panelPrefill.value?.sceneId ? { sceneId: panelPrefill.value.sceneId } : {}),
-        ...(panelPrefill.value?.shotId ? { shotId: panelPrefill.value.shotId } : {})
-      })
-    }
-
-    slotByModel[modelId] = { status: 'done', playbackUrl }
     doneCount.value += 1
   } catch (e: unknown) {
     slotByModel[modelId] = {
@@ -639,6 +797,81 @@ async function runOneModel (modelId: string) {
       error: formatApiFetchError(e, 'Generation failed')
     }
     doneCount.value += 1
+  }
+}
+
+async function deleteRunAssets (assetIds: string[]) {
+  const pid = selectedProjectId.value.trim()
+  const headers = authHeaders()
+  if (!pid || !headers || !assetIds.length) return
+  await Promise.all(
+    assetIds.map(id =>
+      $fetch(`/api/projects/${pid}/assets/${id}`, { method: 'DELETE', headers }).catch(() => {})
+    )
+  )
+}
+
+function resetGenerationRun () {
+  for (const id of selectedModelIds.value) {
+    delete slotByModel[id]
+  }
+  doneCount.value = 0
+  selectedKeepModelId.value = ''
+  uiPhase.value = 'form'
+}
+
+async function discardRunAndRetry () {
+  discardingRun.value = true
+  try {
+    const ids = successfulResults.value.map(r => r.assetId).filter(Boolean) as string[]
+    await deleteRunAssets(ids)
+    resetGenerationRun()
+    toast.showToast('Clips discarded. Adjust settings and generate again.', 'info')
+  } finally {
+    discardingRun.value = false
+  }
+}
+
+async function keepClipAndContinue () {
+  const pick = selectedKeepModelId.value || successfulResults.value[0]?.modelId
+  const kept = successfulResults.value.find(r => r.modelId === pick)
+  if (!kept?.playbackUrl) return
+
+  keepingClip.value = true
+  try {
+    const discardIds = successfulResults.value
+      .filter(r => r.modelId !== pick && r.assetId)
+      .map(r => r.assetId!)
+    await deleteRunAssets(discardIds)
+
+    if (addToTimeline.value && selectedProjectId.value) {
+      appendVideoToProjectTimeline(selectedProjectId.value, {
+        url: playbackSrc(kept.playbackUrl),
+        label: clipTitle(),
+        ...(panelPrefill.value?.sceneId ? { sceneId: panelPrefill.value.sceneId } : {}),
+        ...(panelPrefill.value?.shotId ? { shotId: panelPrefill.value.shotId } : {})
+      })
+    }
+
+    const pid = selectedProjectId.value.trim()
+    const pre = panelPrefill.value
+    if (pid && pre?.sceneId && pre?.shotId) {
+      toast.showToast('Clip saved to your storyboard panel.', 'success')
+      await navigateTo({
+        path: `/projects/${pid}/video`,
+        query: { sceneId: pre.sceneId, shotId: pre.shotId }
+      })
+      return
+    }
+    if (pid && saveToProject.value) {
+      toast.showToast('Clip saved to your project.', 'success')
+      await navigateTo(`/projects/${pid}/video`)
+      return
+    }
+    toast.showToast('Clip kept.', 'success')
+    resetGenerationRun()
+  } finally {
+    keepingClip.value = false
   }
 }
 
@@ -665,6 +898,7 @@ async function onSubmit () {
   }
 
   generating.value = true
+  uiPhase.value = 'generating'
   doneCount.value = 0
   for (const id of selectedModelIds.value) {
     delete slotByModel[id]
@@ -676,16 +910,13 @@ async function onSubmit () {
   await Promise.all(selectedModelIds.value.map(id => runOneModel(id)))
 
   generating.value = false
-  const anyOk = selectedModelIds.value.some(id => slotByModel[id]?.status === 'done')
-  const addedTimeline = anyOk && addToTimeline.value && selectedProjectId.value
-  if (anyOk && saveToProject.value && addedTimeline) {
-    toast.showToast('Saved to library and added to project timeline.', 'success')
-  } else if (anyOk && saveToProject.value) {
-    toast.showToast('Saved to project library — see Assets → Video.', 'success')
-  } else if (anyOk && addedTimeline) {
-    toast.showToast('Clips added to project timeline.', 'success')
-  } else if (anyOk) {
-    toast.showToast('Video generation finished.', 'success')
+  uiPhase.value = 'complete'
+  const firstOk = successfulResults.value[0]?.modelId
+  if (firstOk) selectedKeepModelId.value = firstOk
+
+  const anyOk = successfulResults.value.length > 0
+  if (!anyOk) {
+    toast.showToast('All models failed — adjust prompt or try another model.', 'error')
   }
 }
 
