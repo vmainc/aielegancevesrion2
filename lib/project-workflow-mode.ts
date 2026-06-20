@@ -77,10 +77,10 @@ export function resolveProjectWorkflowMode (
   const notes = String(project.conceptNotes || '')
   if (notes.includes(WORKFLOW_IDEA_MARKER)) return 'idea'
   if (notes.includes(WORKFLOW_GENERATE_MARKER) || notes.includes(WORKFLOW_SCRATCH_MARKER)) return 'generate'
-  const fromProject = normalizeWorkflowMode(project.workflowMode)
-  if (fromProject) return fromProject
   const session = readSessionWorkflow(project.id)
   if (session) return session
+  const fromProject = normalizeWorkflowMode(project.workflowMode)
+  if (fromProject) return fromProject
   return 'import'
 }
 

@@ -761,7 +761,7 @@ type OverviewOmdbMovie = {
   rottenTomatoes?: string
 }
 
-const { activeProject, activeProjectId, updateProject, registerImportedProject, withProjectQuery } =
+const { activeProject, activeProjectId, updateProject, registerImportedProject, withProjectQuery, clientReady } =
   useCreativeProject()
 const { isAuthenticated, getAuthToken } = useAuth()
 const { stepBadge } = useProjectWorkflowStep()
@@ -1077,6 +1077,7 @@ const importWorkflow = computed(() => isImportWorkflowProject(project.value))
 const ideaFirstWorkflow = computed(() => isIdeaFirstWorkflowProject(project.value))
 const isIdeaWorkflow = computed(() => isIdeaWorkflowProject(project.value))
 const isGenerateWorkflow = computed(() => isGenerateWorkflowProject(project.value))
+const workflowReady = computed(() => clientReady.value && Boolean(project.value))
 
 /** Screenplay upload + analysis — import-script projects only. */
 const screenplayWorkflowEnabled = importWorkflow
@@ -1084,6 +1085,7 @@ const screenplayWorkflowEnabled = importWorkflow
 /** Idea-first projects (own idea or AI-generated) — not script import. */
 const showIdeaFirstPanel = computed(
   () =>
+    workflowReady.value &&
     ideaFirstWorkflow.value &&
     (showGeneratorForm.value || !hasConcept.value) &&
     !scriptUploadedAwaitingAnalyze.value
@@ -1091,6 +1093,7 @@ const showIdeaFirstPanel = computed(
 
 const showImportWorkflowOverview = computed(
   () =>
+    workflowReady.value &&
     importWorkflow.value &&
     (showGeneratorForm.value || !hasConcept.value) &&
     !scriptUploadedAwaitingAnalyze.value

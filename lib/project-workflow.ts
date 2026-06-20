@@ -1,5 +1,5 @@
 import type { CreativeProject, ProjectWorkflowMode } from '~/types/creative-project'
-import { normalizeWorkflowMode } from '~/lib/project-workflow-mode'
+import { resolveProjectWorkflowMode } from '~/lib/project-workflow-mode'
 
 /** Present in `treatment` after full script import AI (see `enrichmentToProjectFields`). */
 export const IMPORTED_SCRIPT_TREATMENT_MARKER = 'Imported script — creative development'
@@ -25,42 +25,36 @@ const WORKFLOW_PATHS = [
 
 export type WorkflowPath = (typeof WORKFLOW_PATHS)[number]
 
-export function projectWorkflowMode (
-  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
-): ProjectWorkflowMode {
-  return normalizeWorkflowMode(project?.workflowMode) || 'import'
+export type ProjectWorkflowInput =
+  | Pick<CreativeProject, 'id' | 'workflowMode' | 'conceptNotes'>
+  | null
+  | undefined
+
+export function projectWorkflowMode (project: ProjectWorkflowInput): ProjectWorkflowMode {
+  if (!project?.id) return 'import'
+  return resolveProjectWorkflowMode(project)
 }
 
-export function isImportWorkflowProject (
-  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
-): boolean {
+export function isImportWorkflowProject (project: ProjectWorkflowInput): boolean {
   return projectWorkflowMode(project) === 'import'
 }
 
-export function isIdeaWorkflowProject (
-  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
-): boolean {
+export function isIdeaWorkflowProject (project: ProjectWorkflowInput): boolean {
   return projectWorkflowMode(project) === 'idea'
 }
 
-export function isGenerateWorkflowProject (
-  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
-): boolean {
+export function isGenerateWorkflowProject (project: ProjectWorkflowInput): boolean {
   return projectWorkflowMode(project) === 'generate'
 }
 
 /** Idea-first projects (own idea or AI-generated) skip the Script sidebar step. */
-export function isIdeaFirstWorkflowProject (
-  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
-): boolean {
+export function isIdeaFirstWorkflowProject (project: ProjectWorkflowInput): boolean {
   const mode = projectWorkflowMode(project)
   return mode === 'idea' || mode === 'generate'
 }
 
 /** @deprecated Use isIdeaFirstWorkflowProject or isGenerateWorkflowProject. */
-export function isScratchWorkflowProject (
-  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
-): boolean {
+export function isScratchWorkflowProject (project: ProjectWorkflowInput): boolean {
   return isIdeaFirstWorkflowProject(project)
 }
 
