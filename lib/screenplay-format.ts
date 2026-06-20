@@ -24,6 +24,29 @@ export function sanitizeCharacterNameList (names: unknown): string[] {
   return filterLikelyCharacterNames(out)
 }
 
+/** Pull likely proper names from title/summary before falling back to generic placeholders. */
+export function extractProperNamesFromStoryText (text: string, max = 6): string[] {
+  const raw = String(text || '')
+  const candidates: string[] = []
+
+  for (const m of raw.matchAll(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+){0,2}\b/g)) {
+    candidates.push(m[0]!)
+  }
+  for (const m of raw.matchAll(/\b[A-Z]{2,20}\b/g)) {
+    candidates.push(m[0]!)
+  }
+
+  const out: string[] = []
+  for (const c of candidates) {
+    const norm = normalizeScreenplayCharacterName(c)
+    if (!norm || out.includes(norm)) continue
+    if (filterLikelyCharacterNames([norm]).length === 0) continue
+    out.push(norm)
+    if (out.length >= max) break
+  }
+  return out
+}
+
 export const SCREENPLAY_AI_FORMAT_RULES = `Write in plain-text screenplay format:
 - Start with a CAST section (heading line "CAST" only — not a character name) listing every speaking character (name in ALL CAPS, em dash, one-line description).
 - Use standard slug lines: INT. or EXT. LOCATION - TIME
@@ -31,7 +54,8 @@ export const SCREENPLAY_AI_FORMAT_RULES = `Write in plain-text screenplay format
 - Action lines in sentence case; no markdown or code fences.
 - Include at least 3 scenes and dialogue for every named character in CAST.
 - Never use CAST, CREDITS, ENSEMBLE, or similar section labels as a character name; only real roles who appear in scenes.
-- Do not use "OTHER (extras)" as a character name — name specific roles instead.`
+- Do not use "OTHER (extras)" as a character name — name specific roles instead.
+- Never use generic placeholder names (HERO, ALLY, PROTAGONIST, ANTAGONIST, MENTOR, etc.) — invent distinctive proper names from the story.`
 
 export function buildCastSection (
   characters: Array<{ name: string; description?: string }>
@@ -59,9 +83,10 @@ export function buildFallbackScreenplayDraft (input: {
   const cast = buildCastSection(input.characters)
   const names = input.characters
     .map(c => normalizeScreenplayCharacterName(c.name))
-    .filter(Boolean)
-  const lead = names[0] || 'HERO'
-  const second = names[1] || names[0] || 'ALLY'
+    .filter(n => n && filterLikelyCharacterNames([n]).length > 0)
+  const extracted = extractProperNamesFromStoryText(`${input.title}\n${input.summary}`)
+  const lead = names[0] || extracted[0] || normalizeScreenplayCharacterName(input.title.split(/\s+/)[0] || '') || 'ALEX'
+  const second = names[1] || extracted[1] || (lead !== 'ALEX' ? 'ALEX' : 'SAM')
 
   const summaryPara = input.summary.trim().replace(/\s+/g, ' ')
   const actionBeat = summaryPara.slice(0, 220) || 'The story begins.'

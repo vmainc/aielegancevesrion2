@@ -98,11 +98,12 @@
                 v-model="draft.workflowMode"
                 class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
               >
-                <option value="scratch">Generate ideas (no screenplay upload)</option>
+                <option value="idea">I have an idea</option>
+                <option value="generate">Generate idea with AI</option>
                 <option value="import">Import screenplay</option>
               </select>
               <p class="text-xs text-gray-500 mt-1">
-                Use “Generate ideas” for social-first projects without a script file.
+                Controls which starting tools appear on Overview (paste idea, AI generation, or script upload).
               </p>
             </div>
             <button
@@ -159,6 +160,7 @@
 </template>
 
 <script setup lang="ts">
+import { normalizeWorkflowMode } from '~/lib/project-workflow-mode'
 import type {
   CreativeProject,
   ProjectAspectRatio,
@@ -212,7 +214,7 @@ function syncDraft () {
   draft.name = props.project.name
   draft.aspectRatio = props.project.aspectRatio
   draft.goal = props.project.goal
-  draft.workflowMode = props.project.workflowMode || 'import'
+  draft.workflowMode = normalizeWorkflowMode(props.project.workflowMode) || 'import'
 }
 
 async function loadCloudStats () {

@@ -4,7 +4,7 @@ import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-t
 import { parseDirectorField, pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { CONCEPT_GENERATOR_MODELS } from '~/lib/concept-generator-models'
-import { stripWorkflowMarker, WORKFLOW_SCRATCH_MARKER } from '~/lib/project-workflow-mode'
+import { initialConceptNotesForWorkflow, stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { upsertDurationMarkerInConceptNotes } from '~/lib/format-stored-concept'
 
 export default defineEventHandler(async (event) => {
@@ -38,15 +38,16 @@ export default defineEventHandler(async (event) => {
   if (typeof body.goal === 'string' && GOALS.has(body.goal)) {
     patch.goal = body.goal
   }
-  const WORKFLOW = new Set(['import', 'scratch'])
+  const WORKFLOW = new Set(['import', 'idea', 'generate'])
   if (typeof body.workflowMode === 'string' && WORKFLOW.has(body.workflowMode)) {
-    patch.workflow_mode = body.workflowMode
+    const mode = body.workflowMode as 'import' | 'idea' | 'generate'
+    patch.workflow_mode = mode
     const prevNotes = String((existing as { concept_notes?: string }).concept_notes || '')
     const stripped = stripWorkflowMarker(prevNotes)
     patch.concept_notes =
-      body.workflowMode === 'scratch'
-        ? `${WORKFLOW_SCRATCH_MARKER}\n${stripped}`.trim().slice(0, 50_000)
-        : stripped.slice(0, 50_000)
+      mode === 'import'
+        ? stripped.slice(0, 50_000)
+        : `${initialConceptNotesForWorkflow(mode)}${stripped}`.trim().slice(0, 50_000)
   }
   if (typeof body.preferredModelId === 'string' && MODEL_IDS.has(body.preferredModelId)) {
     patch.preferred_model_id = body.preferredModelId

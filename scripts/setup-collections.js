@@ -196,7 +196,7 @@ async function createCollections(adminEmail, adminPassword) {
             required: false,
             options: {
               maxSelect: 1,
-              values: ['import', 'scratch']
+              values: ['import', 'idea', 'generate', 'scratch']
             }
           },
           { name: 'preferred_model_id', type: 'text', required: false, options: { max: 100 } },

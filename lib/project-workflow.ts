@@ -1,4 +1,5 @@
-import type { CreativeProject } from '~/types/creative-project'
+import type { CreativeProject, ProjectWorkflowMode } from '~/types/creative-project'
+import { normalizeWorkflowMode } from '~/lib/project-workflow-mode'
 
 /** Present in `treatment` after full script import AI (see `enrichmentToProjectFields`). */
 export const IMPORTED_SCRIPT_TREATMENT_MARKER = 'Imported script — creative development'
@@ -24,10 +25,43 @@ const WORKFLOW_PATHS = [
 
 export type WorkflowPath = (typeof WORKFLOW_PATHS)[number]
 
+export function projectWorkflowMode (
+  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
+): ProjectWorkflowMode {
+  return normalizeWorkflowMode(project?.workflowMode) || 'import'
+}
+
+export function isImportWorkflowProject (
+  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
+): boolean {
+  return projectWorkflowMode(project) === 'import'
+}
+
+export function isIdeaWorkflowProject (
+  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
+): boolean {
+  return projectWorkflowMode(project) === 'idea'
+}
+
+export function isGenerateWorkflowProject (
+  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
+): boolean {
+  return projectWorkflowMode(project) === 'generate'
+}
+
+/** Idea-first projects (own idea or AI-generated) skip the Script sidebar step. */
+export function isIdeaFirstWorkflowProject (
+  project: Pick<CreativeProject, 'workflowMode'> | null | undefined
+): boolean {
+  const mode = projectWorkflowMode(project)
+  return mode === 'idea' || mode === 'generate'
+}
+
+/** @deprecated Use isIdeaFirstWorkflowProject or isGenerateWorkflowProject. */
 export function isScratchWorkflowProject (
   project: Pick<CreativeProject, 'workflowMode'> | null | undefined
 ): boolean {
-  return project?.workflowMode === 'scratch'
+  return isIdeaFirstWorkflowProject(project)
 }
 
 export function workflowPathsForProject (
@@ -36,8 +70,7 @@ export function workflowPathsForProject (
   if (projectStorySatisfiedByScriptImport(project)) {
     return WORKFLOW_PATHS.filter(p => p !== 'story')
   }
-  if (isScratchWorkflowProject(project)) {
-    // Idea generation lives on overview (labeled “Story” in the nav).
+  if (isIdeaFirstWorkflowProject(project)) {
     return WORKFLOW_PATHS.filter(p => p !== 'story')
   }
   return WORKFLOW_PATHS

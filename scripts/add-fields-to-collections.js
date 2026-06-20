@@ -107,7 +107,7 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
             required: false,
             options: {
               maxSelect: 1,
-              values: ['import', 'scratch']
+              values: ['import', 'idea', 'generate', 'scratch']
             }
           })
         );

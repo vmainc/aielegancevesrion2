@@ -1,9 +1,6 @@
 import { getCurrentInstance, onMounted } from 'vue'
 import { defaultDirector } from '~/lib/director-presets'
-import {
-  applyClientWorkflowOverlay,
-  writeSessionWorkflow
-} from '~/lib/project-workflow-mode'
+import { applyClientWorkflowOverlay, initialConceptNotesForWorkflow, writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import type { CreativeProject, ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
 const STORAGE_KEY = 'aielegance-creative-projects'
@@ -95,7 +92,6 @@ export function useCreativeProject () {
       const res = await $fetch<{ items: CreativeProject[] }>('/api/projects/my', {
         headers: { Authorization: `Bearer ${token}` }
       })
-      const prevById = new Map(projects.value.map(p => [p.id, p]))
       const serverIds = new Set(res.items.map(r => r.id))
       // Keep PocketBase projects not yet returned by /my (e.g. immediately after create).
       const recentPb = projects.value.filter(
@@ -103,14 +99,7 @@ export function useCreativeProject () {
       )
       const locals = projects.value.filter(p => p.source === 'local' || !p.source)
       const merged = [
-        ...res.items.map((item) => {
-          const prev = prevById.get(item.id)
-          let next = item
-          if (prev?.workflowMode === 'scratch' && next.workflowMode !== 'scratch') {
-            next = { ...next, workflowMode: 'scratch' }
-          }
-          return applyClientWorkflowOverlay(next)
-        }),
+        ...res.items.map((item) => applyClientWorkflowOverlay(item)),
         ...recentPb.map(p => applyClientWorkflowOverlay(p)),
         ...locals.filter(l => !serverIds.has(l.id) && !recentPb.some(r => r.id === l.id))
       ]
@@ -144,6 +133,7 @@ export function useCreativeProject () {
   }): CreativeProject => {
     if (!hydrated.value) hydrateLocalOnly()
     const t = nowIso()
+    const mode = input.workflowMode || 'import'
     const project: CreativeProject = {
       id: typeof crypto !== 'undefined' && crypto.randomUUID
         ? `proj-${crypto.randomUUID()}`
@@ -151,12 +141,12 @@ export function useCreativeProject () {
       name: input.name.trim() || 'Untitled project',
       aspectRatio: input.aspectRatio,
       goal: input.goal,
-      workflowMode: input.workflowMode || 'import',
+      workflowMode: mode,
       preferredModelId: 'claude',
       targetLength: 'short',
       synopsis: '',
       treatment: '',
-      conceptNotes: '',
+      conceptNotes: initialConceptNotesForWorkflow(mode),
       director: defaultDirector(),
       continuityMemory: '',
       continuityLastIssues: '',
@@ -171,7 +161,7 @@ export function useCreativeProject () {
   const registerImportedProject = (p: CreativeProject) => {
     hydrated.value = true
     const next = applyClientWorkflowOverlay(p)
-    writeSessionWorkflow(next.id, next.workflowMode)
+    writeSessionWorkflow(next.id, next.workflowMode ?? 'import')
     const without = projects.value.filter(x => x.id !== p.id)
     projects.value = [next, ...without]
   }

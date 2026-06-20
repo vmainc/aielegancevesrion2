@@ -4,8 +4,7 @@
       <div>
         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Projects</h1>
         <p class="text-gray-600 text-sm sm:text-base max-w-xl">
-          Create a project in one step, then work through overview, director, story, characters, scenes, storyboard, and video.
-          Signed-in users can import a script from the project’s Overview after the project exists.
+          Create a project in one step — start with your own idea, generate one with AI, or import a screenplay — then work through story, director, characters, scenes, storyboard, and video.
         </p>
       </div>
       <button
@@ -76,24 +75,36 @@
                 <input
                   v-model="form.workflowMode"
                   type="radio"
-                  value="import"
+                  value="idea"
                   class="mt-0.5"
                 >
                 <span class="text-sm text-gray-700">
-                  <span class="font-medium text-gray-900">Import screenplay</span><br>
-                  Show screenplay upload + analysis modules on Overview.
+                  <span class="font-medium text-gray-900">I have an idea</span><br>
+                  Paste your story on Overview and continue — no AI generation step.
+                </span>
+              </label>
+              <label class="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2 mb-2">
+                <input
+                  v-model="form.workflowMode"
+                  type="radio"
+                  value="generate"
+                  class="mt-0.5"
+                >
+                <span class="text-sm text-gray-700">
+                  <span class="font-medium text-gray-900">Generate idea</span><br>
+                  Compare AI story ideas from a short prompt — great for social and short-form.
                 </span>
               </label>
               <label class="flex items-start gap-2 rounded-lg border border-gray-200 px-3 py-2">
                 <input
                   v-model="form.workflowMode"
                   type="radio"
-                  value="scratch"
+                  value="import"
                   class="mt-0.5"
                 >
                 <span class="text-sm text-gray-700">
-                  <span class="font-medium text-gray-900">Start from scratch</span><br>
-                  Generate story ideas with AI (great for social and short-form) — no screenplay upload.
+                  <span class="font-medium text-gray-900">Import script</span><br>
+                  Upload a screenplay on Overview and run director analysis.
                 </span>
               </label>
             </div>
@@ -192,7 +203,7 @@ const form = reactive({
   name: '',
   aspectRatio: '16:9' as ProjectAspectRatio,
   goal: 'film' as ProjectGoal,
-  workflowMode: 'scratch' as ProjectWorkflowMode
+  workflowMode: 'idea' as ProjectWorkflowMode
 })
 
 function openCreateModal () {
@@ -209,7 +220,7 @@ watch(openCreate, (v) => {
   form.name = ''
   form.aspectRatio = '16:9'
   form.goal = 'film'
-  form.workflowMode = 'scratch'
+  form.workflowMode = 'idea'
   showOptions.value = false
   createError.value = ''
 })
@@ -246,7 +257,7 @@ async function submitCreate () {
           }
         }
       )
-      writeSessionWorkflow(res.project.id, res.project.workflowMode)
+      writeSessionWorkflow(res.project.id, res.project.workflowMode || form.workflowMode)
       registerImportedProject(res.project)
       openCreate.value = false
       toast.showToast('Project created.', 'success')
@@ -268,7 +279,7 @@ async function submitCreate () {
     goal: form.goal,
     workflowMode: form.workflowMode
   })
-  writeSessionWorkflow(p.id, p.workflowMode)
+  writeSessionWorkflow(p.id, p.workflowMode || form.workflowMode)
   openCreate.value = false
   await navigateTo(`/projects/${p.id}/overview`)
 }

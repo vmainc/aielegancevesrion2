@@ -1,4 +1,4 @@
-import { WORKFLOW_SCRATCH_MARKER } from '~/lib/project-workflow-mode'
+import { WORKFLOW_GENERATE_MARKER, WORKFLOW_IDEA_MARKER, WORKFLOW_SCRATCH_MARKER } from '~/lib/project-workflow-mode'
 
 const CHARACTERS_MARKER_RE = /<!--\s*aielegance:characters=(\[.*?\])\s*-->/s
 const DURATION_MARKER_RE = /<!--\s*aielegance:duration=(\d+)\s*-->/gi
@@ -7,6 +7,8 @@ const SOURCE_MARKER_RE = /<!--\s*aielegance:source=\w+\s*-->/gi
 /** Remove embedded metadata markers; leaves user-facing concept text. */
 export function stripConceptMetadataMarkers (text: string): string {
   return (text || '')
+    .replace(WORKFLOW_IDEA_MARKER, '')
+    .replace(WORKFLOW_GENERATE_MARKER, '')
     .replace(WORKFLOW_SCRATCH_MARKER, '')
     .replace(DURATION_MARKER_RE, '')
     .replace(SOURCE_MARKER_RE, '')

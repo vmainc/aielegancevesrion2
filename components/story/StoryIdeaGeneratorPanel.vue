@@ -23,7 +23,7 @@
       v-if="!isAuthenticated"
       class="text-sm text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4"
     >
-      Log in to generate story ideas with AI.
+      {{ allowAiGeneration ? 'Log in to generate story ideas with AI.' : 'Log in to save your story to your account.' }}
     </p>
 
     <p v-if="!projectId && isAuthenticated" class="text-sm text-gray-500 mb-4 animate-pulse">
@@ -139,7 +139,7 @@
     />
 
     <div
-      v-if="allowUseOwnPrompt"
+      v-if="allowUseOwnPrompt && allowAiGeneration"
       class="flex items-center gap-3 my-6"
       aria-hidden="true"
     >
@@ -150,7 +150,11 @@
       <div class="flex-1 border-t border-gray-200" />
     </div>
 
-    <fieldset class="mb-5" :disabled="generating || savingOwnPrompt || !modelOptions.length || !projectId">
+    <fieldset
+      v-if="allowAiGeneration"
+      class="mb-5"
+      :disabled="generating || savingOwnPrompt || !modelOptions.length || !projectId"
+    >
       <legend class="text-sm font-medium text-gray-700 mb-2">AI models</legend>
       <p class="text-xs text-gray-500 mb-3">Optional — select one or more models for alternate takes on your idea.</p>
       <div class="flex flex-wrap gap-3">
@@ -171,6 +175,7 @@
     </fieldset>
 
     <button
+      v-if="allowAiGeneration"
       type="button"
       class="px-4 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
       :disabled="!canGenerate"
@@ -179,11 +184,11 @@
       {{ generating ? 'Generating ideas…' : generateButtonLabel }}
     </button>
 
-    <p v-if="generating" class="mt-4 text-sm text-gray-600 animate-pulse">
+    <p v-if="allowAiGeneration && generating" class="mt-4 text-sm text-gray-600 animate-pulse">
       Generating ideas across selected models…
     </p>
 
-    <div v-if="conceptResults != null && conceptResults.length" class="mt-8 space-y-4">
+    <div v-if="allowAiGeneration && conceptResults != null && conceptResults.length" class="mt-8 space-y-4">
       <h3 class="text-sm font-semibold text-gray-800 uppercase tracking-wide">
         Pick an idea
       </h3>
@@ -252,6 +257,8 @@ const props = withDefaults(
     showTargetRuntime?: boolean
     /** Allow saving the textarea as-is without AI generation. */
     allowUseOwnPrompt?: boolean
+    /** Show AI model selection and generation (disable for “I have an idea” workflow). */
+    allowAiGeneration?: boolean
     useOwnPromptLabel?: string
     promptPlaceholder?: string
   }>(),
@@ -265,6 +272,7 @@ const props = withDefaults(
     showCancel: false,
     showTargetRuntime: true,
     allowUseOwnPrompt: true,
+    allowAiGeneration: true,
     useOwnPromptLabel: 'Continue with my idea →',
     promptPlaceholder: 'Describe your film or video idea — genre, mood, characters, and what happens…'
   }

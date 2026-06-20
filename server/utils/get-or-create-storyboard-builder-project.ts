@@ -29,7 +29,7 @@ export async function getOrCreateStoryboardBuilderProjectId (
     owned_by: userId,
     aspect_ratio: '16:9',
     goal: 'film',
-    workflow_mode: 'scratch',
+    workflow_mode: 'generate',
     target_length: 'short',
     synopsis: '',
     treatment: '',

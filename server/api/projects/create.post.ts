@@ -1,14 +1,14 @@
 import { createError, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import { initialConceptNotesForWorkflow } from '~/lib/project-workflow-mode'
+import { initialConceptNotesForWorkflow, normalizeWorkflowMode } from '~/lib/project-workflow-mode'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
 import type { ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
 const ASPECT = new Set<ProjectAspectRatio>(['16:9', '9:16', '1:1'])
 const GOALS = new Set<ProjectGoal>(['film', 'social', 'commercial', 'other'])
-const WORKFLOW = new Set<ProjectWorkflowMode>(['import', 'scratch'])
+const WORKFLOW = new Set<ProjectWorkflowMode>(['import', 'idea', 'generate'])
 
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
@@ -73,8 +73,8 @@ export default defineEventHandler(async (event) => {
     }
     const full = await pb.collection('creative_projects').getOne(created.id)
     const project = pbRecordToCreativeProject(full as Parameters<typeof pbRecordToCreativeProject>[0])
-    if (workflowMode === 'scratch' && project.workflowMode !== 'scratch') {
-      project.workflowMode = 'scratch'
+    if (workflowMode !== 'import' && normalizeWorkflowMode(project.workflowMode) !== workflowMode) {
+      project.workflowMode = workflowMode
     }
     return { project }
   } catch (e: unknown) {

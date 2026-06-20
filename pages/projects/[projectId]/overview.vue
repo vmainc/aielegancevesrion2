@@ -2,10 +2,13 @@
   <div class="max-w-3xl">
     <p v-if="!scriptUploadedAwaitingAnalyze" class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      <template v-if="scratchWorkflow && !hasConcept">
-        · Paste your own idea and continue to Director, or optionally compare AI-generated variations.
+      <template v-if="ideaFirstWorkflow && isIdeaWorkflow && !hasConcept">
+        · Paste your story idea and continue to Director.
       </template>
-      <template v-else-if="scratchWorkflow">
+      <template v-else-if="ideaFirstWorkflow && isGenerateWorkflow && !hasConcept">
+        · Describe a seed idea and compare AI-generated variations.
+      </template>
+      <template v-else-if="ideaFirstWorkflow">
         · Your synopsis lives here; refine the director bible on the Director tab, then build cast and storyboard when ready.
       </template>
       <template v-else>
@@ -326,7 +329,7 @@
       class="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6 mb-8"
     >
       <h2 class="text-lg font-semibold text-gray-900 mb-1">
-        {{ scratchWorkflow ? 'Story saved' : 'Concept saved' }}
+        {{ ideaFirstWorkflow ? 'Story saved' : 'Concept saved' }}
       </h2>
       <p class="text-sm text-gray-600 mb-4">
         <template v-if="scratchNeedsDirectorBuild">
@@ -335,13 +338,17 @@
           at the top of that page — you’ll land on Characters when it finishes.
         </template>
         <template v-else>
-          {{ scratchWorkflow
-            ? 'Generate more ideas with other models, or remove this story to start fresh.'
-            : 'Try other models or remove this concept to start fresh.' }}
+          {{
+            ideaFirstWorkflow
+              ? (isGenerateWorkflow
+                ? 'Generate more ideas with other models, or remove this story to start fresh.'
+                : 'Edit your story below, or remove it to start fresh.')
+              : 'Try other models or remove this concept to start fresh.'
+          }}
         </template>
       </p>
       <p
-        v-if="conceptBootstrapRunning && scratchWorkflow"
+        v-if="conceptBootstrapRunning && ideaFirstWorkflow"
         class="text-sm text-gray-600 mb-3"
       >
         Building cast, scenes, and storyboard…
@@ -355,18 +362,27 @@
       </p>
       <div class="flex flex-wrap gap-2 items-center">
         <NuxtLink
-          v-if="scratchWorkflow"
+          v-if="ideaFirstWorkflow"
           :to="`/projects/${projectId}/director`"
           class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-semibold transition-colors inline-flex"
         >
           Continue to Director →
         </NuxtLink>
         <button
+          v-if="isGenerateWorkflow"
           type="button"
           class="px-4 py-2 border border-gray-200 text-gray-800 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors"
           @click="openGeneratorAgain"
         >
           Generate with different AI
+        </button>
+        <button
+          v-else-if="isIdeaWorkflow"
+          type="button"
+          class="px-4 py-2 border border-gray-200 text-gray-800 hover:bg-gray-50 rounded-lg text-sm font-medium transition-colors"
+          @click="openGeneratorAgain"
+        >
+          Edit story
         </button>
         <button
           type="button"
@@ -380,17 +396,21 @@
     </div>
 
     <StoryIdeaGeneratorPanel
-      v-if="showScratchIdeaGenerator"
+      v-if="showIdeaFirstPanel"
       ref="scratchIdeaPanelRef"
       class="mb-8"
       :project-id="projectId"
       :goal="project?.goal || 'film'"
       :aspect-ratio="project?.aspectRatio || '16:9'"
-      :heading="hasConcept ? 'Compare new story ideas' : scratchGeneratorHeading"
+      :heading="hasConcept
+        ? (isIdeaWorkflow ? 'Edit your story' : 'Compare new story ideas')
+        : ideaPanelHeading"
       :subheading="hasConcept
         ? 'Your saved story stays below until you pick a new idea.'
-        : 'Paste your story below and continue, or use AI models below for alternate takes.'"
-      :prompt-placeholder="scratchPromptPlaceholder"
+        : ideaPanelSubheading"
+      :prompt-placeholder="ideaPromptPlaceholder"
+      :allow-use-own-prompt="isIdeaWorkflow"
+      :allow-ai-generation="isGenerateWorkflow"
       :show-cancel="hasConcept"
       apply-label="Use this story"
       :generate-button-label="generateIdeasButtonLabel"
@@ -677,7 +697,7 @@
         Director →
       </NuxtLink>
       <NuxtLink
-        v-if="!showImportedScriptOverview && !scratchWorkflow"
+        v-if="!showImportedScriptOverview && !ideaFirstWorkflow"
         :to="`/projects/${projectId}/story`"
         class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
       >
@@ -702,7 +722,13 @@
 </template>
 
 <script setup lang="ts">
-import { projectStorySatisfiedByScriptImport } from '~/lib/project-workflow'
+import {
+  isGenerateWorkflowProject,
+  isIdeaFirstWorkflowProject,
+  isIdeaWorkflowProject,
+  isImportWorkflowProject,
+  projectStorySatisfiedByScriptImport
+} from '~/lib/project-workflow'
 import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-from-treatment'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import {
@@ -1047,41 +1073,47 @@ const hasConcept = computed(() => {
   return Boolean((p.synopsis || '').trim() || conceptNotesHaveUserContent(p.conceptNotes || ''))
 })
 
-const screenplayWorkflowEnabled = computed(
-  () => project.value?.workflowMode !== 'scratch'
-)
+const importWorkflow = computed(() => isImportWorkflowProject(project.value))
+const ideaFirstWorkflow = computed(() => isIdeaFirstWorkflowProject(project.value))
+const isIdeaWorkflow = computed(() => isIdeaWorkflowProject(project.value))
+const isGenerateWorkflow = computed(() => isGenerateWorkflowProject(project.value))
 
-/** Prompt-based concept generator — only for “start from scratch” projects, not script-import workflow. */
-const scratchWorkflow = computed(() => project.value?.workflowMode === 'scratch')
+/** Screenplay upload + analysis — import-script projects only. */
+const screenplayWorkflowEnabled = importWorkflow
 
-const showScratchIdeaGenerator = computed(
+/** Idea-first projects (own idea or AI-generated) — not script import. */
+const showIdeaFirstPanel = computed(
   () =>
-    scratchWorkflow.value &&
+    ideaFirstWorkflow.value &&
     (showGeneratorForm.value || !hasConcept.value) &&
     !scriptUploadedAwaitingAnalyze.value
 )
 
 const showImportWorkflowOverview = computed(
   () =>
-    screenplayWorkflowEnabled.value &&
+    importWorkflow.value &&
     (showGeneratorForm.value || !hasConcept.value) &&
     !scriptUploadedAwaitingAnalyze.value
 )
 
-const scratchGeneratorHeading = computed(() => {
+const ideaPanelHeading = computed(() => {
+  if (isIdeaWorkflow.value) return 'Your story idea'
   if (project.value?.goal === 'social') return 'Generate story ideas'
   if (project.value?.goal === 'commercial') return 'Generate your concept'
-  return 'Start with your idea'
+  return 'Generate story ideas'
 })
 
-const scratchGeneratorBlurb = computed(() => {
-  if (project.value?.goal === 'social') {
-    return 'Describe a hook, mood, or topic. Pick one or more AI models, compare ideas, then choose the story you want to turn into shots and video.'
+const ideaPanelSubheading = computed(() => {
+  if (isIdeaWorkflow.value) {
+    return 'Paste your idea (and optionally add a reference image), then continue to Director.'
   }
-  return 'Describe your idea (and optionally upload a reference image). Pick models to compare — they use both to draft story, director bible, and prompts.'
+  if (project.value?.goal === 'social') {
+    return 'Describe a hook, mood, or topic. Pick one or more AI models, compare ideas, then choose the story you want.'
+  }
+  return 'Describe a seed idea. Pick models to compare — they draft story, director bible, and prompts.'
 })
 
-const scratchPromptPlaceholder = computed(() => {
+const ideaPromptPlaceholder = computed(() => {
   if (project.value?.goal === 'social') {
     return 'e.g. Anthropomorphic egg sandwich wakes up in a diner, realizes it is today’s special — 30s vertical comedy, snappy pacing…'
   }
@@ -1446,7 +1478,7 @@ async function useThisConcept (
     })
     conceptResults.value = null
     showGeneratorForm.value = false
-    if (scratchWorkflow.value && canCloudImport.value) {
+    if (ideaFirstWorkflow.value && canCloudImport.value) {
       toast.showToast('Story saved — open Director to refine your bible.', 'success')
       await navigateTo(`/projects/${id}/director`)
       return

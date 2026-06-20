@@ -59,7 +59,26 @@ export function isExcludedScreenplayCharacterLabel (raw: string): boolean {
     'O.S.',
     'ALL',
     'EVERYONE',
-    'VARIOUS'
+    'VARIOUS',
+    // Generic screenplay placeholders — not real character names
+    'HERO',
+    'HEROINE',
+    'ALLY',
+    'PROTAGONIST',
+    'ANTAGONIST',
+    'VILLAIN',
+    'MENTOR',
+    'SIDEKICK',
+    'LEAD',
+    'PARTNER',
+    'GUIDE',
+    'FOIL',
+    'NEMESIS',
+    'LOVE INTEREST',
+    'MAIN CHARACTER',
+    'MAIN CHAR',
+    'EVERYMAN',
+    'STRANGER'
   ])
   if (exact.has(u)) return true
 

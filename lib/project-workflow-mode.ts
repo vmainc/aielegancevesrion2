@@ -1,29 +1,45 @@
 import type { CreativeProject, ProjectWorkflowMode } from '~/types/creative-project'
 
 /** Embedded in `concept_notes` when PocketBase has no `workflow_mode` field yet. */
+export const WORKFLOW_IDEA_MARKER = '<!-- aielegance:workflow=idea -->'
+export const WORKFLOW_GENERATE_MARKER = '<!-- aielegance:workflow=generate -->'
+/** Legacy marker — treated as `generate`. */
 export const WORKFLOW_SCRATCH_MARKER = '<!-- aielegance:workflow=scratch -->'
 
+const ALL_MARKERS = [WORKFLOW_IDEA_MARKER, WORKFLOW_GENERATE_MARKER, WORKFLOW_SCRATCH_MARKER]
+
 const SESSION_PREFIX = 'aielegance-wf:'
+
+export function normalizeWorkflowMode (raw: string | undefined | null): ProjectWorkflowMode | null {
+  if (raw === 'import' || raw === 'idea' || raw === 'generate') return raw
+  if (raw === 'scratch') return 'generate'
+  return null
+}
 
 export function workflowModeFromProjectRecord (r: {
   workflow_mode?: string
   concept_notes?: string
 }): ProjectWorkflowMode {
-  if (r.workflow_mode === 'scratch') return 'scratch'
-  if (r.workflow_mode === 'import') return 'import'
-  if (String(r.concept_notes || '').includes(WORKFLOW_SCRATCH_MARKER)) return 'scratch'
+  const fromField = normalizeWorkflowMode(r.workflow_mode)
+  if (fromField) return fromField
+  const notes = String(r.concept_notes || '')
+  if (notes.includes(WORKFLOW_IDEA_MARKER)) return 'idea'
+  if (notes.includes(WORKFLOW_GENERATE_MARKER) || notes.includes(WORKFLOW_SCRATCH_MARKER)) return 'generate'
   return 'import'
 }
 
 export function stripWorkflowMarker (text: string): string {
-  return text
-    .replace(WORKFLOW_SCRATCH_MARKER, '')
-    .replace(/^\s*\n/, '')
-    .trimStart()
+  let out = text
+  for (const marker of ALL_MARKERS) {
+    out = out.replace(marker, '')
+  }
+  return out.replace(/^\s*\n/, '').trimStart()
 }
 
 export function initialConceptNotesForWorkflow (mode: ProjectWorkflowMode): string {
-  return mode === 'scratch' ? `${WORKFLOW_SCRATCH_MARKER}\n` : ''
+  if (mode === 'idea') return `${WORKFLOW_IDEA_MARKER}\n`
+  if (mode === 'generate') return `${WORKFLOW_GENERATE_MARKER}\n`
+  return ''
 }
 
 export function sessionWorkflowKey (projectId: string): string {
@@ -34,7 +50,7 @@ export function readSessionWorkflow (projectId: string): ProjectWorkflowMode | n
   if (!import.meta.client) return null
   try {
     const v = sessionStorage.getItem(sessionWorkflowKey(projectId))
-    return v === 'scratch' || v === 'import' ? v : null
+    return normalizeWorkflowMode(v)
   } catch {
     return null
   }
@@ -53,8 +69,11 @@ export function writeSessionWorkflow (projectId: string, mode: ProjectWorkflowMo
 export function resolveProjectWorkflowMode (
   project: Pick<CreativeProject, 'id' | 'workflowMode' | 'conceptNotes'>
 ): ProjectWorkflowMode {
-  if (project.workflowMode === 'scratch') return 'scratch'
-  if (String(project.conceptNotes || '').includes(WORKFLOW_SCRATCH_MARKER)) return 'scratch'
+  const fromProject = normalizeWorkflowMode(project.workflowMode)
+  if (fromProject) return fromProject
+  const notes = String(project.conceptNotes || '')
+  if (notes.includes(WORKFLOW_IDEA_MARKER)) return 'idea'
+  if (notes.includes(WORKFLOW_GENERATE_MARKER) || notes.includes(WORKFLOW_SCRATCH_MARKER)) return 'generate'
   const session = readSessionWorkflow(project.id)
   if (session) return session
   return 'import'

@@ -1,5 +1,6 @@
 import {
   buildFallbackScreenplayDraft,
+  extractProperNamesFromStoryText,
   normalizeScreenplayCharacterName,
   sanitizeCharacterNameList,
   SCREENPLAY_AI_FORMAT_RULES
@@ -27,7 +28,9 @@ function guessCharactersFromSummary (summary: string, title: string): string[] {
   if (/\bmom\b|\bmother\b/.test(text)) guesses.push('MOM')
   if (/\bdad\b|\bfather\b/.test(text)) guesses.push('DAD')
   if (/\bchild\b|\bkid\b|\bboy\b|\bgirl\b/.test(text)) guesses.push('KID')
-  if (guesses.length === 0) guesses.push('HERO', 'ALLY')
+  for (const name of extractProperNamesFromStoryText(`${title}\n${summary}`)) {
+    if (!guesses.includes(name)) guesses.push(name)
+  }
   return [...new Set(guesses.map(normalizeScreenplayCharacterName).filter(Boolean))].slice(0, 6)
 }
 
@@ -105,7 +108,9 @@ ${durationBlock}`
     input.logline ? `Logline: ${input.logline}` : '',
     input.genre ? `Genre: ${input.genre}` : '',
     input.tone ? `Tone: ${input.tone}` : '',
-    `Required speaking characters (use these exact ALL CAPS names in CAST and dialogue): ${castNames}`,
+    castNames
+      ? `Required speaking characters (use these exact ALL CAPS names in CAST and dialogue): ${castNames}`
+      : 'Invent distinctive proper names for every speaking character from the story (never HERO, ALLY, PROTAGONIST, or other generic placeholders).',
     '',
     visualBlock,
     directorBlock,
