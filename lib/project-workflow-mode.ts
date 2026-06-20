@@ -20,11 +20,11 @@ export function workflowModeFromProjectRecord (r: {
   workflow_mode?: string
   concept_notes?: string
 }): ProjectWorkflowMode {
-  const fromField = normalizeWorkflowMode(r.workflow_mode)
-  if (fromField) return fromField
   const notes = String(r.concept_notes || '')
   if (notes.includes(WORKFLOW_IDEA_MARKER)) return 'idea'
   if (notes.includes(WORKFLOW_GENERATE_MARKER) || notes.includes(WORKFLOW_SCRATCH_MARKER)) return 'generate'
+  const fromField = normalizeWorkflowMode(r.workflow_mode)
+  if (fromField) return fromField
   return 'import'
 }
 
@@ -40,6 +40,11 @@ export function initialConceptNotesForWorkflow (mode: ProjectWorkflowMode): stri
   if (mode === 'idea') return `${WORKFLOW_IDEA_MARKER}\n`
   if (mode === 'generate') return `${WORKFLOW_GENERATE_MARKER}\n`
   return ''
+}
+
+/** PocketBase select before `idea` / `generate` were provisioned (import | scratch only). */
+export function legacyPbWorkflowMode (mode: ProjectWorkflowMode): 'import' | 'scratch' {
+  return mode === 'generate' ? 'scratch' : 'import'
 }
 
 export function sessionWorkflowKey (projectId: string): string {
@@ -69,11 +74,11 @@ export function writeSessionWorkflow (projectId: string, mode: ProjectWorkflowMo
 export function resolveProjectWorkflowMode (
   project: Pick<CreativeProject, 'id' | 'workflowMode' | 'conceptNotes'>
 ): ProjectWorkflowMode {
-  const fromProject = normalizeWorkflowMode(project.workflowMode)
-  if (fromProject) return fromProject
   const notes = String(project.conceptNotes || '')
   if (notes.includes(WORKFLOW_IDEA_MARKER)) return 'idea'
   if (notes.includes(WORKFLOW_GENERATE_MARKER) || notes.includes(WORKFLOW_SCRATCH_MARKER)) return 'generate'
+  const fromProject = normalizeWorkflowMode(project.workflowMode)
+  if (fromProject) return fromProject
   const session = readSessionWorkflow(project.id)
   if (session) return session
   return 'import'

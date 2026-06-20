@@ -1,9 +1,16 @@
 import { createError, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import { initialConceptNotesForWorkflow, normalizeWorkflowMode } from '~/lib/project-workflow-mode'
+import {
+  initialConceptNotesForWorkflow,
+  legacyPbWorkflowMode,
+  normalizeWorkflowMode
+} from '~/lib/project-workflow-mode'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
-import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
+import {
+  formatPocketBaseRecordError,
+  isPocketBaseMissingCollectionError
+} from '~/server/utils/pb-missing-collection-error'
 import type { ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
 const ASPECT = new Set<ProjectAspectRatio>(['16:9', '9:16', '1:1'])
@@ -40,45 +47,47 @@ export default defineEventHandler(async (event) => {
   const pb = await getAuthenticatedPocketBase()
   const conceptNotesSeed = initialConceptNotesForWorkflow(workflowMode)
 
+  const basePayload = {
+    name,
+    owned_by: userId,
+    aspect_ratio: aspectRatio,
+    goal,
+    preferred_model_id: 'claude',
+    target_length: 'short',
+    synopsis: '',
+    treatment: '',
+    concept_notes: conceptNotesSeed
+  }
+
+  const legacyMode = legacyPbWorkflowMode(workflowMode)
+  const createAttempts: Array<Record<string, unknown>> = [
+    { ...basePayload, workflow_mode: workflowMode },
+    ...(legacyMode !== workflowMode ? [{ ...basePayload, workflow_mode: legacyMode }] : []),
+    { ...basePayload }
+  ]
+
   try {
-    let created
-    try {
-      created = await pb.collection('creative_projects').create({
-        name,
-        owned_by: userId,
-        aspect_ratio: aspectRatio,
-        goal,
-        workflow_mode: workflowMode,
-        preferred_model_id: 'claude',
-        target_length: 'short',
-        synopsis: '',
-        treatment: '',
-        concept_notes: conceptNotesSeed
-      })
-    } catch (createErr: unknown) {
-      // Backward-compatible fallback for environments where workflow_mode field is not provisioned yet.
-      const msg = createErr instanceof Error ? createErr.message : String(createErr)
-      if (!/workflow_mode/i.test(msg)) throw createErr
-      created = await pb.collection('creative_projects').create({
-        name,
-        owned_by: userId,
-        aspect_ratio: aspectRatio,
-        goal,
-        preferred_model_id: 'claude',
-        target_length: 'short',
-        synopsis: '',
-        treatment: '',
-        concept_notes: conceptNotesSeed
-      })
+    let created: { id: string } | null = null
+    let lastErr: unknown = null
+    for (const payload of createAttempts) {
+      try {
+        created = await pb.collection('creative_projects').create(payload)
+        break
+      } catch (e: unknown) {
+        lastErr = e
+      }
     }
+    if (!created) {
+      throw lastErr ?? new Error('Could not create project.')
+    }
+
     const full = await pb.collection('creative_projects').getOne(created.id)
     const project = pbRecordToCreativeProject(full as Parameters<typeof pbRecordToCreativeProject>[0])
-    if (workflowMode !== 'import' && normalizeWorkflowMode(project.workflowMode) !== workflowMode) {
+    if (normalizeWorkflowMode(project.workflowMode) !== workflowMode) {
       project.workflowMode = workflowMode
     }
     return { project }
   } catch (e: unknown) {
-    const msg = e && typeof e === 'object' && 'message' in e ? String((e as Error).message) : String(e)
     if (isPocketBaseMissingCollectionError(e)) {
       throw createError({
         statusCode: 503,
@@ -86,6 +95,10 @@ export default defineEventHandler(async (event) => {
           'creative_projects collection is missing in PocketBase. From your machine run: npm run setup-db (or node scripts/setup-collections.js) with POCKETBASE_URL pointing at this environment’s PocketBase API (e.g. https://yourdomain.com/pb) and superuser credentials in POCKETBASE_ADMIN_EMAIL / POCKETBASE_ADMIN_PASSWORD.'
       })
     }
-    throw createError({ statusCode: 500, message: msg })
+    const detail = formatPocketBaseRecordError(e)
+    throw createError({
+      statusCode: 500,
+      message: detail && detail !== 'Failed to create record.' ? detail : 'Could not create project.'
+    })
   }
 })

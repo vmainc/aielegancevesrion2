@@ -4,8 +4,9 @@ import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-t
 import { parseDirectorField, pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { CONCEPT_GENERATOR_MODELS } from '~/lib/concept-generator-models'
-import { initialConceptNotesForWorkflow, stripWorkflowMarker } from '~/lib/project-workflow-mode'
+import { initialConceptNotesForWorkflow, legacyPbWorkflowMode, stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { upsertDurationMarkerInConceptNotes } from '~/lib/format-stored-concept'
+import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -87,7 +88,36 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'No valid fields to update' })
   }
 
-  const updated = await pb.collection('creative_projects').update(id, patch)
+  let updated: Record<string, unknown> | null = null
+  let lastErr: unknown = null
+  const workflowModePatch = typeof patch.workflow_mode === 'string' ? patch.workflow_mode : null
+  const patchAttempts: Array<Record<string, unknown>> = [patch]
+  if (workflowModePatch && typeof workflowModePatch === 'string') {
+    const mode = workflowModePatch as 'import' | 'idea' | 'generate'
+    const legacy = legacyPbWorkflowMode(mode)
+    if (legacy !== mode) {
+      patchAttempts.push({ ...patch, workflow_mode: legacy })
+    }
+    const { workflow_mode: _drop, ...withoutWorkflow } = patch
+    patchAttempts.push(withoutWorkflow)
+  }
+
+  for (const attempt of patchAttempts) {
+    try {
+      updated = await pb.collection('creative_projects').update(id, attempt)
+      break
+    } catch (e: unknown) {
+      lastErr = e
+    }
+  }
+  if (!updated) {
+    const detail = formatPocketBaseRecordError(lastErr)
+    throw createError({
+      statusCode: 500,
+      message: detail && detail !== 'Failed to create record.' ? detail : 'Could not update project.'
+    })
+  }
+
   return {
     project: pbRecordToCreativeProject(updated as Parameters<typeof pbRecordToCreativeProject>[0])
   }
