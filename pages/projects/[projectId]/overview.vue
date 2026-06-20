@@ -333,9 +333,9 @@
       </h2>
       <p class="text-sm text-gray-600 mb-4">
         <template v-if="scratchNeedsDirectorBuild">
-          Continue to Director to tune your creative bible, then run
+          Continue to Director — set up your director bible first, then run
           <span class="font-medium text-gray-800">Build cast, scenes &amp; storyboard</span>
-          at the top of that page — you’ll land on Characters when it finishes.
+          on that page. You’ll land on Characters when it finishes.
         </template>
         <template v-else>
           {{
