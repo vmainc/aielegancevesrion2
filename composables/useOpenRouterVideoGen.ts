@@ -22,6 +22,8 @@ export type OpenRouterVideoGenerateInput = {
   supportedDurations?: number[]
   /** Rare opt-in: OpenRouter model-synthesized audio. Default false — add music on the timeline. */
   generateAudio?: boolean
+  includeSpokenDialogue?: boolean
+  includeAmbientSound?: boolean
 }
 
 export async function pollOpenRouterVideoJob (jobId: string): Promise<string> {
@@ -57,6 +59,11 @@ export async function generateOpenRouterVideo (
 
   const frameImageUrl = await ensureVideoStartFrameUrl(input.frameImageUrl)
 
+  const wantsAudio =
+    input.generateAudio === true ||
+    input.includeSpokenDialogue === true ||
+    input.includeAmbientSound === true
+
   const res = await $fetch<VideoJobPostResponse>('/api/generate/video', {
     method: 'POST',
     body: {
@@ -66,7 +73,9 @@ export async function generateOpenRouterVideo (
       resolution: input.resolution || '720p',
       durationSeconds,
       frameImageUrl,
-      generateAudio: input.generateAudio === true
+      generateAudio: wantsAudio,
+      includeSpokenDialogue: input.includeSpokenDialogue === true,
+      includeAmbientSound: input.includeAmbientSound === true
     }
   })
 

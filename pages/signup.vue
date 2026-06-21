@@ -104,6 +104,7 @@
 
 <script setup>
 import logo from '~/assets/img/logo.png'
+import { DEFAULT_AUTHENTICATED_PATH } from '~/lib/default-authenticated-path'
 import { safeInternalPath } from '~/lib/safe-internal-path'
 
 definePageMeta({
@@ -161,7 +162,7 @@ const handleSignup = async () => {
     const result = await signup(email, formData.value.password, formData.value.passwordConfirm)
     
     if (result.success) {
-      await router.push(safeInternalPath(route.query.redirect, '/projects'))
+      await router.push(safeInternalPath(route.query.redirect, DEFAULT_AUTHENTICATED_PATH))
     } else {
       error.value = result.error || 'Signup failed. Please try again.'
     }
@@ -177,7 +178,7 @@ const handleSignup = async () => {
 onMounted(async () => {
   const { isAuthenticated } = useAuth()
   if (isAuthenticated.value) {
-    await router.push(safeInternalPath(route.query.redirect, '/projects'))
+    await router.push(safeInternalPath(route.query.redirect, DEFAULT_AUTHENTICATED_PATH))
   }
 })
 </script>

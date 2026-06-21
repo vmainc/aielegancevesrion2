@@ -2,7 +2,7 @@
   <div class="max-w-4xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Cast list: name and AI-written look/feel prompt. After you run director analysis and tweak the Director tab, use the button below so visual prompts and dialogue-share % follow your <span class="font-medium text-gray-700">newest</span> synopsis, treatment, and director bible. The chart matches table swatches. Reference art lives under Assets.
+      · Cast list: name and AI-written look/feel prompt. Click a character’s image square to upload a photo from your computer — or use <span class="font-medium text-gray-700">Generate with AI</span> in Actions. After director analysis, use the button below so visual prompts and dialogue-share % follow your <span class="font-medium text-gray-700">newest</span> synopsis, treatment, and director bible.
     </p>
 
     <div
@@ -69,7 +69,8 @@
           class="mb-8"
           :characters="displayCharacters"
           :editable="true"
-          :busy="characterMutating || enrichingCast"
+          :busy="characterMutating || enrichingCast || !!uploadingPortraitCharacterId"
+          :uploading-portrait-character-id="uploadingPortraitCharacterId"
           :show-chart-swatches="displayCharacters.length > 0"
           :chart-color-by-name="chartSwatchColors"
           :show-character-creator-link="true"
@@ -79,11 +80,12 @@
           :portrait-prompt-used-by-character-id="portraitPromptUsedByCharacterId"
           :show-portraits="true"
           heading="Characters"
-          subheading="Square colors match the dialogue-share chart. Use the button above to pull names from the screenplay and have AI write a visual prompt for each character."
+          subheading="Click the image square to upload a photo. Square colors match the dialogue-share chart."
           empty-hint="No characters yet. Click “Build / refresh cast from script” (needs a saved screenplay on Overview), or add a row manually."
           @create="onCreateCharacter"
           @update="onUpdateCharacter"
           @delete="onDeleteCharacter"
+          @upload-portrait="onUploadPortrait"
         />
 
         <div
@@ -141,7 +143,9 @@ import {
   pieModelToSwatchRecord
 } from '~/lib/character-screen-share-chart'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { projectAssetPlaybackSrc } from '~/lib/project-asset-playback-url'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
+import { uploadCharacterPortrait } from '~/lib/upload-character-portrait'
 import type { CreativeCharacter } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
 
@@ -162,6 +166,7 @@ const pending = ref(false)
 
 const characterMutating = ref(false)
 const enrichingCast = ref(false)
+const uploadingPortraitCharacterId = ref<string | null>(null)
 
 const canLoadCloud = computed(
   () =>
@@ -192,7 +197,15 @@ const characterPieModel = computed(() => buildCharacterPieModel(displayCharacter
 const pieSlices = computed(() => characterPieModel.value.slices)
 const chartSwatchColors = computed(() => pieModelToSwatchRecord(characterPieModel.value))
 
-type PortraitPick = { url: string; notes: string; promptUsed: string; ts: string; featured: boolean }
+type PortraitPick = {
+  url: string
+  assetId: string
+  projectId: string
+  notes: string
+  promptUsed: string
+  ts: string
+  featured: boolean
+}
 
 function promptUsedFromAssetMeta (metadata: Record<string, unknown> | null): string {
   if (!metadata || typeof metadata !== 'object') return ''
@@ -222,6 +235,8 @@ const characterPortraitFieldsById = computed<Record<string, { url: string; notes
     const featured = meta && typeof meta === 'object' && meta.featured === true
     const pick: PortraitPick = {
       url: a.fileUrl,
+      assetId: a.id,
+      projectId: a.projectId,
       notes: (a.notes || '').trim(),
       promptUsed: promptUsedFromAssetMeta(meta as Record<string, unknown> | null),
       ts,
@@ -246,19 +261,33 @@ const characterPortraitFieldsById = computed<Record<string, { url: string; notes
     }
   }
   const out: Record<string, { url: string; notes: string; promptUsed: string }> = {}
+  const token = getAuthToken()
+  const playbackUrl = (pick: PortraitPick) =>
+    projectAssetPlaybackSrc(
+      { id: pick.assetId, projectId: pick.projectId, fileUrl: pick.url },
+      token
+    )
   for (const c of characters.value) {
     const hitById = byCharacterId[c.id]
     if (hitById?.url) {
-      out[c.id] = { url: hitById.url, notes: hitById.notes, promptUsed: hitById.promptUsed }
+      out[c.id] = {
+        url: playbackUrl(hitById),
+        notes: hitById.notes,
+        promptUsed: hitById.promptUsed
+      }
       continue
     }
     const normName = normalize(c.name)
     const hitByName = byCharacterName[normName]
     if (hitByName?.url) {
-      out[c.id] = { url: hitByName.url, notes: hitByName.notes, promptUsed: hitByName.promptUsed }
+      out[c.id] = {
+        url: playbackUrl(hitByName),
+        notes: hitByName.notes,
+        promptUsed: hitByName.promptUsed
+      }
     } else if (byTitleGuess[normName]?.url) {
       const g = byTitleGuess[normName]
-      out[c.id] = { url: g.url, notes: g.notes, promptUsed: g.promptUsed }
+      out[c.id] = { url: playbackUrl(g), notes: g.notes, promptUsed: g.promptUsed }
     }
   }
   return out
@@ -427,6 +456,31 @@ async function onUpdateCharacter (
     toast.showToast(formatApiFetchError(e, 'Could not update character'), 'error')
   } finally {
     characterMutating.value = false
+  }
+}
+
+async function onUploadPortrait (payload: { characterId: string; file: File }) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  const character = characters.value.find(c => c.id === payload.characterId)
+  if (!character) return
+  uploadingPortraitCharacterId.value = payload.characterId
+  try {
+    await uploadCharacterPortrait({
+      projectId: id,
+      characterId: character.id,
+      characterName: character.name,
+      roleDescription: character.roleDescription,
+      file: payload.file,
+      token
+    })
+    toast.showToast(`Photo saved for ${character.name}.`, 'success')
+    await loadCharacterAssets()
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not upload photo'), 'error')
+  } finally {
+    uploadingPortraitCharacterId.value = null
   }
 }
 

@@ -5,7 +5,7 @@
         Video generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Choose video-capable models and describe your shot. Clips are silent by default (no AI background music) — add score on the timeline, or turn on <span class="font-medium text-gray-800">spoken dialogue</span> for quick talking clips.
+        Clips are silent by default (no AI background music) — add score on the timeline later. Optionally add <span class="font-medium text-gray-800">spoken dialogue</span> or <span class="font-medium text-gray-800">ambient sound</span> (rain, hallway echo, etc.) for models that support audio.
       </p>
       <p
         v-if="loadingPanelPrefill"
@@ -216,17 +216,54 @@
               <p class="mt-1.5 text-xs text-gray-500">
                 Optional if the line is already in your prompt above. Lip-sync quality varies by model.
               </p>
-              <p
-                v-if="spokenDialogueModelWarning"
-                class="mt-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2"
-              >
-                {{ spokenDialogueModelWarning }}
-              </p>
             </div>
+
+            <label class="inline-flex items-start gap-2 text-sm text-gray-800 cursor-pointer pt-1 border-t border-gray-100">
+              <input
+                v-model="includeAmbientSound"
+                type="checkbox"
+                class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
+              >
+              <span>
+                <span class="font-medium text-gray-900">Include ambient / background sound</span>
+                <span class="block text-xs text-gray-500 mt-0.5">
+                  Diegetic in-scene sound — rain, wind, hallway echo, office hum, crowd murmur. Still no musical score.
+                </span>
+              </span>
+            </label>
+            <div v-if="includeAmbientSound">
+              <label for="vg-ambient" class="block text-sm font-medium text-gray-700 mb-1.5">Soundscape</label>
+              <textarea
+                id="vg-ambient"
+                v-model="ambientSoundPrompt"
+                rows="2"
+                maxlength="500"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                placeholder="e.g. Soft rain on leaves, distant thunder, quiet forest birdsong"
+              />
+              <div class="flex flex-wrap gap-1.5 mt-2">
+                <button
+                  v-for="preset in ambientSoundPresets"
+                  :key="preset"
+                  type="button"
+                  class="px-2 py-1 text-[11px] rounded-md border border-gray-200 bg-gray-50 text-gray-700 hover:border-primary/40 hover:bg-primary/5"
+                  @click="applyAmbientPreset(preset)"
+                >
+                  {{ preset.label }}
+                </button>
+              </div>
+            </div>
+
+            <p
+              v-if="generatedAudioModelWarning"
+              class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2"
+            >
+              {{ generatedAudioModelWarning }}
+            </p>
           </div>
 
           <p class="text-xs text-gray-500">
-            By default clips are silent — add score on the timeline later. With spoken dialogue on, the model may include voice in the file (still no AI background music).
+            By default clips are silent — add score on the timeline later. Dialogue and ambient options ask the model to synthesize sound in the file (still no AI background music).
             Video on OpenRouter is API-only and may be in alpha.
             <a
               href="https://openrouter.ai/models?fmt=cards&output_modalities=video"
@@ -256,21 +293,28 @@
             </label>
             <div v-if="saveToProject">
               <label for="vg-project" class="block text-sm font-medium text-gray-700 mb-1.5">Project</label>
-              <select
-                id="vg-project"
-                v-model="selectedProjectId"
-                required
-                class="w-full sm:max-w-md px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-              >
-                <option value="" disabled>Select project</option>
-                <option v-for="p in pbProjects" :key="p.id" :value="p.id">
-                  {{ p.name }}
-                </option>
-              </select>
-              <p v-if="!pbProjects.length" class="mt-2 text-xs text-amber-800">
-                Create a cloud project from
-                <NuxtLink to="/projects" class="text-primary underline">Projects</NuxtLink>
-                first.
+              <div class="flex flex-wrap items-end gap-2">
+                <select
+                  id="vg-project"
+                  v-model="selectedProjectId"
+                  required
+                  class="flex-1 min-w-[12rem] sm:max-w-md px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                >
+                  <option value="" disabled>Select project</option>
+                  <option v-for="p in pbProjects" :key="p.id" :value="p.id">
+                    {{ p.name }}
+                  </option>
+                </select>
+                <button
+                  type="button"
+                  class="shrink-0 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-800"
+                  @click="openCreateProjectModal"
+                >
+                  + New project
+                </button>
+              </div>
+              <p v-if="!pbProjects.length" class="mt-2 text-xs text-gray-600">
+                No projects yet — use <span class="font-medium text-gray-800">+ New project</span> to create one here.
               </p>
             </div>
             <label
@@ -411,6 +455,73 @@
         </div>
       </section>
     </template>
+
+    <Teleport to="body">
+      <div
+        v-if="showCreateProject"
+        class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="vg-create-project-title"
+        @click.self="closeCreateProjectModal"
+      >
+        <div
+          class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6"
+          @click.stop
+        >
+          <h2 id="vg-create-project-title" class="text-lg font-semibold text-gray-900 mb-1">
+            New project
+          </h2>
+          <p class="text-sm text-gray-500 mb-4">
+            Create a cloud project and select it for saving clips — you stay on this page.
+          </p>
+          <form class="space-y-4" @submit.prevent="submitCreateProject">
+            <div>
+              <label for="vg-new-project-name" class="block text-sm font-medium text-gray-700 mb-1">Name</label>
+              <input
+                id="vg-new-project-name"
+                v-model="createProjectForm.name"
+                type="text"
+                maxlength="500"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+                placeholder="New project"
+                autocomplete="off"
+              >
+            </div>
+            <div>
+              <label for="vg-new-project-aspect" class="block text-sm font-medium text-gray-700 mb-1">Aspect ratio</label>
+              <select
+                id="vg-new-project-aspect"
+                v-model="createProjectForm.aspectRatio"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+              >
+                <option value="16:9">16:9 (landscape)</option>
+                <option value="9:16">9:16 (vertical)</option>
+                <option value="1:1">1:1 (square)</option>
+              </select>
+            </div>
+            <p v-if="createProjectError" class="text-sm text-red-600">{{ createProjectError }}</p>
+            <div class="flex gap-2 justify-end pt-1">
+              <button
+                type="button"
+                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-800"
+                :disabled="creatingProject"
+                @click="closeCreateProjectModal"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                class="px-4 py-2 text-sm bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg disabled:opacity-50"
+                :disabled="creatingProject"
+              >
+                {{ creatingProject ? 'Creating…' : 'Create & select' }}
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -436,7 +547,8 @@ import {
   saveVideoToProjectLibrary
 } from '~/composables/useOpenRouterVideoGen'
 import { resolveVideoGenerationPrompt } from '~/lib/video-generation-audio-policy'
-import type { CreativeProject } from '~/types/creative-project'
+import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
+import type { CreativeProject, ProjectAspectRatio } from '~/types/creative-project'
 
 const PB_ID = /^[a-z0-9]{15}$/
 
@@ -468,7 +580,7 @@ const router = useRouter()
 const toast = useToast()
 const { isAuthenticated, getAuthToken, initAuth } = useAuth()
 const authTokenState = useState<string | null>('auth_token')
-const { projects, loadServerProjects, clientReady } = useCreativeProject()
+const { projects, loadServerProjects, clientReady, registerImportedProject } = useCreativeProject()
 
 const prefillState = useVideoGenerationPrefillState()
 
@@ -520,6 +632,21 @@ const durationSeconds = ref(
 )
 const includeSpokenDialogue = ref(false)
 const dialogueLine = ref('')
+const includeAmbientSound = ref(false)
+const ambientSoundPrompt = ref('')
+
+const ambientSoundPresets = [
+  { label: 'Rain & thunder', text: 'Soft rain on surfaces, occasional distant thunder, no music.' },
+  { label: 'Forest', text: 'Birdsong, rustling leaves, light wind through trees, no music.' },
+  { label: 'Hallway', text: 'School or office hallway echo, muffled footsteps and distant voices, no music.' },
+  { label: 'City street', text: 'Distant traffic hum, occasional horn, urban ambience, no music.' },
+  { label: 'Room tone', text: 'Quiet room HVAC hum, subtle fabric and movement sounds, no music.' }
+] as const
+
+function applyAmbientPreset (preset: (typeof ambientSoundPresets)[number]) {
+  ambientSoundPrompt.value = preset.text
+  includeAmbientSound.value = true
+}
 const selectedModelIds = ref<string[]>([])
 const formError = ref('')
 const generating = ref(false)
@@ -549,6 +676,14 @@ const prefillBanner = ref(
 )
 const prefillApplied = ref(Boolean(boot?.prompt?.trim()))
 const loadingPanelPrefill = ref(false)
+
+const showCreateProject = ref(false)
+const creatingProject = ref(false)
+const createProjectError = ref('')
+const createProjectForm = reactive({
+  name: '',
+  aspectRatio: '16:9' as ProjectAspectRatio
+})
 
 const pbProjects = computed(() =>
   projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
@@ -583,6 +718,54 @@ watch([pbProjects, clientReady], () => {
     selectedProjectId.value = pbProjects.value[0].id
   }
 }, { immediate: true })
+
+function openCreateProjectModal () {
+  createProjectForm.name = ''
+  createProjectForm.aspectRatio = aspectRatio.value
+  createProjectError.value = ''
+  showCreateProject.value = true
+}
+
+function closeCreateProjectModal () {
+  if (creatingProject.value) return
+  showCreateProject.value = false
+}
+
+async function submitCreateProject () {
+  createProjectError.value = ''
+  const token = getAuthToken()
+  if (!token) {
+    createProjectError.value = 'Sign in to create a cloud project.'
+    return
+  }
+  const displayName = createProjectForm.name.trim() || 'New project'
+  const projectAspect = createProjectForm.aspectRatio
+  const goal = projectAspect === '9:16' ? 'social' : 'film'
+  creatingProject.value = true
+  try {
+    const res = await $fetch<{ project: CreativeProject }>('/api/projects/create', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        name: displayName,
+        aspectRatio: projectAspect,
+        goal,
+        workflowMode: 'idea'
+      }
+    })
+    writeSessionWorkflow(res.project.id, res.project.workflowMode || 'idea')
+    registerImportedProject(res.project)
+    selectedProjectId.value = res.project.id
+    saveToProject.value = true
+    aspectRatio.value = projectAspect
+    showCreateProject.value = false
+    toast.showToast(`“${res.project.name}” created and selected.`, 'success')
+  } catch (e: unknown) {
+    createProjectError.value = formatApiFetchError(e, 'Could not create project.')
+  } finally {
+    creatingProject.value = false
+  }
+}
 
 function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   panelPrefill.value = p
@@ -756,24 +939,36 @@ const keepButtonLabel = computed(() => {
   return 'Keep clip'
 })
 
-const spokenDialogueModelWarning = computed(() => {
-  if (!includeSpokenDialogue.value || !selectedModelIds.value.length) return ''
+const generatedAudioModelWarning = computed(() => {
+  const wantsAudio = includeSpokenDialogue.value || includeAmbientSound.value
+  if (!wantsAudio || !selectedModelIds.value.length) return ''
   const picked = selectedModelIds.value
     .map(id => models.value.find(m => m.id === id))
     .filter(Boolean) as VideoModel[]
   const withoutAudio = picked.filter(m => m.generateAudio !== true)
   if (!withoutAudio.length) return ''
+  const kind = includeSpokenDialogue.value && includeAmbientSound.value
+    ? 'dialogue and ambient sound'
+    : includeSpokenDialogue.value
+      ? 'spoken dialogue'
+      : 'ambient sound'
   if (withoutAudio.length === picked.length) {
-    return 'None of your selected models are marked for native audio — try Wan 2.6, Seedance 1.5 Pro, or Veo 3.1, or turn off spoken dialogue for silent clips.'
+    return `None of your selected models are marked for native audio — try Wan 2.6, Seedance 1.5 Pro, or Veo 3.1, or turn off ${kind} for silent clips.`
   }
-  return `${withoutAudio.map(m => m.name).join(', ')} may not synthesize speech — prefer models with the Audio badge.`
+  return `${withoutAudio.map(m => m.name).join(', ')} may not synthesize ${kind} — prefer models with the Audio badge.`
 })
+
+const wantsGeneratedAudio = computed(
+  () => includeSpokenDialogue.value || includeAmbientSound.value
+)
 
 function resolvedGenerationPrompt (): string {
   return resolveVideoGenerationPrompt({
     prompt: prompt.value,
     dialogueLine: dialogueLine.value,
-    includeSpokenDialogue: includeSpokenDialogue.value
+    includeSpokenDialogue: includeSpokenDialogue.value,
+    ambientSoundPrompt: ambientSoundPrompt.value,
+    includeAmbientSound: includeAmbientSound.value
   })
 }
 
@@ -816,7 +1011,9 @@ async function runOneModel (modelId: string) {
       durationSeconds: durationSeconds.value,
       frameImageUrl: startFrameUrl.value || undefined,
       supportedDurations: model?.supportedDurations,
-      generateAudio: includeSpokenDialogue.value
+      generateAudio: wantsGeneratedAudio.value,
+      includeSpokenDialogue: includeSpokenDialogue.value,
+      includeAmbientSound: includeAmbientSound.value
     })
 
     let playbackUrl = videoUrl
@@ -836,9 +1033,14 @@ async function runOneModel (modelId: string) {
           source: pre?.source || 'standalone_video_tool',
           aspect_ratio: aspectRatio.value,
           duration_seconds: durationSeconds.value,
-          generate_audio: includeSpokenDialogue.value,
+          generate_audio: wantsGeneratedAudio.value,
+          include_spoken_dialogue: includeSpokenDialogue.value,
+          include_ambient_sound: includeAmbientSound.value,
           ...(includeSpokenDialogue.value && dialogueLine.value.trim()
             ? { dialogue_line: dialogueLine.value.trim().slice(0, 500) }
+            : {}),
+          ...(includeAmbientSound.value && ambientSoundPrompt.value.trim()
+            ? { ambient_sound_prompt: ambientSoundPrompt.value.trim().slice(0, 500) }
             : {}),
           ...(pre?.sceneId ? { scene_id: pre.sceneId } : {}),
           ...(pre?.shotId ? { shot_id: pre.shotId } : {})

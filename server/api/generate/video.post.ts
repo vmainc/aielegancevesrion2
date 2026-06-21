@@ -9,7 +9,7 @@ import {
 } from '~/server/utils/openrouter-video-model-durations'
 import {
   applyVideoGenerationPromptPolicy,
-  openRouterWantsGeneratedVideoAudio
+  resolveVideoGenerationAudioFromBody
 } from '~/lib/video-generation-audio-policy'
 import { registerVideoGenerationJob } from '~/server/utils/video-generation-job-registry'
 
@@ -101,12 +101,14 @@ export default defineEventHandler(async (event) => {
   }
   const durationSeconds = snapVideoDurationToOpenRouterModel(durationRaw, supportedDurations)
 
-  const generateAudio = openRouterWantsGeneratedVideoAudio(
-    body?.generateAudio ?? body?.generate_audio
-  )
+  const { includeSpokenDialogue, includeAmbientSound, generateAudio } =
+    resolveVideoGenerationAudioFromBody(body as Record<string, unknown>)
 
   const jobArgs = {
-    prompt: applyVideoGenerationPromptPolicy(prompt, generateAudio),
+    prompt: applyVideoGenerationPromptPolicy(prompt, {
+      includeSpokenDialogue,
+      includeAmbientSound
+    }),
     model,
     apiKey,
     aspectRatio,

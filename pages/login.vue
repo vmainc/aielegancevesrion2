@@ -88,6 +88,7 @@
 
 <script setup>
 import logo from '~/assets/img/logo.png'
+import { DEFAULT_AUTHENTICATED_PATH } from '~/lib/default-authenticated-path'
 import { safeInternalPath } from '~/lib/safe-internal-path'
 
 definePageMeta({
@@ -114,7 +115,7 @@ const handleLogin = async () => {
     const result = await login(formData.value.email, formData.value.password)
     
     if (result.success) {
-      const dest = safeInternalPath(route.query.redirect, '/projects')
+      const dest = safeInternalPath(route.query.redirect, DEFAULT_AUTHENTICATED_PATH)
       await router.push(dest)
     } else {
       error.value = result.error || 'Login failed. Please check your credentials.'
@@ -131,7 +132,7 @@ const handleLogin = async () => {
 onMounted(async () => {
   const { isAuthenticated } = useAuth()
   if (isAuthenticated.value) {
-    await router.push(safeInternalPath(route.query.redirect, '/projects'))
+    await router.push(safeInternalPath(route.query.redirect, DEFAULT_AUTHENTICATED_PATH))
   }
 })
 </script>

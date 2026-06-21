@@ -2,7 +2,7 @@
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">Scenes</span>
-      · Add scenes manually below, or run <span class="font-medium text-gray-700">Generate scenes from screenplay</span> after director analysis — Claude uses your current Director notes and replaces the whole scene list. Refine shots on the Storyboard tab.
+      · Add scenes manually below, or run <span class="font-medium text-gray-700">Generate scenes from screenplay</span> after director analysis. Open a scene to edit its script, then run <span class="font-medium text-gray-700">Analyze scene</span> to build storyboard panels and check for new characters.
     </p>
 
     <div
@@ -70,7 +70,7 @@
       </div>
       <template v-else-if="scenes.length">
         <p class="text-sm text-gray-600 mb-4">
-          {{ scenes.length }} scene(s) in order. Each row is an accordion: the header is the slug line; open it for full dialogue and action (same text the Storyboard step uses for shots).
+          {{ scenes.length }} scene(s) in order. Edit each scene’s script, save, then analyze to generate storyboard panels and spot cast gaps before Storyboard.
         </p>
         <ul class="space-y-3">
           <li
@@ -91,6 +91,12 @@
                   <span>{{ s.heading }}</span>
                 </span>
                 <span class="text-sm text-gray-600 line-clamp-2 mt-1 block">{{ s.summary || '—' }}</span>
+                <span
+                  v-if="s.shotCount && s.shotCount > 0"
+                  class="text-xs text-gray-400 mt-1 block"
+                >
+                  {{ s.shotCount }} storyboard panel{{ s.shotCount === 1 ? '' : 's' }}
+                </span>
               </span>
               <span class="text-xs text-gray-400 shrink-0 mt-0.5">{{ expandedId === s.id ? '▼' : '▶' }}</span>
             </button>
@@ -110,19 +116,157 @@
                 />
               </div>
               <template v-else>
-                <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">
-                  Script for this scene
+                <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                    Script for this scene
+                  </p>
+                  <p
+                    v-if="scriptDirty"
+                    class="text-xs text-amber-700"
+                  >
+                    Unsaved changes
+                  </p>
+                </div>
+                <textarea
+                  v-model="detailBody"
+                  rows="14"
+                  maxlength="150000"
+                  class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 leading-relaxed font-sans resize-y max-h-[min(70vh,32rem)] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                  :disabled="savingScript"
+                  placeholder="Dialogue and action for this scene…"
+                />
+                <div class="flex flex-wrap items-center gap-2 mt-3">
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
+                    :disabled="!scriptDirty || savingScript"
+                    @click="saveSceneScript(s.id)"
+                  >
+                    {{ savingScript ? 'Saving…' : 'Save script' }}
+                  </button>
+                  <button
+                    type="button"
+                    class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-800 hover:bg-white disabled:opacity-50"
+                    :disabled="!scriptDirty || savingScript"
+                    @click="revertSceneScript"
+                  >
+                    Cancel
+                  </button>
+                </div>
+                <p class="text-xs text-gray-500 mt-2">
+                  Edit dialogue and action here, then save. The analyser reads your saved script.
                 </p>
-                <pre
-                  class="whitespace-pre-wrap font-sans text-gray-800 text-sm leading-relaxed max-h-[min(70vh,28rem)] overflow-y-auto"
-                >{{ detailBody || '—' }}</pre>
+
+                <div class="mt-4 pt-4 border-t border-gray-200">
+                  <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <p class="text-xs font-medium text-gray-500 uppercase tracking-wide">
+                      Scene analyser
+                    </p>
+                  </div>
+                  <p class="text-xs text-gray-600 mb-3">
+                    Builds storyboard panels for this scene and lists any characters in the script who are not in your cast yet.
+                  </p>
+                  <div
+                    v-if="analyzingSceneId === s.id"
+                    class="rounded-lg border border-primary/20 bg-primary/5 p-4 mb-3"
+                  >
+                    <FilmReelLoader
+                      size="sm"
+                      label="Analyzing scene"
+                      sub-label="Generating storyboard panels and checking for new characters…"
+                    />
+                  </div>
+                  <div class="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      class="px-3 py-1.5 text-xs font-medium rounded-lg bg-primary text-white hover:bg-primary-hover disabled:opacity-50"
+                      :disabled="!canAnalyzeScene(s) || analyzingSceneId === s.id || savingScript"
+                      :title="analyzeDisabledReason(s)"
+                      @click="analyzeScene(s.id)"
+                    >
+                      {{ analyzingSceneId === s.id ? 'Analyzing…' : 'Analyze scene' }}
+                    </button>
+                    <NuxtLink
+                      v-if="s.shotCount && s.shotCount > 0"
+                      :to="`/projects/${projectId}/storyboard`"
+                      class="text-xs text-primary font-medium hover:underline"
+                    >
+                      Open storyboard →
+                    </NuxtLink>
+                  </div>
+                  <p
+                    v-if="analyzeErrorBySceneId[s.id]"
+                    class="text-xs text-red-700 mt-2"
+                    role="alert"
+                  >
+                    {{ analyzeErrorBySceneId[s.id] }}
+                  </p>
+                  <div
+                    v-if="analyzeResultBySceneId[s.id]"
+                    class="mt-3 rounded-lg border border-gray-200 bg-white p-3 space-y-3"
+                  >
+                    <p class="text-sm text-gray-800">
+                      Built
+                      <span class="font-semibold">{{ analyzeResultBySceneId[s.id]!.shotCount }}</span>
+                      storyboard panel{{ analyzeResultBySceneId[s.id]!.shotCount === 1 ? '' : 's' }}.
+                      <NuxtLink
+                        :to="`/projects/${projectId}/storyboard`"
+                        class="text-primary font-medium hover:underline ml-1"
+                      >
+                        Review on Storyboard →
+                      </NuxtLink>
+                    </p>
+                    <p
+                      v-if="analyzeResultBySceneId[s.id]!.warning"
+                      class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded px-2 py-1.5"
+                    >
+                      {{ analyzeResultBySceneId[s.id]!.warning }}
+                    </p>
+                    <template v-if="analyzeResultBySceneId[s.id]!.newCharacters.length">
+                      <p class="text-xs font-medium text-gray-700">
+                        New characters in this scene — add them to your cast:
+                      </p>
+                      <ul class="space-y-2">
+                        <li
+                          v-for="c in analyzeResultBySceneId[s.id]!.newCharacters"
+                          :key="c.name"
+                          class="flex flex-wrap items-start justify-between gap-2 text-xs"
+                        >
+                          <div class="min-w-0">
+                            <span class="font-semibold text-gray-900">{{ c.name }}</span>
+                            <p
+                              v-if="c.roleDescription"
+                              class="text-gray-600 mt-0.5 line-clamp-3"
+                            >
+                              {{ c.roleDescription }}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            class="shrink-0 text-primary font-medium hover:underline disabled:opacity-40"
+                            :disabled="addingCharacterName === c.name"
+                            @click="addSuggestedCharacter(c)"
+                          >
+                            {{ addingCharacterName === c.name ? 'Adding…' : 'Add to cast' }}
+                          </button>
+                        </li>
+                      </ul>
+                      <NuxtLink
+                        :to="`/projects/${projectId}/characters`"
+                        class="inline-block text-xs text-primary font-medium hover:underline"
+                      >
+                        Characters tab →
+                      </NuxtLink>
+                    </template>
+                    <p
+                      v-else
+                      class="text-xs text-gray-600"
+                    >
+                      All named characters in this scene are already in your cast.
+                    </p>
+                  </div>
+                </div>
               </template>
-              <NuxtLink
-                :to="`/projects/${projectId}/storyboard`"
-                class="inline-block mt-3 text-sm text-primary font-medium hover:underline"
-              >
-                Storyboard → build shots for this project
-              </NuxtLink>
             </div>
           </li>
         </ul>
@@ -207,6 +351,21 @@ type SceneListRow = {
   heading: string
   summary: string
   bodyLength: number
+  shotCount?: number
+}
+
+type SceneCharacterSuggestion = {
+  name: string
+  roleDescription: string
+  screenSharePercent: number | null
+}
+
+type SceneAnalyzeResult = {
+  shotCount: number
+  shotsPersisted: boolean
+  warning: string
+  newCharacters: SceneCharacterSuggestion[]
+  castInScene: string[]
 }
 
 const { activeProjectId, activeProject } = useCreativeProject()
@@ -226,8 +385,19 @@ const addSceneError = ref<string | null>(null)
 
 const expandedId = ref<string | null>(null)
 const detailBody = ref('')
+const savedScriptBody = ref('')
 const detailLoading = ref(false)
 const detailError = ref<string | null>(null)
+const savingScript = ref(false)
+
+const analyzingSceneId = ref<string | null>(null)
+const analyzeResultBySceneId = ref<Record<string, SceneAnalyzeResult>>({})
+const analyzeErrorBySceneId = ref<Record<string, string>>({})
+const addingCharacterName = ref<string | null>(null)
+
+const scriptDirty = computed(
+  () => expandedId.value != null && detailBody.value !== savedScriptBody.value
+)
 
 const generatingScenes = ref(false)
 const generateScenesError = ref('')
@@ -276,6 +446,7 @@ async function generateScenesFromScript () {
     toast.showToast('Scenes generated from screenplay.', 'success')
     expandedId.value = null
     detailBody.value = ''
+    savedScriptBody.value = ''
     await loadScenes()
   } catch (e: unknown) {
     const msg = formatApiFetchError(e, 'Could not generate scenes')
@@ -318,13 +489,23 @@ async function addScene () {
 
 async function toggleExpand (id: string) {
   if (expandedId.value === id) {
+    if (scriptDirty.value && !globalThis.confirm('Discard unsaved script edits?')) return
     expandedId.value = null
     detailBody.value = ''
+    savedScriptBody.value = ''
     detailError.value = null
+    return
+  }
+  if (
+    scriptDirty.value &&
+    expandedId.value &&
+    !globalThis.confirm('Discard unsaved script edits?')
+  ) {
     return
   }
   expandedId.value = id
   detailBody.value = ''
+  savedScriptBody.value = ''
   detailError.value = null
   detailLoading.value = true
   const token = getAuthToken()
@@ -338,7 +519,9 @@ async function toggleExpand (id: string) {
       `/api/projects/${projectId.value}/scenes/${id}`,
       { headers: { Authorization: `Bearer ${token}` } }
     )
-    detailBody.value = res.scene?.body || ''
+    const body = res.scene?.body || ''
+    detailBody.value = body
+    savedScriptBody.value = body
   } catch (e: unknown) {
     const msg =
       e && typeof e === 'object' && 'data' in e
@@ -347,6 +530,143 @@ async function toggleExpand (id: string) {
     detailError.value = msg
   } finally {
     detailLoading.value = false
+  }
+}
+
+async function saveSceneScript (sceneId: string) {
+  if (!scriptDirty.value || savingScript.value) return
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Please sign in again.', 'error')
+    return
+  }
+  savingScript.value = true
+  try {
+    const res = await $fetch<{ scene: { body: string; bodyLength?: number } }>(
+      `/api/projects/${projectId.value}/scenes/${sceneId}`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: { body: detailBody.value }
+      }
+    )
+    const body = res.scene?.body ?? detailBody.value
+    detailBody.value = body
+    savedScriptBody.value = body
+    const row = scenes.value.find(s => s.id === sceneId)
+    if (row && typeof res.scene?.bodyLength === 'number') {
+      row.bodyLength = res.scene.bodyLength
+    }
+    toast.showToast('Scene script saved.', 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not save scene script'), 'error')
+  } finally {
+    savingScript.value = false
+  }
+}
+
+function revertSceneScript () {
+  detailBody.value = savedScriptBody.value
+}
+
+function sceneHasSavedScript (s: SceneListRow): boolean {
+  if (expandedId.value === s.id) {
+    return Boolean(savedScriptBody.value.trim() || s.summary.trim())
+  }
+  return Boolean((s.bodyLength || 0) > 0 || s.summary.trim())
+}
+
+function canAnalyzeScene (s: SceneListRow): boolean {
+  return sceneHasSavedScript(s) && !scriptDirty.value
+}
+
+function analyzeDisabledReason (s: SceneListRow): string {
+  if (scriptDirty.value) return 'Save script changes first'
+  if (!sceneHasSavedScript(s)) return 'Add and save script text for this scene first'
+  return ''
+}
+
+async function analyzeScene (sceneId: string) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token || analyzingSceneId.value) return
+  analyzingSceneId.value = sceneId
+  analyzeErrorBySceneId.value = { ...analyzeErrorBySceneId.value, [sceneId]: '' }
+  try {
+    const res = await $fetch<SceneAnalyzeResult & { ok?: boolean }>(
+      `/api/projects/${id}/scenes/${sceneId}/analyze`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: {},
+        timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+      }
+    )
+    analyzeResultBySceneId.value = {
+      ...analyzeResultBySceneId.value,
+      [sceneId]: {
+        shotCount: res.shotCount,
+        shotsPersisted: res.shotsPersisted,
+        warning: res.warning || '',
+        newCharacters: res.newCharacters || [],
+        castInScene: res.castInScene || []
+      }
+    }
+    const row = scenes.value.find(s => s.id === sceneId)
+    if (row) row.shotCount = res.shotCount
+    const newCount = res.newCharacters?.length || 0
+    if (newCount > 0) {
+      toast.showToast(
+        `Built ${res.shotCount} panel${res.shotCount === 1 ? '' : 's'} · ${newCount} new character${newCount === 1 ? '' : 's'} found`,
+        'success'
+      )
+    } else {
+      toast.showToast(
+        `Built ${res.shotCount} storyboard panel${res.shotCount === 1 ? '' : 's'}.`,
+        'success'
+      )
+    }
+    await loadScenes()
+  } catch (e: unknown) {
+    const msg = formatApiFetchError(e, 'Could not analyze scene')
+    analyzeErrorBySceneId.value = { ...analyzeErrorBySceneId.value, [sceneId]: msg }
+    toast.showToast(msg, 'error')
+  } finally {
+    analyzingSceneId.value = null
+  }
+}
+
+async function addSuggestedCharacter (c: SceneCharacterSuggestion) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  addingCharacterName.value = c.name
+  try {
+    await $fetch(`/api/projects/${id}/characters`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        name: c.name,
+        roleDescription: c.roleDescription,
+        screenSharePercent: c.screenSharePercent
+      }
+    })
+    toast.showToast(`${c.name} added to cast.`, 'success')
+    const sceneId = expandedId.value
+    if (sceneId && analyzeResultBySceneId.value[sceneId]) {
+      const result = analyzeResultBySceneId.value[sceneId]
+      analyzeResultBySceneId.value = {
+        ...analyzeResultBySceneId.value,
+        [sceneId]: {
+          ...result,
+          newCharacters: result.newCharacters.filter(row => row.name !== c.name)
+        }
+      }
+    }
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not add character'), 'error')
+  } finally {
+    addingCharacterName.value = null
   }
 }
 

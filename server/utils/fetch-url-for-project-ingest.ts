@@ -22,7 +22,7 @@ function hostNeedsOpenRouterAuth (urlStr: string): boolean {
   }
 }
 
-export type IngestMediaKind = 'image' | 'video'
+export type IngestMediaKind = 'image' | 'video' | 'audio'
 
 export async function fetchBinaryFromUrlForIngest (
   urlStr: string,
@@ -40,7 +40,12 @@ export async function fetchBinaryFromUrlForIngest (
 
   const mediaKind = options.mediaKind ?? 'video'
   const timeoutMs = options.timeoutMs ?? 120_000
-  const accept = mediaKind === 'image' ? 'image/*,*/*' : 'video/*,*/*'
+  const accept =
+    mediaKind === 'image'
+      ? 'image/*,*/*'
+      : mediaKind === 'audio'
+        ? 'audio/*,*/*'
+        : 'video/*,*/*'
   const headers: Record<string, string> = { Accept: accept }
   if (hostNeedsOpenRouterAuth(url)) {
     const k = options.openRouterApiKey?.trim()
@@ -75,8 +80,9 @@ export async function fetchBinaryFromUrlForIngest (
   const cd = res.headers.get('content-disposition') || ''
   const m = /filename\*?=(?:UTF-8''|")?([^";\n]+)/i.exec(cd)
   let suggestedName = (m?.[1] || '').trim().replace(/["']/g, '')
-  const defaultExt = mediaKind === 'image' ? 'png' : 'mp4'
-  const defaultCt = mediaKind === 'image' ? 'image/png' : 'video/mp4'
+  const defaultExt = mediaKind === 'image' ? 'png' : mediaKind === 'audio' ? 'mp3' : 'mp4'
+  const defaultCt =
+    mediaKind === 'image' ? 'image/png' : mediaKind === 'audio' ? 'audio/mpeg' : 'video/mp4'
   if (!suggestedName || !/\.[a-z0-9]{2,5}$/i.test(suggestedName)) {
     suggestedName = `generated_${Date.now()}.${defaultExt}`
   }

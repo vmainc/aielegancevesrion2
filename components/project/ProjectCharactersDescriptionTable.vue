@@ -20,7 +20,7 @@
         class="flex flex-wrap items-center justify-between gap-2 mb-4"
       >
         <p class="text-xs text-gray-500">
-          Add rows by hand or edit imported cast. Changes save to your project.
+          Click a portrait square to upload a photo, or add rows by hand. Changes save to your project.
         </p>
         <button
           type="button"
@@ -169,7 +169,14 @@
                     v-if="showPortraits"
                     class="w-16 px-3 sm:px-4 py-3 align-middle text-center"
                   >
-                    <div class="h-11 w-11 rounded-md border border-gray-200 bg-gray-50 mx-auto" />
+                    <ProjectCharacterPortraitUpload
+                      :character="c"
+                      :portrait-url="portraitUrlFor(c)"
+                      :editable="editable && !!projectIdForCreatorLink"
+                      :uploading="uploadingPortraitCharacterId === c.id"
+                      :disabled="busy"
+                      @pick="onPortraitFilePicked"
+                    />
                   </td>
                   <td class="px-4 sm:px-5 py-3 align-top" colspan="2">
                     <div class="space-y-2 max-w-3xl">
@@ -236,22 +243,21 @@
                     v-if="showPortraits"
                     class="w-16 px-3 sm:px-4 py-3 align-middle text-center"
                   >
-                    <div class="h-11 w-11 rounded-md border border-gray-200 bg-gray-50 overflow-hidden mx-auto mb-1">
-                      <img
-                        v-if="portraitUrlFor(c)"
-                        :src="portraitUrlFor(c)"
-                        :alt="`${c.name} portrait`"
-                        class="h-full w-full object-cover"
-                      >
-                    </div>
+                    <ProjectCharacterPortraitUpload
+                      :character="c"
+                      :portrait-url="portraitUrlFor(c)"
+                      :editable="editable && !!projectIdForCreatorLink"
+                      :uploading="uploadingPortraitCharacterId === c.id"
+                      :disabled="busy || !!editingId || showAddRow"
+                      @pick="onPortraitFilePicked"
+                    />
                     <NuxtLink
-                      v-if="editable && projectIdForCreatorLink"
+                      v-if="editable && projectIdForCreatorLink && portraitUrlFor(c)"
                       :to="characterFolderTo(c)"
-                      class="inline-flex items-center justify-center text-[11px] text-primary hover:underline"
+                      class="inline-flex items-center justify-center text-[10px] text-gray-400 hover:text-primary mt-0.5"
                       title="Open character image folder"
                     >
-                      <span aria-hidden="true">📁</span>
-                      <span class="sr-only">Open character image folder</span>
+                      Assets
                     </NuxtLink>
                   </td>
                   <td class="px-4 sm:px-5 py-3 align-top font-semibold text-gray-900">
@@ -273,9 +279,10 @@
                     <NuxtLink
                       v-if="showCharacterCreatorLink"
                       :to="characterCreatorTo(c)"
-                      class="text-xs font-medium text-primary hover:underline mr-3"
+                      class="text-xs text-gray-500 hover:text-primary hover:underline mr-3"
+                      title="Generate a portrait with AI"
                     >
-                      Character Creator
+                      Generate with AI
                     </NuxtLink>
                     <button
                       type="button"
@@ -342,6 +349,8 @@ const props = withDefaults(
     portraitPromptUsedByCharacterId?: Record<string, string>
     /** Show portrait image column. */
     showPortraits?: boolean
+    /** Character id while a portrait upload is in progress. */
+    uploadingPortraitCharacterId?: string | null
   }>(),
   {
     loading: false,
@@ -359,7 +368,8 @@ const props = withDefaults(
     portraitUrlByCharacterId: undefined,
     portraitNotesByCharacterId: undefined,
     portraitPromptUsedByCharacterId: undefined,
-    showPortraits: false
+    showPortraits: false,
+    uploadingPortraitCharacterId: null
   }
 )
 
@@ -417,7 +427,12 @@ const emit = defineEmits<{
   create: [payload: { name: string; roleDescription: string; screenSharePercent: number | null }]
   update: [id: string, payload: { name: string; roleDescription: string; screenSharePercent: number | null }]
   delete: [id: string]
+  'upload-portrait': [payload: { characterId: string; file: File }]
 }>()
+
+function onPortraitFilePicked (c: CreativeCharacter, file: File) {
+  emit('upload-portrait', { characterId: c.id, file })
+}
 
 const editingId = ref<string | null>(null)
 const showAddRow = ref(false)

@@ -3,7 +3,7 @@
     <div class="mb-10">
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Tools</h1>
       <p class="text-gray-600 text-sm sm:text-base max-w-2xl">
-        Creative utilities powered by AI—character imagery and video generation.
+        Creative utilities powered by AI—video, music, character imagery, and more.
       </p>
     </div>
 
@@ -25,6 +25,16 @@
 <script setup>
 const cards = [
   {
+    to: '/tools/video-generation',
+    title: 'Video generation',
+    blurb: 'Generate AI video clips with OpenRouter — upload a starting frame, pick models, save to projects.',
+  },
+  {
+    to: '/tools/music-generation',
+    title: 'Music generation',
+    blurb: 'Compose score beds and themes with Google Lyria — save to projects and add to the timeline.',
+  },
+  {
     to: '/tools/script-wizard',
     title: 'Script Wizard',
     blurb: 'Standalone script workspace: upload, analyze, and reuse scripts across projects.',
@@ -38,11 +48,6 @@ const cards = [
     to: '/character-creator',
     title: 'Character Creator',
     blurb: 'Generate character portraits and references with image models.',
-  },
-  {
-    to: '/tools/video-generation',
-    title: 'Video generation',
-    blurb: 'Browse video-capable models on OpenRouter and plan your pipeline.',
   },
 ]
 

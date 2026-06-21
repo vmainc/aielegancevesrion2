@@ -1,7 +1,7 @@
 <template>
   <div
-    class="rounded-lg border border-gray-200 bg-gray-50/80 p-3 space-y-3"
-    :class="compact ? '' : 'p-4'"
+    class="rounded-lg border border-gray-200 bg-gray-50/80 space-y-3"
+    :class="compact ? 'p-3' : 'p-4'"
   >
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="text-xs font-medium text-gray-700">
@@ -18,71 +18,101 @@
       </button>
     </div>
     <p v-if="!compact" class="text-xs text-gray-500">
-      Upload a still or generate one from your prompt. Video models use this as the first frame (image-to-video).
-      Generated and uploaded frames are compressed to fit video limits (~900KB).
+      Upload a still (default) or generate one from your prompt. Video models use this as the first frame (image-to-video).
+      Frames are compressed to fit video limits (~900KB).
     </p>
     <p v-else class="text-[11px] text-gray-500 leading-snug">
-      Upload or generate a still to animate when no storyboard frame is set.
+      Upload a still or generate from your prompt when no storyboard frame is set.
     </p>
 
-    <div class="flex flex-col sm:flex-row gap-3 items-start">
-      <div
-        v-if="previewUrl"
-        class="rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0"
-        :class="compact ? 'w-20 h-20' : 'w-28 h-28'"
+    <div
+      v-if="previewUrl"
+      class="rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0"
+      :class="compact ? 'w-20 h-20' : 'w-28 h-28'"
+    >
+      <img
+        :src="previewUrl"
+        alt="Starting frame preview"
+        class="w-full h-full object-cover"
       >
-        <img
-          :src="previewUrl"
-          alt="Starting frame preview"
-          class="w-full h-full object-cover"
+    </div>
+
+    <div class="space-y-3">
+      <div class="flex flex-wrap gap-2">
+        <button
+          type="button"
+          class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
+          :class="frameMode === 'upload'
+            ? 'bg-primary text-gray-950 hover:bg-primary/90'
+            : 'bg-white border border-gray-300 text-gray-800 hover:bg-gray-50'"
+          @click="chooseUpload"
         >
-      </div>
-      <div class="flex-1 min-w-0 space-y-2">
+          Choose file
+        </button>
+        <button
+          type="button"
+          class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
+          :class="frameMode === 'generate'
+            ? 'bg-primary text-gray-950 hover:bg-primary/90'
+            : 'bg-white border border-gray-300 text-gray-800 hover:bg-gray-50'"
+          @click="frameMode = 'generate'"
+        >
+          Generate
+        </button>
         <input
           ref="fileInputEl"
           type="file"
           accept="image/jpeg,image/png,image/webp,image/gif"
-          class="block w-full text-xs text-gray-700 file:mr-2 file:py-1.5 file:px-2 file:rounded-md file:border-0 file:text-xs file:font-semibold file:bg-primary file:text-gray-950 hover:file:bg-primary/90"
+          class="sr-only"
           @change="onFileChange"
         >
-        <div v-if="!compact" class="flex flex-col sm:flex-row sm:items-end gap-2">
-          <div class="flex-1 min-w-0">
-            <label class="block text-[11px] font-medium text-gray-600 mb-1">Image model (for generate)</label>
-            <select
-              v-model="imageModelId"
-              class="w-full px-2 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-xs"
-            >
-              <option
-                v-for="m in imageModels"
-                :key="m.id"
-                :value="m.id"
-              >
-                {{ m.label }}
-              </option>
-            </select>
-          </div>
-          <button
-            type="button"
-            class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white border border-gray-300 text-gray-800 hover:bg-gray-50 disabled:opacity-50 whitespace-nowrap"
-            :disabled="generatingFrame || !prompt.trim()"
-            @click="generateFrame"
+      </div>
+
+      <div
+        v-if="frameMode === 'generate'"
+        class="rounded-lg border border-gray-200 bg-white p-3 space-y-2"
+      >
+        <div>
+          <label
+            :for="compact ? 'vg-frame-image-model-compact' : 'vg-frame-image-model'"
+            class="block text-[11px] font-medium text-gray-600 mb-1"
           >
-            {{ generatingFrame ? 'Generating…' : 'Generate starting frame' }}
-          </button>
+            Image model
+          </label>
+          <select
+            :id="compact ? 'vg-frame-image-model-compact' : 'vg-frame-image-model'"
+            v-model="imageModelId"
+            class="w-full px-2 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-xs"
+          >
+            <option
+              v-for="m in imageModels"
+              :key="m.id"
+              :value="m.id"
+            >
+              {{ m.label }}
+            </option>
+          </select>
         </div>
         <button
-          v-else
           type="button"
-          class="px-2.5 py-1 text-[11px] font-medium rounded-lg bg-white border border-gray-300 text-gray-800 hover:bg-gray-50 disabled:opacity-50"
+          class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-gray-950 hover:bg-primary/90 disabled:opacity-50"
           :disabled="generatingFrame || !prompt.trim()"
           @click="generateFrame"
         >
-          {{ generatingFrame ? 'Generating…' : 'Generate frame' }}
+          {{ generatingFrame ? 'Generating…' : compact ? 'Generate frame' : 'Generate starting frame' }}
         </button>
-        <p v-if="frameLabel" class="text-[11px] text-gray-600">
-          {{ frameLabel }}
+        <p v-if="!prompt.trim()" class="text-[11px] text-gray-500">
+          Add a video prompt above first.
         </p>
       </div>
+
+      <p v-else-if="frameMode === 'upload' && !frameImageUrl" class="text-[11px] text-gray-500">
+        JPEG, PNG, WebP, or GIF — pick a file from your computer.
+      </p>
+
+      <p v-if="frameLabel" class="text-[11px] text-gray-600">
+        {{ frameLabel }}
+      </p>
     </div>
   </div>
 </template>
@@ -118,6 +148,7 @@ const imageModelId = ref(DEFAULT_IMAGE_MODEL_ID)
 const generatingFrame = ref(false)
 const frameLabel = ref('')
 const fileInputEl = ref<HTMLInputElement | null>(null)
+const frameMode = ref<'upload' | 'generate'>('upload')
 
 const previewUrl = computed(() => props.frameImageUrl || null)
 
@@ -145,6 +176,11 @@ function clearFrame () {
   if (fileInputEl.value) fileInputEl.value.value = ''
 }
 
+function chooseUpload () {
+  frameMode.value = 'upload'
+  fileInputEl.value?.click()
+}
+
 async function onFileChange (event: Event) {
   const file = (event.target as HTMLInputElement).files?.[0]
   if (!file) return
@@ -152,6 +188,7 @@ async function onFileChange (event: Event) {
     toast.showToast('Choose an image file (JPEG, PNG, WebP, or GIF).', 'warning')
     return
   }
+  frameMode.value = 'upload'
   try {
     const url = await uploadVideoStartFrameFile(file)
     syncEmit(url, `Uploaded: ${file.name}`)
@@ -192,6 +229,7 @@ async function generateFrame () {
       toast.showToast('Image was too large for video — try Flux Klein or Gemini Flash.', 'warning')
       return
     }
+    frameMode.value = 'generate'
     syncEmit(url, `Generated (${imageModelId.value})`)
     toast.showToast('Starting frame ready — generate video when ready.', 'success')
   } catch (e: unknown) {

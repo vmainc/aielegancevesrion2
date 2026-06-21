@@ -8,7 +8,7 @@
           <!-- Logo -->
           <div class="flex items-center min-h-0 space-x-4 lg:space-x-8">
             <NuxtLink
-              to="/"
+              :to="showAuthenticatedUi ? '/tools/video-generation' : '/'"
               class="flex items-center shrink-0"
             >
               <img
@@ -20,6 +20,18 @@
             <!-- Desktop: workspace nav (logged in) or marketing anchors (guest) -->
             <ClientOnly>
               <div v-if="showAuthenticatedUi" class="hidden lg:flex items-center space-x-8">
+                <NuxtLink
+                  to="/tools/video-generation"
+                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
+                >
+                  Video
+                </NuxtLink>
+                <NuxtLink
+                  to="/tools/music-generation"
+                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
+                >
+                  Music
+                </NuxtLink>
                 <NuxtLink
                   to="/projects"
                   class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
@@ -100,8 +112,22 @@
                     class="absolute left-0 top-full mt-2 min-w-[14rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
                   >
                     <NuxtLink
-                      to="/tools"
+                      to="/tools/video-generation"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-t-lg"
+                      @click="closeToolsDropdown"
+                    >
+                      Video generation
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/tools/music-generation"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
+                      @click="closeToolsDropdown"
+                    >
+                      Music generation
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/tools"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                       @click="closeToolsDropdown"
                     >
                       Overview
@@ -114,13 +140,6 @@
                       Script Wizard
                     </NuxtLink>
                     <NuxtLink
-                      to="/tools/storyboard-builder"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
-                      @click="closeToolsDropdown"
-                    >
-                      Storyboard Builder
-                    </NuxtLink>
-                    <NuxtLink
                       to="/character-creator"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                       @click="closeToolsDropdown"
@@ -128,11 +147,11 @@
                       Character Creator
                     </NuxtLink>
                     <NuxtLink
-                      to="/tools/video-generation"
+                      to="/tools/storyboard-builder"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
                       @click="closeToolsDropdown"
                     >
-                      Video generation
+                      Storyboard Builder
                     </NuxtLink>
                   </div>
                 </div>
@@ -322,6 +341,20 @@
             <ClientOnly>
               <template v-if="showAuthenticatedUi">
                 <NuxtLink
+                  to="/tools/video-generation"
+                  @click="closeMobileMenu"
+                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
+                >
+                  Video
+                </NuxtLink>
+                <NuxtLink
+                  to="/tools/music-generation"
+                  @click="closeMobileMenu"
+                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
+                >
+                  Music
+                </NuxtLink>
+                <NuxtLink
                   to="/projects"
                   @click="closeMobileMenu"
                   class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
@@ -374,6 +407,20 @@
                     Tools
                   </NuxtLink>
                   <NuxtLink
+                    to="/tools/video-generation"
+                    @click="closeMobileMenu"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                  >
+                    Video generation
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/tools/music-generation"
+                    @click="closeMobileMenu"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                  >
+                    Music generation
+                  </NuxtLink>
+                  <NuxtLink
                     to="/character-creator"
                     @click="closeMobileMenu"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
@@ -393,13 +440,6 @@
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
                   >
                     Storyboard Builder
-                  </NuxtLink>
-                  <NuxtLink
-                    to="/tools/video-generation"
-                    @click="closeMobileMenu"
-                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
-                  >
-                    Video generation
                   </NuxtLink>
                 </div>
                 <NuxtLink

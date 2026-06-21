@@ -25,7 +25,7 @@
             Get started
           </NuxtLink>
           <NuxtLink
-            :to="{ path: '/login', query: { redirect: '/projects' } }"
+            :to="{ path: '/login', query: { redirect: '/tools/video-generation' } }"
             class="inline-flex justify-center items-center px-8 py-3.5 rounded-xl border border-gray-300 text-gray-800 font-semibold text-base hover:bg-gray-50 hover:border-gray-400 transition-all"
           >
             Import script
@@ -131,7 +131,7 @@
               Upload your screenplay and instantly generate scenes, characters, and storyboard structure — ready for your AI filmmaking pipeline.
             </p>
             <NuxtLink
-              :to="{ path: '/login', query: { redirect: '/projects' } }"
+              :to="{ path: '/login', query: { redirect: '/tools/video-generation' } }"
               class="inline-flex items-center justify-center px-8 py-3.5 rounded-xl bg-primary text-gray-950 font-semibold hover:bg-primary/90 transition-colors"
             >
               Import script
@@ -222,6 +222,17 @@
 </template>
 
 <script setup lang="ts">
+import { DEFAULT_AUTHENTICATED_PATH } from '~/lib/default-authenticated-path'
+
+const { isAuthenticated, initAuth } = useAuth()
+
+onMounted(async () => {
+  await initAuth()
+  if (isAuthenticated.value) {
+    await navigateTo(DEFAULT_AUTHENTICATED_PATH, { replace: true })
+  }
+})
+
 const capabilityCards: Array<{ title: string; body: string; icon: 'spark' | 'users' | 'frame' | 'film' | 'chart' }> = [
   { title: 'Concept & Story', body: 'Generate ideas, treatments, and scripts with AI.', icon: 'spark' },
   { title: 'Characters', body: 'Create consistent characters with personality and visual identity.', icon: 'users' },

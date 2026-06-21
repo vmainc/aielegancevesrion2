@@ -3,6 +3,10 @@ import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { fetchBinaryFromUrlForIngest } from '~/server/utils/fetch-url-for-project-ingest'
 import {
+  parseMusicResultIdFromPath,
+  readMusicGenerationResult
+} from '~/server/utils/music-generation-store'
+import {
   formatPocketBaseRecordError,
   isPocketBaseMissingCollectionError,
   pocketBaseErrorStatus
@@ -56,17 +60,42 @@ export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const openRouterKey = resolveOpenRouterApiKey(config)
 
-  const mediaKind =
-    kind === 'storyboard' || kind === 'character' ? ('image' as const) : ('video' as const)
+  const musicResultId = parseMusicResultIdFromPath(sourceUrl)
+  const metadataSource =
+    metadata && typeof metadata.source === 'string' ? metadata.source.trim() : ''
+  const isMusicAsset = metadataSource === 'music_generation' || Boolean(musicResultId)
 
-  const { buffer, suggestedName } = await fetchBinaryFromUrlForIngest(sourceUrl, {
-    openRouterApiKey: openRouterKey || undefined,
-    maxBytes: MAX_FILE_BYTES,
-    timeoutMs: 180_000,
-    mediaKind
-  })
+  let buffer: Buffer
+  let suggestedName: string
 
-  const safeFilename = suggestedName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 180) || 'video.mp4'
+  if (musicResultId) {
+    const staged = await readMusicGenerationResult(musicResultId)
+    if (!staged) {
+      throw createError({ statusCode: 404, message: 'Generated audio not found or expired — generate again.' })
+    }
+    buffer = staged.data
+    suggestedName = `music_${musicResultId.slice(0, 8)}.mp3`
+  } else {
+    const mediaKind =
+      kind === 'storyboard' || kind === 'character'
+        ? ('image' as const)
+        : isMusicAsset
+          ? ('audio' as const)
+          : ('video' as const)
+
+    const fetched = await fetchBinaryFromUrlForIngest(sourceUrl, {
+      openRouterApiKey: openRouterKey || undefined,
+      maxBytes: MAX_FILE_BYTES,
+      timeoutMs: 180_000,
+      mediaKind
+    })
+    buffer = fetched.buffer
+    suggestedName = fetched.suggestedName
+  }
+
+  const safeFilename =
+    suggestedName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 180) ||
+    (isMusicAsset ? 'music.mp3' : 'video.mp4')
 
   const formData = new FormData()
   formData.append('owned_by', userId)
