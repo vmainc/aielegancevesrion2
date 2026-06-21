@@ -5,6 +5,7 @@ export async function pollScriptImportJob (
 ): Promise<{
   projectId: string
   project: import('~/types/creative-project').CreativeProject
+  scriptAsset?: import('~/server/utils/import-script-core').ScriptAssetAttachResult
 }> {
   const intervalMs = options?.intervalMs ?? 3500
   const maxMs = options?.maxMs ?? 30 * 60 * 1000
@@ -15,11 +16,16 @@ export async function pollScriptImportJob (
       status: string
       projectId?: string
       project?: import('~/types/creative-project').CreativeProject
+      scriptAsset?: import('~/server/utils/import-script-core').ScriptAssetAttachResult
       message?: string
     }>(`/api/script-import/jobs/${encodeURIComponent(jobId)}`, { headers })
 
     if (res.status === 'completed' && res.projectId && res.project) {
-      return { projectId: res.projectId, project: res.project }
+      return {
+        projectId: res.projectId,
+        project: res.project,
+        scriptAsset: res.scriptAsset
+      }
     }
     if (res.status === 'failed') {
       throw new Error(res.message || 'Script import failed')

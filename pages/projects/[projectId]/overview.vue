@@ -731,6 +731,7 @@ import {
 } from '~/lib/project-workflow'
 import { extractThreeActBreakdownFromTreatment } from '~/lib/extract-three-act-from-treatment'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { pollScriptImportJob } from '~/lib/poll-script-import-job'
 import {
   conceptNotesHaveUserContent,
   formatStoredConceptNotes,
@@ -940,19 +941,25 @@ async function runProjectFullImport () {
   if (!id || !token || !scriptWorkflowAssetId.value) return
   overviewFullImporting.value = true
   overviewImportError.value = ''
+  const headers = { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' }
   try {
-    const res = await $fetch<{
-      project: CreativeProject
-      scriptAsset: { ok: boolean; message?: string; id?: string }
-    }>(`/api/projects/${id}/script/full-import`, {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${token}` },
-      body: { assetId: scriptWorkflowAssetId.value },
-      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    const started = await $fetch<{ async?: boolean; jobId?: string }>(
+      `/api/projects/${id}/script/full-import`,
+      {
+        method: 'POST',
+        headers,
+        body: { assetId: scriptWorkflowAssetId.value }
+      }
+    )
+    if (!started.jobId) {
+      throw new Error('Server did not start import job')
+    }
+    const polled = await pollScriptImportJob(started.jobId, headers, {
+      maxMs: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
     })
-    registerImportedProject(res.project)
-    if (res.scriptAsset?.ok && res.scriptAsset.id) {
-      scriptWorkflowAssetId.value = res.scriptAsset.id
+    registerImportedProject(polled.project)
+    if (polled.scriptAsset?.ok && polled.scriptAsset.id) {
+      scriptWorkflowAssetId.value = polled.scriptAsset.id
     }
     toast.showToast('Script imported — open Storyboard to generate video clips.', 'success')
     await navigateTo(`/projects/${id}/storyboard`)

@@ -57,11 +57,11 @@
                     class="absolute left-0 top-full mt-2 min-w-[12rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
                   >
                     <NuxtLink
-                      to="/assets"
+                      to="/assets/video"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-t-lg"
                       @click="closeAssetsDropdown"
                     >
-                      Overview
+                      My Videos
                     </NuxtLink>
                     <NuxtLink
                       to="/assets/scripts"
@@ -79,17 +79,10 @@
                     </NuxtLink>
                     <NuxtLink
                       to="/assets/storyboards"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
-                      @click="closeAssetsDropdown"
-                    >
-                      Storyboards
-                    </NuxtLink>
-                    <NuxtLink
-                      to="/assets/video"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
                       @click="closeAssetsDropdown"
                     >
-                      Video
+                      Storyboards
                     </NuxtLink>
                   </div>
                 </div>
@@ -362,12 +355,15 @@
                   Projects
                 </NuxtLink>
                 <div class="rounded-lg border border-gray-200 overflow-hidden">
-                  <NuxtLink
-                    to="/assets"
-                    @click="closeMobileMenu"
-                    class="block px-4 py-3.5 text-gray-900 font-medium bg-gray-50 border-b border-gray-200"
-                  >
+                  <div class="block px-4 py-3.5 text-gray-900 font-medium bg-gray-50 border-b border-gray-200">
                     Assets
+                  </div>
+                  <NuxtLink
+                    to="/assets/video"
+                    @click="closeMobileMenu"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                  >
+                    My Videos
                   </NuxtLink>
                   <NuxtLink
                     to="/assets/scripts"
@@ -389,13 +385,6 @@
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
                   >
                     Storyboards
-                  </NuxtLink>
-                  <NuxtLink
-                    to="/assets/video"
-                    @click="closeMobileMenu"
-                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
-                  >
-                    Video
                   </NuxtLink>
                 </div>
                 <div class="rounded-lg border border-gray-200 overflow-hidden">

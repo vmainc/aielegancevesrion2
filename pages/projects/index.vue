@@ -35,7 +35,7 @@
     <ul v-else class="grid gap-4 sm:grid-cols-2">
       <li v-for="p in projects" :key="p.id">
         <NuxtLink
-          :to="`/projects/${p.id}/overview`"
+          :to="`/projects/${p.id}/home`"
           class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:border-primary/50 hover:bg-gray-50 transition-all p-5 h-full"
         >
           <div class="flex items-start justify-between gap-3 mb-3">
@@ -43,7 +43,7 @@
             <span class="shrink-0 text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">{{ p.aspectRatio }}</span>
           </div>
           <p class="text-sm text-gray-500 line-clamp-2 mb-3">
-            {{ p.synopsis || 'No synopsis yet — start in Overview.' }}
+            {{ p.synopsis || 'No synopsis yet — open to get started.' }}
           </p>
           <span class="text-sm text-primary font-medium">Open workspace →</span>
         </NuxtLink>
@@ -261,7 +261,7 @@ async function submitCreate () {
       registerImportedProject(res.project)
       openCreate.value = false
       toast.showToast('Project created.', 'success')
-      await navigateTo(`/projects/${res.project.id}/overview`)
+      await navigateTo(`/projects/${res.project.id}/home`)
     } catch (e: unknown) {
       createError.value =
         (e as { data?: { message?: string } })?.data?.message ||
@@ -281,6 +281,6 @@ async function submitCreate () {
   })
   writeSessionWorkflow(p.id, p.workflowMode || form.workflowMode)
   openCreate.value = false
-  await navigateTo(`/projects/${p.id}/overview`)
+  await navigateTo(`/projects/${p.id}/home`)
 }
 </script>
