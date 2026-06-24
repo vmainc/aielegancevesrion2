@@ -161,21 +161,30 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
     try {
       const col = await pb.collections.getFirstListItem('name="creative_characters"');
       const currentSchema = col.fields || col.schema || [];
+      const charFieldsToAdd = [];
       if (!fieldExists(col, 'screen_share_percent')) {
+        charFieldsToAdd.push(flattenField({
+          name: 'screen_share_percent',
+          type: 'number',
+          required: false,
+          options: { min: 0, max: 100 }
+        }));
+      }
+      if (!fieldExists(col, 'voice_description')) {
+        charFieldsToAdd.push(flattenField({
+          name: 'voice_description',
+          type: 'text',
+          required: false,
+          options: { max: 2000 }
+        }));
+      }
+      if (charFieldsToAdd.length) {
         await pb.collections.update(col.id, {
-          fields: [
-            ...currentSchema,
-            flattenField({
-              name: 'screen_share_percent',
-              type: 'number',
-              required: false,
-              options: { min: 0, max: 100 }
-            })
-          ]
+          fields: [...currentSchema, ...charFieldsToAdd]
         });
-        console.log('  ➕ Added screen_share_percent (number 0–100)\n');
+        console.log(`  ➕ Added ${charFieldsToAdd.map(f => f.name).join(', ')} to creative_characters\n`);
       } else {
-        console.log('  ✓ screen_share_percent exists\n');
+        console.log('  ✓ creative_characters fields up to date\n');
       }
     } catch (_e) {
       console.log('⚠️  creative_characters not found. Skipping...\n');

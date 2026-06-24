@@ -31,6 +31,8 @@ export interface ProjectCharacterRef {
   portraitNotes?: string
   /** Image prompt used to generate the featured portrait. */
   portraitPromptUsed?: string
+  /** Cast voice bible notes (reference clips on Characters step). */
+  voiceDescription?: string
 }
 
 export function projectCharacterRefToCastMember (c: ProjectCharacterRef) {

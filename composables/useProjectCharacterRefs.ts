@@ -1,4 +1,5 @@
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
+import { isCharacterPortraitAsset } from '~/lib/character-voice-assets'
 import type { ProjectCharacterRef } from '~/lib/shot-character-continuity'
 import type { CreativeCharacter } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
@@ -26,6 +27,7 @@ function portraitMapFromAssets (
   for (const a of assets) {
     if (!a.fileUrl && !a.id) continue
     const meta = a.metadata || {}
+    if (!isCharacterPortraitAsset(meta as Record<string, unknown>)) continue
     const cid = typeof meta.character_id === 'string' ? meta.character_id.trim() : ''
     const cname = typeof meta.character_name === 'string' ? normalizeName(meta.character_name) : ''
     const ts = a.updated || a.created || ''
@@ -113,7 +115,8 @@ export function useProjectCharacterRefs (projectId: Ref<string> | ComputedRef<st
           roleDescription: c.roleDescription || '',
           portraitUrl: p?.url || null,
           portraitNotes: p?.notes || '',
-          portraitPromptUsed: p?.promptUsed || ''
+          portraitPromptUsed: p?.promptUsed || '',
+          voiceDescription: c.voiceDescription || ''
         }
       })
     } catch (e: unknown) {

@@ -2,7 +2,7 @@
   <div class="max-w-4xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Cast list: name and AI-written look/feel prompt. Click a character’s image square to upload a photo from your computer — or use <span class="font-medium text-gray-700">Generate with AI</span> in Actions. After director analysis, use the button below so visual prompts and dialogue-share % follow your <span class="font-medium text-gray-700">newest</span> synopsis, treatment, and director bible.
+      · Cast list: name and AI-written look/feel prompt. Click a character’s image square to upload a photo from your computer — or use <span class="font-medium text-gray-700">Generate with AI</span> in Actions. Below the table, attach short voice clips and notes so you can hear each character’s sound. After director analysis, use the button below so visual prompts and dialogue-share % follow your <span class="font-medium text-gray-700">newest</span> synopsis, treatment, and director bible.
     </p>
 
     <div
@@ -69,7 +69,7 @@
           class="mb-8"
           :characters="displayCharacters"
           :editable="true"
-          :busy="characterMutating || enrichingCast || !!uploadingPortraitCharacterId"
+          :busy="characterMutating || enrichingCast || !!uploadingPortraitCharacterId || !!uploadingVoiceCharacterId || !!deletingVoiceAssetId || !!savingVoiceNotesCharacterId"
           :uploading-portrait-character-id="uploadingPortraitCharacterId"
           :show-chart-swatches="displayCharacters.length > 0"
           :chart-color-by-name="chartSwatchColors"
@@ -86,6 +86,20 @@
           @update="onUpdateCharacter"
           @delete="onDeleteCharacter"
           @upload-portrait="onUploadPortrait"
+        />
+
+        <ProjectCharacterVoicePanel
+          v-if="displayCharacters.length"
+          :characters="displayCharacters"
+          :samples-by-character-id="voiceSamplesByCharacterId"
+          :editable="true"
+          :busy="characterMutating || enrichingCast || !!uploadingPortraitCharacterId"
+          :uploading-character-id="uploadingVoiceCharacterId"
+          :deleting-asset-id="deletingVoiceAssetId"
+          :saving-notes-character-id="savingVoiceNotesCharacterId"
+          @upload="onUploadVoiceSample"
+          @delete-sample="onDeleteVoiceSample"
+          @save-voice-notes="onSaveVoiceNotes"
         />
 
         <div
@@ -142,10 +156,15 @@ import {
   buildCharacterPieModel,
   pieModelToSwatchRecord
 } from '~/lib/character-screen-share-chart'
+import {
+  isCharacterPortraitAsset,
+  voiceSamplesByCharacterIdFromAssets
+} from '~/lib/character-voice-assets'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { projectAssetPlaybackSrc } from '~/lib/project-asset-playback-url'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import { uploadCharacterPortrait } from '~/lib/upload-character-portrait'
+import { uploadCharacterVoiceSample } from '~/lib/upload-character-voice-sample'
 import type { CreativeCharacter } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
 
@@ -167,6 +186,9 @@ const pending = ref(false)
 const characterMutating = ref(false)
 const enrichingCast = ref(false)
 const uploadingPortraitCharacterId = ref<string | null>(null)
+const uploadingVoiceCharacterId = ref<string | null>(null)
+const deletingVoiceAssetId = ref<string | null>(null)
+const savingVoiceNotesCharacterId = ref<string | null>(null)
 
 const canLoadCloud = computed(
   () =>
@@ -229,6 +251,7 @@ const characterPortraitFieldsById = computed<Record<string, { url: string; notes
   for (const a of characterAssets.value) {
     if (!a.fileUrl) continue
     const meta = a.metadata || {}
+    if (!isCharacterPortraitAsset(meta as Record<string, unknown>)) continue
     const cid = typeof meta.character_id === 'string' ? meta.character_id.trim() : ''
     const cname = typeof meta.character_name === 'string' ? normalize(meta.character_name) : ''
     const ts = a.updated || a.created || ''
@@ -310,6 +333,11 @@ const portraitPromptUsedByCharacterId = computed<Record<string, string>>(() =>
     Object.entries(characterPortraitFieldsById.value).map(([id, v]) => [id, v.promptUsed])
   )
 )
+
+const voiceSamplesByCharacterId = computed(() => {
+  const token = getAuthToken()
+  return voiceSamplesByCharacterIdFromAssets(characters.value, characterAssets.value, token)
+})
 
 async function refreshCharactersList () {
   const token = getAuthToken()
@@ -481,6 +509,75 @@ async function onUploadPortrait (payload: { characterId: string; file: File }) {
     toast.showToast(formatApiFetchError(e, 'Could not upload photo'), 'error')
   } finally {
     uploadingPortraitCharacterId.value = null
+  }
+}
+
+async function onUploadVoiceSample (payload: { characterId: string; file: File }) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  const character = characters.value.find(c => c.id === payload.characterId)
+  if (!character) return
+  uploadingVoiceCharacterId.value = payload.characterId
+  try {
+    await uploadCharacterVoiceSample({
+      projectId: id,
+      characterId: character.id,
+      characterName: character.name,
+      file: payload.file,
+      token
+    })
+    toast.showToast(`Voice clip saved for ${character.name}.`, 'success')
+    await loadCharacterAssets()
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not upload voice clip'), 'error')
+  } finally {
+    uploadingVoiceCharacterId.value = null
+  }
+}
+
+async function onDeleteVoiceSample (payload: { characterId: string; assetId: string }) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  deletingVoiceAssetId.value = payload.assetId
+  try {
+    await $fetch(`/api/projects/${id}/assets/${payload.assetId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    toast.showToast('Voice clip removed.', 'success')
+    await loadCharacterAssets()
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not remove voice clip'), 'error')
+  } finally {
+    deletingVoiceAssetId.value = null
+  }
+}
+
+async function onSaveVoiceNotes (payload: { characterId: string; voiceDescription: string }) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token) return
+  savingVoiceNotesCharacterId.value = payload.characterId
+  try {
+    const res = await $fetch<{ character: CreativeCharacter }>(
+      `/api/projects/${id}/characters/${payload.characterId}`,
+      {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body: { voiceDescription: payload.voiceDescription }
+      }
+    )
+    const idx = characters.value.findIndex(c => c.id === payload.characterId)
+    if (idx >= 0 && res.character) {
+      characters.value[idx] = res.character
+    }
+    toast.showToast('Voice notes saved.', 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not save voice notes'), 'error')
+  } finally {
+    savingVoiceNotesCharacterId.value = null
   }
 }
 

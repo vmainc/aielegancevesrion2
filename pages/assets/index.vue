@@ -112,6 +112,11 @@ const cards = [
     title: 'Video',
     blurb: 'Rendered clips, exports, and video outputs.',
   },
+  {
+    to: '/assets/music',
+    title: 'My Music',
+    blurb: 'AI-generated scores and uploaded tracks — grouped by project, ready for the timeline.',
+  },
 ]
 
 const { isAuthenticated, initAuth, getAuthToken } = useAuth()

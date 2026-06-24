@@ -45,6 +45,7 @@ export default defineEventHandler(async (event) => {
     name?: string
     roleDescription?: string
     screenSharePercent?: number | null
+    voiceDescription?: string
   }>(event).catch(() => ({}))
 
   const patch: Record<string, unknown> = {}
@@ -68,6 +69,10 @@ export default defineEventHandler(async (event) => {
     } else if (p !== undefined) {
       patch.screen_share_percent = p
     }
+  }
+
+  if (body && typeof body.voiceDescription === 'string') {
+    patch.voice_description = body.voiceDescription.trim().slice(0, 2000)
   }
 
   if (!Object.keys(patch).length) {

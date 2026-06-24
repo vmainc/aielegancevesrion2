@@ -17,21 +17,29 @@
   </div>
 
   <div v-else class="min-h-[calc(100vh-5rem)] flex flex-col lg:flex-row bg-gray-50">
-    <!-- Mobile section tabs -->
-    <div class="lg:hidden border-b border-gray-200 bg-white px-2 pt-3 pb-2 overflow-x-auto shadow-sm">
-      <div class="flex gap-1 min-w-max">
-        <NuxtLink
-          v-for="item in sections"
+    <!-- Mobile: section picker (9 workflow steps don't fit a horizontal tab bar) -->
+    <div class="lg:hidden border-b border-gray-200 bg-white px-4 py-3 shadow-sm space-y-2">
+      <NuxtLink
+        to="/projects"
+        class="text-xs text-gray-500 hover:text-primary transition-colors inline-flex items-center gap-1"
+      >
+        <span aria-hidden="true">←</span> All projects
+      </NuxtLink>
+      <label for="project-section-mobile" class="sr-only">Project section</label>
+      <select
+        id="project-section-mobile"
+        :value="activeSectionPath"
+        class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+        @change="onMobileSectionChange"
+      >
+        <option
+          v-for="(item, i) in sections"
           :key="item.path"
-          :to="`/projects/${projectId}/${item.path}`"
-          class="px-3 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors"
-          :class="isActive(item.path)
-            ? 'bg-primary text-gray-950'
-            : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'"
+          :value="item.path"
         >
-          {{ item.label }}
-        </NuxtLink>
-      </div>
+          {{ i + 1 }}. {{ item.label }}
+        </option>
+      </select>
     </div>
 
     <!-- Desktop sidebar -->
@@ -141,6 +149,7 @@ const props = withDefaults(
 
 const settingsOpen = ref(false)
 const route = useRoute()
+const router = useRouter()
 
 watch(
   () => route.params.projectId,
@@ -172,14 +181,22 @@ const sections = computed(() => {
 const workflowSections = sections
 const toolSections: Array<{ path: string; label: string }> = []
 
-const isActive = (path: string) => {
+const isActive = (path: string) => activeSectionPath.value === path
+
+const activeSectionPath = computed(() => {
   const tail = route.path.split('/').pop() || ''
-  return tail === path
+  if (sections.value.some(s => s.path === tail)) return tail
+  return sections.value[0]?.path ?? 'home'
+})
+
+function onMobileSectionChange (ev: Event) {
+  const path = (ev.target as HTMLSelectElement).value
+  if (!path || path === activeSectionPath.value) return
+  void router.push(`/projects/${props.projectId}/${path}`)
 }
 
 const sectionSubtitle = computed(() => {
-  const tail = route.path.split('/').pop() || ''
-  const found = sections.value.find(s => s.path === tail)
+  const found = sections.value.find(s => s.path === activeSectionPath.value)
   return found ? `${found.label} · project workspace` : 'Project workspace'
 })
 

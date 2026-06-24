@@ -332,6 +332,12 @@ async function createCollections(adminEmail, adminPassword) {
             type: 'number',
             required: false,
             options: { min: 0, max: 100 }
+          },
+          {
+            name: 'voice_description',
+            type: 'text',
+            required: false,
+            options: { max: 2000 }
           }
         ]
       });

@@ -26,6 +26,8 @@ export interface CreativeCharacter {
   roleDescription: string
   /** Estimated share of dialogue + significant on-page presence (0–100). */
   screenSharePercent: number | null
+  /** Cast audio bible — tone, pace, accent (not used for TTS). */
+  voiceDescription?: string
 }
 
 export interface CreativeProject {

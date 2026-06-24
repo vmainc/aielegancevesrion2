@@ -78,9 +78,10 @@
             :key="s.id"
             class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
           >
+            <div class="flex items-start gap-1">
             <button
               type="button"
-              class="w-full text-left px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors"
+              class="flex-1 min-w-0 text-left px-4 py-3 flex items-start gap-3 hover:bg-gray-50 transition-colors"
               :aria-expanded="expandedId === s.id"
               @click="toggleExpand(s.id)"
             >
@@ -100,6 +101,16 @@
               </span>
               <span class="text-xs text-gray-400 shrink-0 mt-0.5">{{ expandedId === s.id ? '▼' : '▶' }}</span>
             </button>
+            <button
+              type="button"
+              class="shrink-0 px-3 py-3 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-40"
+              :disabled="deletingSceneId === s.id || generatingScenes || addingScene"
+              :title="`Delete ${s.heading}`"
+              @click.stop="deleteScene(s)"
+            >
+              {{ deletingSceneId === s.id ? '…' : 'Delete' }}
+            </button>
+            </div>
             <div
               v-if="expandedId === s.id"
               class="border-t border-gray-100 px-4 py-3 bg-gray-50/80 text-sm"
@@ -401,6 +412,7 @@ const scriptDirty = computed(
 
 const generatingScenes = ref(false)
 const generateScenesError = ref('')
+const deletingSceneId = ref<string | null>(null)
 const generateScenesHint =
   'Claude is splitting your screenplay into scenes — large scripts can take many minutes. Stay on this page.'
 
@@ -454,6 +466,38 @@ async function generateScenesFromScript () {
     toast.showToast(msg, 'error')
   } finally {
     generatingScenes.value = false
+  }
+}
+
+async function deleteScene (s: SceneListRow) {
+  const id = projectId.value
+  const token = getAuthToken()
+  if (!id || !token || deletingSceneId.value) return
+  const panels = s.shotCount && s.shotCount > 0 ? ` and ${s.shotCount} storyboard panel${s.shotCount === 1 ? '' : 's'}` : ''
+  if (!globalThis.confirm(`Delete “${s.heading}”${panels}? This cannot be undone.`)) return
+  deletingSceneId.value = s.id
+  try {
+    await $fetch(`/api/projects/${id}/scenes/${s.id}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (expandedId.value === s.id) {
+      expandedId.value = null
+      detailBody.value = ''
+      savedScriptBody.value = ''
+    }
+    const nextAnalyze = { ...analyzeResultBySceneId.value }
+    delete nextAnalyze[s.id]
+    analyzeResultBySceneId.value = nextAnalyze
+    const nextErrors = { ...analyzeErrorBySceneId.value }
+    delete nextErrors[s.id]
+    analyzeErrorBySceneId.value = nextErrors
+    toast.showToast('Scene deleted.', 'success')
+    await loadScenes()
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not delete scene'), 'error')
+  } finally {
+    deletingSceneId.value = null
   }
 }
 
