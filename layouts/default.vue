@@ -79,10 +79,17 @@
                     </NuxtLink>
                     <NuxtLink
                       to="/assets/storyboards"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                       @click="closeAssetsDropdown"
                     >
                       Storyboards
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/assets/music"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
+                      @click="closeAssetsDropdown"
+                    >
+                      My Music
                     </NuxtLink>
                   </div>
                 </div>
@@ -385,6 +392,13 @@
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
                   >
                     Storyboards
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/assets/music"
+                    @click="closeMobileMenu"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                  >
+                    My Music
                   </NuxtLink>
                 </div>
                 <div class="rounded-lg border border-gray-200 overflow-hidden">
