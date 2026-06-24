@@ -1,3 +1,3 @@
 <template>
-  <MusicAssetHub />
+  <AssetsMusicAssetHub />
 </template>
