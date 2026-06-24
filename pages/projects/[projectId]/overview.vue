@@ -342,11 +342,101 @@
             ideaFirstWorkflow
               ? (isGenerateWorkflow
                 ? 'Generate more ideas with other models, or remove this story to start fresh.'
-                : 'Edit your story below, or remove it to start fresh.')
+                : 'Run AI analysis, then use a result to build director, cast, scenes, and storyboard — or edit your story below.')
               : 'Try other models or remove this concept to start fresh.'
           }}
         </template>
       </p>
+
+      <div
+        v-if="isIdeaWorkflow && canCloudImport"
+        class="mb-5 rounded-xl border-2 border-primary/40 bg-white p-4 sm:p-5"
+      >
+        <p class="text-xs font-bold uppercase tracking-wide text-primary mb-2">
+          AI story analysis
+        </p>
+        <p class="text-sm text-gray-700 mb-3">
+          Have AI read your saved idea, then apply an analysis to fill in the director bible, cast, scenes, and storyboard panels — same end result as script import.
+        </p>
+        <p v-if="modelsLoadError" class="text-sm text-red-700 mb-3">{{ modelsLoadError }}</p>
+        <div class="flex flex-wrap gap-3 mb-4">
+          <label
+            v-for="m in modelOptions"
+            :key="`idea-analyze-${m.id}`"
+            class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+          >
+            <input
+              v-model="selectedModelIds"
+              type="checkbox"
+              :value="m.id"
+              class="rounded border-gray-300 text-primary focus:ring-primary"
+              :disabled="generating"
+            >
+            <span class="text-sm text-gray-800">{{ m.label }}</span>
+          </label>
+        </div>
+        <button
+          type="button"
+          class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+          :disabled="!canAnalyzeSavedIdea || conceptBootstrapRunning"
+          @click="analyzeSavedIdea"
+        >
+          {{ generating ? 'Analyzing story…' : 'Analyze story' }}
+        </button>
+        <div
+          v-if="generating && isIdeaWorkflow"
+          class="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-5"
+        >
+          <FilmReelLoader
+            size="sm"
+            label="Analyzing your story"
+            sub-label="Genre, tone, synopsis, and director notes from your saved idea…"
+          />
+        </div>
+        <div
+          v-if="conceptBootstrapRunning && isIdeaWorkflow"
+          class="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-5"
+        >
+          <FilmReelLoader
+            size="sm"
+            label="Building your project"
+            sub-label="Screenplay, director bible, cast, scenes, and storyboard panels — this can take several minutes."
+          />
+        </div>
+        <div v-if="ideaAnalysisResults.length" class="mt-5 grid gap-4">
+          <article
+            v-for="(r, idx) in ideaAnalysisResults"
+            :key="`idea-analysis-${r.model}-${idx}`"
+            class="rounded-xl border p-4 bg-white shadow-sm"
+            :class="r.error ? 'border-red-200 bg-red-50/50' : 'border-gray-200'"
+          >
+            <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
+              <span class="text-xs font-semibold uppercase tracking-wide text-primary">
+                {{ modelLabel(r.model) }}
+              </span>
+              <button
+                v-if="!r.error"
+                type="button"
+                class="px-3 py-1.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
+                :disabled="applyingModel === r.model || generating || conceptBootstrapRunning"
+                @click="useThisConcept(r)"
+              >
+                {{ applyingModel === r.model ? 'Building…' : 'Use & build project' }}
+              </button>
+            </div>
+            <template v-if="!r.error">
+              <h4 class="text-base font-bold text-gray-900 mb-2">{{ r.title }}</h4>
+              <p class="text-sm text-gray-700 italic mb-2">{{ r.logline }}</p>
+              <p class="text-sm text-gray-600 whitespace-pre-wrap mb-3">{{ r.summary }}</p>
+              <div class="flex flex-wrap gap-2">
+                <span v-if="r.tone" class="text-xs px-2 py-1 rounded-md bg-gray-100 text-gray-800">{{ r.tone }}</span>
+                <span v-if="r.genre" class="text-xs px-2 py-1 rounded-md bg-gray-200 text-gray-800 capitalize">{{ r.genre }}</span>
+              </div>
+            </template>
+            <p v-else class="text-sm text-red-800">{{ r.error }}</p>
+          </article>
+        </div>
+      </div>
       <p
         v-if="conceptBootstrapRunning && ideaFirstWorkflow"
         class="text-sm text-gray-600 mb-3"
@@ -412,7 +502,7 @@
       :allow-use-own-prompt="isIdeaWorkflow"
       :allow-ai-generation="isGenerateWorkflow"
       :show-cancel="hasConcept"
-      apply-label="Use this story"
+      apply-label="Use & build project"
       :generate-button-label="generateIdeasButtonLabel"
       @apply="onScratchIdeaApply"
       @apply-own="onScratchOwnIdeaApply"
@@ -1115,7 +1205,7 @@ const ideaPanelHeading = computed(() => {
 
 const ideaPanelSubheading = computed(() => {
   if (isIdeaWorkflow.value) {
-    return 'Paste your idea (and optionally add a reference image), then continue to Director.'
+    return 'Paste your idea, save it, then run AI analysis — or continue to Director when ready.'
   }
   if (project.value?.goal === 'social') {
     return 'Describe a hook, mood, or topic. Pick one or more AI models, compare ideas, then choose the story you want.'
@@ -1225,7 +1315,8 @@ async function persistTargetDuration () {
 
 const {
   conceptBootstrapRunning,
-  scratchNeedsDirectorBuild
+  scratchNeedsDirectorBuild,
+  runConceptBootstrap
 } = useScratchConceptBootstrap({
   persistBeforeBootstrap: persistTargetDuration,
   resolveTargetDurationSeconds: parsedTargetDurationSeconds
@@ -1316,6 +1407,21 @@ const canGenerate = computed(() => {
   if (!conceptPrompt.value.trim() && !conceptReferenceImage.value) return false
   if (!selectedModelIds.value.length) return false
   return true
+})
+
+const canAnalyzeSavedIdea = computed(() => {
+  if (generating.value || conceptBootstrapRunning.value) return false
+  if (!isAuthenticated.value) return false
+  if (!canCloudImport.value) return false
+  if (!isIdeaWorkflow.value) return false
+  if (!conceptSynopsisDisplay.value.trim()) return false
+  if (!selectedModelIds.value.length) return false
+  return true
+})
+
+const ideaAnalysisResults = computed(() => {
+  if (!isIdeaWorkflow.value || !conceptResults.value?.length) return []
+  return conceptResults.value
 })
 
 function modelLabel (modelId: string) {
@@ -1418,6 +1524,56 @@ async function generateConcepts () {
   }
 }
 
+async function analyzeSavedIdea () {
+  const id = projectId.value
+  const prompt = conceptSynopsisDisplay.value.trim()
+  if (!id || !prompt || !canAnalyzeSavedIdea.value) return
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Log in to analyze your story.', 'error')
+    return
+  }
+  generating.value = true
+  conceptResults.value = null
+  try {
+    await persistTargetDuration()
+    const runtimeSec = parsedTargetDurationSeconds()
+    const res = await $fetch<ConceptGeneratorResultItem[]>('/api/generate-concepts', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        project_id: id,
+        user_prompt: prompt,
+        selected_models: [...selectedModelIds.value],
+        goal: project.value?.goal,
+        aspect_ratio: project.value?.aspectRatio,
+        ...(runtimeSec != null ? { target_duration_seconds: runtimeSec } : {})
+      }
+    })
+    conceptResults.value = Array.isArray(res) ? res : []
+    const ok = conceptResults.value.filter(r => !('error' in r && r.error)).length
+    const fail = conceptResults.value.length - ok
+    if (ok && !fail) {
+      toast.showToast('Analysis ready — pick a result below.', 'success')
+    } else if (ok && fail) {
+      toast.showToast(`${ok} model(s) succeeded, ${fail} failed — see cards.`, 'info')
+    } else {
+      toast.showToast('All analysis requests failed — see cards.', 'error')
+    }
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'data' in e
+        ? (e as { data?: { message?: string; statusMessage?: string } }).data?.message ||
+          (e as { data?: { statusMessage?: string } }).data?.statusMessage
+        : e instanceof Error
+          ? e.message
+          : 'Analysis failed.'
+    toast.showToast(msg || 'Analysis failed.', 'error')
+  } finally {
+    generating.value = false
+  }
+}
+
 function isSuccessResult (r: ConceptGeneratorResultItem): r is GeneratedConceptItem {
   if ('error' in r && typeof (r as { error?: unknown }).error === 'string') {
     return false
@@ -1450,8 +1606,7 @@ async function onScratchOwnIdeaApply (payload: StoryOwnIdeaApplyPayload) {
     })
     conceptResults.value = null
     showGeneratorForm.value = false
-    toast.showToast('Story saved — open Director to refine your bible.', 'success')
-    await navigateTo(`/projects/${id}/director`)
+    toast.showToast('Story saved — run AI analysis below or continue to Director.', 'success')
   } catch {
     toast.showToast('Could not save your story.', 'error')
   } finally {
@@ -1489,8 +1644,16 @@ async function useThisConcept (
     conceptResults.value = null
     showGeneratorForm.value = false
     if (ideaFirstWorkflow.value && canCloudImport.value) {
-      toast.showToast('Story saved — open Director to refine your bible.', 'success')
-      await navigateTo(`/projects/${id}/director`)
+      await runConceptBootstrap({
+        title: item.title,
+        logline: item.logline,
+        summary: synopsis,
+        genre: item.genre,
+        tone: item.tone,
+        characters: item.characters,
+        director: item.director,
+        visualReference: item.visual_reference
+      })
       return
     }
     toast.showToast('Concept applied to project.', 'success')
