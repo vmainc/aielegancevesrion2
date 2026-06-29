@@ -261,6 +261,8 @@
 
 <script setup lang="ts">
 import { appendAudioToProjectTimeline } from '~/lib/append-project-timeline-audio'
+import { timelineAppendToast } from '~/lib/timeline-append-feedback'
+import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { groupProjectAssetsByProject } from '~/lib/project-asset-sort'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { uploadMusicTrack, validateMusicTrackFile } from '~/lib/upload-music-track'
@@ -326,16 +328,18 @@ function musicSourceLabel (a: ProjectAsset): string {
   return ''
 }
 
-function addToTimeline (a: ProjectAsset) {
+async function addToTimeline (a: ProjectAsset) {
   if (!a.projectId || !PB_ID.test(a.projectId)) return
   const src = playbackSrc(a)
   if (!src) return
-  appendAudioToProjectTimeline(a.projectId, {
+  const result = await appendAudioToProjectTimeline(a.projectId, {
     url: src,
     label: (a.title || 'Music').slice(0, 500),
-    duration: 120
-  })
-  toast.showToast('Added to project timeline.', 'success')
+    duration: 120,
+    assetId: a.id
+  }, { authHeaders: pocketBaseBearerHeaders(getAuthToken()) })
+  const t = timelineAppendToast(result.outcome, 'audio')
+  toast.showToast(t.message, t.type)
 }
 
 async function fetchItems () {

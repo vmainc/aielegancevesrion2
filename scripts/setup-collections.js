@@ -844,6 +844,66 @@ async function createCollections(adminEmail, adminPassword) {
       console.log('⚠️  Could not ensure Production Bible collections:', e.message || e, '\n');
     }
 
+    // Project timelines — PASS 28 cloud persistence
+    console.log('🎬 Ensuring project_timelines collection...');
+    try {
+      const creativeProjectsId = await getCollectionIdByName(pb, 'creative_projects');
+
+      console.log('  Ensuring "project_timelines"...');
+      try {
+        await pb.collections.getFirstListItem('name="project_timelines"');
+        console.log('  ⚠️  "project_timelines" already exists, skipping...');
+      } catch (_missing) {
+        await createCollectionThenRules(pb, {
+          name: 'project_timelines',
+          type: 'base',
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'project',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: creativeProjectsId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            { name: 'title', type: 'text', required: true, options: { max: 200 } },
+            { name: 'timeline_json', type: 'json', required: true },
+            { name: 'schema_version', type: 'number', required: true, options: { min: 1, max: 100 } },
+            { name: 'revision', type: 'number', required: true, options: { min: 1, max: 999999 } },
+            { name: 'source', type: 'text', required: false, options: { max: 50 } },
+            { name: 'imported_from_local', type: 'bool', required: false },
+            { name: 'local_backup_key', type: 'text', required: false, options: { max: 300 } }
+          ]
+        });
+        console.log('  ✅ "project_timelines" created');
+      }
+
+      console.log('✅ project_timelines collection ensured\n');
+    } catch (e) {
+      console.log('⚠️  Could not ensure project_timelines:', e.message || e, '\n');
+    }
+
     console.log('🎉 All collections have been set up successfully!');
     console.log('\nCollections created:');
     console.log('  ✓ creative_projects / creative_scenes / creative_characters - Script import workspace (if created this run)');
@@ -851,6 +911,7 @@ async function createCollections(adminEmail, adminPassword) {
     console.log('  ✓ project_assets - Per-project assets (scripts, characters, storyboards, video, files)');
     console.log('  ✓ creative_scripts - Standalone Script Wizard library');
     console.log('  ✓ bible_entities / bible_facts / bible_relationships - Production Bible foundation (if created this run)');
+    console.log('  ✓ project_timelines - Per-project timeline documents (if created this run)');
     console.log('  ✓ users - Created automatically by PocketBase');
     console.log('\n✨ You can now use the application!');
 

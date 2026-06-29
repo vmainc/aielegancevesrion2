@@ -21,6 +21,7 @@
         :selected="clip.id === selectedClipId"
         :active-tool="activeTool"
         :dragging="clip.id === draggingClipId"
+        :media-reliability="mediaReliabilityByClipId?.get(clip.id) ?? null"
         @select="$emit('select-clip', clip.id)"
         @remove="$emit('remove-clip', clip.id)"
         @drag-start="(ev) => $emit('clip-drag-start', clip.id, ev)"
@@ -46,6 +47,7 @@ const props = defineProps<{
   selectedClipId: string | null
   activeTool: TimelineEditorTool
   draggingClipId: string | null
+  mediaReliabilityByClipId?: Map<string, import('~/lib/timeline-clip-media-reliability').TimelineClipMediaReliability>
 }>()
 
 const emit = defineEmits<{

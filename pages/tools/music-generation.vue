@@ -311,6 +311,8 @@
 definePageMeta({ ssr: false })
 
 import { appendAudioToProjectTimeline } from '~/lib/append-project-timeline-audio'
+import { timelineAppendToast } from '~/lib/timeline-append-feedback'
+import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { MUSIC_STYLE_PRESETS } from '~/lib/music-generation-prompt'
 import { DEFAULT_MUSIC_MODEL_ID } from '~/lib/music-generation-models'
@@ -537,17 +539,17 @@ async function saveTrack () {
     timelineUrl = appendPlaybackAccessToken(timelineUrl, token)
 
     if (addToTimeline.value) {
-      appendAudioToProjectTimeline(projectId, {
+      const appendResult = await appendAudioToProjectTimeline(projectId, {
         url: timelineUrl,
         label: title,
-        duration: selectedModelId.value.includes('pro') ? 120 : 30
-      })
+        duration: selectedModelId.value.includes('pro') ? 120 : 30,
+        assetId: asset.id
+      }, { authHeaders: pocketBaseBearerHeaders(token) })
+      const t = timelineAppendToast(appendResult.outcome, 'audio')
+      toast.showToast(t.message, t.type)
+    } else {
+      toast.showToast('Track saved to project.', 'success')
     }
-
-    toast.showToast(
-      addToTimeline.value ? 'Track saved and added to timeline.' : 'Track saved to project.',
-      'success'
-    )
     uiPhase.value = 'form'
     playbackUrl.value = ''
   } catch (e: unknown) {

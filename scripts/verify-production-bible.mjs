@@ -576,6 +576,29 @@ assert('storyboard passes productionBible to frame prompt', storyboard.includes(
 assert('storyboard shows bible debug label', storyboard.includes('frameBibleDebug'))
 assert('composable exposes loadContextForPrompt', composable.includes('loadContextForPrompt'))
 
+// PASS 34 — project review dashboard (read-only)
+const reviewDash = read('lib/project-review-dashboard.ts')
+const reviewPage = read('pages/projects/[projectId]/review.vue')
+const workspaceLayout = read('components/project/ProjectWorkspaceLayout.vue')
+
+assert('review dashboard aggregator', reviewDash.includes('computeProjectReviewDashboard'))
+assert('review uses isBibleFactPendingReview', reviewDash.includes('isBibleFactPendingReview'))
+assert('review uses buildTentativeReviewItems', reviewDash.includes('buildTentativeReviewItems'))
+assert('review uses readGenerationObservability', reviewDash.includes('readGenerationObservability'))
+assert('review uses metadataHasFullPromptLeak', reviewDash.includes('metadataHasFullPromptLeak'))
+assert('review uses timelineMediaReliabilitySummary', reviewDash.includes('timelineMediaReliabilitySummary'))
+assert('review dashboard page exists', exists('pages/projects/[projectId]/review.vue'))
+assert('review page read-only note', reviewPage.includes('read-only'))
+assert('review page bible GET only', reviewPage.includes('/bible/facts') && !reviewPage.includes("method: 'POST'"))
+assert('review page no bible writes', !reviewPage.includes('approveFacts') && !reviewPage.includes('redactLegacy'))
+assert('review navigation open bible', reviewPage.includes('Open Production Bible'))
+assert('review navigation open timeline', reviewPage.includes('Open timeline'))
+assert('review navigation open assets', reviewPage.includes('Open Assets'))
+assert('review navigation redact legacy', reviewPage.includes('Redact legacy prompt metadata'))
+assert('review in tools nav', workspaceLayout.includes("path: 'review'"))
+assert('design doc PASS 34', doc.includes('PASS 34'))
+assert('checkpoint mentions PASS 34', read('docs/TodayCheckpoint.md').includes('PASS 34'))
+
 let failed = 0
 for (const c of checks) {
   const mark = c.ok ? '✓' : '✗'

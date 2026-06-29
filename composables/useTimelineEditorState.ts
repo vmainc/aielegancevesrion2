@@ -27,13 +27,21 @@ import type { TimelineHistorySnapshot } from '~/lib/timeline-editor/history'
 import {
   DEFAULT_ZOOM_PX_PER_SEC,
   type TimelineEditorClip,
+  type TimelineEditorDocument,
   type TimelineEditorTool,
   type TimelineTransitionType
 } from '~/types/timeline-editor'
 
+export type TimelineEditorPersistenceOptions = {
+  /** When true, parent must call `loadFromDocument` after cloud/local resolution. */
+  deferInitialLoad?: boolean
+  onAfterPersist?: (doc: TimelineEditorDocument) => void
+}
+
 export function useTimelineEditorState (
   projectId: Ref<string> | ComputedRef<string>,
-  resolvePlaybackSrc: (raw: string) => string
+  resolvePlaybackSrc: (raw: string) => string,
+  persistence?: TimelineEditorPersistenceOptions
 ) {
   const pid = computed(() => {
     const v = unref(projectId)
@@ -74,6 +82,23 @@ export function useTimelineEditorState (
   function persist () {
     if (!pid.value) return
     saveTimelineToStorage(pid.value, clips.value, zoom.value)
+    persistence?.onAfterPersist?.({
+      version: 2,
+      clips: clips.value,
+      zoom: zoom.value
+    })
+  }
+
+  function loadFromDocument (doc: TimelineEditorDocument | null | undefined) {
+    history.clearHistory()
+    if (!doc?.clips.length) {
+      clips.value = []
+      zoom.value = DEFAULT_ZOOM_PX_PER_SEC
+      return
+    }
+    clips.value = doc.clips
+    zoom.value = doc.zoom
+    void refreshDurations(false)
   }
 
   function applyLoadedDocument () {
@@ -115,7 +140,10 @@ export function useTimelineEditorState (
     persist()
   }
 
-  watch(() => pid.value, load, { immediate: true })
+  watch(() => pid.value, () => {
+    if (persistence?.deferInitialLoad) return
+    load()
+  }, { immediate: !persistence?.deferInitialLoad })
 
   function setClips (next: TimelineEditorClip[], recordHistory = true) {
     if (recordHistory) history.recordHistory()
@@ -334,6 +362,25 @@ export function useTimelineEditorState (
     return true
   }
 
+  function repairClipMedia (clipId: string, newSrc: string) {
+    const bare = newSrc.trim()
+    if (!clipId || !bare) return false
+    const target = clips.value.find((c) => c.id === clipId)
+    if (!target) return false
+    history.recordHistory()
+    const linked = new Set<string>([clipId])
+    if (target.linkedAudioId) linked.add(target.linkedAudioId)
+    if (target.linkedVideoId) linked.add(target.linkedVideoId)
+    clips.value = clips.value.map((c) => {
+      if (linked.has(c.id)) {
+        return { ...c, src: bare }
+      }
+      return c
+    })
+    persist()
+    return true
+  }
+
   return {
     clips,
     zoom,
@@ -348,6 +395,7 @@ export function useTimelineEditorState (
     canUndo: history.canUndo,
     canRedo: history.canRedo,
     load,
+    loadFromDocument,
     persist,
     setClips,
     selectClip,
@@ -367,6 +415,7 @@ export function useTimelineEditorState (
     trimRight,
     blendWithNextClip,
     reloadFromStorage,
+    repairClipMedia,
     refreshDurations,
     undo: history.undo,
     redo: history.redo,

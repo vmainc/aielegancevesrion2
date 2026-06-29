@@ -12,17 +12,33 @@
       :timecode-duration="formatTimecode(duration)"
       :active-label="activeVideoClip?.label"
       :blend-label="blendPreviewLabel"
-        @toggle-play="onTogglePlay"
+      @toggle-play="onTogglePlay"
       @stop="onStop"
     >
-      <template #extra>
+      <template v-if="isEmpty" #extra>
+        <span class="text-xs text-zinc-500 ml-auto">No clips yet</span>
+      </template>
+      <template v-else #extra>
         <label class="text-xs text-primary cursor-pointer hover:underline ml-auto">
           <input type="file" accept="audio/*" class="sr-only" @change="onAudioFile">
-          + Audio
+          Add audio file
         </label>
       </template>
     </EditorVideoPreview>
 
+    <div
+      v-if="isEmpty"
+      class="rounded-xl border border-dashed border-white/15 bg-zinc-900/50 px-6 py-10 text-center"
+    >
+      <p class="text-sm font-medium text-zinc-200">Timeline is empty</p>
+      <p class="mt-2 text-xs text-zinc-500 max-w-md mx-auto">
+        Add video clips from the
+        <NuxtLink :to="`/projects/${projectId}/video`" class="text-primary hover:underline">Video</NuxtLink>
+        page or the scene library below. Edits autosave to this browser and sync to the cloud when available.
+      </p>
+    </div>
+
+    <template v-if="!isEmpty">
     <EditorTimelineToolbar
       :active-tool="activeTool"
       :has-selection="!!selectedClipId"
@@ -46,6 +62,45 @@
       @set-zoom="setZoom"
       @export="onExportVideo"
     />
+
+    <div
+      v-if="media.issueClipCount > 0"
+      class="rounded-lg border border-amber-500/25 bg-amber-950/30 px-3 py-2.5 text-xs text-amber-100"
+      role="status"
+    >
+      <p class="font-medium text-amber-50">Clip media reliability</p>
+      <p class="mt-1 text-amber-200/85">
+        <span v-if="media.summary.cloud_asset">{{ media.summary.cloud_asset }} cloud asset</span>
+        <span v-if="media.summary.recoverable"> · {{ media.summary.recoverable }} recoverable</span>
+        <span v-if="media.summary.url_only"> · {{ media.summary.url_only }} URL only</span>
+        <span v-if="media.summary.local_blob"> · {{ media.summary.local_blob }} local blob</span>
+        <span v-if="media.summary.missing"> · {{ media.summary.missing }} missing</span>
+      </p>
+      <p class="mt-1 text-[10px] text-amber-200/70">
+        Badges on each clip show durability. Recoverable clips play via asset ID until you repair and save.
+      </p>
+    </div>
+
+    <div
+      v-if="selectedClip && selectedMediaReliability"
+      class="rounded-lg border px-3 py-2.5 text-xs"
+      :class="selectedMediaPanelClass"
+    >
+      <p class="font-medium">
+        Selected: {{ TIMELINE_MEDIA_RELIABILITY_LABELS[selectedMediaReliability] }}
+      </p>
+      <p v-if="selectedMediaWarning" class="mt-1 opacity-90">
+        {{ selectedMediaWarning }}
+      </p>
+      <button
+        v-if="canRepairSelected"
+        type="button"
+        class="mt-2 rounded-md bg-sky-600 px-2.5 py-1 text-[11px] font-semibold text-white hover:bg-sky-500"
+        @click="onRepairSelectedClip"
+      >
+        Repair clip media from asset
+      </button>
+    </div>
 
     <div class="rounded-xl border border-white/10 bg-zinc-950/90 overflow-hidden" data-timeline-surface>
       <div
@@ -99,6 +154,7 @@
               :selected-clip-id="selectedClipId"
               :active-tool="activeTool"
               :dragging-clip-id="draggingClipId"
+              :media-reliability-by-clip-id="media.reliabilityByClipId"
               @select-clip="onSelectClip"
               @remove-clip="onRemoveClip"
               @clip-drag-start="onClipDragStart"
@@ -114,6 +170,7 @@
               :selected-clip-id="selectedClipId"
               :active-tool="activeTool"
               :dragging-clip-id="draggingClipId"
+              :media-reliability-by-clip-id="media.reliabilityByClipId"
               @select-clip="onSelectClip"
               @remove-clip="onRemoveClip"
               @clip-drag-start="onClipDragStart"
@@ -132,23 +189,26 @@
         </div>
       </div>
     </div>
+    </template>
 
     <p class="text-[11px] text-zinc-500">
       <span class="text-primary">⌘Z</span> undo ·
-      <span class="text-primary">Delete</span> or
-      <span class="text-primary">Remove clip</span> to take a clip off the timeline (files stay in Assets → Video) ·
-      drag the teal playhead line (or time ruler) to scrub — preview updates frame-by-frame ·
-      <span class="text-primary">C</span> razor tool ·
-      <span class="text-primary">V</span> select tool ·
-      <span class="text-primary">Export video</span> downloads WebM ·
-      Space to play/pause ·
-      <span class="text-primary">Blend with next</span> for crossfade. Saved in this browser.
+      <span class="text-primary">Delete</span> removes clip from timeline only ·
+      <span class="text-primary">C</span> razor ·
+      <span class="text-primary">V</span> select ·
+      <span class="text-primary">Export WebM</span> downloads from this browser ·
+      Space play/pause ·
+      Cloud sync {{ persistenceCloudLabel }}.
     </p>
   </div>
 </template>
 
 <script setup lang="ts">
-import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
+import {
+  TIMELINE_MEDIA_RELIABILITY_LABELS,
+  TIMELINE_MEDIA_RELIABILITY_WARNINGS,
+  type TimelineClipMediaReliability
+} from '~/lib/timeline-clip-media-reliability'
 import { hasNextClipForBlend } from '~/lib/timeline-editor/blend'
 import {
   canSplitClipAtPlayhead,
@@ -164,22 +224,27 @@ import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { useTimelineClipPushedState } from '~/lib/append-project-timeline-video'
 import { formatTimecode, timeFromClientX, timeToPx, TRACK_LABEL_WIDTH } from '~/lib/timeline-editor/geometry'
 
+import type { TimelinePersistenceStatus } from '~/composables/useProjectTimeline'
+import type { TimelineEditorDocument } from '~/types/timeline-editor'
+
 const props = defineProps<{
   projectId: string
+  initialDocument?: TimelineEditorDocument | null
+  persistenceStatus?: TimelinePersistenceStatus
+}>()
+
+const emit = defineEmits<{
+  persist: [TimelineEditorDocument]
+  'document-stats': [{ count: number; duration: number }]
 }>()
 
 const toast = useToast()
 const { getAuthToken } = useAuth()
 const authTokenState = useState<string | null>('auth_token')
 
-function resolveSrc (raw: string): string {
-  void authTokenState.value
-  const u = (raw || '').trim()
-  if (!u) return ''
-  return appendPlaybackAccessToken(u, getAuthToken())
-}
-
 const projectIdRef = computed(() => props.projectId)
+
+let resolveSrcImpl: (raw: string) => string = (raw) => (raw || '').trim()
 
 const {
   clips,
@@ -210,12 +275,96 @@ const {
   addAudioClip,
   blendWithNextClip,
   reloadFromStorage,
+  loadFromDocument,
+  repairClipMedia,
   undo,
   redo,
   beginGesture,
   commitGesture,
   cancelGesture
-} = useTimelineEditorState(projectIdRef, resolveSrc)
+} = useTimelineEditorState(projectIdRef, (raw) => resolveSrcImpl(raw), {
+  deferInitialLoad: true,
+  onAfterPersist: (doc) => emit('persist', doc)
+})
+
+const media = useTimelineClipMediaReliability(projectIdRef, clips)
+resolveSrcImpl = (raw) => media.resolveSrcForPlayback(raw)
+
+function resolveSrc (raw: string): string {
+  return media.resolveSrcForPlayback(raw)
+}
+
+const isEmpty = computed(() => clips.value.length === 0)
+
+const persistenceCloudLabel = computed(() => {
+  if (props.persistenceStatus?.savePending) return 'pending'
+  if (props.persistenceStatus?.cloudLoaded) return 'on'
+  return 'when saved'
+})
+
+const selectedMediaReliability = computed((): TimelineClipMediaReliability | null => {
+  if (!selectedClip.value) return null
+  return media.mediaReliabilityForClip(selectedClip.value)
+})
+
+const selectedMediaWarning = computed(() => {
+  const r = selectedMediaReliability.value
+  if (!r) return ''
+  return TIMELINE_MEDIA_RELIABILITY_WARNINGS[r] || ''
+})
+
+const selectedMediaPanelClass = computed(() => {
+  switch (selectedMediaReliability.value) {
+    case 'cloud_asset':
+      return 'border-emerald-500/30 bg-emerald-950/25 text-emerald-100'
+    case 'recoverable':
+      return 'border-sky-500/30 bg-sky-950/25 text-sky-100'
+    case 'local_blob':
+      return 'border-orange-500/30 bg-orange-950/25 text-orange-100'
+    case 'missing':
+      return 'border-red-500/30 bg-red-950/25 text-red-100'
+    case 'url_only':
+      return 'border-amber-500/30 bg-amber-950/25 text-amber-100'
+    default:
+      return 'border-white/10 bg-zinc-900/50 text-zinc-300'
+  }
+})
+
+const canRepairSelected = computed(() => {
+  if (!selectedClip.value) return false
+  return media.canRepairClip(selectedClip.value)
+})
+
+function onRepairSelectedClip () {
+  if (!selectedClip.value) return
+  const repaired = media.repairedSrcForClip(selectedClip.value)
+  if (!repaired) {
+    toast.showToast('Could not resolve media from asset.', 'warning')
+    return
+  }
+  if (repairClipMedia(selectedClip.value.id, repaired)) {
+    playback.seekPreviewToPlayhead(true)
+    toast.showToast('Clip media repaired from project asset.', 'success')
+  }
+}
+
+watch(
+  () => [clips.value.length, duration.value] as const,
+  () => {
+    emit('document-stats', { count: clips.value.length, duration: duration.value })
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.initialDocument,
+  (doc) => {
+    if (doc === undefined) return
+    loadFromDocument(doc)
+    nextTick(bindPreviewVideo)
+  },
+  { immediate: true }
+)
 
 const timelineClipPushed = useTimelineClipPushedState()
 

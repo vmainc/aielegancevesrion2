@@ -86,6 +86,8 @@
 
 <script setup lang="ts">
 import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
+import { timelineAppendToast } from '~/lib/timeline-append-feedback'
+import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { buildVideoSceneGroups } from '~/lib/project-scene-groups'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
@@ -130,17 +132,19 @@ const sceneGroups = computed(() => {
   )
 })
 
-function addToTimeline (a: ProjectAsset) {
+async function addToTimeline (a: ProjectAsset) {
   const src = videoSrc(a)
   if (!src) return
   const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
-  appendVideoToProjectTimeline(props.projectId, {
+  const result = await appendVideoToProjectTimeline(props.projectId, {
     url: src,
     label: (a.title || 'Video clip').slice(0, 500),
     sceneId: typeof meta.scene_id === 'string' ? meta.scene_id : undefined,
-    shotId: typeof meta.shot_id === 'string' ? meta.shot_id : undefined
-  })
-  toast.showToast('Added to timeline at end.', 'success')
+    shotId: typeof meta.shot_id === 'string' ? meta.shot_id : undefined,
+    assetId: a.id
+  }, { authHeaders: pocketBaseBearerHeaders(getAuthToken()) })
+  const t = timelineAppendToast(result.outcome, 'video')
+  toast.showToast(t.message, t.type)
 }
 
 async function fetchData () {

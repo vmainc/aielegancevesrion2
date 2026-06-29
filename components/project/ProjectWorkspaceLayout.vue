@@ -169,10 +169,12 @@ const sectionLabels: Record<string, string> = {
   video: 'Video',
   timeline: 'Timeline',
   guide: 'Project Guide',
-  bible: 'Production Bible'
+  bible: 'Production Bible',
+  review: 'Review Dashboard'
 }
 
 const toolSections: Array<{ path: string; label: string }> = [
+  { path: 'review', label: 'Review Dashboard' },
   { path: 'guide', label: 'Project Guide' },
   { path: 'bible', label: 'Production Bible' }
 ]

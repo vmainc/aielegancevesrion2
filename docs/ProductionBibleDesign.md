@@ -2373,6 +2373,63 @@ Manual: Seed project → open Production Bible → Tentative items → filter En
 
 ### Recommended next 3 passes
 
-1. **PASS 26 — Generation observability backfill** — optional stamp for recent assets where bible context can be inferred.
-2. **PASS 27 — Asset metadata audit export** — read-only export of observability + redaction status.
-3. **PASS 28 — Bible review dashboard** — unified counts for pending facts, tentative items, and legacy prompt leaks.
+1. **PASS 35 — Observability backfill (manual)** — optional stamp for recent assets where bible context can be inferred.
+2. **PASS 36 — Asset metadata audit export** — read-only export of observability + redaction status.
+3. **PASS 37 — Link clip to asset tool** — attach `assetId` to URL-only timeline clips.
+
+---
+
+## PASS 34 Implementation Note (2026-06-29)
+
+**Status:** Read-only project review dashboard under Tools → Review Dashboard. No prompt, generation, Bible write, or timeline save changes.
+
+### Route
+
+`/projects/:projectId/review` — sidebar Tools group (first tool entry).
+
+### Counts (client-side over GET lists)
+
+| Area | Metrics |
+|------|---------|
+| **Production Bible** | Facts pending review, tentative entities/relationships, retired/contradicted |
+| **Timeline** | Cloud exists, local-only, queued cloud save, missing/local blob/recoverable clips |
+| **Assets** | With/without observability, legacy prompt leaks, Bible entity links |
+| **Generation** | Recent generated (30d), Bible context used / not used |
+
+### Helper reuse
+
+- `isBibleFactPendingReview`, `isExcludedBibleStatus` — `lib/bible-trust.ts`
+- `buildTentativeReviewItems` — `lib/bible-tentative-item-filters.ts`
+- `readGenerationObservability` — `lib/generation-observability.ts`
+- `metadataHasFullPromptLeak` — `lib/legacy-asset-prompt-metadata.ts`
+- `timelineMediaReliabilitySummary` — `lib/timeline-clip-media-reliability.ts`
+- `countTimelineCloudSaveQueue` — `lib/timeline-editor/cloud-save-queue.ts`
+- Aggregator: `lib/project-review-dashboard.ts`
+
+### Navigation links (read-only)
+
+Open Production Bible, Review facts, Review tentative items, Open timeline, Open Assets, Redact legacy prompt metadata — all link to existing surfaces; no new review actions on the dashboard.
+
+### Files
+
+- `lib/project-review-dashboard.ts`
+- `pages/projects/[projectId]/review.vue`
+- `components/project/ProjectWorkspaceLayout.vue` — Tools nav entry
+
+### Verification
+
+```bash
+node scripts/verify-production-bible.mjs
+```
+
+### Known limitations (PASS 34)
+
+- No server-side aggregates — full list fetches per category
+- No charts or drill-down tables
+- Review links go to Bible/Assets pages; no deep-link anchors yet
+- Timeline counts use cloud doc or localStorage fallback when cloud missing
+- No new review actions on dashboard (PASS 35+)
+
+### Recommended next pass (PASS 35)
+
+Manual observability backfill for inferable generated assets.

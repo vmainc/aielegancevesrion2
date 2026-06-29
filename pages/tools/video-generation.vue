@@ -569,6 +569,8 @@ definePageMeta({
 })
 
 import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
+import { timelineAppendToast } from '~/lib/timeline-append-feedback'
+import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import { productionBibleGenerationDebugLabel } from '~/lib/production-bible-generation-context'
@@ -1216,12 +1218,15 @@ async function keepClipAndContinue () {
     await deleteRunAssets(discardIds)
 
     if (addToTimeline.value && selectedProjectId.value) {
-      appendVideoToProjectTimeline(selectedProjectId.value, {
+      const appendResult = await appendVideoToProjectTimeline(selectedProjectId.value, {
         url: playbackSrc(kept.playbackUrl),
         label: clipTitle(),
+        assetId: kept.assetId,
         ...(panelPrefill.value?.sceneId ? { sceneId: panelPrefill.value.sceneId } : {}),
         ...(panelPrefill.value?.shotId ? { shotId: panelPrefill.value.shotId } : {})
-      })
+      }, { authHeaders: pocketBaseBearerHeaders(getAuthToken()) })
+      const t = timelineAppendToast(appendResult.outcome, 'video')
+      toast.showToast(t.message, t.type)
     }
 
     const pid = selectedProjectId.value.trim()

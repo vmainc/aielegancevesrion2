@@ -120,7 +120,7 @@
       :title="exporting ? exportLabel : 'Download finished edit as WebM (records in real time)'"
       @click="$emit('export')"
     >
-      {{ exporting ? exportLabel : 'Export video' }}
+      {{ exporting ? exportLabel : 'Export WebM' }}
     </button>
 
     <div class="ml-auto flex items-center gap-2">

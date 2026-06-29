@@ -13,7 +13,8 @@ export function parseEditorDocument (raw: string | null): TimelineEditorDocument
       const row = r as Record<string, unknown>
       const id = typeof row.id === 'string' ? row.id : ''
       const src = typeof row.src === 'string' ? row.src : ''
-      if (!id || !src.trim()) continue
+      const assetId = typeof row.assetId === 'string' ? row.assetId.trim() : ''
+      if (!id || (!src.trim() && !assetId)) continue
       const type = row.type === 'audio' ? 'audio' : 'video'
       const track = row.track === 'audio' ? 'audio' : 'video'
       const sourceStart = Number(row.sourceStart) || 0
@@ -49,7 +50,8 @@ export function parseEditorDocument (raw: string | null): TimelineEditorDocument
             ? row.transitionDurationSec
             : undefined,
         sceneId: typeof row.sceneId === 'string' ? row.sceneId : undefined,
-        shotId: typeof row.shotId === 'string' ? row.shotId : undefined
+        shotId: typeof row.shotId === 'string' ? row.shotId : undefined,
+        assetId: assetId || undefined
       })
     }
     return {

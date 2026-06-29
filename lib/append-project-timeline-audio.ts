@@ -1,82 +1,101 @@
-import { clipsOnTrack, normalizeTrackLayout } from '~/lib/timeline-editor/clip-ops'
+import {
+  appendClipsToDocument,
+  type TimelineClipAppendInput
+} from '~/lib/timeline-editor/append-to-document'
 import {
   loadTimelineFromStorage,
   saveTimelineToStorage
 } from '~/lib/timeline-editor/storage'
+import { projectTimelineDocumentToEditorDocument } from '~/lib/project-timeline-normalize'
+import {
+  appendClipsToCloudTimeline,
+  type TimelineAppendOutcome,
+  type TimelineAppendResult
+} from '~/lib/timeline-append-feedback'
 import { DEFAULT_ZOOM_PX_PER_SEC } from '~/types/timeline-editor'
-import type { TimelineEditorClip } from '~/types/timeline-editor'
 import { useTimelineClipPushedState } from '~/lib/append-project-timeline-video'
+import type { ProjectTimelineDocument } from '~/types/project-timeline'
 
 export type ProjectTimelineAudioAppend = {
   url: string
   label: string
+  assetId?: string
   id?: string
-  /** Timeline clip length in seconds (default 30 for score beds). */
   duration?: number
 }
 
-function newClipId (): string {
-  return `clip_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 9)}`
-}
-
-function createAudioClip (opts: {
-  id: string
-  src: string
-  label: string
-  timelineStart: number
-  duration: number
-}): TimelineEditorClip {
+function toAudioClipInput (clip: ProjectTimelineAudioAppend): TimelineClipAppendInput {
   return {
-    id: opts.id,
     type: 'audio',
-    track: 'audio',
-    src: opts.src,
-    label: opts.label,
-    sourceStart: 0,
-    sourceEnd: opts.duration,
-    timelineStart: opts.timelineStart,
-    duration: opts.duration,
-    transitionIn: null,
-    transitionOut: null
+    label: clip.label,
+    src: clip.url,
+    assetId: clip.assetId,
+    id: clip.id,
+    duration: clip.duration
   }
 }
 
-/**
- * Append generated (or library) audio to the project timeline audio track.
- */
-export function appendAudioToProjectTimeline (
-  projectId: string,
-  clip: ProjectTimelineAudioAppend
-): string {
-  if (!import.meta.client) return ''
+function appendAudioToLocalStorage (projectId: string, clip: ProjectTimelineAudioAppend): string {
   const pid = projectId.trim()
-  const url = clip.url.trim()
-  if (!pid || !url) return ''
-
-  const clipId = clip.id?.trim() || newClipId()
-  const duration = typeof clip.duration === 'number' && clip.duration > 0 ? clip.duration : 30
   const doc = loadTimelineFromStorage(pid)
   let clips = doc?.clips ?? []
   const zoom = doc?.zoom ?? DEFAULT_ZOOM_PX_PER_SEC
+  const { clips: next, appendedClipIds } = appendClipsToDocument(clips, [toAudioClipInput(clip)])
+  if (!appendedClipIds.length) {
+    return clip.id?.trim() || ''
+  }
+  saveTimelineToStorage(pid, next, zoom)
+  return appendedClipIds[0]
+}
 
-  if (!clips.some(c => c.id === clipId)) {
-    const end = clipsOnTrack(clips, 'audio').reduce(
-      (m, c) => Math.max(m, c.timelineStart + c.duration),
-      0
-    )
-    const created = createAudioClip({
-      id: clipId,
-      src: url,
-      label: clip.label,
-      timelineStart: end,
-      duration
-    })
-    clips = normalizeTrackLayout([...clips, created], 'audio')
-    saveTimelineToStorage(pid, clips, zoom)
+function syncLocalFromCloudDocument (projectId: string, cloudDocument: ProjectTimelineDocument): void {
+  const editorDoc = projectTimelineDocumentToEditorDocument(cloudDocument)
+  saveTimelineToStorage(projectId, editorDoc.clips, editorDoc.zoom)
+}
+
+/**
+ * Append generated (or library) audio to the project timeline — cloud first, local backup.
+ */
+export async function appendAudioToProjectTimeline (
+  projectId: string,
+  clip: ProjectTimelineAudioAppend,
+  opts?: { authHeaders?: Record<string, string> }
+): Promise<TimelineAppendResult> {
+  if (!import.meta.client) {
+    return { clipId: '', outcome: 'unavailable' }
+  }
+  const pid = projectId.trim()
+  const url = clip.url.trim()
+  if (!pid || !url) {
+    return { clipId: '', outcome: 'unavailable' }
   }
 
-  const pushed = useTimelineClipPushedState()
-  pushed.value = { projectId: pid, clipId }
+  const input = toAudioClipInput(clip)
+  let outcome: TimelineAppendOutcome = 'unavailable'
+  let cloudError: string | undefined
+  let clipId = clip.id?.trim() || ''
 
-  return clipId
+  const hasAuth = Boolean(opts?.authHeaders && Object.keys(opts.authHeaders).length)
+
+  if (hasAuth) {
+    const cloud = await appendClipsToCloudTimeline(pid, [input], opts!.authHeaders!)
+    if (cloud.ok) {
+      outcome = 'cloud'
+      clipId = cloud.data.appendedClipIds[0] || clipId
+      syncLocalFromCloudDocument(pid, cloud.data.timeline.document)
+    } else {
+      cloudError = cloud.error
+      outcome = cloud.statusCode === 503 ? 'unavailable' : 'local_only'
+      clipId = appendAudioToLocalStorage(pid, clip) || clipId
+    }
+  } else {
+    clipId = appendAudioToLocalStorage(pid, clip) || clipId
+  }
+
+  if (clipId) {
+    const pushed = useTimelineClipPushedState()
+    pushed.value = { projectId: pid, clipId }
+  }
+
+  return { clipId, outcome, cloudError }
 }

@@ -321,6 +321,8 @@ import {
   projectAssetPlaybackSrc
 } from '~/lib/project-asset-playback-url'
 import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
+import { timelineAppendToast } from '~/lib/timeline-append-feedback'
+import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import {
   navigateToVideoGenerationFromPanel,
   type VideoGenerationPrefill
@@ -562,17 +564,18 @@ function openExpandedFrame (shot: CreativeShot, url: string) {
   }
 }
 
-function addClipToTimeline (scene: CreativeSceneListItem, shot: CreativeShot, url: string) {
+async function addClipToTimeline (scene: CreativeSceneListItem, shot: CreativeShot, url: string) {
   const u = url.trim()
   const pid = projectId.value
   if (!u || !PB_ID.test(pid)) return
-  appendVideoToProjectTimeline(pid, {
+  const result = await appendVideoToProjectTimeline(pid, {
     url: playbackVideoSrc(u),
     label: `${shot.title || 'Clip'} — ${scene.heading || 'Scene'}`.slice(0, 500),
     sceneId: scene.id,
     shotId: shot.id
-  })
-  toast.showToast('Clip added to timeline.', 'success')
+  }, { authHeaders: pocketBaseBearerHeaders(getAuthToken()) })
+  const t = timelineAppendToast(result.outcome, 'video')
+  toast.showToast(t.message, t.type)
 }
 
 function projectAspectForVideo (): '16:9' | '9:16' | '1:1' {

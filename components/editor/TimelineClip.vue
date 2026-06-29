@@ -55,6 +55,14 @@
     </button>
 
     <div class="px-2 py-1 h-full flex flex-col justify-center min-w-0 pointer-events-none relative z-[1]">
+      <div v-if="mediaLabel" class="mb-0.5">
+        <span
+          class="inline-block max-w-full truncate rounded px-1 py-px text-[8px] font-semibold uppercase tracking-wide"
+          :class="mediaBadgeClass"
+        >
+          {{ mediaLabel }}
+        </span>
+      </div>
       <p class="text-[10px] font-semibold text-white truncate">
         {{ clip.label }}
       </p>
@@ -81,6 +89,10 @@
 </template>
 
 <script setup lang="ts">
+import {
+  TIMELINE_MEDIA_RELIABILITY_LABELS,
+  type TimelineClipMediaReliability
+} from '~/lib/timeline-clip-media-reliability'
 import type { TimelineEditorClip, TimelineEditorTool } from '~/types/timeline-editor'
 
 const props = defineProps<{
@@ -92,6 +104,7 @@ const props = defineProps<{
   selected: boolean
   activeTool: TimelineEditorTool
   dragging: boolean
+  mediaReliability?: TimelineClipMediaReliability | null
 }>()
 
 const overlapOutPx = computed(() => props.overlapOutPx ?? 0)
@@ -111,6 +124,28 @@ const transitionLabel = computed(() => {
   if (props.clip.transitionIn) parts.push(`↗ ${props.clip.transitionIn}`)
   if (props.clip.transitionOut) parts.push(`↘ ${props.clip.transitionOut}`)
   return parts.join(' ')
+})
+
+const mediaLabel = computed(() => {
+  if (!props.mediaReliability) return ''
+  return TIMELINE_MEDIA_RELIABILITY_LABELS[props.mediaReliability]
+})
+
+const mediaBadgeClass = computed(() => {
+  switch (props.mediaReliability) {
+    case 'cloud_asset':
+      return 'bg-emerald-500/25 text-emerald-100 border border-emerald-400/40'
+    case 'url_only':
+      return 'bg-amber-500/20 text-amber-100 border border-amber-400/35'
+    case 'local_blob':
+      return 'bg-orange-500/25 text-orange-100 border border-orange-400/40'
+    case 'missing':
+      return 'bg-red-500/25 text-red-100 border border-red-400/40'
+    case 'recoverable':
+      return 'bg-sky-500/25 text-sky-100 border border-sky-400/40'
+    default:
+      return 'bg-zinc-700/50 text-zinc-300'
+  }
 })
 
 function onClipPointerDown (ev: PointerEvent) {

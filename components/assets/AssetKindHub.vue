@@ -875,6 +875,8 @@
 
 <script setup lang="ts">
 import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
+import { timelineAppendToast } from '~/lib/timeline-append-feedback'
+import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { buildVideoSceneGroups } from '~/lib/project-scene-groups'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { visualBriefForCharacterCreator } from '~/lib/character-visual-description'
@@ -1325,20 +1327,22 @@ function projectHubStepTo (projectId: string): string {
   return `/projects/${projectId}/home`
 }
 
-function addVideoAssetToTimeline (a: ProjectAsset) {
+async function addVideoAssetToTimeline (a: ProjectAsset) {
   if (!a.projectId || !PB_ID.test(a.projectId) || !a.id) return
   const src = videoAssetPlaybackSrc(a)
   if (!src) return
   const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
   const sceneId = typeof meta.scene_id === 'string' ? meta.scene_id : undefined
   const shotId = typeof meta.shot_id === 'string' ? meta.shot_id : undefined
-  appendVideoToProjectTimeline(a.projectId, {
+  const result = await appendVideoToProjectTimeline(a.projectId, {
     url: src,
     label: (a.title || 'Video clip').slice(0, 500),
     sceneId,
-    shotId
-  })
-  toast.showToast('Added to project timeline.', 'success')
+    shotId,
+    assetId: a.id
+  }, { authHeaders: pocketBaseBearerHeaders(getAuthToken()) })
+  const t = timelineAppendToast(result.outcome, 'video')
+  toast.showToast(t.message, t.type)
 }
 
 async function fetchItems () {

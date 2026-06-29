@@ -30,6 +30,8 @@ export interface TimelineEditorClip {
   transitionDurationSec?: number
   sceneId?: string
   shotId?: string
+  /** Durable `project_assets` row when known (PASS 29+). */
+  assetId?: string
 }
 
 export interface TimelineEditorDocument {

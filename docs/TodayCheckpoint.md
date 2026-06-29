@@ -1,6 +1,7 @@
 # Today Checkpoint — 2026-06-29
 
 **PASS 27 — Architecture Checkpoint Snapshot**  
+**Updated:** PASS 28 — Timeline cloud persistence slice 1  
 **Purpose:** Single source of truth for what exists in the repo after today's Production Bible evolution (PASS 17–25), observability/redaction hardening (PASS 22–24), tentative bulk review (PASS 25), and timeline persistence design (PASS 26). Use this doc before starting new work to avoid drift.
 
 **Docs reviewed for this checkpoint:**
@@ -81,15 +82,62 @@
 - Production Bible **Tentative items** section: filters, bulk approve/retire
 - Composable: `approveEntities`, `retireEntities`, `approveRelationships`, `retireRelationships`
 
+### PASS 28 — Timeline cloud persistence (slice 1)
+
+- `project_timelines` PocketBase collection
+- `GET/PUT /api/projects/:id/timeline` (owner-secured, revision conflict `409`)
+- Cloud-first load, localStorage fallback + backup on every edit
+- Import/save-to-cloud prompt for local-only timelines
+- Status UI: cloud loaded, local backup, last saved, save errors
+- Empty state + minor toolbar copy cleanup
+
+### PASS 29 — Timeline cloud append handoff
+
+- `POST /api/projects/:id/timeline/clips` — append clips, create timeline if missing
+- Async `appendVideoToProjectTimeline` / `appendAudioToProjectTimeline` — cloud first, localStorage backup
+- `assetId` preserved on clips when callers provide it
+- Toast feedback: cloud / local only / unavailable
+
+### PASS 30 — Timeline missing-media UX
+
+- Clip badges: Cloud asset, URL only, Local blob, Missing media, Recoverable
+- Runtime playback resolve from `assetId` (no auto-save)
+- **Repair clip media from asset** — explicit persist when asset URL available
+- Project assets loaded for classification + repair
+
+### PASS 31 — Timeline persistence stability checkpoint
+
+- Audited PASS 28–30; fixed PUT revision overwrite, stale revision after append, broad repair scope
+- `cancelPendingCloudSave` + refetch on external clip push
+- PUT requires `baseRevision` when cloud row exists; 409 triggers revision resync
+
+### PASS 32 — Timeline conflict merge UX
+
+- Visible **Conflict** state on cloud save 409
+- Actions: Reload cloud / Keep local / Save my version over cloud (confirmed)
+- Sync labels: Synced, Local changes pending, Conflict, Local only
+- `snapshotTimelineLocalBackup` before cloud reload
+
+### PASS 33 — Offline cloud save queue
+
+- Queue editor PUT on offline / network / 5xx failures
+- No queue on 401/403/409/validation
+- Auto-flush on reconnect + manual retry/clear
+- Sync label **Queued for cloud sync**
+
+### PASS 34 — Project review dashboard
+
+- Read-only Tools page: `/projects/:id/review`
+- Counts: Bible pending/tentative, timeline sync/media, asset observability/legacy, generation provenance
+- Links to Bible, timeline, Assets — no new review actions on dashboard
+
 ---
 
 ## What Was Built (Design Only)
 
 ### PASS 26 — Timeline persistence design
 
-- [`docs/TimelinePersistenceDesign.md`](./TimelinePersistenceDesign.md)
-- Recommends `project_timelines` single-collection schema, GET/PUT timeline API, localStorage migration UX
-- **Explicit Do Not Build Yet** — no PocketBase collection, no routes, no editor changes
+- [`docs/TimelinePersistenceDesign.md`](./TimelinePersistenceDesign.md) — original design (PASS 28 implemented the first slice)
 
 ### PASS 27 — This checkpoint
 
@@ -101,7 +149,10 @@
 
 | Item | Reason |
 |------|--------|
-| Timeline cloud persistence | PASS 26 design only |
+| Timeline append API / cloud handoff | **PASS 29 implemented** |
+| Timeline conflict merge UX | **PASS 32 implemented** |
+| Offline cloud save queue | **PASS 33 implemented** — editor PUT only; append POST not queued |
+| Bible review dashboard | **PASS 34 implemented** — read-only counts; no dashboard actions |
 | Server-side timeline render / export upload | Out of scope; export stays browser WebM |
 | Automatic Bible fact writes from timeline/clips | Future explicit review workflow only |
 | Observability backfill for old assets | No inference/write without user confirm |
@@ -232,13 +283,16 @@ Scripts: `verify-production-bible.mjs`, `verify-bible-trust-matrix.mjs`
 
 | Aspect | Current state |
 |--------|----------------|
-| Storage | Browser `localStorage` only |
-| Key | `aie_timeline_editor_v2_<projectId>` |
-| Document | `{ version: 2, clips[], zoom }` |
-| Clip refs | URL `src` only; optional `sceneId`/`shotId` (unused after write) |
-| Append handoff | Video/music tools write localStorage + `useTimelineClipPushedState` |
+| Cloud storage | `project_timelines` — one JSON document per project |
+| API | `GET/PUT /api/projects/:id/timeline`, `POST …/timeline/clips` |
+| Local backup | `aie_timeline_editor_v2_<projectId>` — still written on every edit |
+| Load order | Cloud first → localStorage fallback |
+| Import UX | Banner to save local timeline to cloud (explicit action) |
+| Append handoff | Cloud POST first → sync local backup; local fallback on failure |
 | Export | Client WebM download; not saved to project |
-| Cloud | **None** — see PASS 26 design |
+| Bible | No timeline → Bible writes |
+
+See [`docs/TimelinePersistenceDesign.md`](./TimelinePersistenceDesign.md) PASS 28 UX audit + implementation note.
 
 ---
 
@@ -270,18 +324,48 @@ node scripts/verify-continuity-engine.mjs
 node scripts/verify-generation-auth.mjs
 node scripts/verify-p0-remediation.mjs
 node scripts/verify-scene-type.mjs
+node scripts/verify-timeline-persistence.mjs
 ```
 
 | Script | Result |
 |--------|--------|
-| `verify-production-bible.mjs` | **361 checks, 0 failed** |
+| `verify-production-bible.mjs` | **378 checks, 0 failed** |
 | `verify-bible-trust-matrix.mjs` | **17 checks, 0 failed** |
 | `verify-prompt-assembly.mjs` | **11 checks, 0 failed** |
 | `verify-continuity-engine.mjs` | **15 checks, 0 failed** |
 | `verify-generation-auth.mjs` | **15 checks, 0 failed** |
 | `verify-p0-remediation.mjs` | **17 checks, 0 failed** |
 | `verify-scene-type.mjs` | **37 checks, 0 failed** |
-| **Total** | **473 checks, 0 failed** |
+| `verify-timeline-persistence.mjs` | **114 checks, 0 failed** (PASS 28–33) |
+| **Total** | **604 checks, 0 failed** |
+
+### PASS 32 manual verification (conflict UX)
+
+1. Open timeline on two tabs (or trigger stale revision via append in another tab).
+2. Edit in tab A; save or wait for debounced PUT with stale `baseRevision` → **409**.
+3. Confirm status shows **Conflict** and banner: “Cloud timeline changed while you were editing.”
+4. **Reload cloud timeline** — editor shows cloud doc; `aie_timeline_editor_v2_conflict_backup_<projectId>` holds pre-reload local.
+5. **Keep my local version** — conflict clears; status **Local changes pending**; “Local changes not synced…” message; no auto cloud save on edit.
+6. **Save my version over cloud** — confirm dialog; cloud updated with latest revision; status **Synced**.
+
+### PASS 33 manual verification (offline queue)
+
+1. Open timeline; edit while DevTools → Network → Offline (or stop PocketBase).
+2. Confirm status **Queued for cloud sync**, pending count, last error.
+3. Re-enable network → auto-flush or click **Retry cloud sync** → **Synced**, queue cleared.
+4. Trigger 409 during flush (stale revision) → conflict UX, queue retained.
+5. **Clear queued save** → confirm; localStorage editor backup unchanged.
+6. Auth error (401) → not queued; error shown inline.
+
+### PASS 34 manual verification (review dashboard)
+
+1. Open **Tools → Review Dashboard** for a cloud project.
+2. Confirm Bible counts match Production Bible panel (pending facts, tentative items).
+3. Confirm timeline rows reflect cloud/local/queue/media reliability state.
+4. Confirm asset observability and legacy prompt counts match sample assets.
+5. Click navigation links — Bible, timeline, Assets open correctly; dashboard performs no writes.
+
+---
 
 ---
 
@@ -296,24 +380,24 @@ node scripts/verify-scene-type.mjs
 | Observability | `lib/generation-observability.ts` |
 | Prompt redaction | `lib/legacy-asset-prompt-metadata.ts`, `server/utils/redact-legacy-asset-prompts.ts` |
 | Bible UI | `components/project/ProductionBiblePanel.vue`, `composables/useProductionBible.ts` |
-| Timeline (local) | `lib/timeline-editor/*`, `composables/useTimelineEditorState.ts` |
+| Timeline (cloud + local) | `types/project-timeline.ts`, `composables/useProjectTimeline.ts`, `lib/timeline-sync-status.ts`, `lib/timeline-editor/cloud-save-queue.ts`, `server/api/projects/[id]/timeline.*` |
+| Review dashboard | `lib/project-review-dashboard.ts`, `pages/projects/[projectId]/review.vue` |
+| Timeline editor | `lib/timeline-editor/*`, `composables/useTimelineEditorState.ts` |
 | Verification | `scripts/verify-production-bible.mjs` (+ siblings above) |
 
 ---
 
 ## Recommended Next 5 Passes
 
-Ordered for minimal risk and maximum leverage:
+1. **PASS 35 — Observability backfill (manual)** — Stamp inferable `generation_observability`.
 
-1. **PASS 28 — Timeline persistence slice 1** — Implement PASS 26 design: `project_timelines` collection, GET/PUT API, adapter, local import UX (keep localStorage backup).
+2. **PASS 36 — Link clip to asset tool** — Attach `assetId` to URL-only clips.
 
-2. **PASS 29 — Timeline handoff + assetId** — `POST …/timeline/clips` append route; video/music handoff through API; store `assetId` on clips when known.
+3. **PASS 37 — Prompt-stack consolidation (audit P1)** — Unify duplicate prompt builders.
 
-3. **PASS 30 — Bible review dashboard** — Unified project home counts: pending facts, tentative items, legacy prompt leaks, assets missing observability.
+4. **PASS 38 — Timeline append offline queue** — Optional POST clip queue if needed.
 
-4. **PASS 31 — Observability backfill (manual)** — Preview/import tool to stamp `generation_observability` on recent assets where bible context can be inferred; explicit user confirm only.
-
-5. **PASS 32 — Prompt-stack consolidation (audit P1)** — Unify `resolveVideoGenerationPrompt`, collapse duplicate director/negative builders per [ArchitectureAudit](./ArchitectureAudit.md) Part III.
+5. **PASS 39 — Review dashboard actions** — Inline approve/redact from dashboard (optional).
 
 ---
 
@@ -325,9 +409,11 @@ When adding features, check against this checkpoint:
 2. **Do not** auto-write Bible facts from generation, timeline, or asset saves.
 3. **Do not** store full prompts in `generation_observability` or new metadata keys.
 4. **Do not** change trust rules without updating `verify-bible-trust-matrix.mjs`.
-5. **Do not** implement timeline cloud save without migration UX from PASS 26.
-6. **Do** add verification checks to `verify-production-bible.mjs` for new Bible surfaces.
-7. **Do** update this checkpoint doc after major pass completions.
+5. **Do not** implement timeline cloud save without migration UX from PASS 26/28.
+6. **Do** run `npm run setup-db` after deploy when `project_timelines` is new.
+7. **Do** add verification checks to `verify-timeline-persistence.mjs` for timeline surfaces.
+8. **Do** add verification checks to `verify-production-bible.mjs` for new Bible surfaces.
+9. **Do** update this checkpoint doc after major pass completions.
 
 ---
 
