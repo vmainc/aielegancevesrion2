@@ -1,3 +1,4 @@
+import type { ContinuityCheckStatus } from '~/lib/continuity-check-result'
 import type { ProjectDirector } from '~/types/creative-project'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
@@ -14,6 +15,9 @@ export interface ContinuityCheckInput {
 }
 
 export interface ContinuityCheckResult {
+  status: ContinuityCheckStatus
+  /** Short detail for logs / failed status (HTTP code, etc.). */
+  detail?: string
   issues: string[]
   shots: GeneratedShot[]
   memoryAppend: string
@@ -41,15 +45,31 @@ function asStrArr (v: unknown): string[] {
   return v.map(x => (typeof x === 'string' ? x.trim() : '')).filter(Boolean)
 }
 
+function failResult (
+  status: Extract<ContinuityCheckStatus, 'skipped' | 'failed' | 'unavailable'>,
+  shots: GeneratedShot[],
+  detail?: string
+): ContinuityCheckResult {
+  return { status, detail, issues: [], shots, memoryAppend: '' }
+}
+
 /**
  * Claude (via OpenRouter): validate shot list vs continuity + director; return issues and optional fixes.
+ * On skip/failure/unavailable, returns original shots unchanged.
  */
 export async function checkShotsContinuity (input: ContinuityCheckInput): Promise<ContinuityCheckResult> {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) {
-    return { issues: [], shots: input.shots, memoryAppend: '' }
+    console.warn('[continuity-check-ai] skipped — OpenRouter API key not configured')
+    return failResult('skipped', input.shots)
   }
+
+  console.log('[continuity-check-ai] running', {
+    sceneTitle: input.sceneTitle,
+    shotCount: input.shots.length,
+    model: input.openrouterModelId || 'anthropic/claude-3.5-sonnet'
+  })
 
   const d = input.director
   const directorSummary = d
@@ -103,21 +123,29 @@ ${JSON.stringify(input.shots).slice(0, 45000)}`
     max_tokens: 8192
   })
 
-  const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${apiKey.trim()}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://aielegance.com',
-      'X-Title': 'AI Elegance Continuity'
-    },
-    body: JSON.stringify(body)
-  })
+  let res: Response
+  try {
+    res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey.trim()}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://aielegance.com',
+        'X-Title': 'AI Elegance Continuity'
+      },
+      body: JSON.stringify(body)
+    })
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'network error'
+    console.warn('[continuity-check-ai] fetch failed:', msg)
+    return failResult('failed', input.shots, msg)
+  }
 
   const raw = await res.text()
   if (!res.ok) {
-    console.warn('[continuity-check-ai] OpenRouter error:', res.status, raw.slice(0, 400))
-    return { issues: [], shots: input.shots, memoryAppend: '' }
+    const detail = `HTTP ${res.status}`
+    console.warn('[continuity-check-ai] OpenRouter error:', detail, raw.slice(0, 400))
+    return failResult('failed', input.shots, detail)
   }
 
   let content = ''
@@ -125,12 +153,19 @@ ${JSON.stringify(input.shots).slice(0, 45000)}`
     const j = JSON.parse(raw) as { choices?: Array<{ message?: { content?: string } }> }
     content = j.choices?.[0]?.message?.content || ''
   } catch {
-    return { issues: [], shots: input.shots, memoryAppend: '' }
+    console.warn('[continuity-check-ai] invalid OpenRouter JSON envelope')
+    return failResult('unavailable', input.shots)
+  }
+
+  if (!content.trim()) {
+    console.warn('[continuity-check-ai] empty model content')
+    return failResult('unavailable', input.shots)
   }
 
   const parsed = extractJson(content)
   if (!parsed) {
-    return { issues: [], shots: input.shots, memoryAppend: '' }
+    console.warn('[continuity-check-ai] could not parse continuity JSON from model')
+    return failResult('unavailable', input.shots)
   }
 
   const issues = asStrArr(parsed.issues)
@@ -141,18 +176,35 @@ ${JSON.stringify(input.shots).slice(0, 45000)}`
 
   const rawShots = parsed.shots
   if (!Array.isArray(rawShots) || rawShots.length < 3) {
-    return { issues, shots: input.shots, memoryAppend }
+    console.log('[continuity-check-ai] complete (ran, shots unchanged — model shot list unusable)', {
+      sceneTitle: input.sceneTitle,
+      issueCount: issues.length
+    })
+    return { status: 'ran', issues, shots: input.shots, memoryAppend }
   }
 
   const normalized = normalizeShotsFromModelArray(rawShots)
   if (normalized.length < 3) {
-    return { issues, shots: input.shots, memoryAppend }
+    console.log('[continuity-check-ai] complete (ran, shots unchanged — normalization failed)', {
+      sceneTitle: input.sceneTitle,
+      issueCount: issues.length
+    })
+    return { status: 'ran', issues, shots: input.shots, memoryAppend }
   }
 
   const useFixed = issues.length > 0 && normalized.length >= 3
-  return {
+  const result: ContinuityCheckResult = {
+    status: 'ran',
     issues,
     shots: useFixed ? normalized.slice(0, 12) : input.shots,
     memoryAppend
   }
+  console.log('[continuity-check-ai] complete', {
+    sceneTitle: input.sceneTitle,
+    status: result.status,
+    issueCount: result.issues.length,
+    shotsRepaired: useFixed,
+    memoryAppendChars: result.memoryAppend.length
+  })
+  return result
 }

@@ -2,6 +2,8 @@ import type PocketBase from 'pocketbase'
 import { heuristicCharacterNamesFromScenes } from '~/server/utils/parse-script-txt'
 import { filterLikelyCharacterNames } from '~/lib/screenplay-character-filter'
 import { executeGenerateShots } from '~/server/utils/execute-generate-shots'
+import type { ContinuityCheckSummary } from '~/lib/continuity-check-result'
+import { pbRecordToCreativeScene } from '~/server/utils/creative-scene-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { projectIdOnCharacterRow } from '~/server/utils/creative-character-map'
 import { inferCharactersWithScreenShareFromScript } from '~/server/utils/script-import-ai'
@@ -20,6 +22,7 @@ export interface AnalyzeProjectSceneResult {
   warning: string
   newCharacters: SceneCharacterSuggestion[]
   castInScene: string[]
+  continuity: ContinuityCheckSummary
 }
 
 export function normalizeCastName (value: string): string {
@@ -108,17 +111,14 @@ export async function analyzeProjectScene (opts: {
   }
 
   const scene = await pb.collection('creative_scenes').getOne(sceneId)
-  const sceneProject =
-    typeof scene.project === 'string'
-      ? scene.project
-      : ((scene.project as { id?: string } | undefined)?.id || '')
-  if (sceneProject !== projectId) {
+  const sceneRec = pbRecordToCreativeScene(scene as Parameters<typeof pbRecordToCreativeScene>[0])
+  if (sceneRec.projectId !== projectId) {
     throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Scene does not belong to this project')
   }
 
-  const heading = String(scene.heading || '').trim()
-  const summary = String(scene.summary || '').trim()
-  const body = String(scene.body || '').trim()
+  const heading = sceneRec.heading.trim()
+  const summary = sceneRec.summary.trim()
+  const body = sceneRec.body.trim()
   const sceneText = body || summary
   if (!sceneText) {
     throwApiError(
@@ -186,6 +186,7 @@ export async function analyzeProjectScene (opts: {
     shotsPersisted: shotResult.persisted,
     warning: warnings.join(' ').trim(),
     newCharacters,
-    castInScene: [...new Set(castInScene)]
+    castInScene: [...new Set(castInScene)],
+    continuity: shotResult.continuity
   }
 }

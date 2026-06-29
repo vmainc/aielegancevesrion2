@@ -1,21 +1,48 @@
 import { projectAssetPlaybackSrc } from '~/lib/project-asset-playback-url'
 import type { ProjectAsset } from '~/types/project-asset'
 
-export type CharacterVoiceSample = {
+export type CharacterReferenceClip = {
   assetId: string
   projectId: string
   title: string
   url: string
   created: string
+  mediaType: 'audio' | 'video'
+  mannerismLabel?: string
 }
+
+/** @deprecated Use CharacterReferenceClip */
+export type CharacterVoiceSample = CharacterReferenceClip
 
 export function isCharacterVoiceSampleAsset (metadata: Record<string, unknown> | null | undefined): boolean {
   if (!metadata || typeof metadata !== 'object') return false
   return metadata.source === 'character_voice_sample'
 }
 
+export function isCharacterPerformanceClipAsset (metadata: Record<string, unknown> | null | undefined): boolean {
+  if (!metadata || typeof metadata !== 'object') return false
+  return metadata.source === 'character_performance_clip'
+}
+
+export function isCharacterReferenceClipAsset (metadata: Record<string, unknown> | null | undefined): boolean {
+  return isCharacterVoiceSampleAsset(metadata) || isCharacterPerformanceClipAsset(metadata)
+}
+
 export function isCharacterPortraitAsset (metadata: Record<string, unknown> | null | undefined): boolean {
-  return !isCharacterVoiceSampleAsset(metadata)
+  return !isCharacterReferenceClipAsset(metadata)
+}
+
+function mediaTypeFromAsset (meta: Record<string, unknown>, fileUrl: string): 'audio' | 'video' {
+  if (meta.media_type === 'video' || isCharacterPerformanceClipAsset(meta)) return 'video'
+  if (meta.media_type === 'audio' || isCharacterVoiceSampleAsset(meta)) return 'audio'
+  const url = (fileUrl || '').toLowerCase()
+  if (/\.(mp4|webm|mov)(\?|$)/i.test(url)) return 'video'
+  return 'audio'
+}
+
+function mannerismLabelFromMeta (meta: Record<string, unknown>): string {
+  const v = meta.mannerism_label ?? meta.mannerismLabel
+  return typeof v === 'string' ? v.trim() : ''
 }
 
 function normalizeName (v: string): string {
@@ -23,48 +50,50 @@ function normalizeName (v: string): string {
 }
 
 /**
- * Voice reference clips per character id (all samples, newest first within each character).
+ * Voice + performance reference clips per character id (newest first within each character).
  */
-export function voiceSamplesByCharacterIdFromAssets (
+export function referenceClipsByCharacterIdFromAssets (
   characters: Array<{ id: string; name: string }>,
   assets: ProjectAsset[],
   token: string | null
-): Record<string, CharacterVoiceSample[]> {
-  const byCharacterId: Record<string, CharacterVoiceSample[]> = {}
-  const byCharacterName: Record<string, CharacterVoiceSample[]> = {}
+): Record<string, CharacterReferenceClip[]> {
+  const byCharacterId: Record<string, CharacterReferenceClip[]> = {}
+  const byCharacterName: Record<string, CharacterReferenceClip[]> = {}
 
   for (const a of assets) {
     if (!a.id || !a.projectId) continue
-    const meta = a.metadata || {}
-    if (!isCharacterVoiceSampleAsset(meta as Record<string, unknown>)) continue
+    const meta = (a.metadata || {}) as Record<string, unknown>
+    if (!isCharacterReferenceClipAsset(meta)) continue
 
     const cid = typeof meta.character_id === 'string' ? meta.character_id.trim() : ''
     const cname = typeof meta.character_name === 'string' ? normalizeName(meta.character_name) : ''
-    const sample: CharacterVoiceSample = {
+    const clip: CharacterReferenceClip = {
       assetId: a.id,
       projectId: a.projectId,
-      title: (a.title || 'Voice sample').trim(),
+      title: (a.title || 'Reference clip').trim(),
       url: projectAssetPlaybackSrc(
         { id: a.id, projectId: a.projectId, fileUrl: a.fileUrl || '' },
         token
       ),
-      created: a.created || a.updated || ''
+      created: a.created || a.updated || '',
+      mediaType: mediaTypeFromAsset(meta, a.fileUrl || ''),
+      mannerismLabel: mannerismLabelFromMeta(meta) || undefined
     }
 
     if (cid) {
       if (!byCharacterId[cid]) byCharacterId[cid] = []
-      byCharacterId[cid].push(sample)
+      byCharacterId[cid].push(clip)
     }
     if (cname) {
       if (!byCharacterName[cname]) byCharacterName[cname] = []
-      byCharacterName[cname].push(sample)
+      byCharacterName[cname].push(clip)
     }
   }
 
-  const sortNewest = (list: CharacterVoiceSample[]) =>
+  const sortNewest = (list: CharacterReferenceClip[]) =>
     [...list].sort((a, b) => (b.created || '').localeCompare(a.created || ''))
 
-  const out: Record<string, CharacterVoiceSample[]> = {}
+  const out: Record<string, CharacterReferenceClip[]> = {}
   for (const c of characters) {
     const fromId = byCharacterId[c.id] || []
     const fromName = byCharacterName[normalizeName(c.name)] || []
@@ -72,4 +101,13 @@ export function voiceSamplesByCharacterIdFromAssets (
     out[c.id] = sortNewest(merged)
   }
   return out
+}
+
+/** @deprecated Use referenceClipsByCharacterIdFromAssets */
+export function voiceSamplesByCharacterIdFromAssets (
+  characters: Array<{ id: string; name: string }>,
+  assets: ProjectAsset[],
+  token: string | null
+): Record<string, CharacterReferenceClip[]> {
+  return referenceClipsByCharacterIdFromAssets(characters, assets, token)
 }

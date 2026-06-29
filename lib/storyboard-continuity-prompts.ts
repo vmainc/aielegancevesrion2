@@ -4,12 +4,18 @@ import {
   castNameAppearsInText,
   formatCastNameForPrompt
 } from '~/lib/cast-name-convention'
-import { formatCastLineForProductionPrompt } from '~/lib/character-visual-description'
+import { formatCastLineForProductionPrompt, castMemberToVisualInput } from '~/lib/character-visual-description'
 import type { ProjectDirector } from '~/types/creative-project'
 
 export interface CastMemberForContinuity {
   name: string
   traitsRoleVisual: string
+  /** Locked visual anchor from character profile. */
+  appearanceDescription?: string
+  /** Recurring props, accessories, or tics. */
+  signatureDetails?: string
+  /** Per-character avoid list merged into STRICT EXCLUSIONS. */
+  avoidDescription?: string
   portraitUrl?: string | null
   portraitNotes?: string
   portraitPromptUsed?: string
@@ -30,7 +36,7 @@ export const STANDARD_STORYBOARD_NEGATIVES =
 /** True when the cast reads as non-human characters (e.g. animal story). */
 export function isAnimalOnlyCast (cast: CastMemberForContinuity[]): boolean {
   if (!cast.length) return false
-  const blob = cast.map(c => `${c.name} ${c.traitsRoleVisual}`).join(' ')
+  const blob = cast.map(c => `${c.name} ${c.appearanceDescription || ''} ${c.traitsRoleVisual}`).join(' ')
   if (HUMAN_IN_CAST.test(blob)) return false
   if (ANIMAL_SIGNAL.test(blob)) return true
   return cast.every(c => {
@@ -41,11 +47,18 @@ export function isAnimalOnlyCast (cast: CastMemberForContinuity[]): boolean {
 
 export function buildProjectNegativePrompt (opts: {
   cast: CastMemberForContinuity[]
+  /** When set, only merge avoid lists for characters in this shot. */
+  inShot?: CastMemberForContinuity[]
   extra?: string
 }): string {
   const parts: string[] = [STANDARD_STORYBOARD_NEGATIVES]
   if (isAnimalOnlyCast(opts.cast)) {
     parts.push(ANIMAL_ONLY_NEGATIVE_PROMPT)
+  }
+  const avoidMembers = opts.inShot?.length ? opts.inShot : opts.cast
+  for (const c of avoidMembers) {
+    const av = (c.avoidDescription || '').trim()
+    if (av) parts.push(`for ${formatCastNameForPrompt(c.name)}: ${av}`)
   }
   const extra = (opts.extra || '').trim()
   if (extra) parts.push(extra)
@@ -86,15 +99,7 @@ export function buildDirectorBibleBlock (director: ProjectDirector | null | unde
 export function buildCastBibleParagraph (cast: CastMemberForContinuity[]): string {
   if (!cast.length) return ''
   return cast
-    .map(c =>
-      formatCastLineForProductionPrompt({
-        name: c.name,
-        roleDescription: c.traitsRoleVisual,
-        portraitUrl: c.portraitUrl,
-        portraitNotes: c.portraitNotes,
-        portraitPromptUsed: c.portraitPromptUsed
-      })
-    )
+    .map(c => formatCastLineForProductionPrompt(castMemberToVisualInput(c)))
     .join('\n')
 }
 
@@ -141,13 +146,7 @@ export function buildCharacterLockForShot (
 ): string {
   if (!inShot.length) return ''
   const lines = inShot.map(c => {
-    const line = formatCastLineForProductionPrompt({
-      name: c.name,
-      roleDescription: c.traitsRoleVisual,
-      portraitUrl: c.portraitUrl,
-      portraitNotes: c.portraitNotes,
-      portraitPromptUsed: c.portraitPromptUsed
-    })
+    const line = formatCastLineForProductionPrompt(castMemberToVisualInput(c))
     return `- ${line}`
   })
   const speciesRule = animalOnly

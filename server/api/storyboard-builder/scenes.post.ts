@@ -4,6 +4,12 @@ import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-t
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
 import { getOrCreateStoryboardBuilderProjectId } from '~/server/utils/get-or-create-storyboard-builder-project'
 import { createSceneShot } from '~/server/utils/persist-scene-shots'
+import {
+  creativeSceneToListItem,
+  nextCreativeSceneSortOrder,
+  normalizeCreativeSceneForPb,
+  pbRecordToCreativeScene
+} from '~/server/utils/creative-scene-map'
 
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
@@ -14,47 +20,26 @@ export default defineEventHandler(async (event) => {
     description?: string
   }>(event)
 
-  const headingRaw =
-    typeof body?.heading === 'string'
-      ? body.heading
-      : typeof body?.title === 'string'
-        ? body.title
-        : ''
-  const heading = headingRaw.trim().slice(0, 2000) || 'Untitled scene'
-  const desc =
-    typeof body?.description === 'string'
-      ? body.description.trim()
-      : typeof body?.summary === 'string'
-        ? body.summary.trim()
-        : ''
-  const summary = desc.slice(0, 5000)
-
   const pb = await getAuthenticatedPocketBase()
   const projectId = await getOrCreateStoryboardBuilderProjectId(pb, userId)
-
-  const top = await pb.collection('creative_scenes').getFullList({
-    filter: `project="${projectId}"`,
-    sort: '-sort_order',
-    batch: 1
+  const normalized = normalizeCreativeSceneForPb(0, {
+    title: 'Untitled scene',
+    ...(body || {})
   })
-  let nextOrder = 1
-  if (top.length) {
-    const prev = Number(top[0]!.sort_order)
-    const base = Number.isFinite(prev) ? Math.max(0, Math.floor(prev)) : 0
-    nextOrder = base + 1
-  }
+  const nextOrder = await nextCreativeSceneSortOrder(pb, projectId)
 
-  let sceneId: string
+  let sceneListItem: ReturnType<typeof creativeSceneToListItem> | null = null
   try {
     const created = await pb.collection('creative_scenes').create({
       owned_by: userId,
       project: projectId,
       sort_order: nextOrder,
-      heading,
-      summary,
-      body: summary
+      heading: normalized.heading,
+      summary: normalized.summary,
+      body: normalized.body
     })
-    sceneId = created.id
+    const mapped = pbRecordToCreativeScene(created as Parameters<typeof pbRecordToCreativeScene>[0])
+    sceneListItem = creativeSceneToListItem(mapped, { shotCount: 1 })
   } catch (e: unknown) {
     const detail = formatPocketBaseRecordError(e)
     throw createError({
@@ -63,19 +48,16 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const shot = await createSceneShot(pb, userId, projectId, sceneId, {
+  if (!sceneListItem) {
+    throw createError({ statusCode: 500, message: 'Scene was created but could not be mapped.' })
+  }
+  const shot = await createSceneShot(pb, userId, projectId, sceneListItem.id, {
     title: 'Board 1'
   })
 
   return {
     projectId,
-    scene: {
-      id: sceneId,
-      sortOrder: nextOrder,
-      heading,
-      summary,
-      shotCount: 1
-    },
+    scene: sceneListItem,
     shot
   }
 })

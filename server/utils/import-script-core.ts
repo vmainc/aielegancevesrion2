@@ -30,6 +30,7 @@ import {
   parseDirectorField,
   pbRecordToCreativeProject
 } from '~/server/utils/creative-project-map'
+import { normalizeCreativeSceneForPb } from '~/server/utils/creative-scene-map'
 import { listProjectAssetsForProject } from '~/server/utils/list-project-assets-pb'
 import {
   formatPocketBaseRecordError,
@@ -70,28 +71,6 @@ function normalizeGoal (v: string): ProjectGoal {
 
 /** Align with `server/api/projects/[id]/assets/upload.post.ts` / PocketBase `project_assets.file` maxSize */
 const PROJECT_ASSET_FILE_MAX_BYTES = 52_428_800
-
-/** Must match `scripts/setup-collections.js` creative_scenes field max lengths. */
-const PB_SCENE_HEADING_MAX = 2000
-const PB_SCENE_SUMMARY_MAX = 5000
-const PB_SCENE_BODY_MAX = 150_000
-
-/**
- * PocketBase requires non-empty `heading`; parser/Claude rows sometimes omit it.
- * Clamp strings to collection max lengths so validation never fails on size.
- */
-function normalizeCreativeSceneForPb (
-  index: number,
-  row: { heading: string; summary: string; body: string }
-): { heading: string; summary: string; body: string } {
-  let heading = (row.heading || '').trim().slice(0, PB_SCENE_HEADING_MAX)
-  if (!heading) heading = `Scene ${index + 1}`
-  let summary = (row.summary || '').trim().slice(0, PB_SCENE_SUMMARY_MAX)
-  if (!summary) summary = heading.slice(0, Math.min(500, heading.length))
-  let body = (row.body || '').trim().slice(0, PB_SCENE_BODY_MAX)
-  if (!body) body = summary.slice(0, PB_SCENE_BODY_MAX)
-  return { heading, summary, body }
-}
 
 export type ScriptAssetAttachResult =
   | { ok: true; id: string }

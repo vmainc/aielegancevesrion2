@@ -1,13 +1,8 @@
 import { createError, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { pbRecordToCreativeScene } from '~/server/utils/creative-scene-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
-
-function relProjectId (v: unknown): string {
-  if (typeof v === 'string') return v
-  if (v && typeof v === 'object' && 'id' in v) return String((v as { id: string }).id)
-  return ''
-}
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -29,18 +24,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 
-  const sid = relProjectId(scene.project)
-  if (sid !== projectId) {
+  const mapped = pbRecordToCreativeScene(scene as Parameters<typeof pbRecordToCreativeScene>[0])
+  if (mapped.projectId !== projectId) {
     throw createError({ statusCode: 400, message: 'Scene does not belong to this project' })
   }
 
   return {
     scene: {
-      id: scene.id,
-      sortOrder: typeof scene.sort_order === 'number' ? scene.sort_order : 0,
-      heading: String(scene.heading || ''),
-      summary: String(scene.summary || ''),
-      body: String(scene.body || '')
+      id: mapped.id,
+      sortOrder: mapped.sortOrder,
+      heading: mapped.heading,
+      summary: mapped.summary,
+      body: mapped.body
     }
   }
 })

@@ -157,11 +157,41 @@
               class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
               placeholder="Motion, camera, lighting, mood — no music (add score on the timeline later)"
             />
+            <p
+              v-if="productionBibleDebugLine"
+              class="mt-1.5 text-xs text-gray-500"
+            >
+              {{ productionBibleDebugLine }}
+            </p>
+          </div>
+          <div>
+            <label for="vg-negative" class="block text-sm font-medium text-gray-700 mb-1.5">
+              Negative prompt
+              <span class="font-normal text-gray-500">(what to avoid)</span>
+            </label>
+            <textarea
+              id="vg-negative"
+              v-model="negativePrompt"
+              rows="3"
+              maxlength="4000"
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+              placeholder="e.g. wrong hair color, extra fingers, text overlays, watermark, cartoon style"
+            />
+            <p
+              v-if="negativePrompt.trim() && negativeDeliveryHint"
+              class="mt-1.5 text-xs text-gray-500"
+            >
+              {{ negativeDeliveryHint }}
+            </p>
           </div>
           <VideoStartFramePicker
             v-model:frame-image-url="startFrameUrl"
             :prompt="prompt"
             :aspect-ratio="aspectRatio"
+            :bible-project-id="startFrameBibleProjectId"
+            :bible-scene-id="panelPrefill?.sceneId"
+            :bible-shot-id="panelPrefill?.shotId"
+            :bible-character-ids="panelPrefill?.characterIds"
           />
           <div class="grid sm:grid-cols-2 gap-4">
             <div>
@@ -364,6 +394,11 @@
                     v-if="m.generateAudio"
                     class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/15 text-primary border border-primary/25 align-middle"
                   >Audio</span>
+                  <span
+                    v-if="m.supportsNegativePrompt"
+                    class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-violet-100 text-violet-800 border border-violet-200 align-middle"
+                    title="Supports native negative prompt via OpenRouter"
+                  >Negatives</span>
                 </span>
                 <span class="block text-xs font-mono text-gray-500 truncate mt-0.5" :title="m.id">{{ m.id }}</span>
                 <span
@@ -536,6 +571,12 @@ definePageMeta({
 import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
+import { productionBibleGenerationDebugLabel } from '~/lib/production-bible-generation-context'
+import {
+  buildGenerationObservability,
+  GENERATION_PATH,
+  mergeGenerationObservabilityIntoMetadata
+} from '~/lib/generation-observability'
 import {
   clearVideoGenerationPanelPrefill,
   useVideoGenerationPrefillState,
@@ -546,7 +587,7 @@ import {
   playbackUrlForProjectVideoAsset,
   saveVideoToProjectLibrary
 } from '~/composables/useOpenRouterVideoGen'
-import { resolveVideoGenerationPrompt } from '~/lib/video-generation-audio-policy'
+import { resolveVideoGenerationUserPrompt } from '~/lib/video-generation-audio-policy'
 import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import type { CreativeProject, ProjectAspectRatio } from '~/types/creative-project'
 
@@ -558,6 +599,7 @@ type VideoModel = {
   description?: string
   supportedDurations?: number[]
   generateAudio?: boolean
+  supportsNegativePrompt?: boolean
 }
 
 type ApiPayload = {
@@ -618,6 +660,7 @@ const error = computed(() => {
 const models = computed(() => data.value?.models ?? [])
 
 const prompt = ref(boot?.prompt?.trim() ?? '')
+const negativePrompt = ref(boot?.negativePrompt?.trim() ?? '')
 const startFrameUrl = ref<string | null>(
   boot?.startFrameUrl
     ? appendPlaybackAccessToken(boot.startFrameUrl.trim(), getAuthToken())
@@ -667,11 +710,22 @@ const selectedKeepModelId = ref('')
 const keepingClip = ref(false)
 const discardingRun = ref(false)
 const panelPrefill = ref<VideoGenerationPrefill | null>(boot)
+const productionBibleDebugLine = computed(() => {
+  const ctx = panelPrefill.value?.productionBibleContext
+  if (!ctx) return ''
+  return productionBibleGenerationDebugLabel(ctx)
+})
+const startFrameBibleProjectId = computed(() => {
+  const fromPanel = panelPrefill.value?.projectId?.trim() || ''
+  if (fromPanel && PB_ID.test(fromPanel)) return fromPanel
+  const selected = selectedProjectId.value.trim()
+  return PB_ID.test(selected) ? selected : ''
+})
 const prefillBanner = ref(
   boot?.shotTitle?.trim()
-    ? `Opened from project storyboard — “${boot.shotTitle.trim()}”. Prompt and seed frame are prefilled; pick one or more models below.`
+    ? `Opened from project storyboard — “${boot.shotTitle.trim()}”. Prompt, negative prompt, and seed frame are prefilled; pick one or more models below.`
     : boot?.prompt?.trim()
-      ? 'Opened from a project panel — prompt and seed frame are prefilled; pick one or more models below.'
+      ? 'Opened from a project panel — prompt, negative prompt, and seed frame are prefilled; pick one or more models below.'
       : ''
 )
 const prefillApplied = ref(Boolean(boot?.prompt?.trim()))
@@ -770,6 +824,7 @@ async function submitCreateProject () {
 function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   panelPrefill.value = p
   prompt.value = p.prompt.trim()
+  negativePrompt.value = (p.negativePrompt || '').trim()
   if (p.startFrameUrl) {
     startFrameUrl.value = appendPlaybackAccessToken(p.startFrameUrl.trim(), getAuthToken())
   }
@@ -787,8 +842,8 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   }
   const label = (p.shotTitle || '').trim()
   prefillBanner.value = label
-    ? `Opened from project storyboard — “${label}”. Prompt and seed frame are prefilled; pick one or more models below.`
-    : 'Opened from a project panel — prompt and seed frame are prefilled; pick one or more models below.'
+    ? `Opened from project storyboard — “${label}”. Prompt, negative prompt, and seed frame are prefilled; pick one or more models below.`
+    : 'Opened from a project panel — prompt, negative prompt, and seed frame are prefilled; pick one or more models below.'
 }
 
 function stripPanelQueryFromRoute () {
@@ -962,8 +1017,28 @@ const wantsGeneratedAudio = computed(
   () => includeSpokenDialogue.value || includeAmbientSound.value
 )
 
+const negativeDeliveryHint = computed(() => {
+  const neg = negativePrompt.value.trim()
+  if (!neg || !selectedModelIds.value.length) return ''
+  const picked = selectedModelIds.value
+    .map(id => models.value.find(m => m.id === id))
+    .filter(Boolean) as VideoModel[]
+  const native = picked.filter(m => m.supportsNegativePrompt === true)
+  const fallback = picked.filter(m => m.supportsNegativePrompt !== true)
+  if (native.length && !fallback.length) {
+    return 'Selected models receive this as a native negative prompt (not mixed into the main prompt).'
+  }
+  if (!native.length && fallback.length) {
+    return 'Selected models do not support native negatives — your avoid list is saved but not sent to these models (embedding exclusions in the prompt causes inverted results). Prefer Veo or Wan models with the Negatives badge.'
+  }
+  if (native.length && fallback.length) {
+    return `${native.map(m => m.name).join(', ')} use native negatives; ${fallback.map(m => m.name).join(', ')} ignore the avoid list (no native support).`
+  }
+  return ''
+})
+
 function resolvedGenerationPrompt (): string {
-  return resolveVideoGenerationPrompt({
+  return resolveVideoGenerationUserPrompt({
     prompt: prompt.value,
     dialogueLine: dialogueLine.value,
     includeSpokenDialogue: includeSpokenDialogue.value,
@@ -1013,7 +1088,8 @@ async function runOneModel (modelId: string) {
       supportedDurations: model?.supportedDurations,
       generateAudio: wantsGeneratedAudio.value,
       includeSpokenDialogue: includeSpokenDialogue.value,
-      includeAmbientSound: includeAmbientSound.value
+      includeAmbientSound: includeAmbientSound.value,
+      negativePrompt: negativePrompt.value.trim() || undefined
     })
 
     let playbackUrl = videoUrl
@@ -1021,6 +1097,42 @@ async function runOneModel (modelId: string) {
 
     if (saveToProject.value && selectedProjectId.value && headers) {
       const pre = panelPrefill.value
+      const baseMetadata: Record<string, unknown> = {
+        model_id: modelId,
+        source: pre?.source || 'standalone_video_tool',
+        aspect_ratio: aspectRatio.value,
+        duration_seconds: durationSeconds.value,
+        generate_audio: wantsGeneratedAudio.value,
+        include_spoken_dialogue: includeSpokenDialogue.value,
+        include_ambient_sound: includeAmbientSound.value,
+        ...(includeSpokenDialogue.value && dialogueLine.value.trim()
+          ? { dialogue_line: dialogueLine.value.trim().slice(0, 500) }
+          : {}),
+        ...(includeAmbientSound.value && ambientSoundPrompt.value.trim()
+          ? { ambient_sound_prompt: ambientSoundPrompt.value.trim().slice(0, 500) }
+          : {}),
+        ...(negativePrompt.value.trim()
+          ? { negative_prompt: negativePrompt.value.trim().slice(0, 4000) }
+          : {}),
+        ...(pre?.sceneId ? { scene_id: pre.sceneId } : {}),
+        ...(pre?.shotId ? { shot_id: pre.shotId } : {})
+      }
+      const metadata = mergeGenerationObservabilityIntoMetadata(
+        baseMetadata,
+        buildGenerationObservability({
+          generationPath: pre?.source === 'project_video_panel'
+            ? GENERATION_PATH.PROJECT_VIDEO_PANEL
+            : GENERATION_PATH.VIDEO_GENERATION,
+          projectId: selectedProjectId.value,
+          sceneId: pre?.sceneId,
+          shotId: pre?.shotId,
+          characterIds: pre?.characterIds,
+          model: modelId,
+          provider: 'openrouter',
+          promptForHash: resolvedGenerationPrompt(),
+          bibleContext: pre?.productionBibleContext ?? null
+        })
+      )
       const asset = await saveVideoToProjectLibrary({
         projectId: selectedProjectId.value,
         remoteUrl: videoUrl,
@@ -1028,23 +1140,7 @@ async function runOneModel (modelId: string) {
         notes: pre?.source === 'project_video_panel'
           ? 'Generated from project Video step via Video tools.'
           : 'Generated from Video tools (standalone).',
-        metadata: {
-          model_id: modelId,
-          source: pre?.source || 'standalone_video_tool',
-          aspect_ratio: aspectRatio.value,
-          duration_seconds: durationSeconds.value,
-          generate_audio: wantsGeneratedAudio.value,
-          include_spoken_dialogue: includeSpokenDialogue.value,
-          include_ambient_sound: includeAmbientSound.value,
-          ...(includeSpokenDialogue.value && dialogueLine.value.trim()
-            ? { dialogue_line: dialogueLine.value.trim().slice(0, 500) }
-            : {}),
-          ...(includeAmbientSound.value && ambientSoundPrompt.value.trim()
-            ? { ambient_sound_prompt: ambientSoundPrompt.value.trim().slice(0, 500) }
-            : {}),
-          ...(pre?.sceneId ? { scene_id: pre.sceneId } : {}),
-          ...(pre?.shotId ? { shot_id: pre.shotId } : {})
-        },
+        metadata,
         headers
       })
       if (asset?.id) {

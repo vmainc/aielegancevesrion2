@@ -1,6 +1,7 @@
 import { createError, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { creativeSceneToListItem, pbRecordToCreativeScene } from '~/server/utils/creative-scene-map'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 export default defineEventHandler(async (event) => {
@@ -41,15 +42,8 @@ export default defineEventHandler(async (event) => {
 
   return {
     scenes: list.map(s => {
-      const so = Number(s.sort_order)
-      return {
-        id: s.id,
-        sortOrder: Number.isFinite(so) ? so : 0,
-        heading: s.heading,
-        summary: s.summary || '',
-        bodyLength: String(s.body || '').length,
-        shotCount: shotCountBySceneId[s.id] || 0
-      }
+      const mapped = pbRecordToCreativeScene(s as Parameters<typeof pbRecordToCreativeScene>[0])
+      return creativeSceneToListItem(mapped, { shotCount: shotCountBySceneId[mapped.id] || 0 })
     })
   }
 })

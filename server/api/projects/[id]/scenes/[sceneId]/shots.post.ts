@@ -4,6 +4,7 @@ import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { createSceneShot } from '~/server/utils/persist-scene-shots'
+import { projectIdOnSceneRow } from '~/server/utils/creative-scene-map'
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -22,9 +23,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const scene = await pb.collection('creative_scenes').getOne(sceneId)
-  const sceneProject =
-    typeof scene.project === 'string' ? scene.project : (scene.project as { id?: string })?.id
-  if (sceneProject !== projectId) {
+  if (projectIdOnSceneRow(scene as Record<string, unknown>) !== projectId) {
     throw createError({ statusCode: 400, message: 'Scene does not belong to this project' })
   }
 

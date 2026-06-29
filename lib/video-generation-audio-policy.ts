@@ -93,7 +93,7 @@ export function appendAmbientSoundPrompt (prompt: string, ambientLine: string): 
 }
 
 /** Client/server: merge user prompt + optional dialogue and ambient fields before API call. */
-export function resolveVideoGenerationPrompt (opts: {
+export function resolveVideoGenerationUserPrompt (opts: {
   prompt: string
   dialogueLine?: string
   includeSpokenDialogue?: boolean

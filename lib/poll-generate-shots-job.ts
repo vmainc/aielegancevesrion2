@@ -1,3 +1,4 @@
+import type { ContinuityCheckSummary } from '~/lib/continuity-check-result'
 import type { CreativeShot } from '~/types/creative-shot'
 
 export async function pollGenerateShotsJob (
@@ -8,7 +9,7 @@ export async function pollGenerateShotsJob (
   shots: CreativeShot[]
   persisted?: boolean
   warning?: string
-  continuity?: { issueCount: number; memoryUpdated: boolean }
+  continuity?: ContinuityCheckSummary
 }> {
   const intervalMs = options?.intervalMs ?? 3500
   const maxMs = options?.maxMs ?? 12 * 60 * 1000
@@ -20,7 +21,7 @@ export async function pollGenerateShotsJob (
       shots?: CreativeShot[]
       persisted?: boolean
       warning?: string
-      continuity?: { issueCount: number; memoryUpdated: boolean }
+      continuity?: ContinuityCheckSummary
       message?: string
     }>(`/api/generate-shots/jobs/${encodeURIComponent(jobId)}`, { headers })
 

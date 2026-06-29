@@ -28,6 +28,14 @@ export interface CreativeCharacter {
   screenSharePercent: number | null
   /** Cast audio bible — tone, pace, accent (not used for TTS). */
   voiceDescription?: string
+  /** Locked visual anchor: face, build, age, hair, wardrobe, distinguishing marks. */
+  appearanceDescription?: string
+  /** Personality, attitude, and on-screen mannerisms for performance continuity. */
+  personality?: string
+  /** Signature props, accessories, catchphrases, or tics that should recur. */
+  signatureDetails?: string
+  /** Per-character negative / avoid list — things that must never appear for this role. */
+  avoidDescription?: string
 }
 
 export interface CreativeProject {

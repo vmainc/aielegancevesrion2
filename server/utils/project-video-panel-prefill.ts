@@ -2,13 +2,21 @@ import { createError } from 'h3'
 import type PocketBase from 'pocketbase'
 import { buildFullVideoGenerationPrompt } from '~/lib/shot-character-continuity'
 import type { ProjectCharacterRef } from '~/lib/shot-character-continuity'
+import { projectCharacterRefToCastMember } from '~/lib/shot-character-continuity'
+import {
+  resolveVideoNegativePromptForShot,
+  stripStrictExclusionsFromPrompt
+} from '~/lib/video-negative-prompt'
 import { mapStoryboardAssetsToShots } from '~/lib/storyboard-panel-assets'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
+import { projectIdOnSceneRow } from '~/server/utils/creative-scene-map'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
 import { listProjectAssetsForProject } from '~/server/utils/list-project-assets-pb'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
+import { resolveProductionBibleForGeneration } from '~/server/utils/resolve-production-bible-for-generation'
+import { mergeProductionBibleGenerationOptions } from '~/lib/production-bible-generation-context'
 import type { VideoGenerationPrefill } from '~/lib/video-generation-prefill'
 import type { ProjectAspectRatio } from '~/types/creative-project'
 
@@ -31,7 +39,10 @@ async function loadProjectCharacterRefs (
     return {
       id: String(row.id),
       name: String(row.name || ''),
-      roleDescription: String(row.role_description || '')
+      roleDescription: String(row.role_description || ''),
+      appearanceDescription: String(row.appearance_description || ''),
+      signatureDetails: String(row.signature_details || ''),
+      avoidDescription: String(row.avoid_description || '')
     }
   })
 
@@ -75,6 +86,9 @@ async function loadProjectCharacterRefs (
       id: c.id,
       name: c.name,
       roleDescription: c.roleDescription,
+      appearanceDescription: c.appearanceDescription || undefined,
+      signatureDetails: c.signatureDetails || undefined,
+      avoidDescription: c.avoidDescription || undefined,
       portraitUrl: hit?.url || null,
       portraitNotes: hit?.notes,
       portraitPromptUsed: hit?.promptUsed
@@ -159,11 +173,7 @@ export async function buildVideoPanelPrefill (input: {
   const project = pbRecordToCreativeProject(projectRow as Parameters<typeof pbRecordToCreativeProject>[0])
 
   const sceneRow = await pb.collection('creative_scenes').getOne(sceneId)
-  const sceneProject =
-    typeof sceneRow.project === 'string'
-      ? sceneRow.project
-      : (sceneRow.project as { id?: string })?.id
-  if (sceneProject !== projectId) {
+  if (projectIdOnSceneRow(sceneRow as Record<string, unknown>) !== projectId) {
     throw createError({ statusCode: 400, message: 'Scene does not belong to this project' })
   }
 
@@ -195,7 +205,27 @@ export async function buildVideoPanelPrefill (input: {
   }
 
   const cast = await loadProjectCharacterRefs(pb, projectId, userId)
-  const prompt = buildFullVideoGenerationPrompt({
+  const castMembers = cast.map(c => projectCharacterRefToCastMember(c))
+
+  const { context: productionBible } = await resolveProductionBibleForGeneration(pb, projectId, {
+    ...mergeProductionBibleGenerationOptions(),
+    sceneId,
+    shotId,
+    characterIds: cast.map((c) => c.id)
+  })
+
+  const promptCtx = {
+    director: project.director,
+    continuityMemory: project.continuityMemory,
+    aspectRatio: project.aspectRatio,
+    sceneTitle: String(sceneRow.heading || ''),
+    sceneSummary: String(sceneRow.summary || ''),
+    cast: castMembers
+  }
+
+  const negativePrompt = resolveVideoNegativePromptForShot(shot, promptCtx).trim()
+
+  const fullPrompt = buildFullVideoGenerationPrompt({
     director: project.director,
     continuityMemory: project.continuityMemory,
     aspectRatio: project.aspectRatio as ProjectAspectRatio,
@@ -205,15 +235,21 @@ export async function buildVideoPanelPrefill (input: {
       summary: String(sceneRow.summary || '')
     },
     shot,
-    cast
+    cast,
+    productionBible
   }).trim()
 
-  if (!prompt) {
+  const prompt = negativePrompt
+    ? stripStrictExclusionsFromPrompt(fullPrompt)
+    : fullPrompt
+
+  if (!prompt && !negativePrompt) {
     throw createError({ statusCode: 400, message: 'This panel has no production prompt yet.' })
   }
 
   return {
-    prompt,
+    prompt: prompt || fullPrompt,
+    negativePrompt: negativePrompt || undefined,
     startFrameUrl: projectAssetMediaPath(projectId, frameAsset.id),
     aspectRatio: projectAspectForVideo(project.aspectRatio),
     durationSeconds: snapToStoryboardClipSeconds(Number(shot.durationSeconds) || 5),
@@ -222,6 +258,8 @@ export async function buildVideoPanelPrefill (input: {
     shotTitle: shot.title || undefined,
     sceneId,
     shotId,
-    source: 'project_video_panel'
+    characterIds: cast.map((c) => c.id),
+    source: 'project_video_panel',
+    productionBibleContext: productionBible ?? undefined
   }
 }

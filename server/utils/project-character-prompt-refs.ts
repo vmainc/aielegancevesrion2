@@ -72,7 +72,10 @@ export async function loadCastMembersForContinuity (
     return {
       id: String(row.id),
       name: String(row.name || ''),
-      role_description: String(row.role_description || '')
+      role_description: String(row.role_description || ''),
+      appearance_description: String(row.appearance_description || ''),
+      signature_details: String(row.signature_details || ''),
+      avoid_description: String(row.avoid_description || '')
     }
   })
 
@@ -93,6 +96,9 @@ export async function loadCastMembersForContinuity (
     return {
       name: c.name,
       traitsRoleVisual: c.role_description,
+      appearanceDescription: c.appearance_description || undefined,
+      signatureDetails: c.signature_details || undefined,
+      avoidDescription: c.avoid_description || undefined,
       portraitNotes: extra?.notes,
       portraitPromptUsed: extra?.promptUsed
     }

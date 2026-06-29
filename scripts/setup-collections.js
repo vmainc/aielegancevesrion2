@@ -338,6 +338,30 @@ async function createCollections(adminEmail, adminPassword) {
             type: 'text',
             required: false,
             options: { max: 2000 }
+          },
+          {
+            name: 'appearance_description',
+            type: 'text',
+            required: false,
+            options: { max: 4000 }
+          },
+          {
+            name: 'personality',
+            type: 'text',
+            required: false,
+            options: { max: 4000 }
+          },
+          {
+            name: 'signature_details',
+            type: 'text',
+            required: false,
+            options: { max: 2000 }
+          },
+          {
+            name: 'avoid_description',
+            type: 'text',
+            required: false,
+            options: { max: 2000 }
           }
         ]
       });
@@ -564,12 +588,269 @@ async function createCollections(adminEmail, adminPassword) {
       }
     }
 
+    // Production Bible — PASS 6 foundation collections
+    console.log('📖 Ensuring Production Bible collections...');
+    try {
+      const creativeProjectsId = await getCollectionIdByName(pb, 'creative_projects');
+
+      console.log('  Ensuring "bible_entities"...');
+      try {
+        await pb.collections.getFirstListItem('name="bible_entities"');
+        console.log('  ⚠️  "bible_entities" already exists, skipping...');
+      } catch (_missing) {
+        await createCollectionThenRules(pb, {
+          name: 'bible_entities',
+          type: 'base',
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'project',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: creativeProjectsId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            {
+              name: 'entity_type',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [
+                  { value: 'character' },
+                  { value: 'location' },
+                  { value: 'prop' },
+                  { value: 'creature' },
+                  { value: 'species' },
+                  { value: 'organization' },
+                  { value: 'technology' },
+                  { value: 'world_rule' },
+                  { value: 'event' },
+                  { value: 'style_rule' },
+                  { value: 'concept' }
+                ]
+              }
+            },
+            { name: 'name', type: 'text', required: true, options: { max: 500 } },
+            { name: 'slug', type: 'text', required: false, options: { max: 200 } },
+            { name: 'aliases', type: 'json', required: false },
+            { name: 'summary', type: 'text', required: false, options: { max: 5000 } },
+            { name: 'description', type: 'text', required: false, options: { max: 50000 } },
+            {
+              name: 'status',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [
+                  { value: 'active' },
+                  { value: 'tentative' },
+                  { value: 'draft' },
+                  { value: 'retired' },
+                  { value: 'contradicted' }
+                ]
+              }
+            },
+            { name: 'confidence', type: 'number', required: false, options: { min: 0, max: 1 } },
+            { name: 'source_type', type: 'text', required: false, options: { max: 100 } },
+            { name: 'source_id', type: 'text', required: false, options: { max: 200 } },
+            { name: 'actor_type', type: 'text', required: false, options: { max: 50 } },
+            { name: 'actor_id', type: 'text', required: false, options: { max: 200 } }
+          ]
+        });
+        console.log('  ✅ "bible_entities" created');
+      }
+
+      let bibleEntitiesId;
+      try {
+        bibleEntitiesId = await getCollectionIdByName(pb, 'bible_entities');
+      } catch (_e) {
+        bibleEntitiesId = null;
+      }
+
+      console.log('  Ensuring "bible_facts"...');
+      try {
+        await pb.collections.getFirstListItem('name="bible_facts"');
+        console.log('  ⚠️  "bible_facts" already exists, skipping...');
+      } catch (_missing) {
+        if (!bibleEntitiesId) throw new Error('bible_entities collection is required before bible_facts');
+        await createCollectionThenRules(pb, {
+          name: 'bible_facts',
+          type: 'base',
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'project',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: creativeProjectsId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            {
+              name: 'entity',
+              type: 'relation',
+              required: false,
+              options: {
+                collectionId: bibleEntitiesId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            { name: 'fact_type', type: 'text', required: false, options: { max: 100 } },
+            { name: 'statement', type: 'text', required: true, options: { max: 10000 } },
+            { name: 'structured_value', type: 'json', required: false },
+            { name: 'scope_type', type: 'text', required: false, options: { max: 50 } },
+            { name: 'scope_id', type: 'text', required: false, options: { max: 200 } },
+            {
+              name: 'status',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [
+                  { value: 'active' },
+                  { value: 'tentative' },
+                  { value: 'draft' },
+                  { value: 'needs_review' },
+                  { value: 'contradicted' },
+                  { value: 'retired' }
+                ]
+              }
+            },
+            { name: 'confidence', type: 'number', required: false, options: { min: 0, max: 1 } },
+            { name: 'source_type', type: 'text', required: false, options: { max: 100 } },
+            { name: 'source_id', type: 'text', required: false, options: { max: 200 } },
+            { name: 'actor_type', type: 'text', required: false, options: { max: 50 } },
+            { name: 'actor_id', type: 'text', required: false, options: { max: 200 } }
+          ]
+        });
+        console.log('  ✅ "bible_facts" created');
+      }
+
+      console.log('  Ensuring "bible_relationships"...');
+      try {
+        await pb.collections.getFirstListItem('name="bible_relationships"');
+        console.log('  ⚠️  "bible_relationships" already exists, skipping...');
+      } catch (_missing) {
+        await createCollectionThenRules(pb, {
+          name: 'bible_relationships',
+          type: 'base',
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'project',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: creativeProjectsId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            { name: 'from_type', type: 'text', required: true, options: { max: 50 } },
+            { name: 'from_id', type: 'text', required: true, options: { max: 200 } },
+            { name: 'to_type', type: 'text', required: true, options: { max: 50 } },
+            { name: 'to_id', type: 'text', required: true, options: { max: 200 } },
+            { name: 'relationship_type', type: 'text', required: true, options: { max: 200 } },
+            { name: 'role', type: 'text', required: false, options: { max: 500 } },
+            { name: 'strength', type: 'number', required: false, options: { min: 0, max: 1 } },
+            {
+              name: 'status',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [
+                  { value: 'active' },
+                  { value: 'tentative' },
+                  { value: 'retired' },
+                  { value: 'contradicted' }
+                ]
+              }
+            },
+            { name: 'source_type', type: 'text', required: false, options: { max: 100 } },
+            { name: 'source_id', type: 'text', required: false, options: { max: 200 } },
+            { name: 'actor_type', type: 'text', required: false, options: { max: 50 } },
+            { name: 'actor_id', type: 'text', required: false, options: { max: 200 } }
+          ]
+        });
+        console.log('  ✅ "bible_relationships" created');
+      }
+
+      console.log('✅ Production Bible collections ensured\n');
+    } catch (e) {
+      console.log('⚠️  Could not ensure Production Bible collections:', e.message || e, '\n');
+    }
+
     console.log('🎉 All collections have been set up successfully!');
     console.log('\nCollections created:');
     console.log('  ✓ creative_projects / creative_scenes / creative_characters - Script import workspace (if created this run)');
     console.log('  ✓ creative_shots - Storyboard shots per scene (if created this run)');
     console.log('  ✓ project_assets - Per-project assets (scripts, characters, storyboards, video, files)');
     console.log('  ✓ creative_scripts - Standalone Script Wizard library');
+    console.log('  ✓ bible_entities / bible_facts / bible_relationships - Production Bible foundation (if created this run)');
     console.log('  ✓ users - Created automatically by PocketBase');
     console.log('\n✨ You can now use the application!');
 

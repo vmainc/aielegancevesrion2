@@ -178,6 +178,38 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
           options: { max: 2000 }
         }));
       }
+      if (!fieldExists(col, 'appearance_description')) {
+        charFieldsToAdd.push(flattenField({
+          name: 'appearance_description',
+          type: 'text',
+          required: false,
+          options: { max: 4000 }
+        }));
+      }
+      if (!fieldExists(col, 'personality')) {
+        charFieldsToAdd.push(flattenField({
+          name: 'personality',
+          type: 'text',
+          required: false,
+          options: { max: 4000 }
+        }));
+      }
+      if (!fieldExists(col, 'signature_details')) {
+        charFieldsToAdd.push(flattenField({
+          name: 'signature_details',
+          type: 'text',
+          required: false,
+          options: { max: 2000 }
+        }));
+      }
+      if (!fieldExists(col, 'avoid_description')) {
+        charFieldsToAdd.push(flattenField({
+          name: 'avoid_description',
+          type: 'text',
+          required: false,
+          options: { max: 2000 }
+        }));
+      }
       if (charFieldsToAdd.length) {
         await pb.collections.update(col.id, {
           fields: [...currentSchema, ...charFieldsToAdd]
@@ -268,6 +300,74 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
       }
     } catch (_e) {
       console.log('⚠️  project_assets not found. Skipping...\n');
+    }
+
+    // bible_facts — review statuses for continuity write-back (existing installs)
+    console.log('📖 Checking "bible_facts" status values...');
+    try {
+      const col = await pb.collections.getFirstListItem('name="bible_facts"');
+      const currentSchema = col.fields || col.schema || [];
+      const statusField = currentSchema.find((f) => f?.name === 'status');
+      if (statusField && statusField.type === 'select') {
+        const flat = flattenField(statusField);
+        const existing = Array.isArray(flat.values) ? flat.values : [];
+        const required = ['active', 'tentative', 'draft', 'needs_review', 'contradicted', 'retired'];
+        const merged = [...existing];
+        let changed = false;
+        for (const v of required) {
+          if (!merged.includes(v)) {
+            merged.push(v);
+            changed = true;
+          }
+        }
+        if (changed) {
+          const updatedFields = currentSchema.map((f) => {
+            if (f?.name !== 'status') return flattenField(f);
+            return flattenField({ ...f, options: { ...(f.options || {}), values: merged.map((v) => ({ value: v })) } });
+          });
+          await pb.collections.update(col.id, { fields: updatedFields });
+          console.log('  ➕ Added draft / needs_review to bible_facts.status\n');
+        } else {
+          console.log('  ✓ bible_facts.status already includes review values\n');
+        }
+      } else {
+        console.log('  ⚠️  bible_facts.status field missing or not select — run setup-collections.js\n');
+      }
+    } catch (_e) {
+      console.log('⚠️  bible_facts not found. Skipping status migration...\n');
+    }
+
+    // bible_entities — tentative status for seeded entities (existing installs)
+    console.log('📖 Checking "bible_entities" status values...');
+    try {
+      const col = await pb.collections.getFirstListItem('name="bible_entities"');
+      const currentSchema = col.fields || col.schema || [];
+      const statusField = currentSchema.find((f) => f?.name === 'status');
+      if (statusField && statusField.type === 'select') {
+        const flat = flattenField(statusField);
+        const existing = Array.isArray(flat.values) ? flat.values : [];
+        const required = ['active', 'tentative', 'draft', 'retired', 'contradicted'];
+        const merged = [...existing];
+        let changed = false;
+        for (const v of required) {
+          if (!merged.includes(v)) {
+            merged.push(v);
+            changed = true;
+          }
+        }
+        if (changed) {
+          const updatedFields = currentSchema.map((f) => {
+            if (f?.name !== 'status') return flattenField(f);
+            return flattenField({ ...f, options: { ...(f.options || {}), values: merged.map((v) => ({ value: v })) } });
+          });
+          await pb.collections.update(col.id, { fields: updatedFields });
+          console.log('  ➕ Added tentative to bible_entities.status\n');
+        } else {
+          console.log('  ✓ bible_entities.status already includes tentative\n');
+        }
+      }
+    } catch (_e) {
+      console.log('⚠️  bible_entities not found. Skipping status migration...\n');
     }
 
     console.log('🎉 Field addition complete!');

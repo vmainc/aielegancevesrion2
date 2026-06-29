@@ -12,6 +12,7 @@ import {
   resolveVideoGenerationAudioFromBody
 } from '~/lib/video-generation-audio-policy'
 import { registerVideoGenerationJob } from '~/server/utils/video-generation-job-registry'
+import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 
 type Aspect =
   | '16:9'
@@ -43,6 +44,7 @@ function normalizeResolution (v: unknown): '480p' | '720p' | '1080p' | '1K' | '2
 }
 
 export default defineEventHandler(async (event) => {
+  const userId = await getPocketBaseUserIdFromRequest(event)
   const body = await readBody(event).catch(() => ({}))
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
   const model = typeof body?.model === 'string' ? body.model : ''
@@ -104,6 +106,13 @@ export default defineEventHandler(async (event) => {
   const { includeSpokenDialogue, includeAmbientSound, generateAudio } =
     resolveVideoGenerationAudioFromBody(body as Record<string, unknown>)
 
+  const negativePrompt =
+    typeof body?.negativePrompt === 'string'
+      ? body.negativePrompt.trim()
+      : typeof body?.negative_prompt === 'string'
+        ? body.negative_prompt.trim()
+        : ''
+
   const jobArgs = {
     prompt: applyVideoGenerationPromptPolicy(prompt, {
       includeSpokenDialogue,
@@ -115,7 +124,8 @@ export default defineEventHandler(async (event) => {
     resolution,
     durationSeconds,
     firstFrameImageUrl: resolvedFrame || undefined,
-    generateAudio
+    generateAudio,
+    negativePrompt: negativePrompt || undefined
   }
 
   try {
@@ -144,7 +154,8 @@ export default defineEventHandler(async (event) => {
     registerVideoGenerationJob(started.jobId, {
       pollUrl: started.pollUrl,
       apiKey,
-      model: started.model
+      model: started.model,
+      userId
     })
 
     setResponseStatus(event, 202)

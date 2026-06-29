@@ -1,6 +1,6 @@
+import type { CreativeSceneListItem } from '~/types/creative-scene'
 import {
   buildSceneMetaMap,
-  type ProjectSceneRow,
   type SceneMetaMap
 } from '~/lib/project-scene-groups'
 
@@ -33,7 +33,7 @@ export function useProjectScenesHydration () {
       const token = getAuthToken()
       if (!token) return
       try {
-        const res = await $fetch<{ scenes: ProjectSceneRow[] }>(
+        const res = await $fetch<{ scenes: CreativeSceneListItem[] }>(
           `/api/projects/${projectId}/scenes`,
           { headers: { Authorization: `Bearer ${token}` } }
         )

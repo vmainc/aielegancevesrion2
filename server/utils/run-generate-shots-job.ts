@@ -23,6 +23,15 @@ export async function runGenerateShotsJob (opts: {
       warning: result.warning,
       continuity: result.continuity
     })
+    console.log('[run-generate-shots-job] completed', {
+      jobId,
+      projectId,
+      sceneId,
+      shotCount: result.shots.length,
+      continuityStatus: result.continuity.status,
+      continuityIssueCount: result.continuity.issueCount,
+      continuityMemoryUpdated: result.continuity.memoryUpdated
+    })
   } catch (e: unknown) {
     const err = e as { statusMessage?: string; data?: { message?: string } }
     const msg =

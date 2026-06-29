@@ -7,6 +7,12 @@
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
         Design your characters with multiple AI models
       </p>
+      <p
+        v-if="bibleGenerationDebug?.label"
+        class="mt-3 text-xs text-sky-900 bg-sky-50 border border-sky-200 rounded-lg px-3 py-2 max-w-2xl"
+      >
+        {{ bibleGenerationDebug.label }}
+      </p>
     </header>
 
     <form class="space-y-8 mb-10" @submit.prevent="runGenerate">
@@ -327,6 +333,18 @@ import {
   DEFAULT_IMAGE_MODEL_ID
 } from '~/lib/character-creator-models'
 import { buildCharacterImagePrompt, CHARACTER_STYLE_PRESETS } from '~/lib/character-image-prompt'
+import {
+  appendProductionBibleToPrompt,
+  buildProductionBibleGenerationDebug,
+  mergeProductionBibleGenerationOptions,
+  type ProductionBibleGenerationDebug
+} from '~/lib/production-bible-generation-context'
+import {
+  buildGenerationObservability,
+  GENERATION_PATH,
+  mergeGenerationObservabilityIntoMetadata
+} from '~/lib/generation-observability'
+import type { ProductionBibleResolvedContext } from '~/types/production-bible-context'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import type { CharacterLibraryEntry } from '~/types/character-creator'
 import type { CreativeProject } from '~/types/creative-project'
@@ -377,6 +395,14 @@ const referenceForApi = ref<string | null>(null)
 const referenceLabel = ref('')
 const referenceFileInput = ref<HTMLInputElement | null>(null)
 const loadingProjectPortrait = ref(false)
+const bibleGenerationDebug = ref<ProductionBibleGenerationDebug | undefined>()
+const lastGenerationProvenance = ref<{
+  bibleContext: ProductionBibleResolvedContext | null
+  promptForHash: string
+} | null>(null)
+
+const bibleProjectRef = computed(() => contextProjectId.value)
+const productionBible = useProductionBible(bibleProjectRef)
 
 const canLoadProjectPortrait = computed(
   () =>
@@ -527,6 +553,26 @@ const doneCount = computed(() =>
   }).length
 )
 
+async function resolveBibleAugmentedPrompt (basePrompt: string): Promise<{
+  prompt: string
+  bibleContext: ProductionBibleResolvedContext | null
+}> {
+  bibleGenerationDebug.value = undefined
+  if (!PB_ID.test(contextProjectId.value)) {
+    lastGenerationProvenance.value = { bibleContext: null, promptForHash: basePrompt }
+    return { prompt: basePrompt, bibleContext: null }
+  }
+  const ctx = await productionBible.loadContextForPrompt(
+    mergeProductionBibleGenerationOptions({
+      characterIds: PB_ID.test(contextCharacterId.value) ? [contextCharacterId.value] : undefined
+    })
+  )
+  bibleGenerationDebug.value = buildProductionBibleGenerationDebug(ctx)
+  const prompt = appendProductionBibleToPrompt(basePrompt, ctx)
+  lastGenerationProvenance.value = { bibleContext: ctx, promptForHash: prompt }
+  return { prompt, bibleContext: ctx }
+}
+
 async function runGenerate () {
   formError.value = ''
   if (!selectedModelIds.value.length) {
@@ -534,12 +580,13 @@ async function runGenerate () {
     return
   }
 
-  const promptUsed = buildCharacterImagePrompt(
+  const basePrompt = buildCharacterImagePrompt(
     name.value,
     description.value,
     stylePreset.value,
     { hasReferenceImage: !!referenceForApi.value }
   )
+  const { prompt: promptUsed } = await resolveBibleAugmentedPrompt(basePrompt)
   lastPromptUsed.value = promptUsed
   loading.value = true
 
@@ -549,12 +596,20 @@ async function runGenerate () {
   }
   slotByModel.value = next
 
+  const token = getAuthToken()
+  if (!token) {
+    formError.value = 'Sign in to generate character images.'
+    loading.value = false
+    return
+  }
+  const authHeaders = { Authorization: `Bearer ${token}` }
   const ids = [...selectedModelIds.value]
   await Promise.allSettled(
     ids.map(async (modelId) => {
       try {
         const result = await $fetch<{ urls: string[] }>('/api/generate/image', {
           method: 'POST',
+          headers: authHeaders,
           body: {
             prompt: promptUsed,
             model: modelId,
@@ -723,19 +778,30 @@ async function confirmCloudSave () {
     fd.append('kind', 'character')
     fd.append('title', saveTitle.value.trim().slice(0, 500))
     fd.append('notes', description.value.trim().slice(0, 20_000))
-    fd.append(
-      'metadata',
-      JSON.stringify({
-        source: 'character_creator',
+    const prov = lastGenerationProvenance.value
+    const baseMetadata: Record<string, unknown> = {
+      source: 'character_creator',
+      model: pending.modelId,
+      model_label: pending.modelLabel,
+      character_name: linkedCharacter.name,
+      character_id: linkedCharacter.id,
+      featured: true,
+      ...(contextProjectId.value ? { source_project_id: contextProjectId.value } : {}),
+      prompt_used: slotByModel.value[pending.modelId]?.prompt_used ?? lastPromptUsed.value
+    }
+    const metadata = mergeGenerationObservabilityIntoMetadata(
+      baseMetadata,
+      buildGenerationObservability({
+        generationPath: GENERATION_PATH.CHARACTER_CREATOR,
+        projectId: saveProjectId.value,
+        characterId: linkedCharacter.id,
         model: pending.modelId,
-        model_label: pending.modelLabel,
-        character_name: linkedCharacter.name,
-        character_id: linkedCharacter.id,
-        featured: true,
-        ...(contextProjectId.value ? { source_project_id: contextProjectId.value } : {}),
-        prompt_used: slotByModel.value[pending.modelId]?.prompt_used ?? lastPromptUsed.value
+        provider: 'openrouter',
+        promptForHash: prov?.promptForHash ?? lastPromptUsed.value,
+        bibleContext: prov?.bibleContext ?? null
       })
     )
+    fd.append('metadata', JSON.stringify(metadata))
     await $fetch(`/api/projects/${saveProjectId.value}/assets/upload`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${token}` },

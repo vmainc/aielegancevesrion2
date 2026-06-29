@@ -114,15 +114,9 @@ import {
 } from '~/lib/project-workflow'
 import { stripConceptMetadataMarkers } from '~/lib/format-stored-concept'
 import type { CreativeCharacter } from '~/types/creative-project'
+import type { CreativeSceneListItem } from '~/types/creative-scene'
 
 const PB_ID = /^[a-z0-9]{15}$/
-
-type SceneRow = {
-  id: string
-  heading: string
-  summary: string
-  shotCount: number
-}
 
 const { activeProject, activeProjectId } = useCreativeProject()
 const { getAuthToken, isAuthenticated } = useAuth()
@@ -139,7 +133,7 @@ const canLoadCloud = computed(() =>
 const loadingStats = ref(false)
 const loadError = ref('')
 const characters = ref<CreativeCharacter[]>([])
-const sceneRows = ref<SceneRow[]>([])
+const sceneRows = ref<CreativeSceneListItem[]>([])
 
 const synopsisPreview = computed(() => {
   const raw = project.value?.synopsis?.trim() || ''
@@ -288,15 +282,10 @@ async function loadDashboardStats () {
     const headers = { Authorization: `Bearer ${token}` }
     const [charRes, sceneRes] = await Promise.all([
       $fetch<{ characters?: CreativeCharacter[] }>(`/api/projects/${id}/characters`, { headers }),
-      $fetch<{ scenes?: SceneRow[] }>(`/api/projects/${id}/scenes`, { headers })
+      $fetch<{ scenes?: CreativeSceneListItem[] }>(`/api/projects/${id}/scenes`, { headers })
     ])
     characters.value = charRes.characters ?? []
-    sceneRows.value = (sceneRes.scenes ?? []).map(s => ({
-      id: s.id,
-      heading: s.heading || '',
-      summary: s.summary || '',
-      shotCount: s.shotCount ?? 0
-    }))
+    sceneRows.value = sceneRes.scenes ?? []
   } catch (e: unknown) {
     loadError.value = e instanceof Error ? e.message : 'Could not load project stats'
   } finally {

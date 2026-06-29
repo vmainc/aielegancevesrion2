@@ -1,8 +1,19 @@
 import { buildCharacterImagePrompt, isValidStylePreset } from '~/lib/character-image-prompt'
+import {
+  appendProductionBibleToPrompt,
+  buildProductionBibleGenerationDebug,
+  mergeProductionBibleGenerationOptions
+} from '~/lib/production-bible-generation-context'
 import { CHARACTER_CREATOR_MODEL_IDS } from '~/lib/character-creator-models'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { openRouterGenerateImage } from '~/server/utils/openrouter-generate-image'
+import { resolveProductionBibleForGeneration } from '~/server/utils/resolve-production-bible-for-generation'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
+import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import type { CharacterCreatorImageResult } from '~/types/character-creator'
+
+const PB_ID = /^[a-z0-9]{15}$/
 
 export default defineEventHandler(async (event): Promise<CharacterCreatorImageResult[]> => {
   const body = await readBody<{
@@ -10,7 +21,28 @@ export default defineEventHandler(async (event): Promise<CharacterCreatorImageRe
     description?: string
     stylePreset?: string
     models?: string[]
+    projectId?: string
+    characterId?: string
+    entityIds?: string[]
+    sceneId?: string
+    shotId?: string
   }>(event)
+
+  const projectId = typeof body.projectId === 'string' ? body.projectId.trim() : ''
+  const characterId = typeof body.characterId === 'string' ? body.characterId.trim() : ''
+  const entityIds = Array.isArray(body.entityIds)
+    ? body.entityIds.filter((id): id is string => typeof id === 'string' && PB_ID.test(id.trim()))
+    : []
+  const sceneId = typeof body.sceneId === 'string' ? body.sceneId.trim() : ''
+  const shotId = typeof body.shotId === 'string' ? body.shotId.trim() : ''
+
+  let pb
+  if (projectId && PB_ID.test(projectId)) {
+    ;({ pb } = await requireProjectOwner(event, projectId))
+  } else {
+    await getPocketBaseUserIdFromRequest(event)
+    pb = await getAuthenticatedPocketBase()
+  }
 
   const name = typeof body.name === 'string' ? body.name : ''
   const description = typeof body.description === 'string' ? body.description : ''
@@ -38,7 +70,21 @@ export default defineEventHandler(async (event): Promise<CharacterCreatorImageRe
     })
   }
 
-  const prompt_used = buildCharacterImagePrompt(name, description, stylePreset)
+  let productionBibleDebug
+  let prompt_used = buildCharacterImagePrompt(name, description, stylePreset)
+
+  if (projectId && PB_ID.test(projectId)) {
+    const characterIds = characterId && PB_ID.test(characterId) ? [characterId] : undefined
+    const { context, failOpenReason } = await resolveProductionBibleForGeneration(pb, projectId, {
+      ...mergeProductionBibleGenerationOptions(),
+      characterIds,
+      entityIds: entityIds.length ? entityIds : undefined,
+      sceneId: sceneId || undefined,
+      shotId: shotId || undefined
+    })
+    productionBibleDebug = buildProductionBibleGenerationDebug(context, failOpenReason)
+    prompt_used = appendProductionBibleToPrompt(prompt_used, context)
+  }
 
   const settled = await Promise.allSettled(
     models.map(async (modelId): Promise<CharacterCreatorImageResult> => {
@@ -70,7 +116,7 @@ export default defineEventHandler(async (event): Promise<CharacterCreatorImageRe
     })
   )
 
-  return settled.map((r, i) => {
+  const results = settled.map((r, i) => {
     if (r.status === 'fulfilled') return r.value
     return {
       model: models[i] ?? 'unknown',
@@ -79,4 +125,10 @@ export default defineEventHandler(async (event): Promise<CharacterCreatorImageRe
       error: r.reason?.message ?? 'Generation failed'
     }
   })
+
+  if (productionBibleDebug && results[0]) {
+    results[0] = { ...results[0], productionBibleDebug }
+  }
+
+  return results
 })

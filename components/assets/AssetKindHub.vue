@@ -236,8 +236,21 @@
                 class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
               >
                 <div class="min-w-0 flex-1 flex items-start gap-3">
+                  <NuxtLink
+                    v-if="a.fileUrl && characterProfileTo(a)"
+                    :to="characterProfileTo(a)"
+                    class="block w-14 h-14 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0 hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
+                    :aria-label="`Open profile: ${a.title}`"
+                  >
+                    <img
+                      :src="characterAssetPlaybackSrc(a)"
+                      alt=""
+                      class="w-full h-full object-cover"
+                      loading="lazy"
+                    >
+                  </NuxtLink>
                   <button
-                    v-if="a.fileUrl"
+                    v-else-if="a.fileUrl"
                     type="button"
                     class="w-14 h-14 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0 cursor-zoom-in hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
                     :aria-label="`View full image: ${a.title}`"
@@ -260,7 +273,14 @@
                     {{ uploadingCharacterAssetId === a.id ? '…' : 'Add image' }}
                   </button>
                   <div class="min-w-0 flex-1">
-                    <p class="font-medium text-gray-900">{{ a.title }}</p>
+                    <NuxtLink
+                      v-if="characterProfileTo(a)"
+                      :to="characterProfileTo(a)"
+                      class="font-medium text-gray-900 hover:text-primary hover:underline"
+                    >
+                      {{ a.title }}
+                    </NuxtLink>
+                    <p v-else class="font-medium text-gray-900">{{ a.title }}</p>
                     <p
                       v-if="isFeaturedCharacterAsset(a)"
                       class="text-[11px] font-semibold text-emerald-700 mt-0.5"
@@ -282,6 +302,13 @@
                       Actions
                     </summary>
                     <div :class="ACTIONS_MENU_PANEL_CLASS">
+                      <NuxtLink
+                        v-if="characterProfileTo(a)"
+                        :to="characterProfileTo(a)"
+                        class="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-primary hover:bg-primary/5"
+                      >
+                        View character profile
+                      </NuxtLink>
                       <button
                         v-if="a.projectId"
                         type="button"
@@ -1097,6 +1124,18 @@ function characterDedupeKey (a: ProjectAsset): string {
 function isFeaturedCharacterAsset (a: ProjectAsset): boolean {
   const meta = a.metadata
   return !!(meta && typeof meta === 'object' && meta.featured === true)
+}
+
+/** Profile page route when this row has a real project + character id, else '' (fall back to lightbox). */
+function characterProfileTo (a: ProjectAsset): string {
+  if (props.kind !== 'character') return ''
+  const pid = (a.projectId || '').trim()
+  if (!PB_ID.test(pid)) return ''
+  const m = characterMetaFromAsset(a)
+  if (!m.id || !PB_ID.test(m.id)) return ''
+  // Pass the name so the profile can self-heal if the id is stale (deleted/recreated character).
+  const q = m.name ? `?name=${encodeURIComponent(m.name)}` : ''
+  return `/projects/${pid}/cast/${m.id}${q}`
 }
 
 function characterAssetRank (a: ProjectAsset): number {

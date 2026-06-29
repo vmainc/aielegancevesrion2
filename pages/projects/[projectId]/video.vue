@@ -21,7 +21,7 @@
             <span class="font-medium text-gray-800">Generate video</span> opens
             <NuxtLink to="/tools/video-generation" class="text-primary font-medium hover:underline">Video generation</NuxtLink>
             with the full production prompt and frame prefilled — pick multiple models there.
-            When a clip is ready it replaces the still here (play inline or fullscreen).
+            When a clip is ready it appears directly under the storyboard frame (play inline or fullscreen) so you can still reference the still.
             Clips are <span class="font-medium text-gray-800">5s or 10s</span> per shot; the server snaps to what the model supports.
             Generated video has <span class="font-medium text-gray-800">no AI background music</span> by default — add music from
             <NuxtLink to="/assets/music" class="text-primary font-medium hover:underline">Assets → My Music</NuxtLink>
@@ -129,59 +129,71 @@
                   {{ shot.title || `Shot ${idx + 1}` }}
                 </p>
 
-                <div
-                  :class="[
-                    storyboardFramePreviewClasses(project?.aspectRatio),
-                    'relative group bg-gray-900'
-                  ]"
-                >
-                  <video
-                    v-if="videoPreviewByKey[genKey(scene.id, shot.id)]"
-                    :key="videoPreviewByKey[genKey(scene.id, shot.id)]"
-                    :src="playbackVideoSrc(videoPreviewByKey[genKey(scene.id, shot.id)])"
-                    class="w-full h-full object-contain"
-                    controls
-                    playsinline
-                  />
-                  <img
-                    v-else-if="panelStoryboardUrl(shot, scene.id)"
-                    :src="panelStoryboardUrl(shot, scene.id)!"
-                    alt=""
-                    class="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                    loading="lazy"
-                  >
-                  <p
-                    v-else-if="!panelStoryboardUrl(shot, scene.id)"
-                    class="absolute inset-0 flex items-center justify-center text-xs text-gray-400 px-4 text-center"
-                  >
-                    No storyboard frame yet —
-                    <NuxtLink
-                      :to="`/projects/${projectId}/storyboard`"
-                      class="text-primary font-medium hover:underline ml-1"
-                    >Generate image</NuxtLink>
-                    on Storyboard first.
+                <!-- Storyboard seed frame — always shown so you can reference it while generating -->
+                <div>
+                  <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
+                    Storyboard frame
                   </p>
-                  <span
-                    v-else-if="!panelVideoUrl(scene.id, shot.id)"
-                    class="absolute bottom-2 left-2 z-10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded bg-black/55 text-white"
+                  <div
+                    :class="[
+                      storyboardFramePreviewClasses(project?.aspectRatio),
+                      'relative group bg-gray-900'
+                    ]"
                   >
-                    Seed frame
-                  </span>
-                  <button
-                    v-if="panelVideoUrl(scene.id, shot.id)"
-                    type="button"
-                    class="absolute top-2 right-2 z-10 px-2 py-1 text-[11px] font-semibold rounded-md bg-gray-950/75 text-white hover:bg-gray-950 border border-white/20"
-                    @click="openExpandedVideo(scene.id, shot, panelVideoUrl(scene.id, shot.id)!)"
+                    <img
+                      v-if="panelStoryboardUrl(shot, scene.id)"
+                      :src="panelStoryboardUrl(shot, scene.id)!"
+                      alt=""
+                      class="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                      loading="lazy"
+                    >
+                    <p
+                      v-else
+                      class="absolute inset-0 flex items-center justify-center text-xs text-gray-400 px-4 text-center"
+                    >
+                      No storyboard frame yet —
+                      <NuxtLink
+                        :to="`/projects/${projectId}/storyboard`"
+                        class="text-primary font-medium hover:underline ml-1"
+                      >Generate image</NuxtLink>
+                      on Storyboard first.
+                    </p>
+                    <button
+                      v-if="panelStoryboardUrl(shot, scene.id)"
+                      type="button"
+                      class="absolute inset-0 w-full h-full cursor-zoom-in rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary z-[1]"
+                      :aria-label="`View seed frame: ${shot.title || 'panel'}`"
+                      @click="openExpandedFrame(shot, panelStoryboardUrl(shot, scene.id)!)"
+                    />
+                  </div>
+                </div>
+
+                <!-- Generated video — appears directly under the storyboard once ready -->
+                <div v-if="panelVideoUrl(scene.id, shot.id)">
+                  <p class="text-[10px] font-semibold uppercase tracking-wide text-primary mb-1">
+                    Generated video
+                  </p>
+                  <div
+                    :class="[
+                      storyboardFramePreviewClasses(project?.aspectRatio),
+                      'relative group bg-gray-900'
+                    ]"
                   >
-                    Fullscreen
-                  </button>
-                  <button
-                    v-else-if="panelStoryboardUrl(shot, scene.id)"
-                    type="button"
-                    class="absolute inset-0 w-full h-full cursor-zoom-in rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary z-[1]"
-                    :aria-label="`View seed frame: ${shot.title || 'panel'}`"
-                    @click="openExpandedFrame(shot, panelStoryboardUrl(shot, scene.id)!)"
-                  />
+                    <video
+                      :key="videoPreviewByKey[genKey(scene.id, shot.id)]"
+                      :src="playbackVideoSrc(videoPreviewByKey[genKey(scene.id, shot.id)])"
+                      class="w-full h-full object-contain"
+                      controls
+                      playsinline
+                    />
+                    <button
+                      type="button"
+                      class="absolute top-2 right-2 z-10 px-2 py-1 text-[11px] font-semibold rounded-md bg-gray-950/75 text-white hover:bg-gray-950 border border-white/20"
+                      @click="openExpandedVideo(scene.id, shot, panelVideoUrl(scene.id, shot.id)!)"
+                    >
+                      Fullscreen
+                    </button>
+                  </div>
                 </div>
                 <div
                   v-if="panelVideoUrl(scene.id, shot.id)"
@@ -322,6 +334,7 @@ import {
   type ProductionPromptContext
 } from '~/lib/shot-character-continuity'
 import type { CreativeShot } from '~/types/creative-shot'
+import type { CreativeSceneListItem } from '~/types/creative-scene'
 import type { ProjectAsset } from '~/types/project-asset'
 
 const route = useRoute()
@@ -337,16 +350,7 @@ const PB_ID = /^[a-z0-9]{15}$/
 const project = activeProject
 const projectId = activeProjectId
 
-type SceneRow = {
-  id: string
-  sortOrder: number
-  heading: string
-  summary: string
-  bodyLength: number
-  shotCount?: number
-}
-
-const scenes = ref<SceneRow[]>([])
+const scenes = ref<CreativeSceneListItem[]>([])
 const addToTimelineOnSave = ref(false)
 const boardsError = ref('')
 const boardsLoading = ref(false)
@@ -379,7 +383,7 @@ async function loadScenesForVideo () {
   if (!headers) return
   boardsLoading.value = true
   try {
-    const res = await $fetch<{ scenes: SceneRow[] }>(`/api/projects/${id}/scenes`, { headers })
+    const res = await $fetch<{ scenes: CreativeSceneListItem[] }>(`/api/projects/${id}/scenes`, { headers })
     scenes.value = res.scenes || []
   } catch (e: unknown) {
     scenes.value = []
@@ -489,7 +493,7 @@ function panelVideoUrl (sceneId: string, shotId: string): string {
 
 function productionPromptContext (
   shot: CreativeShot,
-  scene?: SceneRow
+  scene?: CreativeSceneListItem
 ): ProductionPromptContext {
   return {
     director: project.value?.director,
@@ -504,7 +508,7 @@ function productionPromptContext (
   }
 }
 
-function finalVideoPrompt (shot: CreativeShot, scene?: SceneRow): string {
+function finalVideoPrompt (shot: CreativeShot, scene?: CreativeSceneListItem): string {
   return buildFullVideoGenerationPrompt(productionPromptContext(shot, scene))
 }
 
@@ -558,7 +562,7 @@ function openExpandedFrame (shot: CreativeShot, url: string) {
   }
 }
 
-function addClipToTimeline (scene: SceneRow, shot: CreativeShot, url: string) {
+function addClipToTimeline (scene: CreativeSceneListItem, shot: CreativeShot, url: string) {
   const u = url.trim()
   const pid = projectId.value
   if (!u || !PB_ID.test(pid)) return
@@ -577,7 +581,7 @@ function projectAspectForVideo (): '16:9' | '9:16' | '1:1' {
   return '16:9'
 }
 
-async function openVideoGenerationForPanel (shot: CreativeShot, scene: SceneRow) {
+async function openVideoGenerationForPanel (shot: CreativeShot, scene: CreativeSceneListItem) {
   const frame = panelStoryboardUrl(shot, scene.id)
   if (!frame) {
     toast.showToast('Generate a storyboard image for this panel first.', 'info')

@@ -2,7 +2,7 @@
   <div class="max-w-4xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Cast list: name and AI-written look/feel prompt. Click a character’s image square to upload a photo from your computer — or use <span class="font-medium text-gray-700">Generate with AI</span> in Actions. Below the table, attach short voice clips and notes so you can hear each character’s sound. After director analysis, use the button below so visual prompts and dialogue-share % follow your <span class="font-medium text-gray-700">newest</span> synopsis, treatment, and director bible.
+      · Cast list: name and AI-written look/feel prompt. Click a character’s name to open their profile — upload expression photos, voice clips, and short performance videos there. Below the table, attach reference clips and notes so you and your partner stay aligned on how each role sounds and moves.
     </p>
 
     <div
@@ -80,7 +80,7 @@
           :portrait-prompt-used-by-character-id="portraitPromptUsedByCharacterId"
           :show-portraits="true"
           heading="Characters"
-          subheading="Click the image square to upload a photo. Square colors match the dialogue-share chart."
+          subheading="Click a name to open the full character profile. Click the image square to upload a photo. Square colors match the dialogue-share chart."
           empty-hint="No characters yet. Click “Build / refresh cast from script” (needs a saved screenplay on Overview), or add a row manually."
           @create="onCreateCharacter"
           @update="onUpdateCharacter"

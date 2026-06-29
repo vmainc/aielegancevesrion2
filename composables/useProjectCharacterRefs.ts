@@ -116,7 +116,10 @@ export function useProjectCharacterRefs (projectId: Ref<string> | ComputedRef<st
           portraitUrl: p?.url || null,
           portraitNotes: p?.notes || '',
           portraitPromptUsed: p?.promptUsed || '',
-          voiceDescription: c.voiceDescription || ''
+          voiceDescription: c.voiceDescription || '',
+          appearanceDescription: c.appearanceDescription || '',
+          signatureDetails: c.signatureDetails || '',
+          avoidDescription: c.avoidDescription || ''
         }
       })
     } catch (e: unknown) {

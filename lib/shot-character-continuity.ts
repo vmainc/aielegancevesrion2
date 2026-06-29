@@ -13,11 +13,12 @@ import {
 } from '~/lib/storyboard-continuity-prompts'
 
 export { normalizeCharacterNameKey } from '~/lib/cast-name-convention'
-import { formatCastLineForProductionPrompt } from '~/lib/character-visual-description'
+import { formatCastLineForProductionPrompt, castMemberToVisualInput } from '~/lib/character-visual-description'
 import { SINGLE_STORYBOARD_FRAME_DIRECTIVE } from '~/lib/storyboard-frame-image'
 import { applyVideoNoBackgroundMusicPolicy } from '~/lib/video-generation-audio-policy'
-import { resolveFrameGenerationPrompt, resolveVideoGenerationPrompt } from '~/lib/unified-shot-prompt'
+import { resolveFrameGenerationPrompt, resolveShotVideoGenerationPrompt } from '~/lib/unified-shot-prompt'
 import type { ProjectDirector, ProjectTargetLength } from '~/types/creative-project'
+import type { ProductionBibleResolvedContext } from '~/types/production-bible-context'
 import type { CreativeShot } from '~/types/creative-shot'
 
 export interface ProjectCharacterRef {
@@ -33,12 +34,21 @@ export interface ProjectCharacterRef {
   portraitPromptUsed?: string
   /** Cast voice bible notes (reference clips on Characters step). */
   voiceDescription?: string
+  /** Locked visual anchor from character profile. */
+  appearanceDescription?: string
+  /** Recurring props, accessories, or tics. */
+  signatureDetails?: string
+  /** Per-character avoid list for STRICT EXCLUSIONS. */
+  avoidDescription?: string
 }
 
 export function projectCharacterRefToCastMember (c: ProjectCharacterRef) {
   return {
     name: c.name,
     traitsRoleVisual: c.roleDescription,
+    appearanceDescription: c.appearanceDescription,
+    signatureDetails: c.signatureDetails,
+    avoidDescription: c.avoidDescription,
     portraitUrl: c.portraitUrl,
     portraitNotes: c.portraitNotes,
     portraitPromptUsed: c.portraitPromptUsed
@@ -127,13 +137,7 @@ export function collectCharacterPortraitUrls (
 export function buildContinuityPromptBlock (matches: ProjectCharacterRef[]): string {
   if (!matches.length) return ''
   const lines = matches.map((c) => {
-    const line = formatCastLineForProductionPrompt({
-      name: c.name,
-      roleDescription: c.roleDescription,
-      portraitUrl: c.portraitUrl,
-      portraitNotes: c.portraitNotes,
-      portraitPromptUsed: c.portraitPromptUsed
-    })
+    const line = formatCastLineForProductionPrompt(castMemberToVisualInput(c))
     return `- ${line}`
   })
   return [
@@ -141,17 +145,6 @@ export function buildContinuityPromptBlock (matches: ProjectCharacterRef[]): str
     ...lines,
     'Do not invent a new look for any named character. If multiple characters appear, keep each distinct but faithful to their description.'
   ].join('\n')
-}
-
-function formatDirectorForPrompt (d: ProjectDirector | undefined): string {
-  if (!d) return ''
-  const chunks: string[] = []
-  if (d.style?.trim()) chunks.push(`Visual style: ${d.style.trim()}`)
-  if (d.tone?.trim()) chunks.push(`Directorial tone: ${d.tone.trim()}`)
-  if (d.camera_preferences?.trim()) chunks.push(`Camera preferences: ${d.camera_preferences.trim()}`)
-  if (d.lighting_style?.trim()) chunks.push(`Lighting: ${d.lighting_style.trim()}`)
-  if (d.pacing?.trim()) chunks.push(`Pacing: ${d.pacing.trim()}`)
-  return chunks.join('\n').slice(0, 6000)
 }
 
 export interface ProductionPromptContext {
@@ -165,86 +158,8 @@ export interface ProductionPromptContext {
     'title' | 'description' | 'imagePrompt' | 'videoPrompt' | 'shotType' | 'cameraMove'
   >
   cast: ProjectCharacterRef[]
-}
-
-function buildDirectorAndLightingBlock (ctx: ProductionPromptContext): string {
-  const dir = formatDirectorForPrompt(ctx.director)
-  const mem = (ctx.continuityMemory || '').trim()
-  const parts: string[] = []
-  if (dir) {
-    parts.push(
-      'VISUAL STYLE & LIGHTING (project-wide — use the same look in every panel; do not reset style between shots):',
-      dir
-    )
-  }
-  if (mem) {
-    parts.push('CONTINUITY MEMORY (carry forward across all panels):', mem)
-  }
-  return parts.join('\n')
-}
-
-function buildSceneEnvironmentBlock (scene?: { heading: string; summary?: string }): string {
-  const heading = scene?.heading?.trim() || ''
-  const summary = scene?.summary?.trim() || ''
-  if (!heading && !summary) return ''
-  const lines = [
-    'SETTING & ENVIRONMENT (same location, props, and time-of-day across panels in this scene unless this shot explicitly changes them):'
-  ]
-  if (heading) lines.push(`Slug: ${heading}`)
-  if (summary) lines.push(`Scene: ${summary}`)
-  lines.push(
-    'Keep background architecture, diner layout, color palette, and practical lights consistent with this setting.'
-  )
-  return lines.join('\n')
-}
-
-/** Full project cast — same wording every time so models do not redesign characters per panel. */
-export function buildCastBibleBlock (cast: ProjectCharacterRef[]): string {
-  if (!cast.length) return ''
-  const lines = cast.map((c) => {
-    const line = formatCastLineForProductionPrompt({
-      name: c.name,
-      roleDescription: c.roleDescription,
-      portraitUrl: c.portraitUrl,
-      portraitNotes: c.portraitNotes,
-      portraitPromptUsed: c.portraitPromptUsed
-    })
-    return `- ${line}`
-  })
-  return [
-    'CAST BIBLE (describe every named character exactly as below — same face, body, materials, colors, and proportions in every panel):',
-    ...lines
-  ].join('\n')
-}
-
-function shotMotionText (
-  shot: ProductionPromptContext['shot']
-): string {
-  const v = (shot.videoPrompt || '').trim()
-  if (v) return v
-  const i = (shot.imagePrompt || '').trim()
-  if (i) return i
-  return (shot.description || '').trim()
-}
-
-function buildSharedProductionBlocks (
-  ctx: Pick<ProductionPromptContext, 'director' | 'continuityMemory' | 'scene' | 'cast' | 'shot'>
-): string[] {
-  const inShot = findCharactersInShot(ctx.shot, ctx.cast, ctx.scene?.summary)
-  const castForBible = ctx.cast.length ? ctx.cast : inShot
-  const parts: string[] = []
-
-  const directorBlock = buildDirectorAndLightingBlock(ctx)
-  if (directorBlock) parts.push(directorBlock)
-
-  const sceneBlock = buildSceneEnvironmentBlock(ctx.scene)
-  if (sceneBlock) parts.push(sceneBlock)
-
-  const castBlock = buildCastBibleBlock(castForBible)
-  if (castBlock) parts.push(castBlock)
-  else if (inShot.length) parts.push(buildContinuityPromptBlock(inShot))
-
-  return parts
+  /** Read-only bible context appended at prompt assembly time (not persisted). */
+  productionBible?: ProductionBibleResolvedContext | null
 }
 
 /**
@@ -265,13 +180,14 @@ export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): s
         : ''
   } as CreativeShot
 
-  let prompt = resolveVideoGenerationPrompt(shotForVideo, {
+  let prompt = resolveShotVideoGenerationPrompt(shotForVideo, {
     director: ctx.director,
     continuityMemory: ctx.continuityMemory,
     aspectRatio: ctx.aspectRatio,
     sceneTitle: ctx.scene?.heading,
     sceneSummary: ctx.scene?.summary,
-    cast: ctx.cast.map(c => projectCharacterRefToCastMember(c))
+    cast: ctx.cast.map(c => projectCharacterRefToCastMember(c)),
+    productionBible: ctx.productionBible
   })
   if (isMusicVideoTarget(ctx.targetLength)) {
     prompt +=
@@ -314,17 +230,7 @@ export function buildStoryboardFramePrompt (
     aspectRatio: ctx.aspectRatio,
     sceneTitle: ctx.scene?.heading,
     sceneSummary: ctx.scene?.summary,
-    cast: (ctx.cast.length ? ctx.cast : matches).map(c => projectCharacterRefToCastMember(c))
+    cast: (ctx.cast.length ? ctx.cast : matches).map(c => projectCharacterRefToCastMember(c)),
+    productionBible: ctx.productionBible
   })
-}
-
-/** @deprecated Use buildFullVideoGenerationPrompt — kept for any legacy imports */
-export function buildVideoMotionPrompt (
-  basePrompt: string,
-  matches: ProjectCharacterRef[]
-): string {
-  const base = basePrompt.trim()
-  const block = buildContinuityPromptBlock(matches)
-  if (!block) return base
-  return `${block}\n\nMOTION / ACTION:\n${base}`
 }

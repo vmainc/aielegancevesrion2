@@ -229,39 +229,77 @@
 
         <div
           v-if="!shotsLoading && shots.length"
-          class="flex flex-wrap items-center justify-end gap-2 mb-3"
+          class="flex flex-wrap items-center justify-between gap-2 mb-3"
         >
-          <button
-            type="button"
-            class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-            @click="setAllBoardDetailsOpen(false)"
-          >
-            Collapse all details
-          </button>
-          <button
-            type="button"
-            class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
-            @click="setAllBoardDetailsOpen(true)"
-          >
-            Expand all details
-          </button>
+          <p class="text-xs text-gray-500">
+            Drag a board by its grip handle and drop it onto another board to reorder. Use the dashed card to add a new board.
+          </p>
+          <div class="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              @click="setAllBoardDetailsOpen(false)"
+            >
+              Collapse all details
+            </button>
+            <button
+              type="button"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              @click="setAllBoardDetailsOpen(true)"
+            >
+              Expand all details
+            </button>
+          </div>
         </div>
 
         <ul v-if="!shotsLoading && shots.length" class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5 items-start">
-          <li
-            v-for="(shot, idx) in shots"
-            :key="shot.id"
-            class="rounded-xl border border-gray-200 bg-white overflow-hidden flex flex-col shadow-sm"
-          >
+          <template v-for="(shot, idx) in shots" :key="shot.id">
+            <li
+              class="relative rounded-xl border bg-white overflow-hidden flex flex-col shadow-sm transition-all"
+              :class="[
+                draggingShotId === shot.id ? 'opacity-40 border-gray-300' : 'border-gray-200',
+                draggingShotId && draggingShotId !== shot.id && dropTargetIndex === idx
+                  ? 'ring-2 ring-primary ring-offset-2'
+                  : '',
+                reordering ? 'pointer-events-none' : ''
+              ]"
+              :draggable="armedShotId === shot.id"
+              @dragstart="onBoardDragStart(shot.id, $event)"
+              @dragend="onBoardDragEnd"
+              @dragover="onDropSlotDragOver(idx, $event)"
+              @dragleave="onDropSlotDragLeave(idx)"
+              @drop="onDropAtSlot(idx, $event)"
+            >
             <div class="px-3 py-2 border-b border-gray-200 flex items-center justify-between gap-2 bg-gray-50 shrink-0">
-              <span class="text-xs font-mono text-primary">BOARD {{ idx + 1 }}</span>
+              <div class="flex items-center gap-2 min-w-0">
+                <span
+                  class="shrink-0 px-1 py-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-200 select-none"
+                  :class="reordering || !!imageGenId || !!frameUploadingId
+                    ? 'opacity-40 cursor-not-allowed'
+                    : 'cursor-grab active:cursor-grabbing'"
+                  title="Drag to reorder"
+                  aria-label="Drag to reorder board"
+                  @mousedown="onGripPress(shot.id)"
+                  @touchstart="onGripPress(shot.id)"
+                >
+                  <svg class="w-4 h-4 pointer-events-none" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+                    <circle cx="5" cy="4" r="1.2" />
+                    <circle cx="11" cy="4" r="1.2" />
+                    <circle cx="5" cy="8" r="1.2" />
+                    <circle cx="11" cy="8" r="1.2" />
+                    <circle cx="5" cy="12" r="1.2" />
+                    <circle cx="11" cy="12" r="1.2" />
+                  </svg>
+                </span>
+                <span class="text-xs font-mono text-primary">BOARD {{ idx + 1 }}</span>
+              </div>
               <div class="flex items-center gap-2 min-w-0">
                 <span class="text-xs text-gray-500 truncate max-w-[12rem] sm:max-w-[55%] text-right">{{ shot.title || 'Untitled' }}</span>
                 <button
                   v-if="shots.length > 1"
                   type="button"
                   class="shrink-0 px-2 py-0.5 text-[10px] font-semibold rounded border border-red-200 text-red-700 hover:bg-red-50 disabled:opacity-50"
-                  :disabled="deletingBoardId === shot.id"
+                  :disabled="deletingBoardId === shot.id || reordering"
                   @click="deleteBoard(shot)"
                 >
                   {{ deletingBoardId === shot.id ? '…' : 'Delete' }}
@@ -334,6 +372,12 @@
                         Generate
                       </button>
                     </div>
+                    <p
+                      v-if="frameBibleDebug[shot.id]"
+                      class="mt-2 text-[10px] text-gray-500 text-center px-2"
+                    >
+                      {{ frameBibleDebug[shot.id] }}
+                    </p>
                   </template>
                 </div>
                 <button
@@ -376,6 +420,37 @@
                 {{ shot.shotType || 'Shot' }} · {{ shot.durationSeconds }}s
               </span>
             </div>
+            <div
+              v-if="shotCharacterMatches(shot).length"
+              class="px-3 py-1.5 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-white shrink-0"
+            >
+              <span class="text-[10px] font-medium text-gray-400 uppercase tracking-wide shrink-0">Cast</span>
+              <ul class="flex flex-wrap gap-1">
+                <li
+                  v-for="c in shotCharacterMatches(shot)"
+                  :key="`chip-${c.id}`"
+                >
+                  <NuxtLink
+                    :to="characterProfileTo(c)"
+                    class="block w-7 h-7 rounded overflow-hidden border border-gray-200 bg-gray-100 hover:ring-2 hover:ring-primary/50 transition-shadow"
+                    :title="c.name"
+                  >
+                    <img
+                      v-if="c.portraitUrl"
+                      :src="c.portraitUrl"
+                      :alt="c.name"
+                      class="w-full h-full object-cover"
+                    >
+                    <span
+                      v-else
+                      class="flex h-full w-full items-center justify-center text-[8px] font-bold text-gray-500 uppercase"
+                    >
+                      {{ c.name.trim().slice(0, 2) }}
+                    </span>
+                  </NuxtLink>
+                </li>
+              </ul>
+            </div>
             <details
               class="group/board border-t border-gray-200"
               :open="boardDetailsOpenFor(shot)"
@@ -396,6 +471,12 @@
                 </span>
               </summary>
               <div class="px-3 pb-4 pt-1 space-y-3 border-t border-gray-100 bg-gray-50/50">
+                <p
+                  v-if="frameBibleDebug[shot.id]"
+                  class="text-[10px] text-gray-500"
+                >
+                  {{ frameBibleDebug[shot.id] }}
+                </p>
                 <div
                   v-if="!hasDisplayableFrame(shot) && !framePreviewLoading[shot.id]"
                   class="flex flex-wrap items-center gap-2"
@@ -481,20 +562,45 @@
                   </select>
                 </div>
               </div>
-              <div class="flex flex-col gap-1.5 pt-1">
-                <p
-                  v-if="shotCharacterMatches(shot).length"
-                  class="text-[11px] text-gray-500 leading-snug"
-                >
-                  Cast continuity:
-                  <span
-                    v-for="(c, ci) in shotCharacterMatches(shot)"
-                    :key="c.id"
-                    class="font-medium text-gray-700"
-                  >
-                    {{ c.name.trim().toUpperCase() }}<span v-if="c.portraitUrl" class="text-primary"> · ref</span><span v-if="ci < shotCharacterMatches(shot).length - 1">, </span>
-                  </span>
+              <div
+                v-if="shotCharacterMatches(shot).length"
+                class="flex flex-col gap-1.5 pt-1"
+              >
+                <p class="text-[11px] font-medium text-gray-500">
+                  In this shot
                 </p>
+                <ul class="flex flex-wrap gap-2">
+                  <li
+                    v-for="c in shotCharacterMatches(shot)"
+                    :key="c.id"
+                  >
+                    <NuxtLink
+                      :to="characterProfileTo(c)"
+                      class="group flex flex-col items-center gap-0.5 w-11"
+                      :title="`Open ${c.name} profile${c.portraitUrl ? ' · portrait attached' : ''}`"
+                    >
+                      <span
+                        class="relative block w-9 h-9 rounded-md overflow-hidden border border-gray-200 bg-gray-100 shadow-sm group-hover:ring-2 group-hover:ring-primary/50 transition-shadow"
+                      >
+                        <img
+                          v-if="c.portraitUrl"
+                          :src="c.portraitUrl"
+                          :alt="c.name"
+                          class="absolute inset-0 w-full h-full object-cover"
+                        >
+                        <span
+                          v-else
+                          class="absolute inset-0 flex items-center justify-center text-[9px] font-bold text-gray-500 uppercase tracking-tight"
+                        >
+                          {{ c.name.trim().slice(0, 2) }}
+                        </span>
+                      </span>
+                      <span class="text-[9px] font-semibold text-gray-600 uppercase truncate max-w-[2.75rem] group-hover:text-primary leading-tight">
+                        {{ c.name.trim() }}
+                      </span>
+                    </NuxtLink>
+                  </li>
+                </ul>
               </div>
                 <div class="pt-1 border-t border-gray-200">
                   <div class="flex justify-between items-center gap-2 mb-1 mt-2">
@@ -514,6 +620,31 @@
                 </div>
               </div>
             </details>
+            </li>
+          </template>
+
+          <li
+            class="rounded-xl border-2 border-dashed bg-gray-50/80 overflow-hidden flex flex-col min-h-[12rem] transition-colors"
+            :class="[
+              draggingShotId && dropTargetIndex === shots.length
+                ? 'border-primary bg-primary/10'
+                : 'border-gray-300 hover:border-primary/50 hover:bg-primary/5',
+              reordering || addingBoard ? 'pointer-events-none opacity-60' : 'cursor-pointer'
+            ]"
+            @dragover="onDropSlotDragOver(shots.length, $event)"
+            @dragleave="onDropSlotDragLeave(shots.length)"
+            @drop="onDropAtSlot(shots.length, $event)"
+            @click="onAddBoardCardClick"
+          >
+            <div class="flex-1 flex flex-col items-center justify-center gap-2 p-6 text-center">
+              <span class="text-2xl text-gray-400 leading-none">+</span>
+              <p class="text-sm font-semibold text-gray-700">
+                {{ addingBoard ? 'Adding board…' : 'Add board' }}
+              </p>
+              <p class="text-xs text-gray-500 max-w-[14rem]">
+                Click to add a board, or drag a board here to move it to the end.
+              </p>
+            </div>
           </li>
         </ul>
 
@@ -524,8 +655,8 @@
           <button
             type="button"
             class="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 text-sm font-semibold rounded-lg disabled:opacity-50"
-            :disabled="addingBoard"
-            @click="addBoard"
+            :disabled="addingBoard || reordering"
+            @click="addBoard()"
           >
             {{ addingBoard ? 'Adding board…' : '+ Add board' }}
           </button>
@@ -630,6 +761,7 @@
 
 <script setup lang="ts">
 import type { CreativeShot } from '~/types/creative-shot'
+import type { CreativeSceneListItem } from '~/types/creative-scene'
 import type { ProjectAsset } from '~/types/project-asset'
 import {
   CHARACTER_CREATOR_IMAGE_MODELS,
@@ -644,7 +776,9 @@ import { canonicalizeShotCastNames } from '~/lib/cast-name-convention'
 import {
   collectCharacterPortraitUrls,
   findCharactersInShot,
-  resolveCharactersForFrameGeneration
+  projectCharacterRefToCastMember,
+  resolveCharactersForFrameGeneration,
+  type ProjectCharacterRef
 } from '~/lib/shot-character-continuity'
 import {
   buildMotionPromptForShot,
@@ -661,6 +795,16 @@ import {
   mapStoryboardAssetsToShots,
   storyboardFrameMetadata
 } from '~/lib/storyboard-panel-assets'
+import {
+  mergeProductionBibleGenerationOptions,
+  productionBibleGenerationDebugLabel
+} from '~/lib/production-bible-generation-context'
+import {
+  buildGenerationObservability,
+  GENERATION_PATH,
+  mergeGenerationObservabilityIntoMetadata
+} from '~/lib/generation-observability'
+import type { ProductionBibleResolvedContext } from '~/types/production-bible-context'
 import {
   fetchImageAsDataUrl,
   isDirectStoryboardFrameSrc
@@ -687,17 +831,14 @@ const builderMode = computed(() => route.query.builder === '1')
 const projectId = activeProjectId
 const project = activeProject
 
-type SceneRow = {
-  id: string
-  sortOrder: number
-  heading: string
-  summary: string
-  bodyLength: number
-  shotCount?: number
-}
-
-const scenes = ref<SceneRow[]>([])
+const scenes = ref<CreativeSceneListItem[]>([])
 const { refs: characterRefs, reload: reloadCharacterRefs } = useProjectCharacterRefs(projectId)
+const productionBible = useProductionBible(projectId)
+const frameBibleDebug = reactive<Record<string, string>>({})
+const frameGenerationProvenance = reactive<Record<string, {
+  bibleContext: ProductionBibleResolvedContext | null
+  promptForHash: string
+}>>({})
 const storyboardAssets = ref<ProjectAsset[]>([])
 const selectedSceneId = ref('')
 const scenesLoadError = ref('')
@@ -735,6 +876,31 @@ const selectedImageModelId = ref<string>(DEFAULT_IMAGE_MODEL_ID)
 const activeImageModelLabel = computed(
   () => imageModelOptions.find(m => m.id === selectedImageModelId.value)?.label || selectedImageModelId.value
 )
+
+const {
+  draggingShotId,
+  dropTargetIndex,
+  reordering,
+  armedShotId,
+  armBoardDrag,
+  onBoardDragStart,
+  onBoardDragEnd,
+  onDropSlotDragOver,
+  onDropSlotDragLeave,
+  onDropAtSlot,
+  persistShotOrder
+} = useStoryboardBoardReorder({
+  projectId,
+  sceneId: selectedSceneId,
+  shots,
+  getAuthToken,
+  toast
+})
+
+function onGripPress (shotId: string) {
+  if (reordering.value || imageGenId.value || frameUploadingId.value) return
+  armBoardDrag(shotId)
+}
 
 const framePreviewBoxClass = computed(() => {
   const base = storyboardFramePreviewClasses(project.value?.aspectRatio)
@@ -799,7 +965,7 @@ const storyboardTimingWarning = computed(() => {
   return `This project targets ~${budget.totalSeconds}s (${budget.maxPanelsTotal} panels at ${budget.clipSeconds}s each), but you have ${totalPanels} panels (~${estSeconds}s). Rebuild from Director or trim scenes on the Scenes tab.`
 })
 
-function scenePanelLabel (scene: SceneRow): string {
+function scenePanelLabel (scene: CreativeSceneListItem): string {
   const existing = Number(scene.shotCount || 0)
   if (Number.isFinite(existing) && existing > 0) {
     return `${Math.floor(existing)} panel${Math.floor(existing) === 1 ? '' : 's'}`
@@ -817,6 +983,13 @@ function scenePanelLabel (scene: SceneRow): string {
 
 function shotCharacterMatches (shot: CreativeShot) {
   return findCharactersInShot(shot, characterRefs.value, activeScene.value?.summary)
+}
+
+function characterProfileTo (c: ProjectCharacterRef): string {
+  const pid = projectId.value
+  if (!pid || !c.id) return '#'
+  const q = c.name ? `?name=${encodeURIComponent(c.name)}` : ''
+  return `/projects/${pid}/cast/${c.id}${q}`
 }
 
 function applyCastNameConventionToShots (list: CreativeShot[]): CreativeShot[] {
@@ -979,14 +1152,22 @@ function unifiedPromptContext () {
     aspectRatio: project.value?.aspectRatio,
     sceneTitle: activeScene.value?.heading,
     sceneSummary: activeScene.value?.summary,
-    cast: characterRefs.value.map(c => ({
-      name: c.name,
-      traitsRoleVisual: c.roleDescription,
-      portraitUrl: c.portraitUrl,
-      portraitNotes: c.portraitNotes,
-      portraitPromptUsed: c.portraitPromptUsed
-    }))
+    cast: characterRefs.value.map(c => projectCharacterRefToCastMember(c))
   }
+}
+
+async function loadBibleContextForFrame (shot: CreativeShot) {
+  const matches = shotCharacterMatches(shot)
+  const characterIds = [
+    ...new Set([...matches.map(c => c.id), ...characterRefs.value.map(c => c.id)])
+  ].filter(Boolean)
+  return productionBible.loadContextForPrompt(
+    mergeProductionBibleGenerationOptions({
+      sceneId: selectedSceneId.value || undefined,
+      shotId: shot.id,
+      characterIds
+    })
+  )
 }
 
 async function generateAllFrames () {
@@ -1033,10 +1214,17 @@ async function generateFrame (shot: CreativeShot) {
   }
   const matches = shotCharacterMatches(shot)
   const panelIndex = shots.value.findIndex(s => s.id === shot.id)
+  const productionBibleCtx = await loadBibleContextForFrame(shot)
+  frameBibleDebug[shot.id] = productionBibleGenerationDebugLabel(productionBibleCtx)
   const prompt = resolveFrameGenerationPrompt(shot, {
     ...unifiedPromptContext(),
-    panelIndex: panelIndex >= 0 ? panelIndex : undefined
+    panelIndex: panelIndex >= 0 ? panelIndex : undefined,
+    productionBible: productionBibleCtx
   })
+  frameGenerationProvenance[shot.id] = {
+    bibleContext: productionBibleCtx,
+    promptForHash: prompt
+  }
   const referenceImageUrls = frameGenerationReferenceUrls(shot)
   if (!referenceImageUrls.length) {
     const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim())
@@ -1047,10 +1235,16 @@ async function generateFrame (shot: CreativeShot) {
       )
     }
   }
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Sign in to generate frames.', 'warning')
+    return
+  }
   imageGenId.value = shot.id
   try {
     const res = await $fetch<{ urls?: unknown[] }>('/api/generate/image', {
       method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
       body: {
         prompt,
         model: selectedImageModelId.value,
@@ -1326,12 +1520,27 @@ async function persistStoryboardAsset (
   if (!id || !sid || !token) return null
 
   const title = `${shot.title || 'Storyboard Frame'} (${activeImageModelLabel.value})`.slice(0, 500)
-  const metadata = storyboardFrameMetadata(shot, sid, panelIndexForShot(shot), {
+  const prov = frameGenerationProvenance[shot.id]
+  const baseMetadata = storyboardFrameMetadata(shot, sid, panelIndexForShot(shot), {
     model_id: selectedImageModelId.value,
     model_label: activeImageModelLabel.value,
     character_ids: matches.map(c => c.id),
     character_names: matches.map(c => c.name)
   })
+  const metadata = mergeGenerationObservabilityIntoMetadata(
+    baseMetadata,
+    buildGenerationObservability({
+      generationPath: GENERATION_PATH.STORYBOARD_FRAME,
+      projectId: id,
+      sceneId: sid,
+      shotId: shot.id,
+      characterIds: matches.map(c => c.id),
+      model: selectedImageModelId.value,
+      provider: 'openrouter',
+      promptForHash: prov?.promptForHash,
+      bibleContext: prov?.bibleContext ?? null
+    })
+  )
 
   if (/^https?:\/\//i.test(imageUrl)) {
     const out = await $fetch<{ asset?: ProjectAsset }>(
@@ -1490,7 +1699,7 @@ async function loadScenes () {
   const headers = await authHeaders()
   if (!headers) return
   try {
-    const res = await $fetch<{ scenes: SceneRow[] }>(`/api/projects/${id}/scenes`, { headers })
+    const res = await $fetch<{ scenes: CreativeSceneListItem[] }>(`/api/projects/${id}/scenes`, { headers })
     scenes.value = res.scenes || []
     if (!scenes.value.length) {
       selectedSceneId.value = ''
@@ -1540,7 +1749,7 @@ async function saveShot (shot: CreativeShot) {
   }
 }
 
-async function addBoard () {
+async function addBoard (insertAt?: number) {
   const id = projectId.value
   const sid = selectedSceneId.value
   const token = getAuthToken()
@@ -1553,7 +1762,24 @@ async function addBoard () {
     })
     const mapped = applyCastNameConventionToShots(mapShotsFromApi([res.shot]))
     if (mapped[0]) {
-      shots.value = [...shots.value, mapped[0]]
+      let next = [...shots.value, mapped[0]]
+      const targetIndex = typeof insertAt === 'number'
+        ? Math.max(0, Math.min(insertAt, next.length - 1))
+        : next.length - 1
+      if (targetIndex < next.length - 1) {
+        const fromIndex = next.length - 1
+        const reordered = [...next]
+        const [moved] = reordered.splice(fromIndex, 1)
+        reordered.splice(targetIndex, 0, moved!)
+        next = reordered.map((s, i) => ({ ...s, sortOrder: i + 1 }))
+        shots.value = next
+        const ok = await persistShotOrder(next)
+        if (!ok) {
+          await loadShots({ preserveOnError: true })
+        }
+      } else {
+        shots.value = next
+      }
       boardDetailsOpenByShotId.value = {
         ...boardDetailsOpenByShotId.value,
         [mapped[0].id]: true
@@ -1566,6 +1792,11 @@ async function addBoard () {
   } finally {
     addingBoard.value = false
   }
+}
+
+function onAddBoardCardClick () {
+  if (draggingShotId.value || addingBoard.value || reordering.value) return
+  void addBoard(shots.value.length)
 }
 
 async function deleteBoard (shot: CreativeShot) {

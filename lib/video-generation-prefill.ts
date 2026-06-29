@@ -12,7 +12,13 @@ export interface VideoGenerationPrefill {
   shotTitle?: string
   sceneId?: string
   shotId?: string
+  /** Cast ids used when resolving bible context for start-frame generation. */
+  characterIds?: string[]
+  /** Merged shot + cast avoid list — editable in Video generation; sent natively when supported. */
+  negativePrompt?: string
   source?: 'project_video_panel' | 'standalone_video_tool'
+  /** Read-only bible slice used when assembling prompt (debug / transparency). */
+  productionBibleContext?: import('~/types/production-bible-context').ProductionBibleResolvedContext
 }
 
 /** In-memory handoff for same-tab navigation to Video tools. */

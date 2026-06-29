@@ -5,12 +5,17 @@ import {
   resolveProjectDurationBudget
 } from '~/lib/project-duration-budget'
 import type PocketBase from 'pocketbase'
+import { checkShotsContinuity } from '~/server/utils/continuity-check-ai'
 import { enrichGeneratedShotsForContinuity } from '~/server/utils/enrich-generated-shots'
 import { loadCastMembersForContinuity } from '~/server/utils/project-character-prompt-refs'
+import { summaryFromContinuityCheck, type ContinuityCheckSummary } from '~/lib/continuity-check-result'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
+import { pbRecordToCreativeScene } from '~/server/utils/creative-scene-map'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
 import { replaceSceneShots } from '~/server/utils/persist-scene-shots'
+import { persistContinuityCheckOnProject } from '~/server/utils/persist-continuity-results'
+import { persistContinuityFindingsToBible } from '~/server/utils/persist-continuity-bible-facts'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { resolveProjectPreferredOpenRouterModel } from '~/server/utils/project-model-preference'
 import { ApiErrorCode, isAbortLikeError, throwApiError } from '~/server/utils/api-error-envelope'
@@ -24,7 +29,7 @@ export interface ExecuteGenerateShotsResult {
   shots: ReturnType<typeof pbRecordToCreativeShot>[]
   persisted: boolean
   warning: string
-  continuity: { issueCount: number; memoryUpdated: boolean }
+  continuity: ContinuityCheckSummary
 }
 
 export async function executeGenerateShots (opts: {
@@ -74,11 +79,8 @@ export async function executeGenerateShots (opts: {
     }
     throw e
   }
-  const sceneProject =
-    typeof (scene as { project?: unknown }).project === 'string'
-      ? (scene as { project: string }).project
-      : ((scene as { project?: { id?: string } }).project as { id?: string } | undefined)?.id
-  if (sceneProject !== projectId) {
+  const sceneRec = pbRecordToCreativeScene(scene as Parameters<typeof pbRecordToCreativeScene>[0])
+  if (sceneRec.projectId !== projectId) {
     throwApiError(400, ApiErrorCode.SCENE_WRONG_PROJECT, 'Scene does not belong to this project', {
       sceneId,
       projectId
@@ -88,9 +90,6 @@ export async function executeGenerateShots (opts: {
   if (sceneUser !== userId) {
     throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'scene' })
   }
-
-  const charFilter = `project="${projectId}"`
-  const characters = await pb.collection('creative_characters').getFullList({ filter: charFilter, batch: 200 })
 
   const projectRec = project as {
     director?: unknown
@@ -103,10 +102,9 @@ export async function executeGenerateShots (opts: {
     target_length?: string
     concept_notes?: string
   }
-  const sceneRec = scene as { heading?: string; summary?: string; body?: string }
 
   const director = parseDirectorField(projectRec.director) ?? null
-  const continuityMemory = String(projectRec.continuity_memory || '')
+  let continuityMemory = String(projectRec.continuity_memory || '')
   const pref = resolveProjectPreferredOpenRouterModel(project as Record<string, unknown>)
 
   const durationBudget = resolveProjectDurationBudget({
@@ -170,8 +168,8 @@ export async function executeGenerateShots (opts: {
     goal: String(projectRec.goal || 'film'),
     tone: String(projectRec.tone || 'cinematic'),
     sceneTitle: sceneRec.heading || 'Scene',
-    sceneSummary: String(sceneRec.summary || ''),
-    sceneScript: String(sceneRec.body || ''),
+    sceneSummary: sceneRec.summary,
+    sceneScript: sceneRec.body,
     characters: await loadCastMembersForContinuity(pb, projectId),
     director,
     continuityMemory,
@@ -203,13 +201,100 @@ export async function executeGenerateShots (opts: {
     throwApiError(502, ApiErrorCode.OPENROUTER_UPSTREAM, msg, { projectId, sceneId })
   }
 
-  const finalShots = enrichGeneratedShotsForContinuity(
-    generated.map(s => ({
+  const charactersSummary = shotsCtx.characters
+    .map(c => `${c.name}: ${c.traitsRoleVisual || c.appearanceDescription || ''}`.trim())
+    .filter(Boolean)
+    .join('\n')
+
+  console.log('[execute-generate-shots] continuity check starting', {
+    projectId,
+    sceneId,
+    shotCount: generated.length
+  })
+
+  const continuityChecked = await checkShotsContinuity({
+    shots: generated.map(s => ({
       ...s,
       duration_seconds: snapToStoryboardClipSeconds(s.duration_seconds)
     })),
-    shotsCtx
-  )
+    continuityMemory,
+    director,
+    sceneTitle: sceneRec.heading || 'Scene',
+    charactersSummary,
+    openrouterModelId: pref.openrouterModelId
+  })
+
+  console.log('[execute-generate-shots] continuity check complete', {
+    projectId,
+    sceneId,
+    status: continuityChecked.status,
+    issueCount: continuityChecked.status === 'ran' ? continuityChecked.issues.length : 0,
+    memoryAppendChars: continuityChecked.memoryAppend.length,
+    shotsRepaired: continuityChecked.status === 'ran' && continuityChecked.issues.length > 0
+  })
+
+  let memoryUpdated = false
+  try {
+    const persistedContinuity = await persistContinuityCheckOnProject({
+      pb,
+      projectId,
+      existingMemory: continuityMemory,
+      status: continuityChecked.status,
+      issues: continuityChecked.issues,
+      memoryAppend: continuityChecked.memoryAppend,
+      detail: continuityChecked.detail
+    })
+    continuityMemory = persistedContinuity.continuityMemory
+    memoryUpdated = persistedContinuity.memoryUpdated
+  } catch (persistContinuityErr: unknown) {
+    console.warn(
+      '[execute-generate-shots] continuity persistence failed:',
+      persistContinuityErr instanceof Error ? persistContinuityErr.message : persistContinuityErr
+    )
+    if (continuityChecked.status === 'ran' && continuityChecked.memoryAppend.trim()) {
+      continuityMemory = `${continuityMemory.trim()}\n\n${continuityChecked.memoryAppend}`.trim()
+      memoryUpdated = true
+    }
+  }
+
+  if (continuityChecked.status === 'ran' && continuityChecked.issues.length > 0) {
+    try {
+      const castRows = shotsCtx.characters as Array<{ id?: string; name: string }>
+      const bibleWriteback = await persistContinuityFindingsToBible({
+        pb,
+        userId,
+        projectId,
+        sceneId,
+        checkStatus: continuityChecked.status,
+        issues: continuityChecked.issues,
+        characters: castRows
+          .filter((c) => typeof c.id === 'string' && c.id && c.name.trim())
+          .map((c) => ({ id: c.id!, name: c.name }))
+      })
+      if (bibleWriteback.created > 0 || bibleWriteback.failed) {
+        console.log('[execute-generate-shots] continuity bible write-back', {
+          projectId,
+          sceneId,
+          ...bibleWriteback
+        })
+      }
+    } catch (bibleErr: unknown) {
+      console.warn(
+        '[execute-generate-shots] continuity bible write-back failed:',
+        bibleErr instanceof Error ? bibleErr.message : bibleErr
+      )
+    }
+  }
+
+  const continuitySummary = summaryFromContinuityCheck({
+    status: continuityChecked.status,
+    issues: continuityChecked.issues,
+    memoryUpdated,
+    detail: continuityChecked.detail
+  })
+
+  const enrichCtx = { ...shotsCtx, continuityMemory }
+  const finalShots = enrichGeneratedShotsForContinuity(continuityChecked.shots, enrichCtx)
 
   let created: ReturnType<typeof pbRecordToCreativeShot>[] = []
   let persisted = true
@@ -246,6 +331,6 @@ export async function executeGenerateShots (opts: {
     shots: created,
     persisted,
     warning,
-    continuity: { issueCount: 0, memoryUpdated: false }
+    continuity: continuitySummary
   }
 }

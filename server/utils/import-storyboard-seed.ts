@@ -7,6 +7,7 @@ import {
 import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
+import { enrichGeneratedShotsForContinuity } from '~/server/utils/enrich-generated-shots'
 import { replaceSceneShots } from '~/server/utils/persist-scene-shots'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 
@@ -99,7 +100,7 @@ export async function seedStoryboardsAfterScriptImport (params: {
       const sceneShotCap = sceneCap
         ? { minShots: Math.min(sceneCap.minShots, maxShots), maxShots }
         : { minShots: 1, maxShots }
-      const shots = await generateShotsWithAi({
+      const shotsCtx = {
         projectName: String(project.name || 'Project'),
         aspectRatio: String(project.aspect_ratio || '16:9'),
         goal: String(project.goal || 'film'),
@@ -112,7 +113,14 @@ export async function seedStoryboardsAfterScriptImport (params: {
         continuityMemory,
         durationBudget: budget,
         sceneShotCap
+      }
+      const rawShots = await generateShotsWithAi(shotsCtx)
+      console.log('[import-storyboard-seed] continuity check skipped (import speed path)', {
+        projectId,
+        sceneId: scene.id,
+        shotCount: rawShots.length
       })
+      const shots = enrichGeneratedShotsForContinuity(rawShots, shotsCtx)
       const fitted = budget
         ? fitShotsToSceneCap(shots, maxShots, budget.clipSeconds)
         : shots

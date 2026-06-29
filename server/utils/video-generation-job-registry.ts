@@ -6,6 +6,7 @@ type RegistryEntry = {
   pollUrl: string
   apiKey: string
   model: string
+  userId: string
   createdAt: number
 }
 

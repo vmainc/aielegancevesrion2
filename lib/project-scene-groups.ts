@@ -1,14 +1,13 @@
 import type { ProjectAsset } from '~/types/project-asset'
+import type { CreativeSceneListItem } from '~/types/creative-scene'
 
 /** Group key when clip metadata has no scene_id. */
 export const UNASSIGNED_SCENE_KEY = '__unassigned_scene__'
 
-export type ProjectSceneRow = {
-  id: string
-  heading?: string
-  sortOrder?: number
-}
+/** Minimal scene fields for timeline/video library grouping (not a separate API shape). */
+export type ProjectSceneRow = Pick<CreativeSceneListItem, 'id'> & Partial<Pick<CreativeSceneListItem, 'heading' | 'sortOrder'>>
 
+/** Derived heading/sort index used only for grouping — not returned by scene APIs. */
 export type SceneMeta = { heading: string; sortOrder: number }
 export type SceneMetaMap = Map<string, SceneMeta>
 

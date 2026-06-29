@@ -1,3 +1,15 @@
+/**
+ * Canonical prompt assembly for storyboard frames and shot-based video.
+ *
+ * Pipeline:
+ * 1. Raw shot drafts (AI or manual) → continuity check (server)
+ * 2. enrichGeneratedShotsForContinuity → applyUnifiedPromptsToShot (once, before persist)
+ * 3. Frame generation: resolveFrameGenerationPrompt
+ * 4. Video from stored shot: resolveShotVideoGenerationPrompt (via buildFullVideoGenerationPrompt)
+ *
+ * User dialogue/ambient for the video tool form lives in lib/video-generation-audio-policy.ts
+ * (resolveVideoGenerationUserPrompt) — not here.
+ */
 import {
   canonicalizeShotCastNames,
   castNameConventionPromptBlock
@@ -16,6 +28,8 @@ import {
 import { parseProjectAspectRatio, SINGLE_STORYBOARD_FRAME_DIRECTIVE } from '~/lib/storyboard-frame-image'
 import type { ProjectDirector } from '~/types/creative-project'
 import type { CreativeShot } from '~/types/creative-shot'
+import type { ProductionBibleResolvedContext } from '~/types/production-bible-context'
+import { formatProductionBiblePromptBlock } from '~/lib/format-production-bible-prompt-block'
 
 export interface UnifiedShotPromptContext {
   director?: ProjectDirector | null
@@ -28,10 +42,15 @@ export interface UnifiedShotPromptContext {
   cast: Array<{
     name: string
     traitsRoleVisual: string
+    appearanceDescription?: string
+    signatureDetails?: string
+    avoidDescription?: string
     portraitUrl?: string | null
     portraitNotes?: string
     portraitPromptUsed?: string
   }>
+  /** Read-only Production Bible slice (PASS 9). Appended when present; never persisted. */
+  productionBible?: ProductionBibleResolvedContext | null
 }
 
 const UNIFIED_MARKERS =
@@ -142,6 +161,7 @@ export function buildUnifiedProductionPrompt (
 
   const directorBible = buildDirectorBibleBlock(ctx.director ?? undefined)
   const mem = (ctx.continuityMemory || '').trim()
+  const bibleBlock = formatProductionBiblePromptBlock(ctx.productionBible)
   const fullCastBible = buildCastBibleParagraph(cast)
   const characterLock = buildCharacterLockForShot(inShot, animalOnly)
   const { w, h } = parseProjectAspectRatio(ctx.aspectRatio || '16:9')
@@ -159,7 +179,7 @@ export function buildUnifiedProductionPrompt (
 
   const negative = mergeNegativePromptParts(
     shotCanon.negativePrompt,
-    buildProjectNegativePrompt({ cast })
+    buildProjectNegativePrompt({ cast, inShot })
   )
   const negBlock = formatNegativePromptForImageModel(negative)
 
@@ -170,6 +190,7 @@ export function buildUnifiedProductionPrompt (
     castNaming,
     directorBible,
     mem ? `CONTINUITY MEMORY (do not contradict):\n${mem.slice(0, 2500)}` : '',
+    bibleBlock,
     sceneBlock,
     fullCastBible ? `FULL CAST BIBLE (same designs every panel — do not change faces/wardrobe):\n${fullCastBible}` : '',
     characterLock,
@@ -199,8 +220,8 @@ export function resolveFrameGenerationPrompt (
   return buildUnifiedProductionPrompt(shotCanon, ctx)
 }
 
-/** Video API: production still + motion beat (no duplicate director/cast blocks). */
-export function resolveVideoGenerationPrompt (
+/** Video from a stored shot: production still + motion beat (no duplicate director/cast blocks). */
+export function resolveShotVideoGenerationPrompt (
   shot: CreativeShot,
   ctx: UnifiedShotPromptContext
 ): string {
@@ -217,21 +238,50 @@ export function resolveVideoGenerationPrompt (
   )
 }
 
+/** @deprecated Use resolveShotVideoGenerationPrompt — shot-based video assembly. */
+export const resolveVideoGenerationPrompt = resolveShotVideoGenerationPrompt
+
+function mergedShotNegativePrompt (
+  shotCanon: CreativeShot,
+  cast: UnifiedShotPromptContext['cast']
+): string {
+  return mergeNegativePromptParts(
+    shotCanon.negativePrompt,
+    buildProjectNegativePrompt({
+      cast,
+      inShot: castMembersInShot(
+        {
+          title: shotCanon.title,
+          description: shotCanon.description,
+          image_prompt: shotCanon.imagePrompt
+        },
+        cast
+      )
+    })
+  )
+}
+
+/**
+ * Normalize shot prompt fields for persist. Idempotent when imagePrompt is already unified.
+ */
 export function applyUnifiedPromptsToShot (
   shot: CreativeShot,
   ctx: UnifiedShotPromptContext
 ): Pick<CreativeShot, 'imagePrompt' | 'videoPrompt' | 'negativePrompt'> {
   const cast = ctx.cast
   const shotCanon = canonicalizeShotCastNames(shot, cast)
-  const production = buildUnifiedProductionPrompt(shotCanon, ctx)
-  const negative = mergeNegativePromptParts(
-    shotCanon.negativePrompt,
-    buildProjectNegativePrompt({
-      cast: ctx.cast
-    })
-  )
+  const negative = mergedShotNegativePrompt(shotCanon, cast)
+
+  if (promptLooksUnified(shotCanon.imagePrompt)) {
+    return {
+      imagePrompt: shotCanon.imagePrompt.trim(),
+      videoPrompt: buildMotionPromptForShot(shotCanon),
+      negativePrompt: negative
+    }
+  }
+
   return {
-    imagePrompt: production,
+    imagePrompt: buildUnifiedProductionPrompt(shotCanon, ctx),
     videoPrompt: buildMotionPromptForShot({
       ...shotCanon,
       description: shotCanon.description

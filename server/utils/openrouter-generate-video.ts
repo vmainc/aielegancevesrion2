@@ -21,6 +21,7 @@ export async function openRouterGenerateVideo (options: {
   durationSeconds?: number
   firstFrameImageUrl?: string
   generateAudio?: boolean
+  negativePrompt?: string
 }): Promise<OpenRouterGenerateVideoResult> {
   const started = await startOpenRouterVideoJob(options)
   if (started.status === 'completed' && started.videoUrl) {

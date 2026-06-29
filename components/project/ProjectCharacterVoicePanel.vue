@@ -4,10 +4,10 @@
     class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-8 shadow-sm"
   >
     <h2 class="text-lg font-semibold text-gray-900 mb-1">
-      Cast voice references
+      Cast voice & performance references
     </h2>
     <p class="text-sm text-gray-600 mb-6">
-      Upload short speaking clips (~10 seconds) per character so you and your partner can hear how each role sounds.
+      Upload short speaking clips (~10 seconds) or small video clips for mannerisms and on-camera delivery.
       These are reference samples only — your original dialogue stays on the timeline.
     </p>
 
@@ -28,7 +28,7 @@
           >
             <input
               type="file"
-              accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg"
+              accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg,video/mp4,video/webm,video/quicktime,.mp4,.mov"
               class="sr-only"
               :disabled="busy || uploadingCharacterId === c.id"
               @change="onFileChange(c, $event)"
@@ -89,16 +89,27 @@
             <li
               v-for="sample in samplesFor(c.id)"
               :key="sample.assetId"
-              class="flex flex-wrap items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2"
+              class="flex flex-col gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2"
             >
+              <video
+                v-if="sample.mediaType === 'video'"
+                :src="sample.url"
+                controls
+                preload="metadata"
+                playsinline
+                class="w-full max-h-36 rounded bg-black"
+              />
               <audio
+                v-else
                 :src="sample.url"
                 controls
                 preload="metadata"
                 class="h-8 max-w-full min-w-[12rem] flex-1"
               />
+              <div class="flex flex-wrap items-center gap-2">
               <span class="text-xs text-gray-400 truncate max-w-[8rem]">
-                {{ sample.title }}
+                {{ sample.mannerismLabel || sample.title }}
+                <span v-if="sample.mediaType === 'video'" class="text-primary"> · video</span>
               </span>
               <button
                 v-if="editable"
@@ -109,6 +120,7 @@
               >
                 {{ deletingAssetId === sample.assetId ? 'Removing…' : 'Remove' }}
               </button>
+              </div>
             </li>
           </ul>
         </div>
@@ -116,7 +128,7 @@
           v-else
           class="text-xs text-gray-500"
         >
-          No voice clips yet. Upload a short MP3 or WAV of this character speaking.
+          No reference clips yet. Upload a short MP3/WAV or a ~10s MP4/WebM of this character speaking or moving.
         </p>
       </li>
     </ul>
@@ -124,13 +136,13 @@
 </template>
 
 <script setup lang="ts">
-import type { CharacterVoiceSample } from '~/lib/character-voice-assets'
+import type { CharacterReferenceClip } from '~/lib/character-voice-assets'
 import type { CreativeCharacter } from '~/types/creative-project'
 
 const props = withDefaults(
   defineProps<{
     characters: CreativeCharacter[]
-    samplesByCharacterId: Record<string, CharacterVoiceSample[]>
+    samplesByCharacterId: Record<string, CharacterReferenceClip[]>
     editable?: boolean
     busy?: boolean
     uploadingCharacterId?: string | null
@@ -154,7 +166,7 @@ const emit = defineEmits<{
 
 const voiceNotesDraft = reactive<Record<string, string>>({})
 
-function samplesFor (characterId: string): CharacterVoiceSample[] {
+function samplesFor (characterId: string): CharacterReferenceClip[] {
   return props.samplesByCharacterId[characterId] || []
 }
 

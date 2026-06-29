@@ -1,5 +1,7 @@
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { ensureVideoStartFrameUrl } from '~/lib/video-start-frame-upload'
+import { normalizeVideoNegativePromptForApi } from '~/lib/video-negative-prompt'
 import { projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { snapDurationToModelSupported } from '~/lib/storyboard-video-duration'
 import type { ProjectAsset } from '~/types/project-asset'
@@ -24,9 +26,12 @@ export type OpenRouterVideoGenerateInput = {
   generateAudio?: boolean
   includeSpokenDialogue?: boolean
   includeAmbientSound?: boolean
+  /** Merged shot + cast exclusions — native passthrough when supported, else appended to prompt. */
+  negativePrompt?: string
 }
 
 export async function pollOpenRouterVideoJob (jobId: string): Promise<string> {
+  const headers = pocketBaseBearerHeaders(useAuth().getAuthToken())
   const deadline = Date.now() + 22 * 60 * 1000
   let wait = 2200
   while (Date.now() < deadline) {
@@ -35,7 +40,7 @@ export async function pollOpenRouterVideoJob (jobId: string): Promise<string> {
       status: string
       videoUrl?: string
       message?: string
-    }>('/api/generate/video/status', { query: { jobId } })
+    }>('/api/generate/video/status', { query: { jobId }, headers })
     if (s.status === 'completed' && s.videoUrl?.trim()) {
       return s.videoUrl.trim()
     }
@@ -64,8 +69,10 @@ export async function generateOpenRouterVideo (
     input.includeSpokenDialogue === true ||
     input.includeAmbientSound === true
 
+  const headers = pocketBaseBearerHeaders(useAuth().getAuthToken())
   const res = await $fetch<VideoJobPostResponse>('/api/generate/video', {
     method: 'POST',
+    headers,
     body: {
       prompt: input.prompt.trim(),
       model: input.model,
@@ -75,7 +82,10 @@ export async function generateOpenRouterVideo (
       frameImageUrl,
       generateAudio: wantsAudio,
       includeSpokenDialogue: input.includeSpokenDialogue === true,
-      includeAmbientSound: input.includeAmbientSound === true
+      includeAmbientSound: input.includeAmbientSound === true,
+      ...(input.negativePrompt?.trim()
+        ? { negativePrompt: normalizeVideoNegativePromptForApi(input.negativePrompt) }
+        : {})
     }
   })
 

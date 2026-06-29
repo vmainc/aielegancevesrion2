@@ -153,6 +153,8 @@
                 v-for="c in characters"
                 :key="c.id"
                 class="hover:bg-gray-50/70 transition-colors"
+                :class="characterProfileTo(c) ? 'cursor-pointer' : ''"
+                @click="onRowClick(c, $event)"
               >
                 <template v-if="editable && editingId === c.id">
                   <td
@@ -242,6 +244,7 @@
                   <td
                     v-if="showPortraits"
                     class="w-16 px-3 sm:px-4 py-3 align-middle text-center"
+                    @click.stop
                   >
                     <ProjectCharacterPortraitUpload
                       :character="c"
@@ -261,7 +264,15 @@
                     </NuxtLink>
                   </td>
                   <td class="px-4 sm:px-5 py-3 align-top font-semibold text-gray-900">
-                    {{ c.name }}
+                    <NuxtLink
+                      v-if="characterProfileTo(c)"
+                      :to="characterProfileTo(c)!"
+                      class="text-primary hover:underline"
+                      @click.stop
+                    >
+                      {{ c.name }}
+                    </NuxtLink>
+                    <span v-else>{{ c.name }}</span>
                   </td>
                   <td class="px-4 sm:px-5 py-3 align-top text-gray-700 leading-relaxed">
                     <span class="whitespace-pre-wrap break-words">{{ c.roleDescription || '—' }}</span>
@@ -275,6 +286,7 @@
                   <td
                     v-if="editable"
                     class="px-4 sm:px-5 py-3 align-top text-right whitespace-nowrap"
+                    @click.stop
                   >
                     <NuxtLink
                       v-if="showCharacterCreatorLink"
@@ -407,6 +419,22 @@ function characterFolderTo (c: CreativeCharacter) {
     path: '/assets/characters',
     query: q
   }
+}
+
+function characterProfileTo (c: CreativeCharacter): string {
+  const pid = (props.projectIdForCreatorLink || '').trim()
+  const cid = (c.id || '').trim()
+  if (!pid || !cid) return ''
+  const q = c.name ? `?name=${encodeURIComponent(c.name)}` : ''
+  return `/projects/${pid}/cast/${cid}${q}`
+}
+
+function onRowClick (c: CreativeCharacter, ev: MouseEvent) {
+  const to = characterProfileTo(c)
+  if (!to) return
+  const target = ev.target
+  if (target instanceof Element && target.closest('a, button, input, textarea, label')) return
+  void navigateTo(to)
 }
 
 function portraitUrlFor (c: CreativeCharacter): string {

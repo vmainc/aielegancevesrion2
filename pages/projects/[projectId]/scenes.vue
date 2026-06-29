@@ -233,6 +233,41 @@
                     >
                       {{ analyzeResultBySceneId[s.id]!.warning }}
                     </p>
+                    <div
+                      v-if="analyzeResultBySceneId[s.id]!.continuity"
+                      class="rounded-lg border px-3 py-2.5 space-y-2"
+                      :class="continuityPanelClass(analyzeResultBySceneId[s.id]!.continuity!)"
+                    >
+                      <p class="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                        Continuity check
+                      </p>
+                      <p class="text-sm text-gray-800">
+                        {{ analyzeResultBySceneId[s.id]!.continuity!.message }}
+                      </p>
+                      <ul
+                        v-if="analyzeResultBySceneId[s.id]!.continuity!.issues?.length"
+                        class="text-xs text-gray-700 space-y-1 list-disc pl-4"
+                      >
+                        <li
+                          v-for="(issue, idx) in analyzeResultBySceneId[s.id]!.continuity!.issues"
+                          :key="idx"
+                        >
+                          {{ issue }}
+                        </li>
+                      </ul>
+                      <p
+                        v-if="analyzeResultBySceneId[s.id]!.continuity!.memoryUpdated"
+                        class="text-xs text-emerald-800"
+                      >
+                        Production bible updated with new continuity notes.
+                      </p>
+                      <NuxtLink
+                        :to="`/projects/${projectId}/director`"
+                        class="inline-block text-xs text-primary font-medium hover:underline"
+                      >
+                        Director tab — full continuity report →
+                      </NuxtLink>
+                    </div>
                     <template v-if="analyzeResultBySceneId[s.id]!.newCharacters.length">
                       <p class="text-xs font-medium text-gray-700">
                         New characters in this scene — add them to your cast:
@@ -351,19 +386,12 @@
 </template>
 
 <script setup lang="ts">
+import type { ContinuityCheckSummary } from '~/lib/continuity-check-result'
+import type { CreativeSceneListItem } from '~/types/creative-scene'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 
 const PB_ID = /^[a-z0-9]{15}$/
-
-type SceneListRow = {
-  id: string
-  sortOrder: number
-  heading: string
-  summary: string
-  bodyLength: number
-  shotCount?: number
-}
 
 type SceneCharacterSuggestion = {
   name: string
@@ -377,15 +405,16 @@ type SceneAnalyzeResult = {
   warning: string
   newCharacters: SceneCharacterSuggestion[]
   castInScene: string[]
+  continuity: ContinuityCheckSummary
 }
 
-const { activeProjectId, activeProject } = useCreativeProject()
+const { activeProjectId, activeProject, registerImportedProject } = useCreativeProject()
 const { getAuthToken, isAuthenticated } = useAuth()
 const toast = useToast()
 
 const projectId = activeProjectId
 
-const scenes = ref<SceneListRow[]>([])
+const scenes = ref<CreativeSceneListItem[]>([])
 const loadError = ref<string | null>(null)
 const pending = ref(false)
 
@@ -430,7 +459,7 @@ async function loadScenes () {
   loadError.value = null
   pending.value = true
   try {
-    const res = await $fetch<{ scenes: SceneListRow[] }>(`/api/projects/${projectId.value}/scenes`, {
+    const res = await $fetch<{ scenes: CreativeSceneListItem[] }>(`/api/projects/${projectId.value}/scenes`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     scenes.value = res.scenes || []
@@ -469,7 +498,7 @@ async function generateScenesFromScript () {
   }
 }
 
-async function deleteScene (s: SceneListRow) {
+async function deleteScene (s: CreativeSceneListItem) {
   const id = projectId.value
   const token = getAuthToken()
   if (!id || !token || deletingSceneId.value) return
@@ -613,18 +642,28 @@ function revertSceneScript () {
   detailBody.value = savedScriptBody.value
 }
 
-function sceneHasSavedScript (s: SceneListRow): boolean {
+function sceneHasSavedScript (s: CreativeSceneListItem): boolean {
   if (expandedId.value === s.id) {
     return Boolean(savedScriptBody.value.trim() || s.summary.trim())
   }
   return Boolean((s.bodyLength || 0) > 0 || s.summary.trim())
 }
 
-function canAnalyzeScene (s: SceneListRow): boolean {
+function canAnalyzeScene (s: CreativeSceneListItem): boolean {
   return sceneHasSavedScript(s) && !scriptDirty.value
 }
 
-function analyzeDisabledReason (s: SceneListRow): string {
+function continuityPanelClass (c: ContinuityCheckSummary): string {
+  if (c.status === 'ran' && c.issueCount === 0) {
+    return 'border-emerald-200 bg-emerald-50/80'
+  }
+  if (c.status === 'ran' && c.issueCount > 0) {
+    return 'border-amber-200 bg-amber-50/80'
+  }
+  return 'border-amber-300 bg-amber-50'
+}
+
+function analyzeDisabledReason (s: CreativeSceneListItem): string {
   if (scriptDirty.value) return 'Save script changes first'
   if (!sceneHasSavedScript(s)) return 'Add and save script text for this scene first'
   return ''
@@ -653,21 +692,39 @@ async function analyzeScene (sceneId: string) {
         shotsPersisted: res.shotsPersisted,
         warning: res.warning || '',
         newCharacters: res.newCharacters || [],
-        castInScene: res.castInScene || []
+        castInScene: res.castInScene || [],
+        continuity: res.continuity
+      }
+    }
+    if (res.continuity?.memoryUpdated) {
+      try {
+        const project = await $fetch<{ project: import('~/types/creative-project').CreativeProject }>(
+          `/api/projects/${id}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+        if (project?.project) registerImportedProject(project.project)
+      } catch {
+        /* non-fatal */
       }
     }
     const row = scenes.value.find(s => s.id === sceneId)
     if (row) row.shotCount = res.shotCount
     const newCount = res.newCharacters?.length || 0
+    const continuityNote =
+      res.continuity?.status !== 'ran'
+        ? ' Continuity review did not run — see details below.'
+        : res.continuity.issueCount > 0
+          ? ` Continuity found ${res.continuity.issueCount} issue${res.continuity.issueCount === 1 ? '' : 's'}.`
+          : ''
     if (newCount > 0) {
       toast.showToast(
-        `Built ${res.shotCount} panel${res.shotCount === 1 ? '' : 's'} · ${newCount} new character${newCount === 1 ? '' : 's'} found`,
-        'success'
+        `Built ${res.shotCount} panel${res.shotCount === 1 ? '' : 's'} · ${newCount} new character${newCount === 1 ? '' : 's'} found.${continuityNote}`,
+        res.continuity?.status !== 'ran' ? 'warning' : 'success'
       )
     } else {
       toast.showToast(
-        `Built ${res.shotCount} storyboard panel${res.shotCount === 1 ? '' : 's'}.`,
-        'success'
+        `Built ${res.shotCount} storyboard panel${res.shotCount === 1 ? '' : 's'}.${continuityNote}`,
+        res.continuity?.status !== 'ran' ? 'warning' : 'success'
       )
     }
     await loadScenes()

@@ -8,7 +8,6 @@ import { isAnimalOnlyCast } from '~/lib/storyboard-continuity-prompts'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
-import { enrichGeneratedShotsForContinuity } from '~/server/utils/enrich-generated-shots'
 import { OPENROUTER_TEXT_MODEL_MAP } from '~/server/utils/openrouter-text-models'
 
 export interface GeneratedShot {
@@ -316,7 +315,7 @@ ${budget ? `${durationBudgetPromptBlock(budget, ctx.sceneShotCap ?? undefined)}\
   }
 
   const normalized = normalizeShotsFromModelArray(arr)
-  let shots = enrichGeneratedShotsForContinuity(normalized, ctx)
+  let shots = normalized
   if (shots.length < shotMin && shotMin > 1) {
     console.warn(
       '[generate-shots-ai] Too few normalized shots:',

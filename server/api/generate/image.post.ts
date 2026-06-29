@@ -3,6 +3,7 @@ import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { openRouterGenerateImage } from '~/server/utils/openrouter-generate-image'
 import { resolveReferenceImageUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
 import { stageImageForVideoStartFrame } from '~/server/utils/stage-image-for-video-start-frame'
+import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 
 function imageErrorMessage (err: unknown): string {
   const anyErr = err as { data?: { error?: { message?: string } }; message?: string }
@@ -33,6 +34,8 @@ function isRetryableImageError (err: unknown): boolean {
 }
 
 export default defineEventHandler(async (event) => {
+  await getPocketBaseUserIdFromRequest(event)
+
   const body = await readBody(event)
   const { prompt, model: modelId } = body || {}
   const referenceImageUrl =

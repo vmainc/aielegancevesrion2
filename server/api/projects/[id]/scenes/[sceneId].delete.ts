@@ -1,14 +1,9 @@
 import { createError, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { projectIdOnSceneRow } from '~/server/utils/creative-scene-map'
 import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
-
-function relProjectId (v: unknown): string {
-  if (typeof v === 'string') return v
-  if (v && typeof v === 'object' && 'id' in v) return String((v as { id: string }).id)
-  return ''
-}
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -30,7 +25,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 
-  if (relProjectId(existing.project) !== projectId) {
+  if (projectIdOnSceneRow(existing as Record<string, unknown>) !== projectId) {
     throw createError({ statusCode: 400, message: 'Scene does not belong to this project' })
   }
 

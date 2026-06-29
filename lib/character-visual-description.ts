@@ -3,11 +3,37 @@ import { formatCastNameForPrompt } from '~/lib/cast-name-convention'
 export interface CharacterVisualPromptInput {
   name: string
   roleDescription?: string
+  /** Locked visual anchor from the character profile — takes priority over role blurb. */
+  appearanceDescription?: string
+  /** Recurring props, accessories, or tics appended to the cast line. */
+  signatureDetails?: string
   portraitUrl?: string | null
   /** Asset notes (Character Creator saves the visual prompt here). */
   portraitNotes?: string
   /** Asset metadata.prompt_used from portrait generation. */
   portraitPromptUsed?: string
+}
+
+/** Map cast-member or character-ref shapes into visual prompt input. */
+export function castMemberToVisualInput (c: {
+  name: string
+  roleDescription?: string
+  traitsRoleVisual?: string
+  appearanceDescription?: string
+  signatureDetails?: string
+  portraitUrl?: string | null
+  portraitNotes?: string
+  portraitPromptUsed?: string
+}): CharacterVisualPromptInput {
+  return {
+    name: c.name,
+    roleDescription: (c.roleDescription ?? c.traitsRoleVisual ?? '').trim() || undefined,
+    appearanceDescription: (c.appearanceDescription || '').trim() || undefined,
+    signatureDetails: (c.signatureDetails || '').trim() || undefined,
+    portraitUrl: c.portraitUrl,
+    portraitNotes: c.portraitNotes,
+    portraitPromptUsed: c.portraitPromptUsed
+  }
 }
 
 const STORY_HEAVY =
@@ -32,36 +58,55 @@ export function isStoryHeavyDescription (text: string): boolean {
   return false
 }
 
-/** Best visual text for production prompts (prefers portrait notes / image prompts over story blurbs). */
+/** Best visual text for production prompts (prefers appearance anchor, then portrait notes / image prompts). */
 export function resolveCharacterVisualDescription (input: CharacterVisualPromptInput): string {
+  const appearance = (input.appearanceDescription || '').trim()
   const role = (input.roleDescription || '').trim()
   const notes = (input.portraitNotes || '').trim()
   const promptUsed = (input.portraitPromptUsed || '').trim()
+  const signature = (input.signatureDetails || '').trim()
   const hasPortrait = Boolean((input.portraitUrl || '').trim())
 
-  for (const candidate of [promptUsed, notes]) {
-    if (candidate && !isStoryHeavyDescription(candidate)) return candidate
+  const withSignature = (base: string): string => {
+    const b = base.trim()
+    if (!b) return signature ? `Signature: ${signature}` : ''
+    return signature ? `${b} Signature details: ${signature}` : b
   }
 
-  if (role && !isStoryHeavyDescription(role)) return role
+  // Explicit appearance anchor from character profile — highest priority for continuity.
+  if (appearance) {
+    let base = appearance
+    if (hasPortrait && !/reference portrait|attached reference/i.test(base)) {
+      base = `${base} Match the attached featured portrait exactly for face, proportions, and wardrobe.`
+    }
+    return withSignature(base)
+  }
 
-  if (promptUsed) return promptUsed
-  if (notes) return notes
+  for (const candidate of [promptUsed, notes]) {
+    if (candidate && !isStoryHeavyDescription(candidate)) return withSignature(candidate)
+  }
+
+  if (role && !isStoryHeavyDescription(role)) return withSignature(role)
+
+  if (promptUsed) return withSignature(promptUsed)
+  if (notes) return withSignature(notes)
 
   if (hasPortrait) {
     const storyHint = role && isStoryHeavyDescription(role)
       ? ` Story context (do not redraw as a generic animal): ${role.slice(0, 400)}`
       : ''
-    return [
+    const base = [
       `VISUAL LOCK: Match the attached reference portrait for ${formatCastNameForPrompt(input.name)} exactly.`,
       'Reproduce species, face shape, fur/feather/skin materials, markings, colors, proportions, and wardrobe from the reference image — not a stock or generic animal.',
       storyHint
     ]
       .filter(Boolean)
       .join(' ')
+    return withSignature(base)
   }
 
-  return role || 'Use the established design from the cast bible and any saved portraits.'
+  const fallback = role || 'Use the established design from the cast bible and any saved portraits.'
+  return withSignature(fallback)
 }
 
 const LIKELY_NARRATIVE_BEAT =

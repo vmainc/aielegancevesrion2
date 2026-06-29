@@ -1,5 +1,10 @@
 import { createError } from 'h3'
 import { parseVideoStartFrameRef } from '~/lib/video-start-frame-ref'
+import { stripStrictExclusionsFromPrompt, normalizeVideoNegativePromptForApi } from '~/lib/video-negative-prompt'
+import {
+  buildOpenRouterVideoNegativePassthrough,
+  loadVideoModelPassthroughMeta
+} from '~/server/utils/openrouter-video-negative'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import { readVideoStartFrame } from '~/server/utils/video-start-frame-store'
 
@@ -112,8 +117,15 @@ export async function startOpenRouterVideoJob (options: {
   firstFrameImageUrl?: string
   /** When true, sets OpenRouter `generate_audio: true`. Defaults to false (score on timeline). */
   generateAudio?: boolean
+  /** Merged shot + cast exclusions — sent natively when the model supports it, else appended to prompt. */
+  negativePrompt?: string
 }): Promise<OpenRouterVideoStartResult> {
-  const prompt = options.prompt.trim().slice(0, 8000)
+  const negativeRaw = typeof options.negativePrompt === 'string' ? options.negativePrompt.trim() : ''
+  let prompt = options.prompt.trim()
+  if (negativeRaw) {
+    prompt = stripStrictExclusionsFromPrompt(prompt)
+  }
+  prompt = prompt.slice(0, 8000)
   if (!prompt) {
     throw createError({ statusCode: 400, message: 'Prompt is required' })
   }
@@ -130,6 +142,19 @@ export async function startOpenRouterVideoJob (options: {
   if (options.resolution) body.resolution = options.resolution
   if (typeof options.durationSeconds === 'number' && Number.isFinite(options.durationSeconds)) {
     body.duration = Math.max(1, Math.floor(options.durationSeconds))
+  }
+
+  if (negativeRaw) {
+    const normalizedNegative = normalizeVideoNegativePromptForApi(negativeRaw)
+    if (normalizedNegative) {
+      const passthroughMeta = await loadVideoModelPassthroughMeta(model)
+      const passthrough = buildOpenRouterVideoNegativePassthrough(model, passthroughMeta, normalizedNegative)
+      if (passthrough) {
+        Object.assign(body, passthrough)
+      }
+      // Never embed exclusions in the positive prompt for video — most models treat
+      // mentioned concepts as things to render (inverted negatives).
+    }
   }
 
   if (options.firstFrameImageUrl) {

@@ -90,14 +90,7 @@
 
 <script setup lang="ts">
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
-
-type SceneRow = {
-  id: string
-  sortOrder: number
-  heading: string
-  summary: string
-  shotCount?: number
-}
+import type { CreativeSceneListItem } from '~/types/creative-scene'
 
 const { isAuthenticated, getAuthToken } = useAuth()
 const router = useRouter()
@@ -106,7 +99,7 @@ const sceneHeading = ref('')
 const creating = ref(false)
 const createError = ref('')
 const builderProjectId = ref('')
-const scenes = ref<SceneRow[]>([])
+const scenes = ref<CreativeSceneListItem[]>([])
 const loadingScenes = ref(false)
 const scenesError = ref('')
 
@@ -138,7 +131,7 @@ async function loadScenes () {
   }
   loadingScenes.value = true
   try {
-    const res = await $fetch<{ scenes: SceneRow[] }>(`/api/projects/${pid}/scenes`, {
+    const res = await $fetch<{ scenes: CreativeSceneListItem[] }>(`/api/projects/${pid}/scenes`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     scenes.value = (res.scenes || []).slice().reverse()

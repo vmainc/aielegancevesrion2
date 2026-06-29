@@ -4,6 +4,8 @@ export interface CharacterCreatorImageResult {
   image_url: string | null
   prompt_used: string
   error?: string
+  /** Present on the first result when project-scoped bible context was resolved. */
+  productionBibleDebug?: import('~/lib/production-bible-generation-context').ProductionBibleGenerationDebug
 }
 
 /** Stored locally for future project / storyboard hooks. */

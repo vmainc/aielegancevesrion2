@@ -1,8 +1,10 @@
 import { createError, getQuery } from 'h3'
 import { pollOpenRouterVideoOnce } from '~/server/utils/openrouter-video-job'
 import { removeVideoGenerationJob, takeVideoGenerationJob } from '~/server/utils/video-generation-job-registry'
+import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 
 export default defineEventHandler(async (event) => {
+  const userId = await getPocketBaseUserIdFromRequest(event)
   const jobId = String(getQuery(event).jobId || '').trim()
   if (!jobId) {
     throw createError({ statusCode: 400, message: 'Query jobId is required' })
@@ -13,6 +15,12 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 404,
       message: 'Unknown or expired job. Start a new render, or the server may have restarted.'
+    })
+  }
+  if (job.userId !== userId) {
+    throw createError({
+      statusCode: 403,
+      message: 'Not authorized to access this video job. Start a new render from your account.'
     })
   }
 

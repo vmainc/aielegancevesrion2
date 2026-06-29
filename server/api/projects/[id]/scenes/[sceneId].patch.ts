@@ -1,18 +1,16 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import {
+  CREATIVE_SCENE_BODY_MAX,
+  CREATIVE_SCENE_HEADING_MAX,
+  CREATIVE_SCENE_SUMMARY_MAX,
+  creativeSceneToListItem,
+  pbRecordToCreativeScene,
+  projectIdOnSceneRow
+} from '~/server/utils/creative-scene-map'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
-
-const HEADING_MAX = 2000
-const SUMMARY_MAX = 5000
-const BODY_MAX = 150_000
-
-function relProjectId (v: unknown): string {
-  if (typeof v === 'string') return v
-  if (v && typeof v === 'object' && 'id' in v) return String((v as { id: string }).id)
-  return ''
-}
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -34,7 +32,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 
-  const sid = relProjectId(existing.project)
+  const sid = projectIdOnSceneRow(existing as Record<string, unknown>)
   if (sid !== projectId) {
     throw createError({ statusCode: 400, message: 'Scene does not belong to this project' })
   }
@@ -48,7 +46,7 @@ export default defineEventHandler(async (event) => {
   const patch: Record<string, unknown> = {}
 
   if (body && typeof body.heading === 'string') {
-    const heading = body.heading.trim().slice(0, HEADING_MAX)
+    const heading = body.heading.trim().slice(0, CREATIVE_SCENE_HEADING_MAX)
     if (!heading) {
       throw createError({ statusCode: 400, message: 'Heading cannot be empty' })
     }
@@ -56,11 +54,11 @@ export default defineEventHandler(async (event) => {
   }
 
   if (body && typeof body.summary === 'string') {
-    patch.summary = body.summary.trim().slice(0, SUMMARY_MAX)
+    patch.summary = body.summary.trim().slice(0, CREATIVE_SCENE_SUMMARY_MAX)
   }
 
   if (body && typeof body.body === 'string') {
-    patch.body = body.body.trim().slice(0, BODY_MAX)
+    patch.body = body.body.trim().slice(0, CREATIVE_SCENE_BODY_MAX)
   }
 
   if (!Object.keys(patch).length) {
@@ -69,15 +67,11 @@ export default defineEventHandler(async (event) => {
 
   try {
     const updated = await pb.collection('creative_scenes').update(sceneId, patch)
-    const bodyText = String(updated.body || '')
+    const scene = pbRecordToCreativeScene(updated as Parameters<typeof pbRecordToCreativeScene>[0])
     return {
       scene: {
-        id: updated.id,
-        sortOrder: typeof updated.sort_order === 'number' ? updated.sort_order : 0,
-        heading: String(updated.heading || ''),
-        summary: String(updated.summary || ''),
-        body: bodyText,
-        bodyLength: bodyText.length
+        ...creativeSceneToListItem(scene),
+        body: scene.body
       }
     }
   } catch (e: unknown) {

@@ -113,18 +113,32 @@
       <p v-if="frameLabel" class="text-[11px] text-gray-600">
         {{ frameLabel }}
       </p>
+      <p
+        v-if="bibleDebugLine"
+        class="text-[11px] text-sky-800 bg-sky-50 border border-sky-100 rounded px-2 py-1"
+      >
+        {{ bibleDebugLine }}
+      </p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import {
+  appendProductionBibleToPrompt,
+  mergeProductionBibleGenerationOptions,
+  productionBibleGenerationDebugLabel
+} from '~/lib/production-bible-generation-context'
+import {
   CHARACTER_CREATOR_IMAGE_MODELS,
   DEFAULT_IMAGE_MODEL_ID
 } from '~/lib/character-creator-models'
 import { firstImageUrlFromGenerateResponse } from '~/lib/image-blob-client'
 import { parseVideoStartFrameRef } from '~/lib/video-start-frame-ref'
+import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { ensureVideoStartFrameUrl, uploadVideoStartFrameFile } from '~/lib/video-start-frame-upload'
+
+const PB_ID = /^[a-z0-9]{15}$/
 
 const props = withDefaults(
   defineProps<{
@@ -134,8 +148,13 @@ const props = withDefaults(
     aspectRatio?: string
     /** v-model: staged `/api/generate/video/start-frame/…` URL or remote still URL. */
     frameImageUrl?: string | null
+    /** When set, Production Bible context is appended to the generate prompt (fail-open). */
+    bibleProjectId?: string
+    bibleSceneId?: string
+    bibleShotId?: string
+    bibleCharacterIds?: string[]
   }>(),
-  { compact: false, aspectRatio: '16:9', frameImageUrl: null }
+  { compact: false, aspectRatio: '16:9', frameImageUrl: null, bibleCharacterIds: () => [] }
 )
 
 const emit = defineEmits<{
@@ -143,12 +162,17 @@ const emit = defineEmits<{
 }>()
 
 const toast = useToast()
+const { getAuthToken } = useAuth()
 const imageModels = CHARACTER_CREATOR_IMAGE_MODELS
 const imageModelId = ref(DEFAULT_IMAGE_MODEL_ID)
 const generatingFrame = ref(false)
 const frameLabel = ref('')
 const fileInputEl = ref<HTMLInputElement | null>(null)
 const frameMode = ref<'upload' | 'generate'>('upload')
+const bibleDebugLine = ref('')
+
+const bibleProjectRef = computed(() => props.bibleProjectId || '')
+const productionBible = useProductionBible(bibleProjectRef)
 
 const previewUrl = computed(() => props.frameImageUrl || null)
 
@@ -210,11 +234,25 @@ async function generateFrame () {
     return
   }
   generatingFrame.value = true
+  bibleDebugLine.value = ''
   try {
+    let promptForApi = p
+    if (props.bibleProjectId && PB_ID.test(props.bibleProjectId)) {
+      const ctx = await productionBible.loadContextForPrompt(
+        mergeProductionBibleGenerationOptions({
+          sceneId: props.bibleSceneId || undefined,
+          shotId: props.bibleShotId || undefined,
+          characterIds: props.bibleCharacterIds?.length ? props.bibleCharacterIds : undefined
+        })
+      )
+      bibleDebugLine.value = productionBibleGenerationDebugLabel(ctx)
+      promptForApi = appendProductionBibleToPrompt(p, ctx)
+    }
     const res = await $fetch<{ urls?: unknown[]; videoStartFrame?: boolean }>('/api/generate/image', {
       method: 'POST',
+      headers: pocketBaseBearerHeaders(getAuthToken()),
       body: {
-        prompt: p,
+        prompt: promptForApi,
         model: imageModelId.value,
         aspectRatio: props.aspectRatio || '16:9',
         purpose: 'video_start_frame'

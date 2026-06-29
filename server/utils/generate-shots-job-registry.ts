@@ -1,3 +1,4 @@
+import type { ContinuityCheckSummary } from '~/lib/continuity-check-result'
 import type { CreativeShot } from '~/types/creative-shot'
 
 export type GenerateShotsJobStatus = 'running' | 'completed' | 'failed'
@@ -11,7 +12,7 @@ export type GenerateShotsJobRecord = {
   shots?: CreativeShot[]
   persisted?: boolean
   warning?: string
-  continuity?: { issueCount: number; memoryUpdated: boolean }
+  continuity?: ContinuityCheckSummary
   error?: string
 }
 

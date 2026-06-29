@@ -8,7 +8,11 @@ export function pbRecordToCreativeCharacter (raw: Record<string, unknown>): Crea
     name: String(raw.name || ''),
     roleDescription: String(raw.role_description || ''),
     screenSharePercent: Number.isFinite(n) ? Math.round(n * 100) / 100 : null,
-    voiceDescription: String(raw.voice_description || '')
+    voiceDescription: String(raw.voice_description || ''),
+    appearanceDescription: String(raw.appearance_description || ''),
+    personality: String(raw.personality || ''),
+    signatureDetails: String(raw.signature_details || ''),
+    avoidDescription: String(raw.avoid_description || '')
   }
 }
 

@@ -1,6 +1,12 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import {
+  creativeSceneToListItem,
+  nextCreativeSceneSortOrder,
+  normalizeCreativeSceneForPb,
+  pbRecordToCreativeScene
+} from '~/server/utils/creative-scene-map'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
@@ -26,52 +32,24 @@ export default defineEventHandler(async (event) => {
     body?: string
   }>(event)
 
-  const headingRaw = typeof body?.heading === 'string' ? body.heading : typeof body?.title === 'string' ? body.title : ''
-  const heading = headingRaw.trim().slice(0, 2000)
-  if (!heading) {
+  if (!body?.heading?.trim() && !body?.title?.trim()) {
     throw createError({ statusCode: 400, message: 'Title is required' })
   }
-
-  const desc =
-    typeof body?.description === 'string'
-      ? body.description.trim()
-      : typeof body?.summary === 'string'
-        ? body.summary.trim()
-        : ''
-  const summary = desc.slice(0, 5000)
-  const extraBody = typeof body?.body === 'string' ? body.body.trim() : ''
-  const bodyText = (extraBody || desc).slice(0, 150000)
-
-  const top = await pb.collection('creative_scenes').getFullList({
-    filter: `project="${projectId}"`,
-    sort: '-sort_order',
-    batch: 1
-  })
-  /** 1-based sequence; PocketBase rejects blank/ambiguous sort_order — never use 0 for first row. */
-  let nextOrder = 1
-  if (top.length) {
-    const prev = Number(top[0].sort_order)
-    const base = Number.isFinite(prev) ? Math.max(0, Math.floor(prev)) : 0
-    nextOrder = base + 1
-  }
+  const normalized = normalizeCreativeSceneForPb(0, body || {})
+  const nextOrder = await nextCreativeSceneSortOrder(pb, projectId)
 
   try {
     const created = await pb.collection('creative_scenes').create({
       owned_by: userId,
       project: projectId,
       sort_order: nextOrder,
-      heading,
-      summary,
-      body: bodyText
+      heading: normalized.heading,
+      summary: normalized.summary,
+      body: normalized.body
     })
+    const scene = pbRecordToCreativeScene(created as Parameters<typeof pbRecordToCreativeScene>[0])
     return {
-      scene: {
-        id: created.id,
-        sortOrder: nextOrder,
-        heading,
-        summary,
-        bodyLength: bodyText.length
-      }
+      scene: creativeSceneToListItem(scene)
     }
   } catch (e: unknown) {
     const detail = formatPocketBaseRecordError(e)

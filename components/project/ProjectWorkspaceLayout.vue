@@ -33,11 +33,11 @@
         @change="onMobileSectionChange"
       >
         <option
-          v-for="(item, i) in sections"
+          v-for="(item, i) in allSections"
           :key="item.path"
           :value="item.path"
         >
-          {{ i + 1 }}. {{ item.label }}
+          {{ toolSections.some(t => t.path === item.path) ? item.label : `${i + 1}. ${item.label}` }}
         </option>
       </select>
     </div>
@@ -167,8 +167,15 @@ const sectionLabels: Record<string, string> = {
   scenes: 'Scenes',
   storyboard: 'Storyboard',
   video: 'Video',
-  timeline: 'Timeline'
+  timeline: 'Timeline',
+  guide: 'Project Guide',
+  bible: 'Production Bible'
 }
+
+const toolSections: Array<{ path: string; label: string }> = [
+  { path: 'guide', label: 'Project Guide' },
+  { path: 'bible', label: 'Production Bible' }
+]
 
 const sections = computed(() => {
   const paths = workflowPathsForProject(props.project)
@@ -179,13 +186,13 @@ const sections = computed(() => {
 })
 
 const workflowSections = sections
-const toolSections: Array<{ path: string; label: string }> = []
+const allSections = computed(() => [...sections.value, ...toolSections])
 
 const isActive = (path: string) => activeSectionPath.value === path
 
 const activeSectionPath = computed(() => {
   const tail = route.path.split('/').pop() || ''
-  if (sections.value.some(s => s.path === tail)) return tail
+  if (allSections.value.some(s => s.path === tail)) return tail
   return sections.value[0]?.path ?? 'home'
 })
 
@@ -196,7 +203,7 @@ function onMobileSectionChange (ev: Event) {
 }
 
 const sectionSubtitle = computed(() => {
-  const found = sections.value.find(s => s.path === activeSectionPath.value)
+  const found = allSections.value.find(s => s.path === activeSectionPath.value)
   return found ? `${found.label} · project workspace` : 'Project workspace'
 })
 

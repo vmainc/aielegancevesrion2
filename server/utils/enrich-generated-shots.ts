@@ -2,7 +2,13 @@ import type { GeneratedShot, GenerateShotsContext } from '~/server/utils/generat
 import { applyUnifiedPromptsToShot } from '~/lib/unified-shot-prompt'
 
 /**
- * Post-process model output: one production prompt per panel + short motion line for video.
+ * Single enrichment pass for AI-generated shot rows before persist.
+ *
+ * Call once after continuity check in execute-generate-shots (or once after raw
+ * generation in import-storyboard-seed). Do not call from generateShotsWithAi.
+ *
+ * Delegates to applyUnifiedPromptsToShot in lib/unified-shot-prompt.ts (idempotent
+ * when prompts are already unified).
  */
 export function enrichGeneratedShotsForContinuity (
   shots: GeneratedShot[],

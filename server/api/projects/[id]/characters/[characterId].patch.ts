@@ -46,6 +46,10 @@ export default defineEventHandler(async (event) => {
     roleDescription?: string
     screenSharePercent?: number | null
     voiceDescription?: string
+    appearanceDescription?: string
+    personality?: string
+    signatureDetails?: string
+    avoidDescription?: string
   }>(event).catch(() => ({}))
 
   const patch: Record<string, unknown> = {}
@@ -73,6 +77,22 @@ export default defineEventHandler(async (event) => {
 
   if (body && typeof body.voiceDescription === 'string') {
     patch.voice_description = body.voiceDescription.trim().slice(0, 2000)
+  }
+
+  if (body && typeof body.appearanceDescription === 'string') {
+    patch.appearance_description = body.appearanceDescription.trim().slice(0, 4000)
+  }
+
+  if (body && typeof body.personality === 'string') {
+    patch.personality = body.personality.trim().slice(0, 4000)
+  }
+
+  if (body && typeof body.signatureDetails === 'string') {
+    patch.signature_details = body.signatureDetails.trim().slice(0, 2000)
+  }
+
+  if (body && typeof body.avoidDescription === 'string') {
+    patch.avoid_description = body.avoidDescription.trim().slice(0, 2000)
   }
 
   if (!Object.keys(patch).length) {

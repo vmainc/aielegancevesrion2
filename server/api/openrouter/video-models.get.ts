@@ -1,4 +1,4 @@
-import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import { modelSupportsNativeNegativePrompt } from '~/lib/video-negative-prompt'
 
 /** Matches OpenRouter’s directory when the API is unavailable or key is missing. */
 const FALLBACK_VIDEO_MODELS = [
@@ -8,6 +8,7 @@ const FALLBACK_VIDEO_MODELS = [
     description: 'Experimental video generation (API-only, alpha).',
     provider: 'Alibaba',
     generateAudio: true,
+    supportsNegativePrompt: true,
   },
   {
     id: 'bytedance/seedance-1.5-pro',
@@ -28,6 +29,7 @@ const FALLBACK_VIDEO_MODELS = [
     description: 'Experimental video generation (API-only, alpha).',
     provider: 'Google',
     generateAudio: true,
+    supportsNegativePrompt: true,
   },
 ]
 
@@ -41,6 +43,8 @@ type VideoModelRow = {
   supportedDurations?: number[]
   /** From OpenRouter video catalog: model can emit synchronized audio. Omitted when unknown. */
   generateAudio?: boolean
+  /** From OpenRouter `allowed_passthrough_parameters` — native negativePrompt when true. */
+  supportsNegativePrompt?: boolean
 }
 
 type VideosModelsPayload = {
@@ -48,12 +52,14 @@ type VideosModelsPayload = {
     id?: string
     supported_durations?: unknown
     generate_audio?: unknown
+    allowed_passthrough_parameters?: unknown
   }>
 }
 
 type VideoCatalogEntry = {
   supportedDurations: number[]
   generateAudio: boolean | undefined
+  allowedPassthroughParameters: string[]
 }
 
 function parseSupportedDurations (raw: unknown): number[] {
@@ -72,6 +78,11 @@ function parseGenerateAudio (raw: unknown): boolean | undefined {
   return undefined
 }
 
+function parseAllowedPassthrough (raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw.filter((x): x is string => typeof x === 'string' && x.trim()).map(x => x.trim())
+}
+
 /** OpenRouter public catalog: durations + native audio capability per model id. */
 async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> {
   const map = new Map<string, VideoCatalogEntry>()
@@ -86,7 +97,8 @@ async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> 
       if (!id) continue
       map.set(id, {
         supportedDurations: parseSupportedDurations(row.supported_durations),
-        generateAudio: parseGenerateAudio(row.generate_audio)
+        generateAudio: parseGenerateAudio(row.generate_audio),
+        allowedPassthroughParameters: parseAllowedPassthrough(row.allowed_passthrough_parameters)
       })
     }
   } catch {
@@ -179,6 +191,13 @@ export default defineEventHandler(async () => {
     if (!meta) continue
     if (meta.supportedDurations.length) row.supportedDurations = meta.supportedDurations
     if (meta.generateAudio !== undefined) row.generateAudio = meta.generateAudio
+    if (modelSupportsNativeNegativePrompt(meta.allowedPassthroughParameters)) {
+      row.supportsNegativePrompt = true
+    } else if (row.id.toLowerCase().startsWith('google/veo')) {
+      row.supportsNegativePrompt = true
+    } else if (row.id.toLowerCase().startsWith('alibaba/wan')) {
+      row.supportsNegativePrompt = true
+    }
   }
 
   if (rows.length === 0) {
