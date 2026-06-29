@@ -385,7 +385,7 @@ export function useProjectTimeline (projectId: Ref<string>) {
 
     const doc = projectTimelineDocumentToEditorDocument(entry.document)
     const saved = await saveCloud(doc, {
-      forceRevision: entry.baseRevision ?? status.revision || undefined,
+      forceRevision: entry.baseRevision ?? (status.revision || undefined),
       importedFromLocal: entry.importedFromLocal,
       fromQueue: true
     })
