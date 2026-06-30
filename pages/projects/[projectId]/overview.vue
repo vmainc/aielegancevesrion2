@@ -832,6 +832,7 @@ import {
 } from '~/lib/format-stored-concept'
 import { defaultDurationSecondsForProject } from '~/lib/project-duration-budget'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
+import { pollScriptAnalyzeJob } from '~/lib/poll-script-analyze-job'
 import type {
   StoryIdeaApplyPayload,
   StoryOwnIdeaApplyPayload
@@ -1067,26 +1068,35 @@ async function runScriptAnalyzeFromOverview (chosenModelId?: string) {
   if (!id || !token) return
   overviewAnalyzing.value = true
   overviewImportError.value = ''
+  const headers = { Authorization: `Bearer ${token}` }
   try {
     const body = scriptWorkflowAssetId.value ? { assetId: scriptWorkflowAssetId.value } : {}
     const finalBody = chosenModelId ? { ...body, chosenModelId } : body
-    const res = await $fetch<{
-      project: CreativeProject
-      scriptAsset: { ok: boolean; message?: string; id?: string }
-    }>(`/api/projects/${id}/script/analyze`, {
-      method: 'POST',
-      body: finalBody,
-      headers: { Authorization: `Bearer ${token}` },
-      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    const started = await $fetch<{ async?: boolean; jobId?: string }>(
+      `/api/projects/${id}/script/analyze`,
+      {
+        method: 'POST',
+        body: finalBody,
+        headers
+      }
+    )
+    if (!started.jobId) {
+      throw new Error('Server did not start analysis job')
+    }
+    const polled = await pollScriptAnalyzeJob(started.jobId, headers, {
+      maxMs: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
     })
-    registerImportedProject(res.project)
-    if (res.scriptAsset?.ok && res.scriptAsset.id) {
-      scriptWorkflowAssetId.value = res.scriptAsset.id
+    if (polled.kind !== 'apply') {
+      throw new Error('Unexpected analysis result')
+    }
+    registerImportedProject(polled.project)
+    if (polled.scriptAsset?.ok && polled.scriptAsset.id) {
+      scriptWorkflowAssetId.value = polled.scriptAsset.id
     }
     analysisCandidates.value = []
     toast.showToast('Director analysis finished — review Overview and Director, then generate cast and scenes when ready.', 'success')
-    if (res.scriptAsset && !res.scriptAsset.ok) {
-      toast.showToast(res.scriptAsset.message || 'Project updated; asset notes may be incomplete.', 'info')
+    if (polled.scriptAsset && !polled.scriptAsset.ok) {
+      toast.showToast(polled.scriptAsset.message || 'Project updated; asset notes may be incomplete.', 'info')
     }
     void loadOverviewCharacters()
   } catch (e: unknown) {
@@ -1111,27 +1121,28 @@ async function previewScriptAnalyses () {
   if (!id || !token || !selectedAnalysisModelIds.value.length) return
   overviewPreviewing.value = true
   overviewImportError.value = ''
+  const headers = { Authorization: `Bearer ${token}` }
   try {
     const body = {
       mode: 'preview' as const,
       selectedModels: [...selectedAnalysisModelIds.value],
       ...(scriptWorkflowAssetId.value ? { assetId: scriptWorkflowAssetId.value } : {})
     }
-    const res = await $fetch<{ candidates: Array<{
-      modelId: string
-      label: string
-      synopsis?: string
-      treatment?: string
-      genre?: string
-      tone?: string
-      error?: string
-    }> }>(`/api/projects/${id}/script/analyze`, {
-      method: 'POST',
-      body,
-      headers: { Authorization: `Bearer ${token}` },
-      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    const started = await $fetch<{ async?: boolean; jobId?: string }>(
+      `/api/projects/${id}/script/analyze`,
+      {
+        method: 'POST',
+        body,
+        headers
+      }
+    )
+    if (!started.jobId) {
+      throw new Error('Server did not start analysis job')
+    }
+    const polled = await pollScriptAnalyzeJob(started.jobId, headers, {
+      maxMs: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
     })
-    analysisCandidates.value = res.candidates || []
+    analysisCandidates.value = polled.kind === 'preview' ? polled.candidates : []
   } catch (e: unknown) {
     overviewImportError.value = formatApiFetchError(e, 'Analysis preview failed')
     toast.showToast(overviewImportError.value, 'error')
