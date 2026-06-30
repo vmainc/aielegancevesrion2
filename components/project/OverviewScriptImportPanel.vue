@@ -129,8 +129,8 @@ withDefaults(
   {
     heading: 'Screenplay',
     intro:
-      'Step 1: choose a file and save it to this project\'s assets (no AI yet). Step 2: run director analysis when you are ready — then refine notes and generate cast, scenes, and storyboard from their tabs.',
-    saveButtonLabel: 'Save screenplay to project',
+      'Choose a screenplay file. After upload, GPT-4o reads it automatically and builds synopsis, director notes, cast, scenes, and storyboard panels.',
+    saveButtonLabel: 'Upload and analyze screenplay',
     analyzeButtonLabel: 'Run director analysis',
     showAspectGoal: true,
     hideUploadStep: false,

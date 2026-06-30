@@ -28,26 +28,27 @@
     <template v-if="scriptUploadedAwaitingAnalyze">
       <p class="text-sm text-gray-600 mb-6">
         <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-        · Screenplay saved — run director analysis below when you are ready.
+        · Screenplay saved — AI Elegance is reading it now.
       </p>
       <section class="rounded-xl border-2 border-primary/40 bg-gradient-to-b from-primary/10 to-white shadow-sm p-6 sm:p-10 mb-8">
         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-3">
           {{ project?.name }}
         </h1>
         <p class="text-base text-gray-700 mb-6 max-w-xl leading-relaxed">
-          Your screenplay is saved. <span class="font-semibold text-gray-900">Import script</span> reads the file, builds scenes and cast, seeds storyboard panels, and sets up director notes — then generate video from the Storyboard step.
+          Your screenplay is saved. GPT-4o is reading the file, building scenes and cast, seeding storyboard panels, and setting up director notes — then you can generate video from the Storyboard step.
         </p>
         <button
+          v-if="overviewImportError"
           type="button"
           class="px-5 py-3 bg-primary hover:bg-primary/90 text-gray-950 rounded-xl text-base font-semibold transition-colors disabled:opacity-50"
           :disabled="overviewFullImporting || !scriptWorkflowAssetId"
           @click="runProjectFullImport"
         >
-          {{ overviewFullImporting ? 'Importing script…' : 'Import script into project' }}
+          Retry script import
         </button>
         <p v-if="overviewImportError" class="mt-3 text-sm text-red-700">{{ overviewImportError }}</p>
         <div
-          v-if="overviewFullImporting"
+          v-if="overviewFullImporting || !overviewImportError"
           class="mt-5 rounded-xl border border-primary/20 bg-primary/5 p-6"
         >
           <FilmReelLoader
@@ -76,12 +77,33 @@
         <div class="mt-5 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
           <p class="text-sm font-semibold text-gray-900 mb-2">Choose your guide/director model</p>
           <p class="text-xs text-gray-600 mb-3">
-            Pick one or more models, compare outputs, then choose which one should guide this project.
+            <template v-if="analysisCompareMode">
+              Pick one or more models, compare outputs, then choose which one should guide this project.
+            </template>
+            <template v-else>
+              Pick the model that will analyze your screenplay and build synopsis, treatment, and director notes.
+            </template>
           </p>
-          <div class="flex flex-wrap gap-3 mb-4">
+          <div v-if="!analysisCompareMode" class="flex flex-wrap gap-3 mb-3">
             <label
               v-for="m in modelOptions"
               :key="`analyze-ready-${m.id}`"
+              class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+            >
+              <input
+                v-model="selectedAnalysisModelId"
+                type="radio"
+                name="analyze-model-ready"
+                :value="m.id"
+                class="border-gray-300 text-primary focus:ring-primary"
+              >
+              <span class="text-sm text-gray-800">{{ m.label }}</span>
+            </label>
+          </div>
+          <div v-else class="flex flex-wrap gap-3 mb-3">
+            <label
+              v-for="m in modelOptions"
+              :key="`analyze-ready-compare-${m.id}`"
               class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
             >
               <input
@@ -93,14 +115,24 @@
               <span class="text-sm text-gray-800">{{ m.label }}</span>
             </label>
           </div>
+          <p class="text-xs mb-4">
+            <button
+              type="button"
+              class="text-primary font-medium hover:underline"
+              @click="toggleAnalysisCompareMode"
+            >
+              {{ analysisCompareMode ? 'Use single model instead' : 'Compare multiple models…' }}
+            </button>
+          </p>
           <button
             type="button"
             class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-            :disabled="overviewPreviewing || overviewAnalyzing || !selectedAnalysisModelIds.length"
-            @click="previewScriptAnalyses"
+            :disabled="overviewPreviewing || overviewAnalyzing || (analysisCompareMode ? !selectedAnalysisModelIds.length : !selectedAnalysisModelId)"
+            @click="onAnalyzeScriptClick"
           >
-            {{ overviewPreviewing ? 'Analyzing script…' : 'Analyze script' }}
+            {{ overviewPreviewing || overviewAnalyzing ? 'Analyzing script…' : 'Analyze script' }}
           </button>
+          <p v-if="overviewImportError" class="mt-3 text-sm text-red-700">{{ overviewImportError }}</p>
         </div>
         <div
           v-if="overviewAnalyzing"
@@ -545,12 +577,33 @@
             <div class="mt-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
               <p class="text-sm font-semibold text-gray-900 mb-2">Choose your guide/director model</p>
               <p class="text-xs text-gray-600 mb-3">
-                Pick one or more models, compare outputs, then choose which one should guide this project.
+                <template v-if="analysisCompareMode">
+                  Pick one or more models, compare outputs, then choose which one should guide this project.
+                </template>
+                <template v-else>
+                  Pick the model that will analyze your screenplay and build synopsis, treatment, and director notes.
+                </template>
               </p>
-              <div class="flex flex-wrap gap-3 mb-4">
+              <div v-if="!analysisCompareMode" class="flex flex-wrap gap-3 mb-3">
                 <label
                   v-for="m in modelOptions"
                   :key="`analyze-generator-${m.id}`"
+                  class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+                >
+                  <input
+                    v-model="selectedAnalysisModelId"
+                    type="radio"
+                    name="analyze-model-generator"
+                    :value="m.id"
+                    class="border-gray-300 text-primary focus:ring-primary"
+                  >
+                  <span class="text-sm text-gray-800">{{ m.label }}</span>
+                </label>
+              </div>
+              <div v-else class="flex flex-wrap gap-3 mb-3">
+                <label
+                  v-for="m in modelOptions"
+                  :key="`analyze-generator-compare-${m.id}`"
                   class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
                 >
                   <input
@@ -562,14 +615,24 @@
                   <span class="text-sm text-gray-800">{{ m.label }}</span>
                 </label>
               </div>
+              <p class="text-xs mb-4">
+                <button
+                  type="button"
+                  class="text-primary font-medium hover:underline"
+                  @click="toggleAnalysisCompareMode"
+                >
+                  {{ analysisCompareMode ? 'Use single model instead' : 'Compare multiple models…' }}
+                </button>
+              </p>
               <button
                 type="button"
                 class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-                :disabled="overviewPreviewing || overviewAnalyzing || !selectedAnalysisModelIds.length"
-                @click="previewScriptAnalyses"
+                :disabled="overviewPreviewing || overviewAnalyzing || (analysisCompareMode ? !selectedAnalysisModelIds.length : !selectedAnalysisModelId)"
+                @click="onAnalyzeScriptClick"
               >
-                {{ overviewPreviewing ? 'Analyzing script…' : 'Analyze script' }}
+                {{ overviewPreviewing || overviewAnalyzing ? 'Analyzing script…' : 'Analyze script' }}
               </button>
+              <p v-if="overviewImportError" class="mt-3 text-sm text-red-700">{{ overviewImportError }}</p>
               <div
                 v-if="overviewPreviewing || overviewAnalyzing"
                 class="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-5"
@@ -858,7 +921,6 @@ const { activeProject, activeProjectId, updateProject, registerImportedProject, 
 const { isAuthenticated, getAuthToken } = useAuth()
 const { stepBadge } = useProjectWorkflowStep()
 const toast = useToast()
-const route = useRoute()
 
 const PB_ID = /^[a-z0-9]{15}$/
 
@@ -904,7 +966,9 @@ const fullImportAttempted = ref(false)
 const scriptWorkflowAssetId = ref('')
 const overviewAspect = ref<'16:9' | '9:16' | '1:1'>('16:9')
 const overviewGoal = ref<'film' | 'social' | 'commercial' | 'other'>('film')
-const selectedAnalysisModelIds = ref<string[]>(['claude'])
+const selectedAnalysisModelId = ref('gpt-4o')
+const selectedAnalysisModelIds = ref<string[]>(['gpt-4o'])
+const analysisCompareMode = ref(false)
 const analysisCandidates = ref<Array<{
   modelId: string
   label: string
@@ -960,10 +1024,9 @@ watch(
 )
 
 watch(
-  [() => route.query.bootstrap, scriptWorkflowAssetId, showImportedScriptOverview, canCloudImport],
-  ([bootstrap]) => {
+  [scriptWorkflowAssetId, showImportedScriptOverview, canCloudImport],
+  () => {
     if (fullImportAttempted.value) return
-    if (bootstrap !== '1') return
     if (!canCloudImport.value) return
     if (!scriptWorkflowAssetId.value) return
     if (showImportedScriptOverview.value) return
@@ -1000,13 +1063,14 @@ async function importScriptFromOverview () {
     })
     registerImportedProject(res.project)
     overviewImportFile.value = null
+    fullImportAttempted.value = false
     if (res.scriptAsset?.ok && res.scriptAsset.id) {
       scriptWorkflowAssetId.value = res.scriptAsset.id
     } else {
       await syncScriptWorkflowAssetFromServer()
     }
     toast.showToast(
-      'Screenplay saved. It appears under Assets → Scripts (sidebar). Run director analysis on Overview when you want synopsis, treatment, and director bible — then generate cast, scenes, and storyboard from their tabs.',
+      'Screenplay uploaded — GPT-4o is reading it and building the project now.',
       'success'
     )
     if (res.upload?.parseWarning) {
@@ -1062,6 +1126,22 @@ async function runProjectFullImport () {
   }
 }
 
+function toggleAnalysisCompareMode () {
+  analysisCompareMode.value = !analysisCompareMode.value
+  if (analysisCompareMode.value) {
+    selectedAnalysisModelIds.value = [selectedAnalysisModelId.value || 'gpt-4o']
+  } else {
+    selectedAnalysisModelId.value = selectedAnalysisModelIds.value[0] || 'gpt-4o'
+  }
+}
+
+function onAnalyzeScriptClick () {
+  if (analysisCompareMode.value) {
+    return previewScriptAnalyses()
+  }
+  return runScriptAnalyzeFromOverview(selectedAnalysisModelId.value || 'gpt-4o')
+}
+
 async function runScriptAnalyzeFromOverview (chosenModelId?: string) {
   const id = projectId.value
   const token = getAuthToken()
@@ -1108,7 +1188,7 @@ async function runScriptAnalyzeFromOverview (chosenModelId?: string) {
 }
 
 function runDefaultScriptAnalyze () {
-  return runScriptAnalyzeFromOverview()
+  return runScriptAnalyzeFromOverview(selectedAnalysisModelId.value || 'gpt-4o')
 }
 
 function applyCandidateModel (modelId: string) {
@@ -1240,7 +1320,7 @@ const generateIdeasButtonLabel = computed(() => {
   return 'Generate concepts'
 })
 
-/** After screenplay save, before AI import: single-focus screen with only the run-import CTA. */
+/** After screenplay upload: single-focus auto-import progress screen. */
 const scriptUploadedAwaitingAnalyze = computed(
   () =>
     screenplayWorkflowEnabled.value &&
@@ -1470,8 +1550,15 @@ async function loadModelOptions () {
   try {
     const res = await $fetch<{ models: Array<{ id: string; label: string }> }>('/api/concept-generator-models')
     modelOptions.value = res.models ?? []
+    const defaultAnalyzeId = modelOptions.value.find(m => m.id === 'gpt-4o')?.id || modelOptions.value[0]?.id || 'gpt-4o'
+    if (!modelOptions.value.some(m => m.id === selectedAnalysisModelId.value)) {
+      selectedAnalysisModelId.value = defaultAnalyzeId
+    }
+    if (!selectedAnalysisModelIds.value.length) {
+      selectedAnalysisModelIds.value = [defaultAnalyzeId]
+    }
     if (!selectedModelIds.value.length && modelOptions.value.length) {
-      selectedModelIds.value = [modelOptions.value[0]!.id]
+      selectedModelIds.value = [defaultAnalyzeId]
     }
   } catch (e: unknown) {
     const msg = e && typeof e === 'object' && 'data' in e

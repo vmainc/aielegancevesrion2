@@ -10,33 +10,13 @@ import {
   scriptPreviewEnrichmentIsUsable
 } from '~/server/utils/script-import-ai'
 import { filterLikelyCharacterNames, heuristicCharacterNamesFromScenes } from '~/server/utils/parse-script-txt'
-import { getConceptGeneratorModelById } from '~/lib/concept-generator-models'
+import { candidateOpenRouterSlugsFor, getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 import {
   completeScriptAnalyzeApplyJob,
   completeScriptAnalyzePreviewJob,
   failScriptAnalyzeJob,
   type ScriptAnalyzeCandidate
 } from '~/server/utils/script-analyze-job-registry'
-
-function candidateModelSlugsFor (modelId: string, primary: string): string[] {
-  if (modelId === 'claude') {
-    return [...new Set([
-      primary,
-      'anthropic/claude-sonnet-4',
-      'anthropic/claude-3.7-sonnet',
-      'anthropic/claude-3.5-sonnet'
-    ])].filter(Boolean)
-  }
-  if (modelId === 'deepseek') {
-    return [...new Set([
-      primary,
-      'deepseek/deepseek-chat-v3-0324',
-      'deepseek/deepseek-chat',
-      'deepseek/deepseek-v3'
-    ])].filter(Boolean)
-  }
-  return [primary]
-}
 
 function sceneOutlineForPreview (scenes: Array<{ heading: string; body: string }>): string {
   const perSceneLimit = scenes.length <= 1 ? 20000 : 2500
@@ -75,7 +55,7 @@ export async function runScriptAnalyzePreviewJob (input: {
       selectedModels.map(async (id): Promise<ScriptAnalyzeCandidate | null> => {
         const cfg = getConceptGeneratorModelById(id)
         if (!cfg) return null
-        const slugs = candidateModelSlugsFor(cfg.id, cfg.openrouterModelId)
+        const slugs = candidateOpenRouterSlugsFor(cfg.id, cfg.openrouterModelId)
         let lastError = 'No usable output from model.'
         for (const slug of slugs) {
           try {
@@ -84,7 +64,7 @@ export async function runScriptAnalyzePreviewJob (input: {
               sceneOutline,
               characterNames: mergedCharacterNames,
               openrouterModelId: slug
-            })
+            }, { surfaceErrors: true })
             const prose = enrichmentToProjectFields(enrichment)
             const candidate: ScriptAnalyzeCandidate = {
               modelId: cfg.id,

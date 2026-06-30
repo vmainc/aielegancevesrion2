@@ -187,10 +187,11 @@ export async function enrichScriptWithAi (input: {
   sceneOutline: string
   characterNames: string[]
   openrouterModelId?: string
-}): Promise<ScriptAiEnrichment> {
+}, opts?: { surfaceErrors?: boolean }): Promise<ScriptAiEnrichment> {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) {
+    if (opts?.surfaceErrors) throw new Error('OpenRouter API key is not configured on the server.')
     return fallbackEnrichment(input)
   }
 
@@ -275,13 +276,17 @@ ${input.sceneOutline.slice(0, 48_000)}`
     }
     content = normalizeOpenRouterAssistantText(j.choices?.[0]?.message?.content)
   } catch {
+    if (opts?.surfaceErrors) throw new Error('OpenRouter returned an unreadable response.')
     return fallbackEnrichment(input)
   }
 
   const parsed = extractJsonObject(content)
   if (!parsed) {
-    const fb = fallbackEnrichment(input)
     const salvage = content.trim().slice(0, 2000)
+    if (opts?.surfaceErrors && salvage.length <= 80) {
+      throw new Error('Model returned no usable content.')
+    }
+    const fb = fallbackEnrichment(input)
     if (salvage.length > 80) {
       fb.summary = salvage
       fb.logline = salvage.split(/\n\n|\n/).find(l => l.trim().length > 0)?.trim().slice(0, 500) || salvage.slice(0, 500)
@@ -366,6 +371,19 @@ ${input.sceneOutline.slice(0, 48_000)}`
     onePageSynopsis.slice(0, 400) ||
     `Imported project: ${input.projectName}`
 
+  if (opts?.surfaceErrors) {
+    const meaningful = [logline, onePageSynopsis, themeExploration, ...sceneSummaries.map(s => s.summary)]
+      .map(s => String(s || '').trim())
+      .filter(s => s && !/^imported project:/i.test(s))
+      .join(' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    const hasGenreTone = (genre && genre !== 'unknown') || (tone && tone !== 'unknown')
+    if (meaningful.length < 28 && !hasGenreTone) {
+      throw new Error('Model returned an empty or unusable analysis.')
+    }
+  }
+
   return {
     logline: logline || summary,
     onePageSynopsis,
@@ -380,6 +398,9 @@ ${input.sceneOutline.slice(0, 48_000)}`
   }
   } catch (err: unknown) {
     console.warn('[script-import-ai] enrichScriptWithAi failed:', err)
+    if (opts?.surfaceErrors) {
+      throw err instanceof Error ? err : new Error(String(err))
+    }
     return fallbackEnrichment(input)
   }
 }
@@ -411,6 +432,7 @@ export function scriptPreviewEnrichmentIsUsable (
 ): boolean {
   const g = String(enrichment.genre || '').trim().toLowerCase()
   const t = String(enrichment.tone || '').trim().toLowerCase()
+  const isStub = (s: unknown): boolean => /^imported project:/i.test(String(s || '').trim())
   const syn = prose.synopsis.trim()
   const fromScenes = enrichment.sceneSummaries?.map(s => s.summary).filter(Boolean).join(' ') || ''
   const block = [
@@ -421,7 +443,9 @@ export function scriptPreviewEnrichmentIsUsable (
     fromScenes
   ]
     .map(s => String(s || '').trim())
-    .filter(Boolean)
+    // Exclude the internal "Imported project: …" stub so a pure fallback is never
+    // mistaken for real model output (that filler alone clears the length gate).
+    .filter(s => s && !isStub(s))
     .join('\n\n')
   const flat = block.replace(/\s+/g, ' ').trim()
   // Accept first: models often leave logline/synopsis empty but fill theme_exploration,

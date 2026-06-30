@@ -40,6 +40,8 @@ import {
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { resolveProjectPreferredOpenRouterModel } from '~/server/utils/project-model-preference'
+import { candidateOpenRouterSlugsFor } from '~/lib/concept-generator-models'
+import { OPENROUTER_TEXT_MODEL_MAP } from '~/server/utils/openrouter-text-models'
 import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
 import { resolveProjectDurationBudget } from '~/lib/project-duration-budget'
 import type { CreativeProject } from '~/types/creative-project'
@@ -722,12 +724,15 @@ export async function runDirectorOnlyFromParsed (input: {
       ? (existing as { name: string }).name.trim()
       : stemTitle
 
-  const preferredSlug = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
-  const modelCandidates = [...new Set([
-    preferredSlug,
-    OPENROUTER_TEXT_MODEL_MAP.Claude,
-    OPENROUTER_TEXT_MODEL_MAP.ChatGPT
-  ])].filter(Boolean)
+  const explicitModelChoice = Boolean(input.preferredModelId?.trim())
+  const preferredSlug = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.ChatGPT
+  const modelCandidates = explicitModelChoice
+    ? candidateOpenRouterSlugsFor(input.preferredModelId!, preferredSlug)
+    : [...new Set([
+      preferredSlug,
+      OPENROUTER_TEXT_MODEL_MAP.ChatGPT,
+      OPENROUTER_TEXT_MODEL_MAP.Claude
+    ])].filter(Boolean)
 
   let enrichment: Awaited<ReturnType<typeof enrichScriptWithAi>> | null = null
   let prose: ReturnType<typeof enrichmentToProjectFields> | null = null
@@ -741,7 +746,7 @@ export async function runDirectorOnlyFromParsed (input: {
         sceneOutline,
         characterNames: mergedCharacterNames,
         openrouterModelId: slug
-      })
+      }, { surfaceErrors: explicitModelChoice })
       const candidateProse = enrichmentToProjectFields(candidate)
       if (scriptPreviewEnrichmentIsUsable(candidate, candidateProse)) {
         enrichment = candidate
@@ -753,6 +758,7 @@ export async function runDirectorOnlyFromParsed (input: {
       lastModelError = `Model returned unusable screenplay output (${slug}).`
     } catch (e: unknown) {
       lastModelError = e instanceof Error ? e.message : String(e)
+      if (explicitModelChoice) break
     }
   }
 
