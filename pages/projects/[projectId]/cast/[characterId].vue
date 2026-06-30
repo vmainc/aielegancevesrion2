@@ -211,9 +211,45 @@
               class="text-2xl sm:text-3xl font-bold text-gray-900 w-full bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-primary focus:outline-none px-0 py-1"
               @blur="saveField"
             >
-            <p class="text-xs text-gray-500 mt-1">
-              Appearance, signature details, and avoid lists auto-inject into storyboard and video prompts for this character.
-            </p>
+            <div class="flex items-center justify-between gap-3 mt-1.5">
+              <p class="text-xs text-gray-500">
+                Appearance, signature details, and avoid lists auto-inject into storyboard and video prompts for this character.
+              </p>
+              <span
+                class="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap shrink-0"
+                :class="{
+                  'text-gray-400': saveStatus === 'idle',
+                  'text-amber-600': saveStatus === 'unsaved',
+                  'text-gray-500': saveStatus === 'saving',
+                  'text-green-600': saveStatus === 'saved',
+                  'text-red-600': saveStatus === 'error'
+                }"
+                aria-live="polite"
+              >
+                <svg
+                  v-if="saveStatus === 'saving'"
+                  class="w-3.5 h-3.5 animate-spin"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                >
+                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
+                </svg>
+                <svg
+                  v-else-if="saveStatus === 'saved'"
+                  class="w-3.5 h-3.5"
+                  viewBox="0 0 20 20"
+                  fill="currentColor"
+                >
+                  <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.1 3.1 6.8-6.8a1 1 0 011.4 0z" clip-rule="evenodd" />
+                </svg>
+                <span
+                  v-else-if="saveStatus === 'unsaved'"
+                  class="w-1.5 h-1.5 rounded-full bg-amber-500"
+                />
+                {{ saveStatusText }}
+              </span>
+            </div>
           </div>
 
           <div
@@ -426,6 +462,51 @@ const form = reactive({
   avoidDescription: ''
 })
 
+type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
+const saveStatus = ref<SaveStatus>('idle')
+const lastSavedAt = ref<number | null>(null)
+
+const isDirty = computed(() => {
+  const c = character.value
+  if (!c) return false
+  return (
+    form.name.trim() !== (c.name || '') ||
+    form.roleDescription !== (c.roleDescription || '') ||
+    form.appearanceDescription !== (c.appearanceDescription || '') ||
+    form.personality !== (c.personality || '') ||
+    form.voiceDescription !== (c.voiceDescription || '') ||
+    form.signatureDetails !== (c.signatureDetails || '') ||
+    form.avoidDescription !== (c.avoidDescription || '')
+  )
+})
+
+const saveStatusText = computed(() => {
+  switch (saveStatus.value) {
+    case 'saving': return 'Saving…'
+    case 'saved': return lastSavedAt.value ? `All changes saved · ${formatSavedTime(lastSavedAt.value)}` : 'All changes saved'
+    case 'unsaved': return 'Unsaved changes — click outside the field to save'
+    case 'error': return 'Couldn’t save — try again'
+    default: return 'Changes save automatically'
+  }
+})
+
+function formatSavedTime (ts: number): string {
+  try {
+    return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+  } catch {
+    return ''
+  }
+}
+
+watch(form, () => {
+  if (!character.value || saveStatus.value === 'saving') return
+  if (isDirty.value) {
+    saveStatus.value = 'unsaved'
+  } else if (saveStatus.value === 'unsaved') {
+    saveStatus.value = lastSavedAt.value ? 'saved' : 'idle'
+  }
+}, { deep: true })
+
 function syncForm (c: CreativeCharacter) {
   form.name = c.name || ''
   form.roleDescription = c.roleDescription || ''
@@ -634,17 +715,25 @@ async function saveField () {
     payload.voiceDescription === (c.voiceDescription || '') &&
     payload.signatureDetails === (c.signatureDetails || '') &&
     payload.avoidDescription === (c.avoidDescription || '')
-  ) return
-  if (!payload.name) {
-    form.name = c.name
+  ) {
+    saveStatus.value = lastSavedAt.value ? 'saved' : 'idle'
     return
   }
+  if (!payload.name) {
+    form.name = c.name
+    saveStatus.value = lastSavedAt.value ? 'saved' : 'idle'
+    return
+  }
+  saveStatus.value = 'saving'
   try {
     // No backing record yet → create one, then re-link this character's assets
     // to the freshly created id so images/voice stay attached.
     if (synthetic.value) {
       const createdId = await createBackingCharacter(token, payload.name)
-      if (!createdId) return
+      if (!createdId) {
+        saveStatus.value = 'error'
+        return
+      }
     }
     const res = await $fetch<{ character: CreativeCharacter }>(
       `/api/projects/${projectId.value}/characters/${effectiveCharacterId.value}`,
@@ -653,8 +742,10 @@ async function saveField () {
     character.value = res.character
     synthetic.value = false
     syncForm(res.character)
-    toast.showToast('Saved.', 'success')
+    lastSavedAt.value = Date.now()
+    saveStatus.value = 'saved'
   } catch (e: unknown) {
+    saveStatus.value = 'error'
     toast.showToast(formatApiFetchError(e, 'Could not save'), 'error')
   }
 }
