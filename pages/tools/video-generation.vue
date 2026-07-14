@@ -195,7 +195,6 @@
             :bible-character-ids="panelPrefill?.characterIds"
           />
           <VideoStartFramePicker
-            v-if="showEndFramePicker"
             v-model:frame-image-url="endFrameUrl"
             role="end"
             :prompt="prompt"
@@ -206,10 +205,13 @@
             :bible-character-ids="panelPrefill?.characterIds"
           />
           <p
-            v-else-if="endFrameHiddenHint"
-            class="text-xs text-gray-500"
+            v-if="endFrameCompatibilityHint"
+            class="text-xs rounded-lg px-3 py-2"
+            :class="endFrameCompatibilityWarn
+              ? 'text-amber-900 bg-amber-50 border border-amber-200'
+              : 'text-gray-500'"
           >
-            {{ endFrameHiddenHint }}
+            {{ endFrameCompatibilityHint }}
           </p>
           <div class="grid sm:grid-cols-2 gap-4">
             <div>
@@ -386,6 +388,7 @@
           </h2>
           <p class="text-xs text-gray-500 mb-4">
             Select one or more; generations run in parallel.
+            Models marked <span class="font-medium text-gray-700">Start+End</span> accept an ending frame.
             <span v-if="data?.source === 'api'" class="block sm:inline sm:ml-1 mt-1 sm:mt-0">
               Live list (<code class="rounded bg-gray-100 px-1 py-0.5 text-gray-800">output_modalities=video</code>).
             </span>
@@ -408,6 +411,11 @@
               <span class="min-w-0">
                 <span class="block text-sm text-gray-800 font-medium leading-snug">
                   {{ m.name }}
+                  <span
+                    v-if="modelSupportsLastFrame(m)"
+                    class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-emerald-50 text-emerald-800 border border-emerald-200 align-middle"
+                    title="Supports starting and ending frame control"
+                  >Start+End</span>
                   <span
                     v-if="m.generateAudio"
                     class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/15 text-primary border border-primary/25 align-middle"
@@ -1032,22 +1040,39 @@ function modelSupportsLastFrame (m: VideoModel | undefined): boolean {
   )
 }
 
-const selectedModelsSupportLastFrame = computed(() => {
-  if (!selectedModelIds.value.length) return true
-  return selectedModelIds.value.some(id =>
-    modelSupportsLastFrame(models.value.find(m => m.id === id))
-  )
-})
+const selectedLastFrameModels = computed(() =>
+  selectedModelIds.value
+    .map(id => models.value.find(m => m.id === id))
+    .filter((m): m is VideoModel => Boolean(m) && modelSupportsLastFrame(m))
+)
 
-const showEndFramePicker = computed(() => selectedModelsSupportLastFrame.value)
+const selectedNonLastFrameModels = computed(() =>
+  selectedModelIds.value
+    .map(id => models.value.find(m => m.id === id))
+    .filter((m): m is VideoModel => Boolean(m) && !modelSupportsLastFrame(m))
+)
 
-const endFrameHiddenHint = computed(() => {
-  if (!selectedModelIds.value.length || selectedModelsSupportLastFrame.value) return ''
-  return 'Ending frame is hidden because the selected model(s) only support a starting frame (or none). Pick Veo, Kling, Seedance, or Wan 2.7 to use start + end frames.'
-})
+const endFrameCompatibilityWarn = computed(() =>
+  Boolean(endFrameUrl.value && selectedModelIds.value.length && !selectedLastFrameModels.value.length)
+)
 
-watch(showEndFramePicker, (ok) => {
-  if (!ok && endFrameUrl.value) endFrameUrl.value = null
+const endFrameCompatibilityHint = computed(() => {
+  if (!endFrameUrl.value) {
+    return 'Tip: pick a model marked Start+End (Veo, Kling, Seedance, Wan 2.7) so your ending frame is used.'
+  }
+  if (!selectedModelIds.value.length) {
+    return 'Ending frame is set — choose a Start+End model below to use it.'
+  }
+  if (!selectedLastFrameModels.value.length) {
+    const names = selectedNonLastFrameModels.value.map(m => m.name).join(', ')
+    return `Ending frame won’t be sent — ${names || 'the selected model(s)'} only support a starting frame (or none). Switch to Veo, Kling, Seedance, or Wan 2.7.`
+  }
+  if (selectedNonLastFrameModels.value.length) {
+    const ok = selectedLastFrameModels.value.map(m => m.name).join(', ')
+    const skip = selectedNonLastFrameModels.value.map(m => m.name).join(', ')
+    return `Ending frame will be used for ${ok}. Skipped for ${skip}.`
+  }
+  return 'Ending frame will be sent to the selected Start+End model(s).'
 })
 
 const generatedAudioModelWarning = computed(() => {
