@@ -9,6 +9,7 @@ const FALLBACK_VIDEO_MODELS = [
     provider: 'Alibaba',
     generateAudio: true,
     supportsNegativePrompt: true,
+    supportedFrameImages: ['first_frame'] as const,
   },
   {
     id: 'bytedance/seedance-1.5-pro',
@@ -16,6 +17,7 @@ const FALLBACK_VIDEO_MODELS = [
     description: 'Experimental video generation (API-only, alpha).',
     provider: 'ByteDance',
     generateAudio: true,
+    supportedFrameImages: ['first_frame', 'last_frame'] as const,
   },
   {
     id: 'openai/sora-2-pro',
@@ -30,6 +32,7 @@ const FALLBACK_VIDEO_MODELS = [
     provider: 'Google',
     generateAudio: true,
     supportsNegativePrompt: true,
+    supportedFrameImages: ['first_frame', 'last_frame'] as const,
   },
 ]
 
@@ -45,6 +48,8 @@ type VideoModelRow = {
   generateAudio?: boolean
   /** From OpenRouter `allowed_passthrough_parameters` — native negativePrompt when true. */
   supportsNegativePrompt?: boolean
+  /** OpenRouter `supported_frame_images` — e.g. first_frame, last_frame. */
+  supportedFrameImages?: Array<'first_frame' | 'last_frame'>
 }
 
 type VideosModelsPayload = {
@@ -53,6 +58,7 @@ type VideosModelsPayload = {
     supported_durations?: unknown
     generate_audio?: unknown
     allowed_passthrough_parameters?: unknown
+    supported_frame_images?: unknown
   }>
 }
 
@@ -60,6 +66,7 @@ type VideoCatalogEntry = {
   supportedDurations: number[]
   generateAudio: boolean | undefined
   allowedPassthroughParameters: string[]
+  supportedFrameImages: Array<'first_frame' | 'last_frame'>
 }
 
 function parseSupportedDurations (raw: unknown): number[] {
@@ -83,6 +90,15 @@ function parseAllowedPassthrough (raw: unknown): string[] {
   return raw.filter((x): x is string => typeof x === 'string' && x.trim()).map(x => x.trim())
 }
 
+function parseSupportedFrameImages (raw: unknown): Array<'first_frame' | 'last_frame'> {
+  if (!Array.isArray(raw)) return []
+  const out: Array<'first_frame' | 'last_frame'> = []
+  for (const x of raw) {
+    if (x === 'first_frame' || x === 'last_frame') out.push(x)
+  }
+  return [...new Set(out)]
+}
+
 /** OpenRouter public catalog: durations + native audio capability per model id. */
 async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> {
   const map = new Map<string, VideoCatalogEntry>()
@@ -98,7 +114,8 @@ async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> 
       map.set(id, {
         supportedDurations: parseSupportedDurations(row.supported_durations),
         generateAudio: parseGenerateAudio(row.generate_audio),
-        allowedPassthroughParameters: parseAllowedPassthrough(row.allowed_passthrough_parameters)
+        allowedPassthroughParameters: parseAllowedPassthrough(row.allowed_passthrough_parameters),
+        supportedFrameImages: parseSupportedFrameImages(row.supported_frame_images)
       })
     }
   } catch {
@@ -191,6 +208,7 @@ export default defineEventHandler(async () => {
     if (!meta) continue
     if (meta.supportedDurations.length) row.supportedDurations = meta.supportedDurations
     if (meta.generateAudio !== undefined) row.generateAudio = meta.generateAudio
+    if (meta.supportedFrameImages.length) row.supportedFrameImages = meta.supportedFrameImages
     if (modelSupportsNativeNegativePrompt(meta.allowedPassthroughParameters)) {
       row.supportsNegativePrompt = true
     } else if (row.id.toLowerCase().startsWith('google/veo')) {

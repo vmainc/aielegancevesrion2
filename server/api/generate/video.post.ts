@@ -60,6 +60,13 @@ export default defineEventHandler(async (event) => {
         ? body.frame_image_url.trim()
         : ''
 
+  const lastFrameImageUrl =
+    typeof body?.lastFrameImageUrl === 'string'
+      ? body.lastFrameImageUrl.trim()
+      : typeof body?.last_frame_image_url === 'string'
+        ? body.last_frame_image_url.trim()
+        : ''
+
   /** Blocking mode (holds connection ~minutes) — for local dev only; production uses async + polling. */
   const syncBlocking = body?.sync === true || body?.sync === 'true'
 
@@ -76,6 +83,13 @@ export default defineEventHandler(async (event) => {
         'Starting frame image is too large to send inline. Remove it and generate or upload the frame again (we compress it automatically).'
     })
   }
+  if (lastFrameImageUrl.startsWith('data:')) {
+    throw createError({
+      statusCode: 400,
+      message:
+        'Ending frame image is too large to send inline. Remove it and generate or upload the frame again (we compress it automatically).'
+    })
+  }
 
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -88,11 +102,15 @@ export default defineEventHandler(async (event) => {
 
   const internalPb = String(config.pocketbaseInternalUrl || '').trim()
   const publicPb = String(config.public?.pocketbaseUrl || '').trim()
+  const resolveOpts = {
+    pocketbaseInternalUrl: internalPb,
+    publicPocketbaseUrl: publicPb || undefined
+  }
   const resolvedFrame = frameImageUrl
-    ? await resolveReferenceImageUrlForServerFetch(frameImageUrl, {
-        pocketbaseInternalUrl: internalPb,
-        publicPocketbaseUrl: publicPb || undefined
-      })
+    ? await resolveReferenceImageUrlForServerFetch(frameImageUrl, resolveOpts)
+    : ''
+  const resolvedLastFrame = lastFrameImageUrl
+    ? await resolveReferenceImageUrlForServerFetch(lastFrameImageUrl, resolveOpts)
     : ''
 
   let supportedDurations: number[] | null = null
@@ -124,6 +142,7 @@ export default defineEventHandler(async (event) => {
     resolution,
     durationSeconds,
     firstFrameImageUrl: resolvedFrame || undefined,
+    lastFrameImageUrl: resolvedLastFrame || undefined,
     generateAudio,
     negativePrompt: negativePrompt || undefined
   }

@@ -5,7 +5,7 @@
   >
     <div class="flex flex-wrap items-center justify-between gap-2">
       <p class="text-xs font-medium text-gray-700">
-        Starting frame
+        {{ titleLabel }}
         <span class="font-normal text-gray-500">(optional)</span>
       </p>
       <button
@@ -18,11 +18,11 @@
       </button>
     </div>
     <p v-if="!compact" class="text-xs text-gray-500">
-      Upload a still (default) or generate one from your prompt. Video models use this as the first frame (image-to-video).
+      {{ helpText }}
       Frames are compressed to fit video limits (~900KB).
     </p>
     <p v-else class="text-[11px] text-gray-500 leading-snug">
-      Upload a still or generate from your prompt when no storyboard frame is set.
+      {{ compactHelpText }}
     </p>
 
     <div
@@ -32,7 +32,7 @@
     >
       <img
         :src="previewUrl"
-        alt="Starting frame preview"
+        :alt="`${titleLabel} preview`"
         class="w-full h-full object-cover"
       >
     </div>
@@ -74,13 +74,13 @@
       >
         <div>
           <label
-            :for="compact ? 'vg-frame-image-model-compact' : 'vg-frame-image-model'"
+            :for="imageModelSelectId"
             class="block text-[11px] font-medium text-gray-600 mb-1"
           >
             Image model
           </label>
           <select
-            :id="compact ? 'vg-frame-image-model-compact' : 'vg-frame-image-model'"
+            :id="imageModelSelectId"
             v-model="imageModelId"
             class="w-full px-2 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-xs"
           >
@@ -99,7 +99,7 @@
           :disabled="generatingFrame || !prompt.trim()"
           @click="generateFrame"
         >
-          {{ generatingFrame ? 'Generating…' : compact ? 'Generate frame' : 'Generate starting frame' }}
+          {{ generatingFrame ? 'Generating…' : compact ? 'Generate frame' : generateButtonLabel }}
         </button>
         <p v-if="!prompt.trim()" class="text-[11px] text-gray-500">
           Add a video prompt above first.
@@ -148,13 +148,21 @@ const props = withDefaults(
     aspectRatio?: string
     /** v-model: staged `/api/generate/video/start-frame/…` URL or remote still URL. */
     frameImageUrl?: string | null
+    /** Start (first) vs end (last) frame labels/toasts. Staging pipeline is shared. */
+    role?: 'start' | 'end'
     /** When set, Production Bible context is appended to the generate prompt (fail-open). */
     bibleProjectId?: string
     bibleSceneId?: string
     bibleShotId?: string
     bibleCharacterIds?: string[]
   }>(),
-  { compact: false, aspectRatio: '16:9', frameImageUrl: null, bibleCharacterIds: () => [] }
+  {
+    compact: false,
+    aspectRatio: '16:9',
+    frameImageUrl: null,
+    role: 'start',
+    bibleCharacterIds: () => []
+  }
 )
 
 const emit = defineEmits<{
@@ -171,6 +179,39 @@ const fileInputEl = ref<HTMLInputElement | null>(null)
 const frameMode = ref<'upload' | 'generate'>('upload')
 const bibleDebugLine = ref('')
 
+const isEndFrame = computed(() => props.role === 'end')
+const titleLabel = computed(() => (isEndFrame.value ? 'Ending frame' : 'Starting frame'))
+const helpText = computed(() =>
+  isEndFrame.value
+    ? 'Upload or generate where the clip should land. Models that support last-frame control (Veo, Kling, Seedance, Wan 2.7) interpolate from start toward this image.'
+    : 'Upload a still (default) or generate one from your prompt. Video models use this as the first frame (image-to-video).'
+)
+const compactHelpText = computed(() =>
+  isEndFrame.value
+    ? 'Optional ending still — where the scene should finish.'
+    : 'Upload a still or generate from your prompt when no storyboard frame is set.'
+)
+const generateButtonLabel = computed(() =>
+  isEndFrame.value ? 'Generate ending frame' : 'Generate starting frame'
+)
+const imageModelSelectId = computed(() => {
+  const role = isEndFrame.value ? 'end' : 'start'
+  return props.compact ? `vg-frame-image-model-${role}-compact` : `vg-frame-image-model-${role}`
+})
+const attachedToast = computed(() =>
+  isEndFrame.value ? 'Ending frame attached.' : 'Starting frame attached.'
+)
+const readyToast = computed(() =>
+  isEndFrame.value
+    ? 'Ending frame ready — generate video when ready.'
+    : 'Starting frame ready — generate video when ready.'
+)
+const oversizedToast = computed(() =>
+  isEndFrame.value
+    ? 'Previous ending frame was too large — generate or upload again.'
+    : 'Previous starting frame was too large — generate or upload again.'
+)
+
 const bibleProjectRef = computed(() => props.bibleProjectId || '')
 const productionBible = useProductionBible(bibleProjectRef)
 
@@ -186,7 +227,7 @@ onMounted(async () => {
     }
   } catch {
     clearFrame()
-    toast.showToast('Previous starting frame was too large — generate or upload again.', 'warning')
+    toast.showToast(oversizedToast.value, 'warning')
   }
 })
 
@@ -216,7 +257,7 @@ async function onFileChange (event: Event) {
   try {
     const url = await uploadVideoStartFrameFile(file)
     syncEmit(url, `Uploaded: ${file.name}`)
-    toast.showToast('Starting frame attached.', 'success')
+    toast.showToast(attachedToast.value, 'success')
   } catch (e: unknown) {
     const msg =
       e && typeof e === 'object' && 'data' in e
@@ -237,6 +278,9 @@ async function generateFrame () {
   bibleDebugLine.value = ''
   try {
     let promptForApi = p
+    if (isEndFrame.value) {
+      promptForApi = `${p}\n\nComposition note: create a final still that shows where this shot ends — resolved action, resting pose, or landing composition suitable as the last video frame.`
+    }
     if (props.bibleProjectId && PB_ID.test(props.bibleProjectId)) {
       const ctx = await productionBible.loadContextForPrompt(
         mergeProductionBibleGenerationOptions({
@@ -246,7 +290,7 @@ async function generateFrame () {
         })
       )
       bibleDebugLine.value = productionBibleGenerationDebugLabel(ctx)
-      promptForApi = appendProductionBibleToPrompt(p, ctx)
+      promptForApi = appendProductionBibleToPrompt(promptForApi, ctx)
     }
     const res = await $fetch<{ urls?: unknown[]; videoStartFrame?: boolean }>('/api/generate/image', {
       method: 'POST',
@@ -269,7 +313,7 @@ async function generateFrame () {
     }
     frameMode.value = 'generate'
     syncEmit(url, `Generated (${imageModelId.value})`)
-    toast.showToast('Starting frame ready — generate video when ready.', 'success')
+    toast.showToast(readyToast.value, 'success')
   } catch (e: unknown) {
     const status =
       e && typeof e === 'object' && 'statusCode' in e

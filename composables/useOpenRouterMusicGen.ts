@@ -1,4 +1,3 @@
-import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import type { ProjectAsset } from '~/types/project-asset'
 
@@ -105,38 +104,36 @@ export async function saveMusicToProjectLibrary (args: {
   notes?: string
   metadata?: Record<string, unknown>
   headers: Record<string, string>
-}): Promise<ProjectAsset | null> {
-  try {
-    const origin =
-      typeof window !== 'undefined' && window.location?.origin
-        ? window.location.origin
-        : ''
-    const url = args.playbackUrl.startsWith('/')
-      ? `${origin}${args.playbackUrl}`
-      : args.playbackUrl
+}): Promise<ProjectAsset> {
+  const origin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : ''
+  const url = args.playbackUrl.startsWith('/')
+    ? `${origin}${args.playbackUrl}`
+    : args.playbackUrl
 
-    const res = await $fetch<{ asset?: ProjectAsset }>(
-      `/api/projects/${args.projectId}/assets/ingest-from-url`,
-      {
-        method: 'POST',
-        headers: { ...args.headers, 'Content-Type': 'application/json' },
-        body: {
-          url,
-          kind: 'other',
-          title: args.title.slice(0, 500),
-          notes: args.notes || '',
-          metadata: {
-            source: 'music_generation',
-            ...(args.metadata || {})
-          }
+  const res = await $fetch<{ asset?: ProjectAsset }>(
+    `/api/projects/${args.projectId}/assets/ingest-from-url`,
+    {
+      method: 'POST',
+      headers: { ...args.headers, 'Content-Type': 'application/json' },
+      body: {
+        url,
+        kind: 'other',
+        title: args.title.slice(0, 500),
+        notes: args.notes || '',
+        metadata: {
+          source: 'music_generation',
+          ...(args.metadata || {})
         }
       }
-    )
-    return res.asset ?? null
-  } catch (e: unknown) {
-    console.warn('[music] library ingest failed:', formatApiFetchError(e, 'ingest'))
-    return null
+    }
+  )
+  if (!res.asset?.id) {
+    throw new Error('Server did not return a saved asset.')
   }
+  return res.asset
 }
 
 export function playbackUrlForProjectMusicAsset (projectId: string, assetId: string): string {

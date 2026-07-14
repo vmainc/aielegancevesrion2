@@ -115,6 +115,8 @@ export async function startOpenRouterVideoJob (options: {
   resolution?: '480p' | '720p' | '1080p' | '1K' | '2K' | '4K'
   durationSeconds?: number
   firstFrameImageUrl?: string
+  /** Ending still — OpenRouter `frame_type: 'last_frame'` when the model supports it. */
+  lastFrameImageUrl?: string
   /** When true, sets OpenRouter `generate_audio: true`. Defaults to false (score on timeline). */
   generateAudio?: boolean
   /** Merged shot + cast exclusions — sent natively when the model supports it, else appended to prompt. */
@@ -157,15 +159,29 @@ export async function startOpenRouterVideoJob (options: {
     }
   }
 
+  const frameImages: Array<{
+    type: 'image_url'
+    frame_type: 'first_frame' | 'last_frame'
+    image_url: { url: string }
+  }> = []
   if (options.firstFrameImageUrl) {
     const dataUrl = await fetchImageAsDataUrlForVideo(options.firstFrameImageUrl, 6_000_000)
-    body.frame_images = [
-      {
-        type: 'image_url',
-        frame_type: 'first_frame',
-        image_url: { url: dataUrl }
-      }
-    ]
+    frameImages.push({
+      type: 'image_url',
+      frame_type: 'first_frame',
+      image_url: { url: dataUrl }
+    })
+  }
+  if (options.lastFrameImageUrl) {
+    const dataUrl = await fetchImageAsDataUrlForVideo(options.lastFrameImageUrl, 6_000_000)
+    frameImages.push({
+      type: 'image_url',
+      frame_type: 'last_frame',
+      image_url: { url: dataUrl }
+    })
+  }
+  if (frameImages.length) {
+    body.frame_images = frameImages
   }
 
   body.generate_audio = options.generateAudio === true

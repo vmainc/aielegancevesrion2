@@ -186,6 +186,7 @@
           </div>
           <VideoStartFramePicker
             v-model:frame-image-url="startFrameUrl"
+            role="start"
             :prompt="prompt"
             :aspect-ratio="aspectRatio"
             :bible-project-id="startFrameBibleProjectId"
@@ -193,6 +194,23 @@
             :bible-shot-id="panelPrefill?.shotId"
             :bible-character-ids="panelPrefill?.characterIds"
           />
+          <VideoStartFramePicker
+            v-if="showEndFramePicker"
+            v-model:frame-image-url="endFrameUrl"
+            role="end"
+            :prompt="prompt"
+            :aspect-ratio="aspectRatio"
+            :bible-project-id="startFrameBibleProjectId"
+            :bible-scene-id="panelPrefill?.sceneId"
+            :bible-shot-id="panelPrefill?.shotId"
+            :bible-character-ids="panelPrefill?.characterIds"
+          />
+          <p
+            v-else-if="endFrameHiddenHint"
+            class="text-xs text-gray-500"
+          >
+            {{ endFrameHiddenHint }}
+          </p>
           <div class="grid sm:grid-cols-2 gap-4">
             <div>
               <label for="vg-aspect" class="block text-sm font-medium text-gray-700 mb-1.5">Aspect ratio</label>
@@ -602,6 +620,7 @@ type VideoModel = {
   supportedDurations?: number[]
   generateAudio?: boolean
   supportsNegativePrompt?: boolean
+  supportedFrameImages?: Array<'first_frame' | 'last_frame'>
 }
 
 type ApiPayload = {
@@ -668,6 +687,7 @@ const startFrameUrl = ref<string | null>(
     ? appendPlaybackAccessToken(boot.startFrameUrl.trim(), getAuthToken())
     : null
 )
+const endFrameUrl = ref<string | null>(null)
 const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(boot?.aspectRatio ?? '16:9')
 const durationSeconds = ref(
   typeof boot?.durationSeconds === 'number' &&
@@ -996,6 +1016,40 @@ const keepButtonLabel = computed(() => {
   return 'Keep clip'
 })
 
+function modelSupportsLastFrame (m: VideoModel | undefined): boolean {
+  if (!m) return false
+  const frames = m.supportedFrameImages
+  if (Array.isArray(frames) && frames.length) {
+    return frames.includes('last_frame')
+  }
+  // Unknown catalog entry — allow end frame for known families that support it.
+  const id = m.id.toLowerCase()
+  return (
+    id.startsWith('google/veo') ||
+    id.startsWith('kwaivgi/kling') ||
+    id.startsWith('bytedance/seedance') ||
+    id === 'alibaba/wan-2.7'
+  )
+}
+
+const selectedModelsSupportLastFrame = computed(() => {
+  if (!selectedModelIds.value.length) return true
+  return selectedModelIds.value.some(id =>
+    modelSupportsLastFrame(models.value.find(m => m.id === id))
+  )
+})
+
+const showEndFramePicker = computed(() => selectedModelsSupportLastFrame.value)
+
+const endFrameHiddenHint = computed(() => {
+  if (!selectedModelIds.value.length || selectedModelsSupportLastFrame.value) return ''
+  return 'Ending frame is hidden because the selected model(s) only support a starting frame (or none). Pick Veo, Kling, Seedance, or Wan 2.7 to use start + end frames.'
+})
+
+watch(showEndFramePicker, (ok) => {
+  if (!ok && endFrameUrl.value) endFrameUrl.value = null
+})
+
 const generatedAudioModelWarning = computed(() => {
   const wantsAudio = includeSpokenDialogue.value || includeAmbientSound.value
   if (!wantsAudio || !selectedModelIds.value.length) return ''
@@ -1087,6 +1141,10 @@ async function runOneModel (modelId: string) {
       aspectRatio: aspectRatio.value,
       durationSeconds: durationSeconds.value,
       frameImageUrl: startFrameUrl.value || undefined,
+      lastFrameImageUrl:
+        modelSupportsLastFrame(model) && endFrameUrl.value
+          ? endFrameUrl.value
+          : undefined,
       supportedDurations: model?.supportedDurations,
       generateAudio: wantsGeneratedAudio.value,
       includeSpokenDialogue: includeSpokenDialogue.value,

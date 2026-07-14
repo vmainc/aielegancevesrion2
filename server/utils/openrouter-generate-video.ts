@@ -20,6 +20,7 @@ export async function openRouterGenerateVideo (options: {
   resolution?: '480p' | '720p' | '1080p' | '1K' | '2K' | '4K'
   durationSeconds?: number
   firstFrameImageUrl?: string
+  lastFrameImageUrl?: string
   generateAudio?: boolean
   negativePrompt?: string
 }): Promise<OpenRouterGenerateVideoResult> {

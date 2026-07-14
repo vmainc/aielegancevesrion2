@@ -49,10 +49,18 @@
         <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-5">
           <div>
             <h2 class="text-lg font-semibold text-gray-900">
-              Your track is ready
+              {{ trackSaved ? 'Track saved to your project' : 'Your track is ready' }}
             </h2>
             <p class="text-sm text-gray-600 mt-1">
-              Save to your project library, add to the timeline, or discard and try again.
+              <template v-if="trackSaved">
+                Find it under
+                <NuxtLink to="/assets/music" class="text-primary font-medium hover:underline">Assets → My Music</NuxtLink>
+                <template v-if="savedProjectName"> for {{ savedProjectName }}</template>.
+                <template v-if="addToTimeline && savedProjectId"> It was also added to the project timeline.</template>
+              </template>
+              <template v-else>
+                Preview below, then save to your project library or discard and try again.
+              </template>
             </p>
           </div>
 
@@ -74,6 +82,7 @@
 
           <div class="flex flex-wrap gap-3 pt-2">
             <button
+              v-if="!trackSaved"
               type="button"
               class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50"
               :disabled="!playbackUrl || saving"
@@ -87,10 +96,17 @@
               :disabled="discarding"
               @click="discardAndRetry"
             >
-              {{ discarding ? 'Removing…' : 'Discard & try again' }}
+              {{ discarding ? 'Removing…' : trackSaved ? 'Generate another track' : 'Discard & try again' }}
             </button>
             <NuxtLink
-              v-if="savedProjectId && addToTimeline"
+              v-if="trackSaved"
+              to="/assets/music"
+              class="inline-flex items-center px-5 py-2.5 border border-primary/40 text-primary font-medium rounded-lg text-sm hover:bg-primary/5"
+            >
+              Open My Music
+            </NuxtLink>
+            <NuxtLink
+              v-if="trackSaved && savedProjectId && addToTimeline"
               :to="`/projects/${savedProjectId}/timeline`"
               class="inline-flex items-center px-5 py-2.5 border border-primary/40 text-primary font-medium rounded-lg text-sm hover:bg-primary/5"
             >
@@ -197,8 +213,13 @@
               type="checkbox"
               class="rounded border-gray-300 text-primary focus:ring-primary"
             >
-            Save to project library after generation
+            Save to project library when generation finishes
           </label>
+          <p v-if="saveToProject" class="text-xs text-gray-500">
+            Saved tracks appear under
+            <NuxtLink to="/assets/music" class="text-primary font-medium hover:underline">Assets → My Music</NuxtLink>,
+            grouped by project.
+          </p>
 
           <div v-if="saveToProject" class="space-y-3">
             <div class="flex flex-wrap gap-2 items-end">
@@ -371,6 +392,7 @@ const resultModel = ref('')
 const transcript = ref('')
 const savedAssetId = ref('')
 const savedProjectId = ref('')
+const trackSaved = ref(false)
 
 const saveToProject = ref(true)
 const addToTimeline = ref(true)
@@ -389,6 +411,10 @@ const saveButtonLabel = computed(() => {
   if (!saveToProject.value) return 'Done'
   return addToTimeline.value ? 'Save & add to timeline' : 'Save to project'
 })
+
+const savedProjectName = computed(() =>
+  pbProjects.value.find(p => p.id === savedProjectId.value)?.name || ''
+)
 
 watch([pbProjects, clientReady], () => {
   if (!selectedProjectId.value && pbProjects.value.length) {
@@ -452,6 +478,55 @@ async function submitCreateProject () {
   }
 }
 
+async function persistGeneratedTrackToProject (): Promise<void> {
+  const projectId = selectedProjectId.value.trim()
+  if (!PB_ID.test(projectId)) {
+    throw new Error('Select a valid project.')
+  }
+
+  const token = getAuthToken()
+  if (!token) {
+    throw new Error('Sign in to save to a project.')
+  }
+  if (!playbackUrl.value) {
+    throw new Error('No generated track to save.')
+  }
+
+  const title = prompt.value.trim().slice(0, 80) || 'Generated music'
+  const asset = await saveMusicToProjectLibrary({
+    projectId,
+    playbackUrl: playbackUrl.value,
+    title,
+    notes: `Lyria · ${resultModel.value || selectedModelId.value}`,
+    metadata: {
+      model: resultModel.value || selectedModelId.value,
+      prompt: prompt.value.trim(),
+      instrumental: instrumental.value
+    },
+    headers: { Authorization: `Bearer ${token}` }
+  })
+
+  savedAssetId.value = asset.id
+  savedProjectId.value = projectId
+  trackSaved.value = true
+
+  let timelineUrl = playbackUrlForProjectMusicAsset(projectId, asset.id)
+  timelineUrl = appendPlaybackAccessToken(timelineUrl, token)
+
+  if (addToTimeline.value) {
+    const appendResult = await appendAudioToProjectTimeline(projectId, {
+      url: timelineUrl,
+      label: title,
+      duration: selectedModelId.value.includes('pro') ? 180 : 30,
+      assetId: asset.id
+    }, { authHeaders: pocketBaseBearerHeaders(token) })
+    const t = timelineAppendToast(appendResult.outcome, 'audio')
+    toast.showToast(t.message, t.type)
+  } else {
+    toast.showToast(`Track saved to “${savedProjectName.value || 'project'}”. Open Assets → My Music to play it.`, 'success')
+  }
+}
+
 async function onSubmit () {
   formError.value = ''
   if (!prompt.value.trim()) {
@@ -468,6 +543,8 @@ async function onSubmit () {
   playbackUrl.value = ''
   transcript.value = ''
   savedAssetId.value = ''
+  savedProjectId.value = ''
+  trackSaved.value = false
 
   try {
     const out = await generateOpenRouterMusic({
@@ -480,6 +557,20 @@ async function onSubmit () {
     playbackUrl.value = out.playbackUrl
     resultModel.value = out.model
     transcript.value = out.transcript || ''
+
+    if (saveToProject.value) {
+      saving.value = true
+      try {
+        await persistGeneratedTrackToProject()
+      } catch (e: unknown) {
+        formError.value = formatApiFetchError(e, 'Track generated but could not save to project.')
+        uiPhase.value = 'complete'
+        return
+      } finally {
+        saving.value = false
+      }
+    }
+
     uiPhase.value = 'complete'
   } catch (e: unknown) {
     formError.value = formatApiFetchError(e, 'Music generation failed.')
@@ -500,58 +591,10 @@ async function saveTrack () {
     return
   }
 
-  const projectId = selectedProjectId.value.trim()
-  if (!PB_ID.test(projectId)) {
-    formError.value = 'Select a valid project.'
-    return
-  }
-
-  const token = getAuthToken()
-  if (!token) {
-    formError.value = 'Sign in to save to a project.'
-    return
-  }
-
   saving.value = true
   try {
-    const title = prompt.value.trim().slice(0, 80) || 'Generated music'
-    const asset = await saveMusicToProjectLibrary({
-      projectId,
-      playbackUrl: playbackUrl.value,
-      title,
-      notes: `Lyria · ${resultModel.value || selectedModelId.value}`,
-      metadata: {
-        model: resultModel.value || selectedModelId.value,
-        prompt: prompt.value.trim(),
-        instrumental: instrumental.value
-      },
-      headers: { Authorization: `Bearer ${token}` }
-    })
-
-    if (!asset?.id) {
-      throw new Error('Could not save track to project library.')
-    }
-
-    savedAssetId.value = asset.id
-    savedProjectId.value = projectId
-
-    let timelineUrl = playbackUrlForProjectMusicAsset(projectId, asset.id)
-    timelineUrl = appendPlaybackAccessToken(timelineUrl, token)
-
-    if (addToTimeline.value) {
-      const appendResult = await appendAudioToProjectTimeline(projectId, {
-        url: timelineUrl,
-        label: title,
-        duration: selectedModelId.value.includes('pro') ? 120 : 30,
-        assetId: asset.id
-      }, { authHeaders: pocketBaseBearerHeaders(token) })
-      const t = timelineAppendToast(appendResult.outcome, 'audio')
-      toast.showToast(t.message, t.type)
-    } else {
-      toast.showToast('Track saved to project.', 'success')
-    }
-    uiPhase.value = 'form'
-    playbackUrl.value = ''
+    await persistGeneratedTrackToProject()
+    uiPhase.value = 'complete'
   } catch (e: unknown) {
     formError.value = formatApiFetchError(e, 'Could not save track.')
   } finally {
@@ -564,6 +607,9 @@ function discardAndRetry () {
   playbackUrl.value = ''
   transcript.value = ''
   formError.value = ''
+  savedAssetId.value = ''
+  savedProjectId.value = ''
+  trackSaved.value = false
   uiPhase.value = 'form'
   discarding.value = false
 }
