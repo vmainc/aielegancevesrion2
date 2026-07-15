@@ -4,6 +4,7 @@ import {
   pbRecordToProjectTimeline,
   projectIdOnTimelineRow
 } from '~/server/utils/project-timeline-map'
+import { PROJECT_TIMELINE_LIST_SORT } from '~/server/utils/project-timeline-store'
 import { timelineEditorStorageKey } from '~/lib/timeline-editor/storage'
 import { isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 
@@ -16,7 +17,7 @@ export default defineEventHandler(async (event) => {
   try {
     const rows = await pb.collection('project_timelines').getList(1, 1, {
       filter: `project = "${projectId}" && owned_by = "${userId}"`,
-      sort: '-updated'
+      sort: PROJECT_TIMELINE_LIST_SORT
     })
 
     const row = rows.items[0] as Record<string, unknown> | undefined

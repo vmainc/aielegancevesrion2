@@ -43,5 +43,8 @@ withDefaults(
 
 const { activeProject, clientReady } = useCreativeProject()
 
-const isCloudProject = computed(() => activeProject.value?.source === 'pocketbase')
+const isCloudProject = computed(() => {
+  const id = activeProject.value?.id || ''
+  return activeProject.value?.source === 'pocketbase' || /^[a-z0-9]{15}$/.test(id)
+})
 </script>

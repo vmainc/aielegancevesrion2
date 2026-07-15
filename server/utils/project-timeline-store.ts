@@ -9,6 +9,9 @@ import { DEFAULT_ZOOM_PX_PER_SEC } from '~/types/timeline-editor'
 import type { ProjectTimeline, ProjectTimelineDocument } from '~/types/project-timeline'
 import { projectTimelineDocumentToEditorDocument } from '~/lib/project-timeline-normalize'
 
+/** PocketBase collections without autodate fields 400 on sort=-updated; revision is always present. */
+export const PROJECT_TIMELINE_LIST_SORT = '-revision'
+
 export async function loadProjectTimelineRow (
   pb: PocketBase,
   userId: string,
@@ -16,7 +19,7 @@ export async function loadProjectTimelineRow (
 ): Promise<{ row: Record<string, unknown> | null; timeline: ProjectTimeline | null }> {
   const rows = await pb.collection('project_timelines').getList(1, 1, {
     filter: `project = "${projectId}" && owned_by = "${userId}"`,
-    sort: '-updated'
+    sort: PROJECT_TIMELINE_LIST_SORT
   })
   const row = (rows.items[0] as Record<string, unknown> | undefined) ?? null
   if (!row) return { row: null, timeline: null }

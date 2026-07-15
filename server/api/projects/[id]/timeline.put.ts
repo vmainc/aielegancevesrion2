@@ -12,6 +12,7 @@ import {
 import { timelineEditorStorageKey } from '~/lib/timeline-editor/storage'
 import { isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 import type { ProjectTimelinePutBody, ProjectTimelineSource } from '~/types/project-timeline'
+import { PROJECT_TIMELINE_LIST_SORT } from '~/server/utils/project-timeline-store'
 
 function parseSource (value: unknown): ProjectTimelineSource | undefined {
   if (value === 'editor' || value === 'local_import' || value === 'migration') return value
@@ -45,7 +46,7 @@ export default defineEventHandler(async (event) => {
   try {
     const existing = await pb.collection('project_timelines').getList(1, 1, {
       filter: `project = "${projectId}" && owned_by = "${userId}"`,
-      sort: '-updated'
+      sort: PROJECT_TIMELINE_LIST_SORT
     })
 
     const row = existing.items[0] as Record<string, unknown> | undefined
