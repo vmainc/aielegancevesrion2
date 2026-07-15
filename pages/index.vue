@@ -19,10 +19,10 @@
         </p>
         <div class="flex flex-col sm:flex-row gap-4">
           <NuxtLink
-            to="/signup"
+            to="/login"
             class="inline-flex justify-center items-center px-8 py-3.5 rounded-xl bg-primary text-gray-950 font-semibold text-base hover:bg-primary/90 transition-all hover:scale-[1.02] active:scale-[0.98] shadow-lg shadow-primary/15"
           >
-            Get started
+            Sign in
           </NuxtLink>
           <NuxtLink
             :to="{ path: '/login', query: { redirect: '/tools/video-generation' } }"
@@ -211,10 +211,10 @@
           Start your first project
         </h2>
         <NuxtLink
-          to="/signup"
+          to="/login"
           class="inline-flex items-center justify-center px-10 py-4 rounded-xl bg-primary text-gray-950 font-semibold text-lg hover:bg-primary/90 transition-all hover:scale-[1.02] shadow-xl shadow-primary/10"
         >
-          Get started free
+          Sign in
         </NuxtLink>
       </div>
     </section>

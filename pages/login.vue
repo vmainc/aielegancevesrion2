@@ -67,13 +67,7 @@
 
         <div class="mt-6 space-y-3 text-center">
           <p class="text-sm text-gray-600">
-            Don't have an account?
-            <NuxtLink
-              :to="{ path: '/signup', query: route.query }"
-              class="text-primary hover:text-primary/80 font-semibold transition-colors"
-            >
-              Sign up
-            </NuxtLink>
+            AI Elegance is invite-only. Ask your administrator for an account.
           </p>
           <p class="text-sm text-gray-600">
             <NuxtLink to="/forgot-password" class="text-primary hover:text-primary/80 font-semibold transition-colors">

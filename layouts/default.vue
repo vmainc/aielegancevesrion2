@@ -290,15 +290,9 @@
                 <template v-else>
                   <NuxtLink
                     to="/login"
-                    class="hidden sm:inline-flex sm:items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
-                  >
-                    Login
-                  </NuxtLink>
-                  <NuxtLink
-                    to="/signup"
                     class="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-sm sm:text-base leading-none"
                   >
-                    Sign Up
+                    Login
                   </NuxtLink>
                 </template>
               </div>
@@ -306,15 +300,9 @@
                 <div class="flex items-center space-x-4">
                   <NuxtLink
                     to="/login"
-                    class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
-                  >
-                    Login
-                  </NuxtLink>
-                  <NuxtLink
-                    to="/signup"
                     class="inline-flex items-center justify-center px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors leading-none"
                   >
-                    Sign Up
+                    Login
                   </NuxtLink>
                 </div>
               </template>
@@ -520,16 +508,9 @@
                   <NuxtLink
                     to="/login"
                     @click="closeMobileMenu"
-                    class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg mb-2 font-medium"
-                  >
-                    Login
-                  </NuxtLink>
-                  <NuxtLink
-                    to="/signup"
-                    @click="closeMobileMenu"
                     class="block px-4 py-3.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-center"
                   >
-                    Sign Up
+                    Login
                   </NuxtLink>
                 </div>
               </template>
