@@ -1,13 +1,11 @@
 import { createError, getQuery, getRouterParam } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { listProjectAssetsForProject } from '~/server/utils/list-project-assets-pb'
 import {
   formatPocketBaseRecordError,
   isPocketBaseMissingCollectionError,
   pocketBaseErrorStatus
 } from '~/server/utils/pb-missing-collection-error'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
 import type { ProjectAsset } from '~/types/project-asset'
 
@@ -16,28 +14,7 @@ export default defineEventHandler(async (event) => {
   if (!projectId) {
     throw createError({ statusCode: 400, message: 'Missing project id' })
   }
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
-
-  let project: unknown
-  try {
-    project = await pb.collection('creative_projects').getOne(projectId)
-  } catch (e: unknown) {
-    if (isPocketBaseMissingCollectionError(e)) {
-      throw createError({
-        statusCode: 503,
-        message: 'creative_projects collection is missing or not provisioned on PocketBase.'
-      })
-    }
-    if (pocketBaseErrorStatus(e) === 404) {
-      throw createError({ statusCode: 404, message: 'Project not found' })
-    }
-    throw e
-  }
-  const owner = pbRecordOwnerId(project as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  const { userId, pb } = await requireProjectOwner(event, projectId)
 
   const q = getQuery(event)
   const kind = typeof q.kind === 'string' ? q.kind.trim() : ''

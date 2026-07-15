@@ -1,8 +1,6 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { createSceneShot } from '~/server/utils/persist-scene-shots'
 import { projectIdOnSceneRow } from '~/server/utils/creative-scene-map'
 
@@ -12,15 +10,8 @@ export default defineEventHandler(async (event) => {
   if (!projectId || !sceneId) {
     throw createError({ statusCode: 400, message: 'Missing ids' })
   }
-  const userId = await getPocketBaseUserIdFromRequest(event)
+  const { pb, access } = await requireProjectOwner(event, projectId)
   const body = await readBody(event).catch(() => null) as Record<string, unknown> | null
-  const pb = await getAuthenticatedPocketBase()
-
-  const project = await pb.collection('creative_projects').getOne(projectId)
-  const owner = pbRecordOwnerId(project as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
 
   const scene = await pb.collection('creative_scenes').getOne(sceneId)
   if (projectIdOnSceneRow(scene as Record<string, unknown>) !== projectId) {
@@ -33,7 +24,7 @@ export default defineEventHandler(async (event) => {
       : 5
 
   try {
-    const shot = await createSceneShot(pb, userId, projectId, sceneId, {
+    const shot = await createSceneShot(pb, access.ownerId, projectId, sceneId, {
       title: typeof body?.title === 'string' ? body.title : undefined,
       description: typeof body?.description === 'string' ? body.description : undefined,
       shot_type: typeof body?.shotType === 'string' ? body.shotType : undefined,

@@ -5,7 +5,7 @@
         Video generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Clips are silent by default (no AI background music) — add score on the timeline later. Optionally add <span class="font-medium text-gray-800">spoken dialogue</span> or <span class="font-medium text-gray-800">ambient sound</span> (rain, hallway echo, etc.) for models that support audio.
+        Clips are silent by default (no AI background music). Optionally add <span class="font-medium text-gray-800">spoken dialogue</span> or <span class="font-medium text-gray-800">ambient sound</span> (rain, hallway echo, etc.) for models that support audio.
       </p>
       <p
         v-if="loadingPanelPrefill"
@@ -119,6 +119,19 @@
             <span class="font-semibold">{{ r.modelName }}:</span> {{ r.error }}
           </div>
 
+          <button
+            v-if="successfulResults.length"
+            type="button"
+            class="w-full flex items-center justify-center gap-2.5 px-6 py-4 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-bold text-base sm:text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="!selectedPlaybackUrl || downloadingClip"
+            @click="downloadSelectedClip"
+          >
+            <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
+            </svg>
+            {{ downloadingClip ? 'Downloading…' : 'Download to your device' }}
+          </button>
+
           <div class="flex flex-wrap gap-3 pt-2">
             <button
               type="button"
@@ -155,7 +168,7 @@
               v-model="prompt"
               rows="4"
               class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-              placeholder="Motion, camera, lighting, mood — no music (add score on the timeline later)"
+              placeholder="Motion, camera, lighting, mood — no background music"
             />
             <p
               v-if="productionBibleDebugLine"
@@ -313,7 +326,7 @@
           </div>
 
           <p class="text-xs text-gray-500">
-            By default clips are silent — add score on the timeline later. Dialogue and ambient options ask the model to synthesize sound in the file (still no AI background music).
+            By default clips are silent. Dialogue and ambient options ask the model to synthesize sound in the file (still no AI background music).
             Video on OpenRouter is API-only and may be in alpha.
             <a
               href="https://openrouter.ai/models?fmt=cards&output_modalities=video"
@@ -478,13 +491,6 @@
               class="px-3 py-3 border-t border-gray-200 flex flex-wrap gap-2"
             >
               <NuxtLink
-                v-if="selectedProjectId && saveToProject"
-                :to="`/projects/${selectedProjectId}/timeline`"
-                class="text-xs font-medium text-primary hover:underline"
-              >
-                Open timeline
-              </NuxtLink>
-              <NuxtLink
                 to="/assets/video"
                 class="text-xs font-medium text-gray-600 hover:text-gray-900"
               >
@@ -583,6 +589,7 @@ definePageMeta({
 })
 
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { downloadMediaFile, sanitizeDownloadFilename } from '~/lib/download-media-file'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import { productionBibleGenerationDebugLabel } from '~/lib/production-bible-generation-context'
 import {
@@ -680,7 +687,11 @@ const startFrameUrl = ref<string | null>(
     ? appendPlaybackAccessToken(boot.startFrameUrl.trim(), getAuthToken())
     : null
 )
-const endFrameUrl = ref<string | null>(null)
+const endFrameUrl = ref<string | null>(
+  boot?.endFrameUrl
+    ? appendPlaybackAccessToken(boot.endFrameUrl.trim(), getAuthToken())
+    : null
+)
 const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(boot?.aspectRatio ?? '16:9')
 const durationSeconds = ref(
   typeof boot?.durationSeconds === 'number' &&
@@ -723,6 +734,7 @@ const uiPhase = ref<UiPhase>('form')
 const selectedKeepModelId = ref('')
 const keepingClip = ref(false)
 const discardingRun = ref(false)
+const downloadingClip = ref(false)
 const panelPrefill = ref<VideoGenerationPrefill | null>(boot)
 const productionBibleDebugLine = computed(() => {
   const ctx = panelPrefill.value?.productionBibleContext
@@ -842,6 +854,11 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   if (p.startFrameUrl) {
     startFrameUrl.value = appendPlaybackAccessToken(p.startFrameUrl.trim(), getAuthToken())
   }
+  if (p.endFrameUrl) {
+    endFrameUrl.value = appendPlaybackAccessToken(p.endFrameUrl.trim(), getAuthToken())
+  } else {
+    endFrameUrl.value = null
+  }
   if (p.aspectRatio) aspectRatio.value = p.aspectRatio
   if (typeof p.durationSeconds === 'number' && (p.durationSeconds === 5 || p.durationSeconds === 10)) {
     durationSeconds.value = p.durationSeconds
@@ -928,6 +945,12 @@ onMounted(async () => {
       getAuthToken()
     )
   }
+  if (prefillApplied.value && panelPrefill.value?.endFrameUrl?.trim()) {
+    endFrameUrl.value = appendPlaybackAccessToken(
+      panelPrefill.value.endFrameUrl.trim(),
+      getAuthToken()
+    )
+  }
   if (!tryApplyStashedPrefill() && hasPanelDeepLink.value) {
     await fetchPanelPrefillFromApi()
   }
@@ -999,6 +1022,11 @@ const keepButtonLabel = computed(() => {
   return 'Keep clip'
 })
 
+const selectedPlaybackUrl = computed(() => {
+  const pick = selectedKeepModelId.value || successfulResults.value[0]?.modelId
+  return successfulResults.value.find(r => r.modelId === pick)?.playbackUrl || ''
+})
+
 function modelSupportsLastFrame (m: VideoModel | undefined): boolean {
   if (!m) return false
   const frames = m.supportedFrameImages
@@ -1064,7 +1092,7 @@ const generatedAudioModelWarning = computed(() => {
       ? 'spoken dialogue'
       : 'ambient sound'
   if (withoutAudio.length === picked.length) {
-    return `None of your selected models are marked for native audio — try Wan 2.6, Seedance 1.5 Pro, or Veo 3.1, or turn off ${kind} for silent clips.`
+    return `None of your selected models are marked for native audio — try Wan 2.7, Seedance 1.5 Pro, or Veo 3.1, or turn off ${kind} for silent clips.`
   }
   return `${withoutAudio.map(m => m.name).join(', ')} may not synthesize ${kind} — prefer models with the Audio badge.`
 })
@@ -1129,6 +1157,39 @@ function clipTitle (): string {
   if (fromPanel) return `${fromPanel} — video`.slice(0, 500)
   const base = prompt.value.trim().slice(0, 80) || 'Generated clip'
   return `${base} — video`.slice(0, 500)
+}
+
+function downloadFilenameForResult (result?: { modelName?: string }): string {
+  const base = sanitizeDownloadFilename(clipTitle())
+  const model = result?.modelName ? sanitizeDownloadFilename(result.modelName) : 'clip'
+  return `${base}-${model}`
+}
+
+async function downloadClip (playbackUrl: string, result?: { modelName?: string }) {
+  if (!playbackUrl || downloadingClip.value) return
+  downloadingClip.value = true
+  try {
+    const src = playbackSrc(playbackUrl)
+    const token = getAuthToken()
+    const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+    await downloadMediaFile({
+      url: src,
+      filename: downloadFilenameForResult(result),
+      headers
+    })
+    toast.showToast('Download started.', 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not download clip.'), 'error')
+  } finally {
+    downloadingClip.value = false
+  }
+}
+
+async function downloadSelectedClip () {
+  const pick = selectedKeepModelId.value || successfulResults.value[0]?.modelId
+  const kept = successfulResults.value.find(r => r.modelId === pick)
+  if (!kept?.playbackUrl) return
+  await downloadClip(kept.playbackUrl, kept)
 }
 
 async function runOneModel (modelId: string) {

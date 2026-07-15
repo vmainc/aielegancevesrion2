@@ -275,6 +275,10 @@
             :active-image-model-label="activeImageModelLabel"
             :panel-image-src="panelImageSrc"
             :has-displayable-frame="hasDisplayableFrame"
+            :has-any-displayable-frame="hasAnyDisplayableFrame"
+            :can-generate-frame="canGenerateFrame"
+            :is-slot-busy="isSlotBusy"
+            :frame-slot-key="frameSlotKey"
             :shot-character-matches="shotCharacterMatches"
             :character-profile-to="characterProfileTo"
             :board-details-open-for="boardDetailsOpenFor"
@@ -342,12 +346,6 @@
         >
           Next: Video →
         </NuxtLink>
-        <NuxtLink
-          :to="`/projects/${projectId}/timeline`"
-          class="text-sm text-gray-600 hover:text-gray-900 font-medium"
-        >
-          Timeline
-        </NuxtLink>
       </div>
     <input
       ref="storyboardFrameFileInput"
@@ -394,9 +392,13 @@ import {
   storyboardFramePreviewClasses
 } from '~/lib/storyboard-frame-image'
 import {
-  mapStoryboardAssetsToShots,
+  mapStoryboardFrameAssetsToShots,
   storyboardFrameMetadata
 } from '~/lib/storyboard-panel-assets'
+import {
+  storyboardFrameSlotKey,
+  type StoryboardFrameRole
+} from '~/lib/storyboard-frame-role'
 import {
   mergeProductionBibleGenerationOptions,
   productionBibleGenerationDebugLabel
@@ -471,10 +473,10 @@ const {
   getAuthToken
 })
 
-const shotStoryboardAssetMap = computed(() => {
+const shotStoryboardFramesMap = computed(() => {
   const sid = selectedSceneId.value
-  if (!sid || !shots.value.length) return new Map<string, ProjectAsset>()
-  return mapStoryboardAssetsToShots(shots.value, storyboardAssets.value, sid)
+  if (!sid || !shots.value.length) return new Map()
+  return mapStoryboardFrameAssetsToShots(shots.value, storyboardAssets.value, sid)
 })
 
 const generatingAllFrames = ref(false)
@@ -496,7 +498,7 @@ const savingShotId = ref<string | null>(null)
 /** Per-board accordion; unset = collapsed so frames align in the grid. */
 const boardDetailsOpenByShotId = ref<Record<string, boolean>>({})
 const storyboardFrameFileInput = ref<HTMLInputElement | null>(null)
-const uploadTargetShot = ref<CreativeShot | null>(null)
+const uploadTarget = ref<{ shot: CreativeShot; role: StoryboardFrameRole } | null>(null)
 const isFullscreen = ref(false)
 const showImageSettings = ref(false)
 const imageModelOptions = CHARACTER_CREATOR_IMAGE_MODELS
@@ -571,13 +573,13 @@ function priorStoryboardFrameInScene (shot: CreativeShot): string | null {
   const idx = shots.value.findIndex(s => s.id === shot.id)
   if (idx <= 0) return null
   for (let i = idx - 1; i >= 0; i--) {
-    const src = panelImageSrc(shots.value[i]!)
+    const src = panelImageSrc(shots.value[i]!, 'start')
     if (src) return src
   }
   return null
 }
 
-function frameGenerationReferenceUrls (shot: CreativeShot): string[] {
+function frameGenerationReferenceUrls (shot: CreativeShot, role: StoryboardFrameRole): string[] {
   const castInScope = resolveCharactersForFrameGeneration(
     shot,
     characterRefs.value,
@@ -588,7 +590,30 @@ function frameGenerationReferenceUrls (shot: CreativeShot): string[] {
   if (prior && !urls.includes(prior) && urls.length < 4) {
     urls.push(prior)
   }
+  if (role === 'end') {
+    const startSrc = panelImageSrc(shot, 'start')
+    if (startSrc && !urls.includes(startSrc) && urls.length < 4) {
+      urls.unshift(startSrc)
+    }
+  }
   return urls.slice(0, 4)
+}
+
+function frameSlotKey (shot: CreativeShot, role: StoryboardFrameRole): string {
+  return storyboardFrameSlotKey(shot.id, role)
+}
+
+function isSlotBusy (shot: CreativeShot, role: StoryboardFrameRole): boolean {
+  const key = frameSlotKey(shot, role)
+  return imageGenId.value === key || frameUploadingId.value === key
+}
+
+function canGenerateFrame (shot: CreativeShot, _role: StoryboardFrameRole): boolean {
+  return Boolean((shot.imagePrompt || shot.description || '').trim())
+}
+
+function hasAnyDisplayableFrame (shot: CreativeShot): boolean {
+  return hasDisplayableFrame(shot, 'start') || hasDisplayableFrame(shot, 'end')
 }
 
 function panelIndexForShot (shot: CreativeShot): number {
@@ -618,49 +643,51 @@ function assetPlaybackUrl (asset: ProjectAsset): string {
   return fileUrl
 }
 
-function setPanelPreviewFromAsset (shotId: string, asset: ProjectAsset) {
+function setPanelPreviewFromAsset (shotId: string, asset: ProjectAsset, role: StoryboardFrameRole) {
   const url = assetPlaybackUrl(asset)
   if (!url) return
-  framePreview[shotId] = url
-  framePreviewFailed[shotId] = false
-  framePreviewHydrateAttempts[shotId] = 0
+  const key = storyboardFrameSlotKey(shotId, role)
+  framePreview[key] = url
+  framePreviewFailed[key] = false
+  framePreviewHydrateAttempts[key] = 0
   collapseBoardDetails(shotId)
 }
 
 /** URL for <img src> — cached preview, else linked library asset. */
-function panelImageSrc (shot: CreativeShot): string {
-  if (framePreviewFailed[shot.id]) return ''
-  const cached = (framePreview[shot.id] || '').trim()
+function panelImageSrc (shot: CreativeShot, role: StoryboardFrameRole = 'start'): string {
+  const key = frameSlotKey(shot, role)
+  if (framePreviewFailed[key]) return ''
+  const cached = (framePreview[key] || '').trim()
   if (cached) return cached
-  const hit = storyboardAssetForShot(shot)
+  const hit = storyboardAssetForShot(shot, role)
   if (hit) return assetPlaybackUrl(hit)
   return ''
 }
 
-async function onFramePreviewImgError (shot: CreativeShot) {
-  const shotId = shot.id
-  const attempts = (framePreviewHydrateAttempts[shotId] || 0) + 1
-  framePreviewHydrateAttempts[shotId] = attempts
+async function onFramePreviewImgError (shot: CreativeShot, role: StoryboardFrameRole = 'start') {
+  const key = frameSlotKey(shot, role)
+  const attempts = (framePreviewHydrateAttempts[key] || 0) + 1
+  framePreviewHydrateAttempts[key] = attempts
   if (attempts > 1) {
-    framePreviewFailed[shotId] = true
+    framePreviewFailed[key] = true
     return
   }
-  const hit = storyboardAssetForShot(shot)
-  const raw = hit ? assetPlaybackUrl(hit) : (framePreview[shotId] || '').trim()
+  const hit = storyboardAssetForShot(shot, role)
+  const raw = hit ? assetPlaybackUrl(hit) : (framePreview[key] || '').trim()
   if (!raw) {
-    framePreviewFailed[shotId] = true
+    framePreviewFailed[key] = true
     return
   }
-  framePreviewLoading[shotId] = true
+  framePreviewLoading[key] = true
   try {
     const headers = await authHeaders()
     const dataUrl = await fetchImageAsDataUrl(raw, { headers: headers ?? undefined })
-    framePreview[shotId] = dataUrl
-    framePreviewFailed[shotId] = false
+    framePreview[key] = dataUrl
+    framePreviewFailed[key] = false
   } catch {
-    framePreviewFailed[shotId] = true
+    framePreviewFailed[key] = true
   } finally {
-    framePreviewLoading[shotId] = false
+    framePreviewLoading[key] = false
   }
 }
 
@@ -735,7 +762,7 @@ async function generateAllFrames () {
     toast.showToast('Shot list is not saved yet — rebuild from Director or fix the warning above.', 'error')
     return
   }
-  const pending = shots.value.filter(s => !hasDisplayableFrame(s))
+  const pending = shots.value.filter(s => !hasDisplayableFrame(s, 'start'))
   if (!pending.length) {
     toast.showToast('All boards already have frames.', 'info')
     return
@@ -746,8 +773,8 @@ async function generateAllFrames () {
   try {
     for (const shot of pending) {
       try {
-        await generateFrame(shot)
-        if (hasDisplayableFrame(shot)) ok++
+        await generateFrame(shot, 'start')
+        if (hasDisplayableFrame(shot, 'start')) ok++
         else failed++
       } catch {
         failed++
@@ -766,26 +793,30 @@ async function generateAllFrames () {
   }
 }
 
-async function generateFrame (shot: CreativeShot) {
+async function generateFrame (shot: CreativeShot, role: StoryboardFrameRole = 'start') {
   const basePrompt = (shot.imagePrompt || shot.description || '').trim()
   if (!basePrompt) {
     toast.showToast('Add a production prompt or story beat first.', 'info')
     return
   }
+  const slotKey = frameSlotKey(shot, role)
   const matches = shotCharacterMatches(shot)
   const panelIndex = shots.value.findIndex(s => s.id === shot.id)
   const productionBibleCtx = await loadBibleContextForFrame(shot)
   frameBibleDebug[shot.id] = productionBibleGenerationDebugLabel(productionBibleCtx)
-  const prompt = resolveFrameGenerationPrompt(shot, {
+  let prompt = resolveFrameGenerationPrompt(shot, {
     ...unifiedPromptContext(),
     panelIndex: panelIndex >= 0 ? panelIndex : undefined,
     productionBible: productionBibleCtx
   })
-  frameGenerationProvenance[shot.id] = {
+  if (role === 'end') {
+    prompt = `${prompt}\n\nEnd frame: final still of this shot — show the concluding moment or composition after the action.`
+  }
+  frameGenerationProvenance[slotKey] = {
     bibleContext: productionBibleCtx,
     promptForHash: prompt
   }
-  const referenceImageUrls = frameGenerationReferenceUrls(shot)
+  const referenceImageUrls = frameGenerationReferenceUrls(shot, role)
   if (!referenceImageUrls.length) {
     const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim())
     if (missingPortraits.length) {
@@ -800,7 +831,7 @@ async function generateFrame (shot: CreativeShot) {
     toast.showToast('Sign in to generate frames.', 'warning')
     return
   }
-  imageGenId.value = shot.id
+  imageGenId.value = slotKey
   try {
     const res = await $fetch<{ urls?: unknown[] }>('/api/generate/image', {
       method: 'POST',
@@ -815,13 +846,13 @@ async function generateFrame (shot: CreativeShot) {
     })
     const url = firstImageUrl(res.urls || [])
     if (url) {
-      framePreviewFailed[shot.id] = false
-      const saveErr = await autoSaveGeneratedFrame(shot, url, matches)
+      framePreviewFailed[slotKey] = false
+      const saveErr = await autoSaveGeneratedFrame(shot, url, matches, role)
       if (!saveErr) {
-        toast.showToast('Frame generated and saved.', 'success')
+        toast.showToast(`${role === 'end' ? 'End' : 'Start'} frame generated and saved.`, 'success')
       } else {
-        framePreview[shot.id] = url
-        framePreviewFailed[shot.id] = false
+        framePreview[slotKey] = url
+        framePreviewFailed[slotKey] = false
         toast.showToast(`Frame generated (save failed): ${saveErr}`, 'warning')
       }
     } else {
@@ -838,8 +869,8 @@ async function generateFrame (shot: CreativeShot) {
   }
 }
 
-function hasDisplayableFrame (shot: CreativeShot): boolean {
-  return Boolean(panelImageSrc(shot))
+function hasDisplayableFrame (shot: CreativeShot, role: StoryboardFrameRole = 'start'): boolean {
+  return Boolean(panelImageSrc(shot, role))
 }
 
 function boardDetailsOpenFor (shot: CreativeShot): boolean {
@@ -870,19 +901,21 @@ function collapseBoardDetails (shotId: string) {
 }
 
 function shotHasFrame (shot: CreativeShot): boolean {
-  return Boolean(storyboardAssetForShot(shot)?.id) || Boolean((framePreview[shot.id] || '').trim())
+  const key = frameSlotKey(shot, 'start')
+  return Boolean(storyboardAssetForShot(shot, 'start')?.id) || Boolean((framePreview[key] || '').trim())
 }
 
-function storyboardAssetForShot (shot: CreativeShot): ProjectAsset | null {
-  return shotStoryboardAssetMap.value.get(shot.id) ?? null
+function storyboardAssetForShot (shot: CreativeShot, role: StoryboardFrameRole = 'start'): ProjectAsset | null {
+  return shotStoryboardFramesMap.value.get(shot.id)?.[role] ?? null
 }
 
-function openFramePreview (shot: CreativeShot) {
-  const url = panelImageSrc(shot)
+function openFramePreview (shot: CreativeShot, role: StoryboardFrameRole = 'start') {
+  const url = panelImageSrc(shot, role)
   if (!url) return
+  const roleLabel = role === 'end' ? 'End frame' : 'Start frame'
   expandedFrame.value = {
     url,
-    title: shot.title || 'Storyboard frame',
+    title: `${shot.title || 'Storyboard'} — ${roleLabel}`,
     downloadUrl: url
   }
   void nextTick(() => framePreviewDialogEl.value?.focus())
@@ -892,14 +925,16 @@ function closeFramePreview () {
   expandedFrame.value = null
 }
 
-async function clearStoryboardFrame (shot: CreativeShot) {
+async function clearStoryboardFrame (shot: CreativeShot, role: StoryboardFrameRole = 'start') {
+  const roleLabel = role === 'end' ? 'end' : 'start'
   const label = shot.title || 'this board'
-  if (!confirm(`Remove the generated image for “${label}”?`)) return
+  if (!confirm(`Remove the ${roleLabel} frame for “${label}”?`)) return
   const pid = projectId.value
   const token = getAuthToken()
-  frameDeletingId.value = shot.id
+  const slotKey = frameSlotKey(shot, role)
+  frameDeletingId.value = slotKey
   try {
-    const asset = storyboardAssetForShot(shot)
+    const asset = storyboardAssetForShot(shot, role)
     if (asset && pid && token) {
       await $fetch(`/api/projects/${pid}/assets/${asset.id}`, {
         method: 'DELETE',
@@ -907,13 +942,13 @@ async function clearStoryboardFrame (shot: CreativeShot) {
       })
       storyboardAssets.value = storyboardAssets.value.filter(a => a.id !== asset.id)
     }
-    const previewUrl = framePreview[shot.id]
-    delete framePreview[shot.id]
-    delete framePreviewFailed[shot.id]
+    const previewUrl = framePreview[slotKey]
+    delete framePreview[slotKey]
+    delete framePreviewFailed[slotKey]
     if (expandedFrame.value?.url === previewUrl) {
       closeFramePreview()
     }
-    toast.showToast('Frame removed.', 'success')
+    toast.showToast(`${role === 'end' ? 'End' : 'Start'} frame removed.`, 'success')
   } catch (e: unknown) {
     const msg = formatApiFetchError(e, 'Could not remove frame')
     toast.showToast(msg, 'error')
@@ -924,13 +959,15 @@ async function clearStoryboardFrame (shot: CreativeShot) {
 
 function applySavedFramesForCurrentScene () {
   for (const s of shots.value) {
-    const hit = storyboardAssetForShot(s)
-    if (hit) setPanelPreviewFromAsset(s.id, hit)
+    for (const role of ['start', 'end'] as const) {
+      const hit = storyboardAssetForShot(s, role)
+      if (hit) setPanelPreviewFromAsset(s.id, hit, role)
+    }
   }
 }
 
-function triggerStoryboardUpload (shot: CreativeShot) {
-  uploadTargetShot.value = shot
+function triggerStoryboardUpload (shot: CreativeShot, role: StoryboardFrameRole = 'start') {
+  uploadTarget.value = { shot, role }
   storyboardFrameFileInput.value?.click()
 }
 
@@ -938,17 +975,17 @@ async function onStoryboardFrameFilePicked (ev: Event) {
   const input = ev.target as HTMLInputElement
   const file = input.files?.[0]
   input.value = ''
-  const shot = uploadTargetShot.value
-  uploadTargetShot.value = null
-  if (!file || !shot) return
+  const target = uploadTarget.value
+  uploadTarget.value = null
+  if (!file || !target) return
   if (!file.type.startsWith('image/')) {
     toast.showToast('Choose an image file (JPEG, PNG, WebP, or GIF).', 'warning')
     return
   }
-  await uploadStoryboardFrame(shot, file)
+  await uploadStoryboardFrame(target.shot, file, target.role)
 }
 
-async function uploadStoryboardFrame (shot: CreativeShot, file: File) {
+async function uploadStoryboardFrame (shot: CreativeShot, file: File, role: StoryboardFrameRole = 'start') {
   const id = projectId.value
   const sid = selectedSceneId.value
   if (!id || !sid) return
@@ -957,31 +994,34 @@ async function uploadStoryboardFrame (shot: CreativeShot, file: File) {
     toast.showToast('Log in to upload frames.', 'info')
     return
   }
-  frameUploadingId.value = shot.id
-  framePreviewFailed[shot.id] = false
+  const slotKey = frameSlotKey(shot, role)
+  frameUploadingId.value = slotKey
+  framePreviewFailed[slotKey] = false
   let localBlobUrl: string | null = null
   try {
     const matches = shotCharacterMatches(shot)
-    const existing = storyboardAssetForShot(shot)
+    const existing = storyboardAssetForShot(shot, role)
     if (existing?.id) {
       await $fetch(`/api/projects/${id}/assets/${existing.id}`, {
         method: 'DELETE',
         headers: { Authorization: `Bearer ${token}` }
       })
       storyboardAssets.value = storyboardAssets.value.filter(a => a.id !== existing.id)
-      delete framePreview[shot.id]
+      delete framePreview[slotKey]
     }
     const uploadFile = await prepareImageFileForUpload(file)
     localBlobUrl = URL.createObjectURL(uploadFile)
-    framePreview[shot.id] = localBlobUrl
+    framePreview[slotKey] = localBlobUrl
+    const roleSuffix = role === 'end' ? ' — End frame' : ''
     const fd = new FormData()
     fd.append('kind', 'storyboard')
-    fd.append('title', `${shot.title || 'Storyboard Frame'} (uploaded)`.slice(0, 500))
-    fd.append('notes', 'Uploaded storyboard frame')
+    fd.append('title', `${shot.title || 'Storyboard Frame'}${roleSuffix} (uploaded)`.slice(0, 500))
+    fd.append('notes', role === 'end' ? 'Uploaded storyboard end frame' : 'Uploaded storyboard frame')
     fd.append(
       'metadata',
       JSON.stringify(
         storyboardFrameMetadata(shot, sid, panelIndexForShot(shot), {
+          frame_role: role,
           source: 'storyboard_upload',
           character_ids: matches.map(c => c.id),
           character_names: matches.map(c => c.name)
@@ -997,11 +1037,11 @@ async function uploadStoryboardFrame (shot: CreativeShot, file: File) {
     if (out.asset?.id) {
       const saved = { ...out.asset, projectId: out.asset.projectId || id }
       storyboardAssets.value = [saved, ...storyboardAssets.value.filter(a => a.id !== saved.id)]
-      setPanelPreviewFromAsset(shot.id, saved)
+      setPanelPreviewFromAsset(shot.id, saved, role)
       await loadStoryboardAssets()
-      const linked = storyboardAssetForShot(shot) || saved
-      setPanelPreviewFromAsset(shot.id, linked)
-      toast.showToast('Frame uploaded.', 'success')
+      const linked = storyboardAssetForShot(shot, role) || saved
+      setPanelPreviewFromAsset(shot.id, linked, role)
+      toast.showToast(`${role === 'end' ? 'End' : 'Start'} frame uploaded.`, 'success')
     } else {
       toast.showToast('Upload finished but no asset was returned.', 'warning')
     }
@@ -1053,8 +1093,8 @@ async function imageUrlToBlob (url: string): Promise<Blob> {
   return res.blob()
 }
 
-async function removeStoryboardAssetForShot (shot: CreativeShot) {
-  const existing = storyboardAssetForShot(shot)
+async function removeStoryboardAssetForShot (shot: CreativeShot, role: StoryboardFrameRole = 'start') {
+  const existing = storyboardAssetForShot(shot, role)
   const pid = projectId.value
   const token = getAuthToken()
   if (!existing?.id || !pid || !token) return
@@ -1072,16 +1112,20 @@ async function removeStoryboardAssetForShot (shot: CreativeShot) {
 async function persistStoryboardAsset (
   shot: CreativeShot,
   imageUrl: string,
-  matches: ReturnType<typeof shotCharacterMatches>
+  matches: ReturnType<typeof shotCharacterMatches>,
+  role: StoryboardFrameRole = 'start'
 ): Promise<ProjectAsset | null> {
   const id = projectId.value
   const sid = selectedSceneId.value
   const token = getAuthToken()
   if (!id || !sid || !token) return null
 
-  const title = `${shot.title || 'Storyboard Frame'} (${activeImageModelLabel.value})`.slice(0, 500)
-  const prov = frameGenerationProvenance[shot.id]
+  const roleSuffix = role === 'end' ? ' — End' : ''
+  const title = `${shot.title || 'Storyboard Frame'}${roleSuffix} (${activeImageModelLabel.value})`.slice(0, 500)
+  const slotKey = frameSlotKey(shot, role)
+  const prov = frameGenerationProvenance[slotKey]
   const baseMetadata = storyboardFrameMetadata(shot, sid, panelIndexForShot(shot), {
+    frame_role: role,
     model_id: selectedImageModelId.value,
     model_label: activeImageModelLabel.value,
     character_ids: matches.map(c => c.id),
@@ -1151,7 +1195,8 @@ async function persistStoryboardAsset (
 async function autoSaveGeneratedFrame (
   shot: CreativeShot,
   imageUrl: string,
-  matches: ReturnType<typeof shotCharacterMatches>
+  matches: ReturnType<typeof shotCharacterMatches>,
+  role: StoryboardFrameRole = 'start'
 ): Promise<string | null> {
   const id = projectId.value
   const sid = selectedSceneId.value
@@ -1164,13 +1209,13 @@ async function autoSaveGeneratedFrame (
   const src = (imageUrl || '').trim()
   if (!src) return 'no image data to save'
   try {
-    await removeStoryboardAssetForShot(shot)
-    const asset = await persistStoryboardAsset(shot, src, matches)
+    await removeStoryboardAssetForShot(shot, role)
+    const asset = await persistStoryboardAsset(shot, src, matches, role)
     if (asset?.id) {
       storyboardAssets.value = [asset, ...storyboardAssets.value.filter(a => a.id !== asset.id)]
       await loadStoryboardAssets()
-      const linked = storyboardAssetForShot(shot) || asset
-      setPanelPreviewFromAsset(shot.id, linked)
+      const linked = storyboardAssetForShot(shot, role) || asset
+      setPanelPreviewFromAsset(shot.id, linked, role)
       return null
     }
     return 'could not save frame to project library'
@@ -1340,8 +1385,12 @@ async function deleteBoard (shot: CreativeShot) {
       headers: { Authorization: `Bearer ${token}` }
     })
     shots.value = shots.value.filter(s => s.id !== shot.id)
-    delete framePreview[shot.id]
-    delete framePreviewFailed[shot.id]
+    for (const role of ['start', 'end'] as const) {
+      const key = storyboardFrameSlotKey(shot.id, role)
+      delete framePreview[key]
+      delete framePreviewFailed[key]
+      delete framePreviewLoading[key]
+    }
     await loadScenes()
     toast.showToast('Board deleted.', 'success')
   } catch (e: unknown) {

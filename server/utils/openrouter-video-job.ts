@@ -117,7 +117,7 @@ export async function startOpenRouterVideoJob (options: {
   firstFrameImageUrl?: string
   /** Ending still — OpenRouter `frame_type: 'last_frame'` when the model supports it. */
   lastFrameImageUrl?: string
-  /** When true, sets OpenRouter `generate_audio: true`. Defaults to false (score on timeline). */
+  /** When true, sets OpenRouter `generate_audio: true`. Defaults to false. */
   generateAudio?: boolean
   /** Merged shot + cast exclusions — sent natively when the model supports it, else appended to prompt. */
   negativePrompt?: string

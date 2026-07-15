@@ -2,46 +2,35 @@ import { createError, type H3Event } from 'h3'
 import type PocketBase from 'pocketbase'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import { isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
+import {
+  assertUserHasProjectAccess,
+  loadProjectRecordOrThrow,
+  requireProjectAccess,
+  type ProjectAccess
+} from '~/server/utils/project-access'
 
 export function bibleRelId (v: string | { id?: string } | undefined): string {
   if (!v) return ''
   return typeof v === 'string' ? v : (v.id || '')
 }
 
+/** Project owner or shared member — read/write project content. */
 export async function requireProjectOwner (
   event: H3Event,
   projectId: string
-): Promise<{ userId: string; pb: PocketBase }> {
-  if (!projectId) {
-    throw createError({ statusCode: 400, message: 'Missing project id' })
-  }
+): Promise<{ userId: string; pb: PocketBase; access: ProjectAccess }> {
+  const { userId, pb, access } = await requireProjectAccess(event, projectId)
+  return { userId, pb, access }
+}
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
-
-  let record: unknown
-  try {
-    record = await pb.collection('creative_projects').getOne(projectId)
-  } catch (e: unknown) {
-    if (isPocketBaseMissingCollectionError(e)) {
-      throw createError({
-        statusCode: 503,
-        message: 'creative_projects collection is missing or not provisioned on PocketBase.'
-      })
-    }
-    if (pocketBaseErrorStatus(e) === 404) {
-      throw createError({ statusCode: 404, message: 'Project not found' })
-    }
-    throw e
-  }
-
-  if (pbRecordOwnerId(record as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
-
-  return { userId, pb }
+/** Only the project owner — sharing settings, delete project, etc. */
+export async function requireProjectOwnerOnly (
+  event: H3Event,
+  projectId: string
+): Promise<{ userId: string; pb: PocketBase; access: ProjectAccess }> {
+  const { userId, pb, access } = await requireProjectAccess(event, projectId, { requireOwner: true })
+  return { userId, pb, access }
 }
 
 export function assertRowBelongsToProject (
@@ -65,6 +54,8 @@ export async function requireOwnedProjectRow (
   projectIdOnRow: (row: Record<string, unknown>) => string,
   label: string
 ): Promise<Record<string, unknown>> {
+  await assertUserHasProjectAccess(pb, userId, projectId)
+
   let row: Record<string, unknown>
   try {
     row = await pb.collection(collection).getOne(rowId) as Record<string, unknown>
@@ -75,10 +66,17 @@ export async function requireOwnedProjectRow (
     throw e
   }
 
-  if (pbRecordOwnerId(row as { owner?: unknown; user?: unknown; owned_by?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
-
   assertRowBelongsToProject(row, projectId, projectIdOnRow, label)
   return row
+}
+
+export async function loadProjectForAccessCheck (
+  event: H3Event,
+  projectId: string
+): Promise<{ userId: string; pb: PocketBase; project: Record<string, unknown> }> {
+  const userId = await getPocketBaseUserIdFromRequest(event)
+  const pb = await getAuthenticatedPocketBase()
+  const project = await loadProjectRecordOrThrow(pb, projectId)
+  await assertUserHasProjectAccess(pb, userId, projectId)
+  return { userId, pb, project }
 }

@@ -4,11 +4,11 @@ export type VideoGenerationAspectRatio = '16:9' | '9:16' | '1:1'
 export interface VideoGenerationPrefill {
   prompt: string
   startFrameUrl?: string | null
+  endFrameUrl?: string | null
   aspectRatio?: VideoGenerationAspectRatio
   durationSeconds?: number
   projectId?: string
   saveToProject?: boolean
-  addToTimeline?: boolean
   shotTitle?: string
   sceneId?: string
   shotId?: string
@@ -39,7 +39,6 @@ export async function navigateToVideoGenerationFromPanel (opts: {
   projectId: string
   sceneId: string
   shotId: string
-  addToTimeline?: boolean
   prefill?: VideoGenerationPrefill
 }): Promise<void> {
   if (opts.prefill?.prompt?.trim()) {
@@ -48,7 +47,6 @@ export async function navigateToVideoGenerationFromPanel (opts: {
       projectId: opts.projectId,
       sceneId: opts.sceneId,
       shotId: opts.shotId,
-      addToTimeline: opts.addToTimeline ?? opts.prefill.addToTimeline,
       saveToProject: opts.prefill.saveToProject ?? true,
       source: opts.prefill.source ?? 'project_video_panel'
     })
@@ -58,7 +56,6 @@ export async function navigateToVideoGenerationFromPanel (opts: {
     sceneId: opts.sceneId,
     shotId: opts.shotId
   }
-  if (opts.addToTimeline) query.addToTimeline = '1'
   await navigateTo({
     path: '/tools/video-generation',
     query

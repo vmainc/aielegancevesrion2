@@ -1,8 +1,6 @@
 import { createError, getRouterParam, readBody } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import type { ProjectAssetKind } from '~/types/project-asset'
 
 const KINDS: ProjectAssetKind[] = ['script', 'character', 'storyboard', 'video', 'other']
@@ -12,14 +10,7 @@ export default defineEventHandler(async (event) => {
   if (!projectId) {
     throw createError({ statusCode: 400, message: 'Missing project id' })
   }
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
-
-  const project = await pb.collection('creative_projects').getOne(projectId)
-  const owner = pbRecordOwnerId(project as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  const { pb, access } = await requireProjectOwner(event, projectId)
 
   const body = await readBody<{
     kind?: string
@@ -53,7 +44,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const created = await pb.collection('project_assets').create({
-      owned_by: userId,
+      owned_by: access.ownerId,
       project: projectId,
       kind,
       title: title.slice(0, 500),

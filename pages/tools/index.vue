@@ -32,7 +32,7 @@ const cards = [
   {
     to: '/tools/music-generation',
     title: 'Music generation',
-    blurb: 'Compose score beds and themes with Google Lyria — save to projects and add to the timeline.',
+    blurb: 'Compose score beds and themes with Google Lyria and save them to projects.',
   },
   {
     to: '/tools/script-wizard',

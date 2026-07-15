@@ -4,7 +4,7 @@ No background music, score, soundtrack, or musical underscore.
 No songs or licensed-style beds.
 Ambient diegetic sound only if needed (wind, room tone, footsteps).
 No spoken dialogue unless explicitly written in the prompt above.
-Music and score are added later on the project timeline — visuals and motion only.`
+Music and score are handled separately during post-production — visuals and motion only.`
 
 /** When generate_audio is on: speech in clip, still no score. */
 export const VIDEO_SPOKEN_DIALOGUE_POLICY_BLOCK = `AUDIO POLICY — SPOKEN DIALOGUE:

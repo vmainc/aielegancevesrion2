@@ -8,7 +8,7 @@
 
     <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-3">My Music</h1>
     <p class="text-gray-600 text-sm sm:text-base mb-6 max-w-2xl">
-      AI-generated scores and uploaded tracks saved to your projects — ready to drop on the timeline.
+      AI-generated scores and uploaded tracks saved to your projects.
     </p>
 
     <div class="flex flex-wrap gap-2 mb-8">
@@ -66,14 +66,6 @@
                   </p>
                 </div>
               </div>
-              <NuxtLink
-                v-if="g.projectId && PB_ID.test(g.projectId)"
-                :to="`/projects/${g.projectId}/video`"
-                class="text-xs font-medium text-primary hover:underline shrink-0"
-                @click.stop
-              >
-                Open timeline →
-              </NuxtLink>
             </summary>
             <ul class="divide-y divide-gray-200">
               <li
@@ -107,14 +99,6 @@
                       Actions
                     </summary>
                     <div class="absolute right-0 bottom-full mb-2 z-50 min-w-[13rem] rounded-lg border border-gray-200 bg-white shadow-lg p-1">
-                      <button
-                        v-if="a.projectId && playbackSrc(a)"
-                        type="button"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                        @click="addToTimeline(a)"
-                      >
-                        Add to timeline
-                      </button>
                       <a
                         v-if="playbackSrc(a)"
                         :href="playbackSrc(a)"
@@ -260,9 +244,6 @@
 </template>
 
 <script setup lang="ts">
-import { appendAudioToProjectTimeline } from '~/lib/append-project-timeline-audio'
-import { timelineAppendToast } from '~/lib/timeline-append-feedback'
-import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { groupProjectAssetsByProject } from '~/lib/project-asset-sort'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { uploadMusicTrack, validateMusicTrackFile } from '~/lib/upload-music-track'
@@ -326,20 +307,6 @@ function musicSourceLabel (a: ProjectAsset): string {
   if (source === 'music_generation') return 'AI generated'
   if (source === 'music_upload') return 'Uploaded'
   return ''
-}
-
-async function addToTimeline (a: ProjectAsset) {
-  if (!a.projectId || !PB_ID.test(a.projectId)) return
-  const src = playbackSrc(a)
-  if (!src) return
-  const result = await appendAudioToProjectTimeline(a.projectId, {
-    url: src,
-    label: (a.title || 'Music').slice(0, 500),
-    duration: 120,
-    assetId: a.id
-  }, { authHeaders: pocketBaseBearerHeaders(getAuthToken()) })
-  const t = timelineAppendToast(result.outcome, 'audio')
-  toast.showToast(t.message, t.type)
 }
 
 async function fetchItems () {

@@ -1,7 +1,6 @@
-import { getRouterParam, readBody } from 'h3'
+import { createError, getRouterParam, readBody } from 'h3'
 import type PocketBase from 'pocketbase'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import {
   pbRecordToCreativeCharacter,
   projectIdOnCharacterRow
@@ -17,7 +16,6 @@ import {
   pocketBaseErrorStatus
 } from '~/server/utils/pb-missing-collection-error'
 import { formatDirectorForAiPrompt, parseDirectorField } from '~/server/utils/creative-project-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { enrichFixedCharacterRosterWithAi } from '~/server/utils/script-import-ai'
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 import { resolveProjectPreferredOpenRouterModel } from '~/server/utils/project-model-preference'
@@ -26,7 +24,7 @@ import { OPENROUTER_TEXT_MODEL_MAP } from '~/server/utils/openrouter-text-models
 async function listProjectCharacterRows (
   pb: PocketBase,
   projectId: string,
-  userId: string
+  ownerId: string
 ): Promise<unknown[]> {
   try {
     return await pb.collection('creative_characters').getFullList({
@@ -36,7 +34,7 @@ async function listProjectCharacterRows (
   } catch (e: unknown) {
     if (pocketBaseErrorStatus(e) === 400) {
       const all = await pb.collection('creative_characters').getFullList({
-        filter: `owned_by="${userId}"`,
+        filter: `owned_by="${ownerId}"`,
         batch: 400
       })
       return all.filter((r) => projectIdOnCharacterRow(r as Record<string, unknown>) === projectId)
@@ -51,17 +49,13 @@ export default defineEventHandler(async (event) => {
     throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Missing project id')
   }
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
+  const { userId, pb, access } = await requireProjectOwner(event, projectId)
 
   const body = await readBody<{ assetId?: string }>(event).catch(() => ({}))
   const rawAsset = typeof body?.assetId === 'string' ? body.assetId.trim() : ''
   const assetId = rawAsset || undefined
 
   const projectRow = await pb.collection('creative_projects').getOne(projectId)
-  if (pbRecordOwnerId(projectRow as { owner?: unknown; user?: unknown }) !== userId) {
-    throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
-  }
 
   const { parsed } = await loadWorkflowScreenplayParsedForProject({
     userId,
@@ -70,7 +64,7 @@ export default defineEventHandler(async (event) => {
     assetId
   })
 
-  let rows = await listProjectCharacterRows(pb, projectId, userId)
+  let rows = await listProjectCharacterRows(pb, projectId, access.ownerId)
   let seeded = 0
   let removedMeta = 0
 
@@ -89,7 +83,7 @@ export default defineEventHandler(async (event) => {
     }
   }
   if (removedMeta > 0) {
-    rows = await listProjectCharacterRows(pb, projectId, userId)
+    rows = await listProjectCharacterRows(pb, projectId, access.ownerId)
   }
 
   if (!rows.length) {
@@ -110,7 +104,7 @@ export default defineEventHandler(async (event) => {
       if (!n || isMetaCastCharacterEntry(n)) continue
       try {
         await pb.collection('creative_characters').create({
-          owned_by: userId,
+          owned_by: access.ownerId,
           project: projectId,
           name: n,
           role_description: ''
@@ -120,7 +114,7 @@ export default defineEventHandler(async (event) => {
         console.warn('[characters enrich] seed create failed:', n, formatPocketBaseRecordError(e))
       }
     }
-    rows = await listProjectCharacterRows(pb, projectId, userId)
+    rows = await listProjectCharacterRows(pb, projectId, access.ownerId)
   }
 
   if (!rows.length) {
@@ -183,7 +177,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (!aiRows.length) {
-    const refreshed = await listProjectCharacterRows(pb, projectId, userId)
+    const refreshed = await listProjectCharacterRows(pb, projectId, access.ownerId)
     refreshed.sort((a, b) => {
       const ra = a as Record<string, unknown>
       const rb = b as Record<string, unknown>
@@ -225,7 +219,7 @@ export default defineEventHandler(async (event) => {
   }
 
   if (updated === 0) {
-    const refreshed = await listProjectCharacterRows(pb, projectId, userId)
+    const refreshed = await listProjectCharacterRows(pb, projectId, access.ownerId)
     refreshed.sort((a, b) => {
       const ra = a as Record<string, unknown>
       const rb = b as Record<string, unknown>
@@ -242,17 +236,17 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const refreshed = await listProjectCharacterRows(pb, projectId, userId)
+  const refreshed = await listProjectCharacterRows(pb, projectId, access.ownerId)
 
   refreshed.sort((a, b) => {
     const ra = a as Record<string, unknown>
     const rb = b as Record<string, unknown>
     const pa =
       typeof ra.screen_share_percent === 'number' ? ra.screen_share_percent : Number(ra.screen_share_percent)
-    const pb =
+    const pbPct =
       typeof rb.screen_share_percent === 'number' ? rb.screen_share_percent : Number(rb.screen_share_percent)
     const na = Number.isFinite(pa) ? pa : -1
-    const nb = Number.isFinite(pb) ? pb : -1
+    const nb = Number.isFinite(pbPct) ? pbPct : -1
     if (nb !== na) return nb - na
     return String(ra.name || '').localeCompare(String(rb.name || ''))
   })

@@ -1,5 +1,17 @@
 import type { CreativeShot } from '~/types/creative-shot'
 import type { ProjectAsset } from '~/types/project-asset'
+import type { StoryboardFrameRole } from '~/lib/storyboard-frame-role'
+
+export type StoryboardShotFrames = {
+  start: ProjectAsset | null
+  end: ProjectAsset | null
+}
+
+export function assetFrameRole (asset: ProjectAsset): StoryboardFrameRole {
+  const meta = asset.metadata
+  if (meta && typeof meta === 'object' && meta.frame_role === 'end') return 'end'
+  return 'start'
+}
 
 function assetSceneId (asset: ProjectAsset): string {
   const meta = asset.metadata || {}
@@ -31,18 +43,19 @@ function assetIsNewer (a: ProjectAsset, b: ProjectAsset): boolean {
   return assetTimestamp(a).localeCompare(assetTimestamp(b)) > 0
 }
 
-/** Metadata written when saving a storyboard frame for a panel. */
 export function storyboardFrameMetadata (
   shot: CreativeShot,
   sceneId: string,
   panelIndex: number,
   extra: Record<string, unknown> = {}
 ): Record<string, unknown> {
+  const frameRole = extra.frame_role === 'end' ? 'end' : 'start'
   return {
     scene_id: sceneId,
     shot_id: (shot.id || '').trim(),
     panel_index: panelIndex,
     sort_order: shot.sortOrder,
+    frame_role: frameRole,
     ...extra
   }
 }
@@ -154,10 +167,49 @@ function sortAssetsByPanelOrder (shots: CreativeShot[], assets: ProjectAsset[]):
 }
 
 /**
- * Map each shot in a scene to its storyboard asset.
+ * Map each shot in a scene to its storyboard assets (start + end frames).
+ * Priority per role: shot_id → panel_index / sort_order → strict title → ordered zip fallback.
+ */
+export function mapStoryboardFrameAssetsToShots (
+  shots: CreativeShot[],
+  assets: ProjectAsset[],
+  sceneId: string
+): Map<string, StoryboardShotFrames> {
+  const startMap = mapStoryboardAssetsToShotsForRole(shots, assets, sceneId, 'start')
+  const endMap = mapStoryboardAssetsToShotsForRole(shots, assets, sceneId, 'end')
+  const out = new Map<string, StoryboardShotFrames>()
+  for (const shot of shots) {
+    out.set(shot.id, {
+      start: startMap.get(shot.id) ?? null,
+      end: endMap.get(shot.id) ?? null
+    })
+  }
+  return out
+}
+
+function mapStoryboardAssetsToShotsForRole (
+  shots: CreativeShot[],
+  assets: ProjectAsset[],
+  sceneId: string,
+  role: StoryboardFrameRole
+): Map<string, ProjectAsset> {
+  const roleAssets = assets.filter(a => assetFrameRole(a) === role)
+  return mapStoryboardAssetsToShotsInternal(shots, roleAssets, sceneId)
+}
+
+/**
+ * Map each shot in a scene to its primary (start) storyboard asset.
  * Priority: shot_id → panel_index / sort_order → strict title → ordered zip fallback.
  */
 export function mapStoryboardAssetsToShots (
+  shots: CreativeShot[],
+  assets: ProjectAsset[],
+  sceneId: string
+): Map<string, ProjectAsset> {
+  return mapStoryboardAssetsToShotsForRole(shots, assets, sceneId, 'start')
+}
+
+function mapStoryboardAssetsToShotsInternal (
   shots: CreativeShot[],
   assets: ProjectAsset[],
   sceneId: string

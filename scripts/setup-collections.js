@@ -1088,6 +1088,80 @@ async function createCollections(adminEmail, adminPassword) {
       console.log('⚠️  Could not ensure project_timelines:', e.message || e, '\n');
     }
 
+    // Project sharing — members can access shared projects and all child content
+    console.log('👥 Ensuring project_members collection...');
+    try {
+      const creativeProjectsId = await getCollectionIdByName(pb, 'creative_projects');
+
+      console.log('  Ensuring "project_members"...');
+      try {
+        await pb.collections.getFirstListItem('name="project_members"');
+        console.log('  ⚠️  "project_members" already exists, skipping...');
+      } catch (_missing) {
+        await createCollectionThenRules(pb, {
+          name: 'project_members',
+          type: 'base',
+          listRule: '@request.auth.id != "" && (user = @request.auth.id || project.owned_by = @request.auth.id)',
+          viewRule: '@request.auth.id != "" && (user = @request.auth.id || project.owned_by = @request.auth.id)',
+          createRule: '@request.auth.id != "" && project.owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && project.owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && project.owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'project',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: creativeProjectsId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            {
+              name: 'user',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'role',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [{ value: 'member' }]
+              }
+            },
+            {
+              name: 'invited_by',
+              type: 'relation',
+              required: false,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            }
+          ]
+        });
+        console.log('  ✅ "project_members" created');
+      }
+
+      console.log('✅ project_members collection ensured\n');
+    } catch (e) {
+      console.log('⚠️  Could not ensure project_members:', e.message || e, '\n');
+    }
+
     console.log('🎉 All collections have been set up successfully!');
     console.log('\nCollections created:');
     console.log('  ✓ creative_projects / creative_scenes / creative_characters - Script import workspace (if created this run)');
@@ -1097,6 +1171,7 @@ async function createCollections(adminEmail, adminPassword) {
     console.log('  ✓ bible_entities / bible_facts / bible_relationships - Production Bible foundation (if created this run)');
     console.log('  ✓ guide_messages / creative_decisions - Project Guide chat + decision log (if created this run)');
     console.log('  ✓ project_timelines - Per-project timeline documents (if created this run)');
+    console.log('  ✓ project_members - Shared project access for team members (if created this run)');
     console.log('  ✓ users - Created automatically by PocketBase');
     console.log('\n✨ You can now use the application!');
 

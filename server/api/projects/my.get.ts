@@ -4,6 +4,7 @@ import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-t
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { listSharedProjectIdsForUser } from '~/server/utils/project-access'
 
 async function listCreativeProjectsRecords (
   pb: Awaited<ReturnType<typeof getAuthenticatedPocketBase>>
@@ -29,28 +30,83 @@ async function listCreativeProjectsRecords (
   return { records: [], allListAttemptsWere400: true }
 }
 
+function mapProjectWithRole (
+  rec: Record<string, unknown>,
+  userId: string,
+  sharedIds: Set<string>
+) {
+  const isOwner = pbRecordOwnerId(rec) === userId
+  const accessRole = isOwner ? 'owner' as const : sharedIds.has(String(rec.id || '')) ? 'member' as const : undefined
+  if (!accessRole) return null
+  return pbRecordToCreativeProject(
+    rec as Parameters<typeof pbRecordToCreativeProject>[0],
+    { accessRole }
+  )
+}
+
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
   const pb = await getAuthenticatedPocketBase()
 
+  const sharedIds = new Set(await listSharedProjectIdsForUser(pb, userId))
+
   try {
-    const items = await pb.collection('creative_projects').getFullList({
-      // Only `owned_by` exists on schema from setup-collections — OR on missing fields returns 400 from PB.
-      filter: `owned_by = "${userId}"`,
-      sort: '-created',
-      requestKey: `creative_my_${userId}`
-    })
-    return {
-      items: items.map(r => pbRecordToCreativeProject(r as Parameters<typeof pbRecordToCreativeProject>[0]))
+    const [ownedItems, sharedProjectIds] = await Promise.all([
+      pb.collection('creative_projects').getFullList({
+        filter: `owned_by = "${userId}"`,
+        sort: '-created',
+        requestKey: `creative_my_${userId}`
+      }),
+      sharedIds.size
+        ? pb.collection('creative_projects').getFullList({
+            filter: sharedIds.size === 1
+              ? `id = "${[...sharedIds][0]}"`
+              : sharedIds.size <= 20
+                ? [...sharedIds].map(id => `id = "${id}"`).join(' || ')
+                : undefined,
+            sort: '-created',
+            requestKey: `creative_shared_${userId}`
+          }).catch(() => [])
+        : Promise.resolve([])
+    ])
+
+    const seen = new Set<string>()
+    const items = []
+    for (const rec of ownedItems as Array<Record<string, unknown>>) {
+      const id = String(rec.id || '')
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      items.push(pbRecordToCreativeProject(rec as Parameters<typeof pbRecordToCreativeProject>[0], { accessRole: 'owner' }))
     }
+    for (const rec of sharedProjectIds as Array<Record<string, unknown>>) {
+      const id = String(rec.id || '')
+      if (!id || seen.has(id)) continue
+      seen.add(id)
+      items.push(pbRecordToCreativeProject(rec as Parameters<typeof pbRecordToCreativeProject>[0], { accessRole: 'member' }))
+    }
+
+    // If shared filter was too large, fetch individually
+    if (sharedIds.size > 20) {
+      for (const pid of sharedIds) {
+        if (seen.has(pid)) continue
+        try {
+          const rec = await pb.collection('creative_projects').getOne(pid) as Record<string, unknown>
+          seen.add(pid)
+          items.push(pbRecordToCreativeProject(rec as Parameters<typeof pbRecordToCreativeProject>[0], { accessRole: 'member' }))
+        } catch {
+          /* skip missing */
+        }
+      }
+    }
+
+    items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
+    return { items }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)
     const status = pocketBaseErrorStatus(e)
     if (isPocketBaseMissingCollectionError(e)) {
-      // Graceful fallback so app remains usable even before PB collections are provisioned.
       return { items: [], warning: 'creative_projects collection missing' }
     }
-    // PocketBase often returns 400 when filter syntax does not match the live schema (e.g. legacy field types).
     if (status === 400) {
       try {
         const { records: all, allListAttemptsWere400 } = await listCreativeProjectsRecords(pb)
@@ -61,11 +117,12 @@ export default defineEventHandler(async (event) => {
               'Could not read creative_projects from PocketBase (400 on every list attempt). Run: node scripts/setup-collections.js against http://127.0.0.1:8090'
           }
         }
-        const mine = all.filter((r) => pbRecordOwnerId(r) === userId)
+        const items = all
+          .map(rec => mapProjectWithRole(rec, userId, sharedIds))
+          .filter((p): p is NonNullable<typeof p> => p !== null)
+        items.sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
         return {
-          items: mine.map(rec =>
-            pbRecordToCreativeProject(rec as Parameters<typeof pbRecordToCreativeProject>[0])
-          ),
+          items,
           warning:
             'creative_projects PocketBase filter failed (400); listed your projects using an in-memory filter. Run node scripts/add-fields-to-collections.js if the schema is out of date.'
         }

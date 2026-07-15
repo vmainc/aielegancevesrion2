@@ -10,13 +10,13 @@ import { isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/ser
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
-  const { userId, pb } = await requireProjectOwner(event, projectId || '')
+  const { pb, access } = await requireProjectOwner(event, projectId || '')
 
   const localStorageKey = timelineEditorStorageKey(projectId || '')
 
   try {
     const rows = await pb.collection('project_timelines').getList(1, 1, {
-      filter: `project = "${projectId}" && owned_by = "${userId}"`,
+      filter: `project = "${projectId}"`,
       sort: PROJECT_TIMELINE_LIST_SORT
     })
 

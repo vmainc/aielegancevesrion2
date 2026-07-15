@@ -3,7 +3,7 @@ import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { resolveProjectAccess } from '~/server/utils/project-access'
 import { getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 
 /** Fallback model when project preference is unavailable. */
@@ -14,7 +14,7 @@ const CONTEXT_HINTS: Record<string, string> = {
   character:
     'Character portrait / reference image for film or games. Keep names and key facts if present; add lighting, wardrobe, and camera-friendly detail.',
   video:
-    'AI video generation: motion, camera, lighting, time, mood. Be specific and film-literate. Never add background music, score, or soundtrack — music is added on the timeline later. Diegetic ambient sound or dialogue only if the user asks.',
+    'AI video generation: motion, camera, lighting, time, mood. Be specific and film-literate. Never add background music, score, or soundtrack. Diegetic ambient sound or dialogue only if the user asks.',
   image:
     'Text-to-image prompt: composition, style, lighting, subject detail.',
   concept:
@@ -102,9 +102,10 @@ ${CONTEXT_HINTS[ctxKey]}`
     try {
       const userId = await getPocketBaseUserIdFromRequest(event)
       const pb = await getAuthenticatedPocketBase()
-      const project = await pb.collection('creative_projects').getOne(projectId)
-      if (pbRecordOwnerId(project as { owner?: unknown; user?: unknown }) === userId) {
-        const preferred = String((project as { preferred_model_id?: unknown }).preferred_model_id || '').trim()
+      const project = await pb.collection('creative_projects').getOne(projectId) as Record<string, unknown>
+      const access = await resolveProjectAccess(pb, userId, projectId, project)
+      if (access) {
+        const preferred = String(project.preferred_model_id || '').trim()
         const cfg = getConceptGeneratorModelById(preferred)
         if (cfg?.openrouterModelId) enhanceModel = cfg.openrouterModelId
       }

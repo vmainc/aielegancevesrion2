@@ -1,8 +1,6 @@
 import { createError, readBody } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
 import { SCREENPLAY_AI_FORMAT_RULES } from '~/lib/screenplay-format'
@@ -57,7 +55,6 @@ function buildProjectContextBlock (p: ReturnType<typeof pbRecordToCreativeProjec
 }
 
 export default defineEventHandler(async (event) => {
-  const userId = await getPocketBaseUserIdFromRequest(event)
   const body = await readBody(event).catch(() => null) as {
     projectId?: string
     kind?: string
@@ -78,7 +75,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const pb = await getAuthenticatedPocketBase()
+  const { pb } = await requireProjectOwner(event, projectId)
   let projectRow: Record<string, unknown>
   try {
     projectRow = await pb.collection('creative_projects').getOne(projectId) as Record<string, unknown>
@@ -88,10 +85,6 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, message: 'Project not found' })
     }
     throw e
-  }
-  const owner = pbRecordOwnerId(projectRow as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 
   const project = pbRecordToCreativeProject(projectRow as Parameters<typeof pbRecordToCreativeProject>[0])

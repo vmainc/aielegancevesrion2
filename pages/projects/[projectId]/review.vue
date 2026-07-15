@@ -9,7 +9,7 @@
         What needs attention
       </h1>
       <p class="text-sm text-gray-600 mt-1 max-w-2xl">
-        Read-only counts across Production Bible, timeline, assets, and generation.
+        Read-only counts across Production Bible, assets, and generation.
         Open linked tools to review or fix items.
       </p>
     </div>
@@ -27,7 +27,7 @@
         v-if="loading"
         class="rounded-xl border border-primary/20 bg-primary/5 p-8"
       >
-        <FilmReelLoader size="sm" label="Loading review counts" sub-label="Fetching bible, timeline, and assets…" />
+        <FilmReelLoader size="sm" label="Loading review counts" sub-label="Fetching bible and assets…" />
       </div>
 
       <template v-else-if="counts">
@@ -69,41 +69,6 @@
                 class="text-xs font-medium text-amber-800 hover:underline"
               >
                 Review tentative items
-              </NuxtLink>
-            </div>
-          </section>
-
-          <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <h2 class="text-sm font-semibold text-gray-900 mb-3">Timeline</h2>
-            <ul class="space-y-2 text-sm">
-              <li class="flex items-center justify-between gap-3">
-                <span class="text-gray-700">Cloud timeline</span>
-                <CountBadge :label="counts.timeline.cloudTimelineExists ? 'Yes' : 'No'" :warn="!counts.timeline.cloudTimelineExists" />
-              </li>
-              <li class="flex items-center justify-between gap-3">
-                <span class="text-gray-700">Local-only backup</span>
-                <CountBadge :label="counts.timeline.localOnly ? 'Yes' : 'No'" :warn="counts.timeline.localOnly" />
-              </li>
-              <li class="flex items-center justify-between gap-3">
-                <span class="text-gray-700">Queued cloud save</span>
-                <CountBadge :value="counts.timeline.queuedCloudSave ? 1 : 0" :warn="counts.timeline.queuedCloudSave" />
-              </li>
-              <li class="flex items-center justify-between gap-3">
-                <span class="text-gray-700">Missing media clips</span>
-                <CountBadge :value="counts.timeline.missingMedia" :warn="counts.timeline.missingMedia > 0" />
-              </li>
-              <li class="flex items-center justify-between gap-3">
-                <span class="text-gray-700">Local blob clips</span>
-                <CountBadge :value="counts.timeline.localBlob" :warn="counts.timeline.localBlob > 0" />
-              </li>
-              <li class="flex items-center justify-between gap-3">
-                <span class="text-gray-700">Recoverable clips</span>
-                <CountBadge :value="counts.timeline.recoverable" :warn="counts.timeline.recoverable > 0" />
-              </li>
-            </ul>
-            <div class="mt-4">
-              <NuxtLink :to="timelinePath" class="text-xs font-medium text-primary hover:underline">
-                Open timeline
               </NuxtLink>
             </div>
           </section>
@@ -166,7 +131,7 @@
         </div>
 
         <p class="text-xs text-gray-500">
-          This dashboard is read-only. Review and fix items in Production Bible, timeline, or Assets.
+          This dashboard is read-only. Review and fix items in Production Bible or Assets.
         </p>
       </template>
     </CloudProjectRequired>
@@ -176,9 +141,6 @@
 <script setup lang="ts">
 import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
-import { countTimelineCloudSaveQueue } from '~/lib/timeline-editor/cloud-save-queue'
-import { loadTimelineFromStorage } from '~/lib/timeline-editor/storage'
-import { projectTimelineDocumentToEditorDocument } from '~/lib/project-timeline-normalize'
 import {
   computeProjectReviewDashboard,
   RECENT_GENERATED_ASSET_DAYS,
@@ -188,7 +150,6 @@ import type { BibleEntity } from '~/types/bible-entity'
 import type { BibleFact } from '~/types/bible-fact'
 import type { BibleRelationship } from '~/types/bible-relationship'
 import type { ProjectAsset } from '~/types/project-asset'
-import type { ProjectTimelineGetResponse } from '~/types/project-timeline'
 
 const CountBadge = defineComponent({
   name: 'CountBadge',
@@ -220,7 +181,6 @@ const loadError = ref('')
 const counts = ref<ProjectReviewDashboardCounts | null>(null)
 
 const biblePath = computed(() => `/projects/${projectId.value}/bible`)
-const timelinePath = computed(() => `/projects/${projectId.value}/timeline`)
 const assetsPath = computed(() => withProjectQuery('/assets/video'))
 
 async function loadReviewDashboard () {
@@ -233,44 +193,20 @@ async function loadReviewDashboard () {
     const headers = pocketBaseBearerHeaders(getAuthToken())
     const base = `/api/projects/${projectId.value}`
 
-    const [factsRes, entitiesRes, relRes, assetsRes, timelineRes] = await Promise.all([
+    const [factsRes, entitiesRes, relRes, assetsRes] = await Promise.all([
       $fetch<{ facts: BibleFact[] }>(`${base}/bible/facts`, { headers }),
       $fetch<{ entities: BibleEntity[] }>(`${base}/bible/entities`, { headers }),
       $fetch<{ relationships: BibleRelationship[] }>(`${base}/bible/relationships`, { headers }),
-      $fetch<{ items: ProjectAsset[] }>(`${base}/assets`, { headers }),
-      $fetch<ProjectTimelineGetResponse>(`${base}/timeline`, { headers }).catch(() => ({
-        timeline: null,
-        localStorageKey: ''
-      }))
+      $fetch<{ items: ProjectAsset[] }>(`${base}/assets`, { headers })
     ])
 
     const assets = assetsRes.items ?? []
-    const assetsById = new Map(assets.map((a) => [a.id, a]))
-
-    let timelineClips = null as ReturnType<typeof projectTimelineDocumentToEditorDocument>['clips'] | null
-    if (timelineRes.timeline?.document) {
-      timelineClips = projectTimelineDocumentToEditorDocument(timelineRes.timeline.document).clips
-    } else if (import.meta.client) {
-      const local = loadTimelineFromStorage(projectId.value)
-      timelineClips = local?.clips ?? null
-    }
-
-    const localDoc = import.meta.client ? loadTimelineFromStorage(projectId.value) : null
-    const queuedCloudSave = import.meta.client
-      ? countTimelineCloudSaveQueue(projectId.value) > 0
-      : false
 
     counts.value = computeProjectReviewDashboard({
       facts: factsRes.facts ?? [],
       entities: entitiesRes.entities ?? [],
       relationships: relRes.relationships ?? [],
-      assets,
-      timelineClips,
-      cloudTimelineExists: Boolean(timelineRes.timeline),
-      localTimelineClipCount: localDoc?.clips.length ?? 0,
-      queuedCloudSave,
-      assetsById,
-      projectId: projectId.value
+      assets
     })
   } catch (e: unknown) {
     loadError.value = formatApiFetchError(e, 'Could not load review dashboard')

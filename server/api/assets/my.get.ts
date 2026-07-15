@@ -5,14 +5,67 @@ import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
 import { projectIdOnCharacterRow } from '~/server/utils/creative-character-map'
 import { isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
+import { listAccessibleProjectIds } from '~/server/utils/project-access'
 import { sortProjectAssetsByProjectThenKind } from '~/lib/project-asset-sort'
 import { filterMusicLibraryAssets } from '~/lib/project-music-assets'
 import type { ProjectAsset } from '~/types/project-asset'
 
 const PB_ID = /^[a-z0-9]{15}$/
+const MAX_PROJECT_OR_FILTER = 20
 
 function normalizeCharacterNameKey (name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, ' ')
+}
+
+function projectIdOnAssetRow (raw: Record<string, unknown>): string {
+  const p = raw.project
+  if (typeof p === 'string') return p
+  if (p && typeof p === 'object' && 'id' in p && typeof (p as { id?: string }).id === 'string') {
+    return (p as { id: string }).id
+  }
+  return ''
+}
+
+function buildProjectOrFilter (projectIds: string[]): string | null {
+  const ids = projectIds.filter((id) => PB_ID.test(id))
+  if (!ids.length) return null
+  if (ids.length === 1) return `project = "${ids[0]}"`
+  if (ids.length > MAX_PROJECT_OR_FILTER) return null
+  return ids.map((id) => `project = "${id}"`).join(' || ')
+}
+
+function userCanSeeAssetRow (
+  row: Record<string, unknown>,
+  userId: string,
+  accessibleProjectIds: Set<string>
+): boolean {
+  if (pbRecordOwnerId(row) === userId) return true
+  const projectId = projectIdOnAssetRow(row)
+  if (projectId && accessibleProjectIds.has(projectId)) return true
+  const exp = row.expand as { project?: Record<string, unknown> } | undefined
+  if (exp?.project) {
+    const pid = String(exp.project.id || '')
+    if (pid && accessibleProjectIds.has(pid)) return true
+    if (pbRecordOwnerId(exp.project) === userId) return true
+  }
+  return false
+}
+
+function userCanSeeCharacterRow (
+  row: Record<string, unknown>,
+  userId: string,
+  accessibleProjectIds: Set<string>
+): boolean {
+  if (pbRecordOwnerId(row) === userId) return true
+  const projectId = projectIdOnCharacterRow(row)
+  if (projectId && accessibleProjectIds.has(projectId)) return true
+  const exp = row.expand as { project?: Record<string, unknown> } | undefined
+  if (exp?.project) {
+    const pid = String(exp.project.id || '')
+    if (pid && accessibleProjectIds.has(pid)) return true
+    if (pbRecordOwnerId(exp.project) === userId) return true
+  }
+  return false
 }
 
 function mergeCharacterHubItems (projectAssets: ProjectAsset[], characterRowAssets: ProjectAsset[]): ProjectAsset[] {
@@ -95,12 +148,78 @@ async function listProjectAssetsRecordsForHub (
   return { records: [], allListAttemptsWere400: true }
 }
 
+async function listProjectAssetsByAccessibleProjects (
+  pb: Awaited<ReturnType<typeof getAuthenticatedPocketBase>>,
+  userId: string,
+  accessibleProjectIds: string[],
+  kindFilter: string | null
+): Promise<Array<Record<string, unknown>> | null> {
+  const projectFilter = buildProjectOrFilter(accessibleProjectIds)
+  if (!projectFilter) return null
+
+  let filter = `(${projectFilter}) || owned_by = "${userId}"`
+  if (kindFilter) {
+    filter += ` && kind = "${kindFilter}"`
+  }
+
+  const requestKey = `assets_my_${userId}_${kindFilter || 'all'}`
+  try {
+    return await pb.collection('project_assets').getFullList({
+      filter,
+      sort: '-created',
+      expand: 'project',
+      requestKey
+    }) as Array<Record<string, unknown>>
+  } catch (e) {
+    if (pocketBaseErrorStatus(e) !== 400) throw e
+  }
+
+  // Retry without kind in SQL (filter in memory later by caller if needed)
+  if (kindFilter) {
+    try {
+      return await pb.collection('project_assets').getFullList({
+        filter: `(${projectFilter}) || owned_by = "${userId}"`,
+        sort: '-created',
+        expand: 'project',
+        requestKey: `${requestKey}_nokind`
+      }) as Array<Record<string, unknown>>
+    } catch (e) {
+      if (pocketBaseErrorStatus(e) !== 400) throw e
+    }
+  }
+
+  return null
+}
+
 async function listCreativeCharacterRecordsForHub (
   pb: Awaited<ReturnType<typeof getAuthenticatedPocketBase>>,
-  userId: string
+  userId: string,
+  accessibleProjectIds: string[]
 ): Promise<Array<Record<string, unknown>>> {
+  const accessibleSet = new Set(accessibleProjectIds)
   const requestKey = `assets_my_characters_${userId}`
+  const projectFilter = buildProjectOrFilter(accessibleProjectIds)
   const tries = [
+    ...(projectFilter
+      ? [
+          () =>
+            pb.collection('creative_characters').getFullList({
+              filter: `(${projectFilter}) || owned_by = "${userId}"`,
+              sort: '-updated',
+              expand: 'project',
+              batch: 500,
+              requestKey
+            }),
+          () =>
+            pb.collection('creative_characters').getFullList({
+              filter: `(${projectFilter}) || owned_by="${userId}"`,
+              sort: '-updated',
+              expand: 'project',
+              batch: 500,
+              requestKey
+            })
+        ]
+      : []),
     () =>
       pb.collection('creative_characters').getFullList({
         filter: `owned_by = "${userId}"`,
@@ -135,14 +254,7 @@ async function listCreativeCharacterRecordsForHub (
     try {
       const rows = await run()
       const asRows = rows as Array<Record<string, unknown>>
-      // If query had to run without owner filter, enforce owner filtering in-memory.
-      const filtered = asRows.filter((r) => {
-        if (pbRecordOwnerId(r) === userId) return true
-        const exp = r.expand as { project?: Record<string, unknown> } | undefined
-        if (exp?.project && pbRecordOwnerId(exp.project) === userId) return true
-        return false
-      })
-      return filtered
+      return asRows.filter((r) => userCanSeeCharacterRow(r, userId, accessibleSet))
     } catch (e) {
       if (isPocketBaseMissingCollectionError(e)) return []
       if (pocketBaseErrorStatus(e) === 400) continue
@@ -156,6 +268,7 @@ async function listCreativeCharacterRecordsForHub (
 
 /**
  * All assets for the signed-in user (across projects), for /assets hub.
+ * Includes assets from owned projects and projects shared with the user.
  */
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
@@ -164,12 +277,14 @@ export default defineEventHandler(async (event) => {
   const kind = typeof q.kind === 'string' ? q.kind.trim() : ''
   const isMusicHub = kind === 'music'
 
-  let filter = `owned_by = "${userId}"`
-  if (isMusicHub) {
-    filter += ' && kind = "other"'
-  } else if (kind && ['script', 'character', 'storyboard', 'video', 'other'].includes(kind)) {
-    filter += ` && kind = "${kind}"`
-  }
+  const accessibleProjectIds = await listAccessibleProjectIds(pb, userId)
+  const accessibleSet = new Set(accessibleProjectIds)
+
+  const kindFilter = isMusicHub
+    ? 'other'
+    : kind && ['script', 'character', 'storyboard', 'video', 'other'].includes(kind)
+      ? kind
+      : null
 
   const mapProjectAssets = (rows: Array<Record<string, unknown>>) =>
     rows.map((r) => {
@@ -205,20 +320,27 @@ export default defineEventHandler(async (event) => {
       }
     })
 
+  const applyKindMemoryFilter = (rows: Array<Record<string, unknown>>) => {
+    if (isMusicHub) return rows.filter((r) => String(r.kind || '') === 'other')
+    if (kindFilter) return rows.filter((r) => String(r.kind || '') === kindFilter)
+    return rows
+  }
+
   try {
-    const rows = await pb.collection('project_assets').getFullList({
-      filter,
-      sort: '-created',
-      expand: 'project',
-      requestKey: `assets_my_${userId}_${kind}`
-    })
-    const projectAssets = mapProjectAssets(rows as Array<Record<string, unknown>>)
+    let rows = await listProjectAssetsByAccessibleProjects(pb, userId, accessibleProjectIds, kindFilter)
+    if (!rows) {
+      // Too many projects for OR filter, or filter 400'd — fall through to unfiltered list + in-memory access check.
+      throw Object.assign(new Error('project filter unavailable'), { status: 400 })
+    }
+    rows = applyKindMemoryFilter(rows).filter((r) => userCanSeeAssetRow(r, userId, accessibleSet))
+
+    const projectAssets = mapProjectAssets(rows)
     if (isMusicHub) {
       return { items: sortProjectAssetsByProjectThenKind(filterMusicLibraryAssets(projectAssets)) }
     }
     if (kind !== 'character') return { items: projectAssets }
 
-    const characterRows = await listCreativeCharacterRecordsForHub(pb, userId)
+    const characterRows = await listCreativeCharacterRecordsForHub(pb, userId, accessibleProjectIds)
     const characterAssets = mapCharacterRowsAsAssets(characterRows)
 
     return {
@@ -241,9 +363,9 @@ export default defineEventHandler(async (event) => {
               'Could not read project_assets from PocketBase (400 on every list attempt). Run: node scripts/setup-collections.js against http://127.0.0.1:8090'
           }
         }
-        let rows = all.filter(r => pbRecordOwnerId(r) === userId)
+        let rows = all.filter((r) => userCanSeeAssetRow(r, userId, accessibleSet))
         if (isMusicHub) {
-          rows = rows.filter(r => String(r.kind || '') === 'other')
+          rows = rows.filter((r) => String(r.kind || '') === 'other')
           const projectAssets = mapProjectAssets(rows)
           return {
             items: sortProjectAssetsByProjectThenKind(filterMusicLibraryAssets(projectAssets)),
@@ -252,7 +374,7 @@ export default defineEventHandler(async (event) => {
           }
         }
         if (kind && ['script', 'character', 'storyboard', 'video', 'other'].includes(kind)) {
-          rows = rows.filter(r => String(r.kind || '') === kind)
+          rows = rows.filter((r) => String(r.kind || '') === kind)
         }
         const projectAssets = mapProjectAssets(rows)
         if (kind !== 'character') {
@@ -263,7 +385,7 @@ export default defineEventHandler(async (event) => {
           }
         }
 
-        const characterRows = await listCreativeCharacterRecordsForHub(pb, userId)
+        const characterRows = await listCreativeCharacterRecordsForHub(pb, userId, accessibleProjectIds)
         const characterAssets = mapCharacterRowsAsAssets(characterRows)
 
         return {

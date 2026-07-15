@@ -115,7 +115,7 @@ const cards = [
   {
     to: '/assets/music',
     title: 'My Music',
-    blurb: 'AI-generated scores and uploaded tracks — grouped by project, ready for the timeline.',
+    blurb: 'AI-generated scores and uploaded tracks, grouped by project.',
   },
 ]
 

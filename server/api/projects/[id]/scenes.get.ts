@@ -1,22 +1,13 @@
 import { createError, getRouterParam } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { creativeSceneToListItem, pbRecordToCreativeScene } from '~/server/utils/creative-scene-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) {
     throw createError({ statusCode: 400, message: 'Missing project id' })
   }
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
-
-  const project = await pb.collection('creative_projects').getOne(id)
-  const owner = pbRecordOwnerId(project as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  const { pb } = await requireProjectOwner(event, id)
 
   const filter = `project="${id}"`
   const list = await pb.collection('creative_scenes').getFullList({

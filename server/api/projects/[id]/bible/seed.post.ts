@@ -5,7 +5,7 @@ import { formatPocketBaseRecordError, isPocketBaseMissingCollectionError } from 
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
-  const { userId, pb } = await requireProjectOwner(event, projectId || '')
+  const { userId, pb, access } = await requireProjectOwner(event, projectId || '')
 
   const body = await readBody<{ dryRun?: boolean }>(event).catch(() => ({}))
   const dryRun = body?.dryRun === true
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
   try {
     const result = await seedProductionBibleFromProject({
       pb,
-      userId,
+      userId: access.ownerId,
       projectId: projectId || '',
       dryRun
     })

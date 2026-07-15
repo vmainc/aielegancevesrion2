@@ -1,9 +1,7 @@
 import { createError, getRouterParam } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { projectIdOnSceneRow } from '~/server/utils/creative-scene-map'
 import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -12,19 +10,9 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing project or scene id' })
   }
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
-
-  const project = await pb.collection('creative_projects').getOne(projectId)
-  if (pbRecordOwnerId(project as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  const { pb } = await requireProjectOwner(event, projectId)
 
   const existing = await pb.collection('creative_scenes').getOne(sceneId)
-  if (pbRecordOwnerId(existing as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
-
   if (projectIdOnSceneRow(existing as Record<string, unknown>) !== projectId) {
     throw createError({ statusCode: 400, message: 'Scene does not belong to this project' })
   }

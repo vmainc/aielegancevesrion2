@@ -24,7 +24,7 @@ export type OpenRouterVideoGenerateInput = {
   /** Ending still — OpenRouter `last_frame` (Veo, Kling, Seedance, Wan 2.7, etc.). */
   lastFrameImageUrl?: string
   supportedDurations?: number[]
-  /** Rare opt-in: OpenRouter model-synthesized audio. Default false — add music on the timeline. */
+  /** Rare opt-in: OpenRouter model-synthesized audio. Default false. */
   generateAudio?: boolean
   includeSpokenDialogue?: boolean
   includeAmbientSound?: boolean

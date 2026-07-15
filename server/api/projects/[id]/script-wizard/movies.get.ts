@@ -1,7 +1,5 @@
 import { createError, getRouterParam } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 import { extractComparableTitlesFromTreatment, fetchOmdbMovie } from '~/server/utils/script-wizard-omdb'
 
@@ -11,8 +9,16 @@ export default defineEventHandler(async (event) => {
     if (!id) {
       throw createError({ statusCode: 400, message: 'Missing project id' })
     }
-    const userId = await getPocketBaseUserIdFromRequest(event)
-    const pb = await getAuthenticatedPocketBase()
+
+    let pb
+    try {
+      ;({ pb } = await requireProjectOwner(event, id))
+    } catch (e: unknown) {
+      if (isPocketBaseMissingCollectionError(e)) {
+        return { candidates: [], movies: [], omdbConfigured: false, warning: 'creative_projects collection missing' }
+      }
+      throw e
+    }
 
     let project: unknown
     try {
@@ -26,11 +32,6 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 404, message: 'Project not found' })
       }
       throw e
-    }
-
-    const owner = pbRecordOwnerId(project as { owned_by?: unknown; owner?: unknown; user?: unknown })
-    if (owner !== userId) {
-      throw createError({ statusCode: 403, message: 'Forbidden' })
     }
 
     const treatment = String((project as { treatment?: unknown }).treatment || '')
@@ -59,6 +60,10 @@ export default defineEventHandler(async (event) => {
   } catch (e: unknown) {
     const status = pocketBaseErrorStatus(e)
     if (status === 400 || status === 401 || status === 403 || status === 404) throw e
+    if (e && typeof e === 'object' && 'statusCode' in e) {
+      const sc = Number((e as { statusCode?: number }).statusCode)
+      if (sc === 400 || sc === 401 || sc === 403 || sc === 404) throw e
+    }
     if (isPocketBaseMissingCollectionError(e)) {
       return { candidates: [], movies: [], omdbConfigured: false, warning: 'creative_projects collection missing' }
     }

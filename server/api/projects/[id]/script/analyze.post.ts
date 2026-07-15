@@ -1,7 +1,5 @@
 import { getRouterParam, readBody, setResponseStatus } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 import {
   isPocketBaseMissingCollectionError,
@@ -27,8 +25,30 @@ export default defineEventHandler(async (event) => {
     throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Missing project id')
   }
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
+  let userId: string
+  try {
+    ;({ userId } = await requireProjectOwner(event, projectId))
+  } catch (e: unknown) {
+    if (isPocketBaseMissingCollectionError(e)) {
+      throwApiError(
+        503,
+        ApiErrorCode.MISSING_COLLECTION,
+        'PocketBase creative_projects collection is missing or not provisioned. Run npm run setup-db against this environment.',
+        { collection: 'creative_projects' }
+      )
+    }
+    if (pocketBaseErrorStatus(e) === 404) {
+      throwApiError(404, ApiErrorCode.PROJECT_NOT_FOUND, 'Project not found.', { projectId })
+    }
+    const status =
+      e && typeof e === 'object' && 'statusCode' in e
+        ? Number((e as { statusCode?: number }).statusCode)
+        : 0
+    if (status === 403) {
+      throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
+    }
+    throw e
+  }
 
   const body = await readBody<{
     assetId?: string
@@ -49,28 +69,6 @@ export default defineEventHandler(async (event) => {
     : []
   const previewMode = body?.mode === 'preview'
   const chosenModelId = typeof body?.chosenModelId === 'string' ? body.chosenModelId.trim() : ''
-
-  // Fast ownership pre-check so obvious errors stay synchronous (before backgrounding the slow AI work).
-  let projectRow: unknown
-  try {
-    projectRow = await pb.collection('creative_projects').getOne(projectId)
-  } catch (e: unknown) {
-    if (isPocketBaseMissingCollectionError(e)) {
-      throwApiError(
-        503,
-        ApiErrorCode.MISSING_COLLECTION,
-        'PocketBase creative_projects collection is missing or not provisioned. Run npm run setup-db against this environment.',
-        { collection: 'creative_projects' }
-      )
-    }
-    if (pocketBaseErrorStatus(e) === 404) {
-      throwApiError(404, ApiErrorCode.PROJECT_NOT_FOUND, 'Project not found.', { projectId })
-    }
-    throw e
-  }
-  if (pbRecordOwnerId(projectRow as { owner?: unknown; user?: unknown }) !== userId) {
-    throwApiError(403, ApiErrorCode.FORBIDDEN, 'Forbidden', { resource: 'project' })
-  }
 
   if (previewMode && selectedModels.length) {
     const jobId = createScriptAnalyzeJob(userId, 'preview')

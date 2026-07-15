@@ -6,7 +6,8 @@ import type {
   ProjectDirector,
   ProjectGoal,
   ProjectWorkflowMode,
-  ProjectTargetLength
+  ProjectTargetLength,
+  ProjectAccessRole
 } from '~/types/creative-project'
 
 type PbProjectRecord = {
@@ -64,7 +65,10 @@ export function parseDirectorField (raw: unknown): ProjectDirector | undefined {
   }
 }
 
-export function pbRecordToCreativeProject (r: PbProjectRecord): CreativeProject {
+export function pbRecordToCreativeProject (
+  r: PbProjectRecord,
+  options?: { accessRole?: ProjectAccessRole }
+): CreativeProject {
   let themes: string[] | undefined
   if (Array.isArray(r.themes)) {
     themes = r.themes.filter((x): x is string => typeof x === 'string')
@@ -103,6 +107,7 @@ export function pbRecordToCreativeProject (r: PbProjectRecord): CreativeProject 
     continuityLastIssues: r.continuity_last_issues || '',
     createdAt: r.created || new Date().toISOString(),
     updatedAt: r.updated || new Date().toISOString(),
-    source: 'pocketbase'
+    source: 'pocketbase',
+    accessRole: options?.accessRole
   }
 }

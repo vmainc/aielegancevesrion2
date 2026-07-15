@@ -2,7 +2,7 @@
   <div class="max-w-6xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Turn storyboard panels into clips — open Video generation per panel, compare models, then assemble on Timeline.
+      · Turn storyboard panels into clips — open Video generation per panel, compare models, and save your preferred renders.
     </p>
 
     <CloudProjectRequired
@@ -23,22 +23,13 @@
             with the full production prompt and frame prefilled — pick multiple models there.
             When a clip is ready it appears directly under the storyboard frame (play inline or fullscreen) so you can still reference the still.
             Clips are <span class="font-medium text-gray-800">5s or 10s</span> per shot; the server snaps to what the model supports.
-            Generated video has <span class="font-medium text-gray-800">no AI background music</span> by default — add music from
-            <NuxtLink to="/assets/music" class="text-primary font-medium hover:underline">Assets → My Music</NuxtLink>
-            on the
-            <NuxtLink :to="`/projects/${projectId}/timeline`" class="text-primary font-medium hover:underline">timeline</NuxtLink>
-            audio track. For quick talking clips, enable <span class="font-medium text-gray-800">spoken dialogue</span> in Video generation.
+            Generated video has <span class="font-medium text-gray-800">no AI background music</span> by default.
+            Music can be created and downloaded from
+            <NuxtLink to="/assets/music" class="text-primary font-medium hover:underline">Assets → My Music</NuxtLink>.
+            For quick talking clips, enable <span class="font-medium text-gray-800">spoken dialogue</span> in Video generation.
             Saved clips appear under
             <NuxtLink to="/assets/video" class="text-primary font-medium hover:underline">Assets → Video</NuxtLink>.
           </p>
-          <label class="mt-3 inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-            <input
-              v-model="addToTimelineOnSave"
-              type="checkbox"
-              class="rounded border-gray-300 text-primary focus:ring-primary"
-            >
-            Add each new clip to this project’s timeline
-          </label>
         </div>
         <button
           type="button"
@@ -129,42 +120,56 @@
                   {{ shot.title || `Shot ${idx + 1}` }}
                 </p>
 
-                <!-- Storyboard seed frame — always shown so you can reference it while generating -->
+                <!-- Storyboard seed frames — start required; end optional for video interpolation -->
                 <div>
                   <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-400 mb-1">
-                    Storyboard frame
+                    Storyboard frames
                   </p>
-                  <div
-                    :class="[
-                      storyboardFramePreviewClasses(project?.aspectRatio),
-                      'relative group bg-gray-900'
-                    ]"
-                  >
-                    <img
-                      v-if="panelStoryboardUrl(shot, scene.id)"
-                      :src="panelStoryboardUrl(shot, scene.id)!"
-                      alt=""
-                      class="absolute inset-0 w-full h-full object-contain pointer-events-none"
-                      loading="lazy"
+                  <div class="grid grid-cols-2 gap-2">
+                    <div
+                      v-for="frameRole in (['start', 'end'] as const)"
+                      :key="frameRole"
                     >
-                    <p
-                      v-else
-                      class="absolute inset-0 flex items-center justify-center text-xs text-gray-400 px-4 text-center"
-                    >
-                      No storyboard frame yet —
-                      <NuxtLink
-                        :to="`/projects/${projectId}/storyboard`"
-                        class="text-primary font-medium hover:underline ml-1"
-                      >Generate image</NuxtLink>
-                      on Storyboard first.
-                    </p>
-                    <button
-                      v-if="panelStoryboardUrl(shot, scene.id)"
-                      type="button"
-                      class="absolute inset-0 w-full h-full cursor-zoom-in rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary z-[1]"
-                      :aria-label="`View seed frame: ${shot.title || 'panel'}`"
-                      @click="openExpandedFrame(shot, panelStoryboardUrl(shot, scene.id)!)"
-                    />
+                      <p class="text-[9px] font-medium uppercase tracking-wide text-gray-500 mb-0.5">
+                        {{ frameRole === 'start' ? 'Start' : 'End' }}
+                      </p>
+                      <div
+                        :class="[
+                          storyboardFramePreviewClasses(project?.aspectRatio),
+                          'relative group bg-gray-900'
+                        ]"
+                      >
+                        <img
+                          v-if="panelStoryboardUrl(shot, scene.id, frameRole)"
+                          :src="panelStoryboardUrl(shot, scene.id, frameRole)!"
+                          alt=""
+                          class="absolute inset-0 w-full h-full object-contain pointer-events-none"
+                          loading="lazy"
+                        >
+                        <p
+                          v-else
+                          class="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 px-2 text-center leading-snug"
+                        >
+                          <template v-if="frameRole === 'start'">
+                            No start frame —
+                            <NuxtLink
+                              :to="`/projects/${projectId}/storyboard`"
+                              class="text-primary font-medium hover:underline ml-0.5"
+                            >Storyboard</NuxtLink>
+                          </template>
+                          <template v-else>
+                            Optional end frame
+                          </template>
+                        </p>
+                        <button
+                          v-if="panelStoryboardUrl(shot, scene.id, frameRole)"
+                          type="button"
+                          class="absolute inset-0 w-full h-full cursor-zoom-in rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-primary z-[1]"
+                          :aria-label="`View ${frameRole} frame: ${shot.title || 'panel'}`"
+                          @click="openExpandedFrame(shot, panelStoryboardUrl(shot, scene.id, frameRole)!, frameRole)"
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -186,28 +191,28 @@
                       controls
                       playsinline
                     />
-                    <button
-                      type="button"
-                      class="absolute top-2 right-2 z-10 px-2 py-1 text-[11px] font-semibold rounded-md bg-gray-950/75 text-white hover:bg-gray-950 border border-white/20"
-                      @click="openExpandedVideo(scene.id, shot, panelVideoUrl(scene.id, shot.id)!)"
-                    >
-                      Fullscreen
-                    </button>
+                    <div class="absolute top-2 right-2 z-10 flex flex-col sm:flex-row gap-1.5">
+                      <button
+                        type="button"
+                        class="px-2 py-1 text-[11px] font-semibold rounded-md bg-gray-950/75 text-white hover:bg-gray-950 border border-white/20"
+                        @click="openExpandedVideo(scene.id, shot, panelVideoUrl(scene.id, shot.id)!)"
+                      >
+                        Fullscreen
+                      </button>
+                    </div>
                   </div>
-                </div>
-                <div
-                  v-if="panelVideoUrl(scene.id, shot.id)"
-                  class="flex flex-wrap gap-2"
-                >
                   <button
                     type="button"
-                    class="px-2.5 py-1 text-xs font-medium rounded-lg border border-primary/40 bg-primary/10 text-primary hover:bg-primary/20"
-                    @click="addClipToTimeline(scene, shot, panelVideoUrl(scene.id, shot.id)!)"
+                    class="mt-2 w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg bg-gray-900 hover:bg-gray-800 text-white font-bold text-sm transition-colors disabled:opacity-50"
+                    :disabled="downloadingPanelKey === genKey(scene.id, shot.id)"
+                    @click="downloadPanelVideo(scene.id, shot)"
                   >
-                    Add to timeline
+                    <svg class="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4" />
+                    </svg>
+                    {{ downloadingPanelKey === genKey(scene.id, shot.id) ? 'Downloading…' : 'Download to your device' }}
                   </button>
                 </div>
-
                 <button
                   type="button"
                   class="mt-auto px-3 py-2 text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-gray-950 transition-colors disabled:opacity-45 disabled:cursor-not-allowed"
@@ -238,19 +243,6 @@
     </div>
     </CloudProjectRequired>
 
-    <div class="rounded-xl border border-gray-200 bg-white p-6 mb-8">
-      <h2 class="text-lg font-semibold text-gray-900 mb-2">Timeline editor</h2>
-      <p class="text-sm text-gray-600 mb-4">
-        Drag clips on a two-track layout (video + audio). Add your own music or diegetic audio on the audio track — AI clips are generated without a score.
-      </p>
-      <NuxtLink
-        :to="`/projects/${projectId}/timeline`"
-        class="inline-flex px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors"
-      >
-        Open timeline
-      </NuxtLink>
-    </div>
-
     <Teleport to="body">
       <div
         v-if="expandedMedia"
@@ -265,13 +257,24 @@
             <p class="text-sm font-medium truncate">
               {{ expandedMedia.title }}
             </p>
-            <button
-              type="button"
-              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
-              @click="expandedMedia = null"
-            >
-              Close
-            </button>
+            <div class="flex items-center gap-2 shrink-0">
+              <button
+                v-if="expandedMedia.kind === 'video'"
+                type="button"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-gray-950 hover:bg-primary/90"
+                :disabled="downloadingExpanded"
+                @click="downloadExpandedVideo"
+              >
+                {{ downloadingExpanded ? 'Downloading…' : 'Download' }}
+              </button>
+              <button
+                type="button"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
+                @click="expandedMedia = null"
+              >
+                Close
+              </button>
+            </div>
           </div>
           <video
             v-if="expandedMedia.kind === 'video'"
@@ -299,12 +302,6 @@
         ← Storyboard
       </NuxtLink>
       <NuxtLink
-        :to="`/projects/${projectId}/timeline`"
-        class="text-sm text-primary font-medium hover:underline"
-      >
-        Next: Timeline →
-      </NuxtLink>
-      <NuxtLink
         to="/tools/script-wizard"
         class="text-sm text-gray-600 hover:text-gray-900 font-medium"
       >
@@ -320,17 +317,15 @@ import {
   projectAssetMediaPath,
   projectAssetPlaybackSrc
 } from '~/lib/project-asset-playback-url'
-import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
-import { timelineAppendToast } from '~/lib/timeline-append-feedback'
-import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import {
   navigateToVideoGenerationFromPanel,
   type VideoGenerationPrefill
 } from '~/lib/video-generation-prefill'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import { downloadMediaFile, sanitizeDownloadFilename } from '~/lib/download-media-file'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { storyboardFramePreviewClasses } from '~/lib/storyboard-frame-image'
-import { mapStoryboardAssetsToShots } from '~/lib/storyboard-panel-assets'
+import { mapStoryboardFrameAssetsToShots } from '~/lib/storyboard-panel-assets'
 import {
   buildFullVideoGenerationPrompt,
   type ProductionPromptContext
@@ -353,7 +348,6 @@ const project = activeProject
 const projectId = activeProjectId
 
 const scenes = ref<CreativeSceneListItem[]>([])
-const addToTimelineOnSave = ref(false)
 const boardsError = ref('')
 const boardsLoading = ref(false)
 const storyboardAssets = ref<ProjectAsset[]>([])
@@ -363,6 +357,8 @@ const videoPreviewByKey = reactive<Record<string, string>>({})
 const expandedMedia = ref<{ kind: 'video' | 'image'; url: string; title: string } | null>(null)
 const openingVideoPanelKey = ref('')
 const highlightPanelKey = ref('')
+const downloadingPanelKey = ref('')
+const downloadingExpanded = ref(false)
 
 const { refs: characterRefs } = useProjectCharacterRefs(projectId)
 
@@ -473,17 +469,25 @@ async function reloadStoryboardBoards () {
   await scrollToPanelFromQuery()
 }
 
-function storyboardAssetMapForScene (sceneId: string): Map<string, ProjectAsset> {
+function storyboardFramesMapForScene (sceneId: string) {
   const sceneShots = sceneShotsBySceneId[sceneId] || []
-  return mapStoryboardAssetsToShots(sceneShots, storyboardAssets.value, sceneId)
+  return mapStoryboardFrameAssetsToShots(sceneShots, storyboardAssets.value, sceneId)
 }
 
-function storyboardAssetForShot (shot: CreativeShot, sceneId: string): ProjectAsset | null {
-  return storyboardAssetMapForScene(sceneId).get(shot.id) ?? null
+function storyboardAssetForShot (
+  shot: CreativeShot,
+  sceneId: string,
+  role: 'start' | 'end' = 'start'
+): ProjectAsset | null {
+  return storyboardFramesMapForScene(sceneId).get(shot.id)?.[role] ?? null
 }
 
-function panelStoryboardUrl (shot: CreativeShot, sceneId: string): string | null {
-  const hit = storyboardAssetForShot(shot, sceneId)
+function panelStoryboardUrl (
+  shot: CreativeShot,
+  sceneId: string,
+  role: 'start' | 'end' = 'start'
+): string | null {
+  const hit = storyboardAssetForShot(shot, sceneId, role)
   if (!hit) return null
   const url = projectAssetPlaybackSrc(hit, getAuthToken())
   return url || null
@@ -554,28 +558,56 @@ function openExpandedVideo (_sceneId: string, shot: CreativeShot, url: string) {
   }
 }
 
-function openExpandedFrame (shot: CreativeShot, url: string) {
-  const u = url.trim()
-  if (!u) return
-  expandedMedia.value = {
-    kind: 'image',
-    url: u,
-    title: `${shot.title || 'Shot'} · seed frame`
+async function downloadVideoUrl (url: string, filename: string) {
+  const src = playbackVideoSrc(url)
+  if (!src) throw new Error('Missing video URL')
+  const token = getAuthToken()
+  const headers = token ? { Authorization: `Bearer ${token}` } : undefined
+  await downloadMediaFile({
+    url: src,
+    filename: sanitizeDownloadFilename(filename),
+    headers
+  })
+}
+
+async function downloadPanelVideo (sceneId: string, shot: CreativeShot) {
+  const key = genKey(sceneId, shot.id)
+  const url = panelVideoUrl(sceneId, shot.id)
+  if (!url || downloadingPanelKey.value) return
+  downloadingPanelKey.value = key
+  try {
+    await downloadVideoUrl(url, `${shot.title || 'panel'}-video`)
+    toast.showToast('Download started.', 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not download clip.'), 'error')
+  } finally {
+    if (downloadingPanelKey.value === key) downloadingPanelKey.value = ''
   }
 }
 
-async function addClipToTimeline (scene: CreativeSceneListItem, shot: CreativeShot, url: string) {
+async function downloadExpandedVideo () {
+  const media = expandedMedia.value
+  if (!media || media.kind !== 'video' || downloadingExpanded.value) return
+  downloadingExpanded.value = true
+  try {
+    await downloadVideoUrl(media.url, media.title)
+    toast.showToast('Download started.', 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not download clip.'), 'error')
+  } finally {
+    downloadingExpanded.value = false
+  }
+}
+
+function openExpandedFrame (shot: CreativeShot, url: string, role: 'start' | 'end' = 'start') {
   const u = url.trim()
-  const pid = projectId.value
-  if (!u || !PB_ID.test(pid)) return
-  const result = await appendVideoToProjectTimeline(pid, {
-    url: playbackVideoSrc(u),
-    label: `${shot.title || 'Clip'} — ${scene.heading || 'Scene'}`.slice(0, 500),
-    sceneId: scene.id,
-    shotId: shot.id
-  }, { authHeaders: pocketBaseBearerHeaders(getAuthToken()) })
-  const t = timelineAppendToast(result.outcome, 'video')
-  toast.showToast(t.message, t.type)
+  if (!u) return
+  const roleLabel = role === 'end' ? 'end frame' : 'start frame'
+  expandedMedia.value = {
+    kind: 'image',
+    url: u,
+    title: `${shot.title || 'Shot'} · ${roleLabel}`
+  }
 }
 
 function projectAspectForVideo (): '16:9' | '9:16' | '1:1' {
@@ -615,7 +647,6 @@ async function openVideoGenerationForPanel (shot: CreativeShot, scene: CreativeS
       projectId: pid,
       sceneId: scene.id,
       shotId: shot.id,
-      addToTimeline: addToTimelineOnSave.value,
       prefill
     })
   } catch (e: unknown) {

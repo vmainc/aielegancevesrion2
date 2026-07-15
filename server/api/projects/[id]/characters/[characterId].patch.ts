@@ -1,12 +1,10 @@
 import { createError, getRouterParam, readBody } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import {
   pbRecordToCreativeCharacter,
   projectIdOnCharacterRow
 } from '~/server/utils/creative-character-map'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 function clampPct (v: unknown): number | null | undefined {
   if (v === undefined) return undefined
@@ -23,22 +21,12 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing project or character id' })
   }
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
-
-  const project = await pb.collection('creative_projects').getOne(projectId)
-  if (pbRecordOwnerId(project as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  const { pb } = await requireProjectOwner(event, projectId)
 
   const existing = await pb.collection('creative_characters').getOne(characterId)
   const row = existing as Record<string, unknown>
   if (projectIdOnCharacterRow(row) !== projectId) {
     throw createError({ statusCode: 403, message: 'Character does not belong to this project' })
-  }
-  const owner = pbRecordOwnerId(existing as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 
   const body = await readBody<{

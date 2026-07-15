@@ -1,8 +1,6 @@
 import { createError, readBody, getRouterParam } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { parseDirectorField, pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { CONCEPT_GENERATOR_MODELS } from '~/lib/concept-generator-models'
 import { initialConceptNotesForWorkflow, legacyPbWorkflowMode, stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { upsertDurationMarkerInConceptNotes } from '~/lib/format-stored-concept'
@@ -13,15 +11,10 @@ export default defineEventHandler(async (event) => {
   if (!id) {
     throw createError({ statusCode: 400, message: 'Missing project id' })
   }
-  const userId = await getPocketBaseUserIdFromRequest(event)
   const body = await readBody<Record<string, unknown>>(event)
-  const pb = await getAuthenticatedPocketBase()
+  const { pb, access } = await requireProjectOwner(event, id)
 
   const existing = await pb.collection('creative_projects').getOne(id)
-  const owner = pbRecordOwnerId(existing as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
 
   const ASPECT = new Set(['16:9', '9:16', '1:1'])
   const GOALS = new Set(['film', 'social', 'commercial', 'other'])
@@ -65,7 +58,6 @@ export default defineEventHandler(async (event) => {
   }
 
   if (body.director === null) {
-    // Allow explicit reset from UI.
     patch.director = null
   } else if (body.director !== undefined) {
     const d = parseDirectorField(body.director)
@@ -119,6 +111,8 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    project: pbRecordToCreativeProject(updated as Parameters<typeof pbRecordToCreativeProject>[0])
+    project: pbRecordToCreativeProject(updated as Parameters<typeof pbRecordToCreativeProject>[0], {
+      accessRole: access.role
+    })
   }
 })

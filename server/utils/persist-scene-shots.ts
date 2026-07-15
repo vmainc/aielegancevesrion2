@@ -5,7 +5,6 @@ import {
   formatPocketBaseRecordError,
   isPocketBaseMissingCollectionError
 } from '~/server/utils/pb-missing-collection-error'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 /** Same as `scripts/setup-collections.js` — PocketBase Admin API expects flat field props after merge. */
 function flattenPb036Fields (fields: unknown[]): unknown[] {
@@ -236,10 +235,6 @@ export async function deleteSceneShot (
   shotId: string
 ): Promise<void> {
   const existing = await pb.collection('creative_shots').getOne(shotId)
-  const shotUser = pbRecordOwnerId(existing as { owner?: unknown; user?: unknown; owned_by?: unknown })
-  if (shotUser !== userId) {
-    throw new Error('Forbidden')
-  }
   const sp =
     typeof existing.project === 'string' ? existing.project : (existing.project as { id?: string })?.id
   const ss =
@@ -247,6 +242,7 @@ export async function deleteSceneShot (
   if (sp !== projectId || ss !== sceneId) {
     throw new Error('Shot does not match project/scene')
   }
+  // Access is enforced by the caller (requireProjectOwner); owned_by may be the project owner, not the acting member.
   await pb.collection('creative_shots').delete(shotId)
 }
 

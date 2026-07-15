@@ -5,7 +5,7 @@ import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-co
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
-  const { userId, pb } = await requireProjectOwner(event, projectId || '')
+  const { pb } = await requireProjectOwner(event, projectId || '')
 
   const query = getQuery(event)
   const limitRaw = typeof query.limit === 'string' ? Number(query.limit) : 50
@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const rows = await pb.collection('creative_decisions').getList(1, limit, {
-      filter: `project = "${projectId}" && owned_by = "${userId}"`,
+      filter: `project = "${projectId}"`,
       sort: '-created'
     })
 

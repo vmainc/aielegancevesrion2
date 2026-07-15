@@ -40,7 +40,15 @@
         >
           <div class="flex items-start justify-between gap-3 mb-3">
             <h2 class="text-lg font-semibold text-gray-900">{{ p.name }}</h2>
-            <span class="shrink-0 text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">{{ p.aspectRatio }}</span>
+            <div class="flex shrink-0 items-center gap-2">
+              <span
+                v-if="p.accessRole === 'member'"
+                class="text-xs px-2 py-0.5 rounded bg-blue-100 text-blue-800"
+              >
+                Shared with you
+              </span>
+              <span class="text-xs px-2 py-0.5 rounded bg-gray-200 text-gray-700">{{ p.aspectRatio }}</span>
+            </div>
           </div>
           <p class="text-sm text-gray-500 line-clamp-2 mb-3">
             {{ p.synopsis || 'No synopsis yet — open to get started.' }}

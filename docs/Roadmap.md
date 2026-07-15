@@ -8,7 +8,7 @@ Phased evolution from the current codebase toward a full **AI Film Operating Sys
 
 What exists and works today:
 
-- **Project workspace** with workflow steps: story → director → cast → scenes → storyboard → video → timeline
+- **Project workspace** with workflow steps: story → director → cast → scenes → storyboard → video
 - **PocketBase schema** for projects, scenes, characters, shots, assets
 - **Script import** → structured scenes + character rows
 - **Concept bootstrap** → screenplay + storyboard seed (`bootstrap-project-from-concept`)
@@ -18,7 +18,6 @@ What exists and works today:
 - **Continuity check** on generated shot lists (AI repair + memory append)
 - **Project Guide** — context-aware chat with structured suggestion cards
 - **Video generation** via OpenRouter with shot prefill and start frames
-- **Timeline editor** for assembly
 
 Known gaps:
 
@@ -118,7 +117,6 @@ Known gaps:
 | Studio character library | Characters referenced across projects |
 | External integrations | Export to edit suites (XML/EDL), DAM hooks |
 | Versioned bibles | Director preset history, A/B creative directions |
-| Automated assembly | Timeline populated from approved shot videos with handles |
 | Quality gates | “No video until continuity clean for scene” rules |
 
 ---

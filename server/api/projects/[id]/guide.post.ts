@@ -1,10 +1,8 @@
 import { ApiErrorCode, isAbortLikeError, throwApiError } from '~/server/utils/api-error-envelope'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { checkRateLimit, rateLimitKey } from '~/server/utils/rate-limit'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 import { loadProjectGuideContext } from '~/server/utils/project-guide-context'
 import {
@@ -23,7 +21,7 @@ export default defineEventHandler(async (event) => {
     throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Missing project id')
   }
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
+  const { userId, pb } = await requireProjectOwner(event, projectId)
   checkRateLimit(rateLimitKey(userId, 'project-guide'), 30, 60_000)
 
   const body = await readBody<{ messages?: ChatTurn[] }>(event)
@@ -39,7 +37,6 @@ export default defineEventHandler(async (event) => {
     throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'messages must include at least one user turn')
   }
 
-  const pb = await getAuthenticatedPocketBase()
   const ctx = await loadProjectGuideContext(pb, projectId, userId)
 
   const config = useRuntimeConfig()
@@ -55,11 +52,9 @@ export default defineEventHandler(async (event) => {
   let model = DEFAULT_MODEL
   try {
     const project = await pb.collection('creative_projects').getOne(projectId)
-    if (pbRecordOwnerId(project as { owner?: unknown; user?: unknown }) === userId) {
-      const preferred = String((project as { preferred_model_id?: unknown }).preferred_model_id || '').trim()
-      const cfg = getConceptGeneratorModelById(preferred)
-      if (cfg?.openrouterModelId) model = cfg.openrouterModelId
-    }
+    const preferred = String((project as { preferred_model_id?: unknown }).preferred_model_id || '').trim()
+    const cfg = getConceptGeneratorModelById(preferred)
+    if (cfg?.openrouterModelId) model = cfg.openrouterModelId
   } catch {
     /* default model */
   }

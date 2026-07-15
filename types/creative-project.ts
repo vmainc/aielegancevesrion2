@@ -9,6 +9,8 @@ export type ProjectTargetLength = 'spot' | 'short' | 'music_video' | 'episode' |
 
 export type ProjectSource = 'local' | 'pocketbase'
 
+export type ProjectAccessRole = 'owner' | 'member'
+
 /** Creative direction bible for the project (presets + manual edits). */
 export interface ProjectDirector {
   name: string
@@ -56,6 +58,8 @@ export interface CreativeProject {
   updatedAt: string
   /** Present when loaded from PocketBase (script import or API). */
   source?: ProjectSource
+  /** Owner or shared member when loaded from API. */
+  accessRole?: ProjectAccessRole
   genre?: string
   tone?: string
   themes?: string[]

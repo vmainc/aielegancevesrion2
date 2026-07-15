@@ -2,7 +2,7 @@
 
 An **AI Film Operating System** — a persistent creative workspace where story, cast, shots, assets, and decisions live together. Built for feature-scale work (hundreds of shots, dozens of characters), not one-off clips.
 
-Turn ideas or scripts into structured productions: import screenplay, build a director bible, manage cast, storyboard shots, generate video, and assemble on a timeline — with AI that reads the whole film, not generic prompts.
+Turn ideas or scripts into structured productions: import screenplay, build a director bible, manage cast, storyboard shots, and generate video — with AI that reads the whole film, not generic prompts.
 
 **Stack:** Nuxt 3, Vue 3, Tailwind CSS, PocketBase, OpenRouter (chat, image, video models).
 
@@ -21,7 +21,6 @@ Each project follows a guided workflow:
 | **Scenes** | Structured scene list (heading, summary, body) |
 | **Storyboard** | Shot boards and frame generation |
 | **Video** | Clip generation from shots with start frames |
-| **Timeline** | Assembly editor |
 | **Guide** | Project Guide — context-aware AI copilot |
 | **Bible** | Production bible — entities, facts, relationships |
 
@@ -206,7 +205,7 @@ After pulling updates, run `npm run setup-db` (or `npm run add-fields`) to provi
 pages/          # Routes — project workspace, tools, assets, auth
 components/     # Vue UI components
 composables/    # Client state and hydration
-lib/            # Shared TS — prompts, continuity, timeline, bible
+lib/            # Shared TS — prompts, continuity, generation, bible
 server/api/     # Nitro API routes
 server/utils/   # PocketBase, AI orchestration, mappers
 types/          # TypeScript contracts

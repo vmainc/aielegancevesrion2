@@ -101,21 +101,6 @@
                   >
                     Open project
                   </NuxtLink>
-                  <NuxtLink
-                    v-if="a.projectId && PB_ID.test(a.projectId)"
-                    :to="`/projects/${a.projectId}/timeline`"
-                    class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                  >
-                    Open timeline
-                  </NuxtLink>
-                  <button
-                    v-if="a.projectId && a.fileUrl"
-                    type="button"
-                    class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                    @click="addVideoAssetToTimeline(a)"
-                  >
-                    Add to timeline
-                  </button>
                   <button
                     v-if="a.projectId && moveTargetProjects(a).length"
                     type="button"
@@ -165,7 +150,6 @@ defineProps<{
   videoAssetPlaybackSrc: (a: ProjectAsset) => string
   formatDate: (iso: string) => string
   moveTargetProjects: (a: ProjectAsset | null) => CreativeProject[]
-  addVideoAssetToTimeline: (a: ProjectAsset) => void
   openMoveVideo: (a: ProjectAsset) => void
   removeAsset: (a: ProjectAsset) => void
 }>()

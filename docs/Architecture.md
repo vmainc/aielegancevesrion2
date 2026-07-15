@@ -24,7 +24,7 @@ The browser talks to Nuxt (`:3000`). Server routes use a **superuser-authenticat
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Project Workspace                         │
 │  home · story · director · characters · scenes · storyboard     │
-│  · video · timeline · guide                                      │
+│  · video · guide                                                 │
 └────────────────────────────┬────────────────────────────────────┘
                              │
          ┌───────────────────┼───────────────────┐
@@ -76,7 +76,6 @@ User
 | Scenes | `scenes` | Structured scene list |
 | Storyboard | `storyboard` | Shot boards, frame generation |
 | Video | `video` | Clip generation from shots |
-| Timeline | `timeline` | Assembly editor |
 | Tool | `guide` | Project Guide (AI copilot) |
 
 Workflow paths adapt by `workflow_mode` (`import` | `idea` | `generate`) — see `lib/project-workflow.ts`.
@@ -142,7 +141,7 @@ Script / concept
     → creative_shots persisted
     → storyboard frame generation (unified-shot-prompt + portraits)
     → video generation (prefill from shot + start frame)
-    → project_assets + timeline
+    → project_assets
 ```
 
 Each stage reads upstream structured data. Downstream stages never invent cast or plot facts.

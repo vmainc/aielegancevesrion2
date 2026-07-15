@@ -32,7 +32,7 @@ function parseDecision (raw: unknown): CreativeDecisionCreateInput | null {
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
-  const { userId, pb } = await requireProjectOwner(event, projectId || '')
+  const { userId, pb, access } = await requireProjectOwner(event, projectId || '')
 
   const body = await readBody<{ decision?: unknown }>(event)
   const decision = parseDecision(body?.decision)
@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const fields = creativeDecisionInputToPbFields({
-      ownerId: userId,
+      ownerId: access.ownerId,
       projectId: projectId || '',
       actorType: 'user',
       actorId: userId,

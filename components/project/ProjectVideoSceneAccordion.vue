@@ -4,7 +4,7 @@
       <div>
         <h2 class="text-base font-semibold text-gray-900">Project video library</h2>
         <p class="text-sm text-gray-600 mt-1">
-          Browse clips grouped by scene. Add to timeline appends each clip at the end.
+          Browse saved clips grouped by scene.
         </p>
       </div>
       <button
@@ -70,13 +70,6 @@
                 <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
               </div>
             </div>
-            <button
-              type="button"
-              class="shrink-0 px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
-              @click="addToTimeline(a)"
-            >
-              Add to timeline
-            </button>
           </li>
         </ul>
       </details>
@@ -85,9 +78,6 @@
 </template>
 
 <script setup lang="ts">
-import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
-import { timelineAppendToast } from '~/lib/timeline-append-feedback'
-import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { buildVideoSceneGroups } from '~/lib/project-scene-groups'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
@@ -99,7 +89,6 @@ const props = defineProps<{
 
 const { isAuthenticated, getAuthToken, initAuth } = useAuth()
 const authTokenState = useState<string | null>('auth_token')
-const toast = useToast()
 const sceneHydration = useProjectScenesHydration()
 
 const loading = ref(false)
@@ -131,21 +120,6 @@ const sceneGroups = computed(() => {
     )
   )
 })
-
-async function addToTimeline (a: ProjectAsset) {
-  const src = videoSrc(a)
-  if (!src) return
-  const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
-  const result = await appendVideoToProjectTimeline(props.projectId, {
-    url: src,
-    label: (a.title || 'Video clip').slice(0, 500),
-    sceneId: typeof meta.scene_id === 'string' ? meta.scene_id : undefined,
-    shotId: typeof meta.shot_id === 'string' ? meta.shot_id : undefined,
-    assetId: a.id
-  }, { authHeaders: pocketBaseBearerHeaders(getAuthToken()) })
-  const t = timelineAppendToast(result.outcome, 'video')
-  toast.showToast(t.message, t.type)
-}
 
 async function fetchData () {
   if (!isAuthenticated.value || !props.projectId) return

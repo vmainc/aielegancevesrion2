@@ -15,7 +15,7 @@ import {
   formatPocketBaseRecordError,
   isPocketBaseMissingCollectionError
 } from '~/server/utils/pb-missing-collection-error'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { assertUserHasProjectAccess } from '~/server/utils/project-access'
 import { resolvePocketBaseAdmin } from '~/server/utils/server-env'
 
 function bearerTokenFromEvent (event: H3Event): string {
@@ -77,11 +77,7 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const projectRow = await pb.collection('creative_projects').getOne(projectId)
-    const owner = pbRecordOwnerId(projectRow as { owner?: unknown; user?: unknown })
-    if (owner !== userId) {
-      throw createError({ statusCode: 403, message: 'Forbidden' })
-    }
+    await assertUserHasProjectAccess(pb, userId, projectId)
 
     let list: unknown[]
     try {

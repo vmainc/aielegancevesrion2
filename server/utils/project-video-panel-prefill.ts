@@ -7,7 +7,7 @@ import {
   resolveVideoNegativePromptForShot,
   stripStrictExclusionsFromPrompt
 } from '~/lib/video-negative-prompt'
-import { mapStoryboardAssetsToShots } from '~/lib/storyboard-panel-assets'
+import { mapStoryboardFrameAssetsToShots } from '~/lib/storyboard-panel-assets'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
@@ -196,13 +196,15 @@ export async function buildVideoPanelPrefill (input: {
   const storyboardAssets = storyboardRows.map(r =>
     pbRecordToProjectAsset(r as Record<string, unknown>, pb)
   )
-  const frameAsset = mapStoryboardAssetsToShots(sceneShots, storyboardAssets, sceneId).get(shotId)
-  if (!frameAsset?.id) {
+  const frameMap = mapStoryboardFrameAssetsToShots(sceneShots, storyboardAssets, sceneId).get(shotId)
+  const startAsset = frameMap?.start
+  if (!startAsset?.id) {
     throw createError({
       statusCode: 400,
       message: 'No storyboard frame saved for this panel — generate an image on Storyboard first.'
     })
   }
+  const endAsset = frameMap?.end
 
   const cast = await loadProjectCharacterRefs(pb, projectId, userId)
   const castMembers = cast.map(c => projectCharacterRefToCastMember(c))
@@ -250,7 +252,8 @@ export async function buildVideoPanelPrefill (input: {
   return {
     prompt: prompt || fullPrompt,
     negativePrompt: negativePrompt || undefined,
-    startFrameUrl: projectAssetMediaPath(projectId, frameAsset.id),
+    startFrameUrl: projectAssetMediaPath(projectId, startAsset.id),
+    endFrameUrl: endAsset?.id ? projectAssetMediaPath(projectId, endAsset.id) : undefined,
     aspectRatio: projectAspectForVideo(project.aspectRatio),
     durationSeconds: snapToStoryboardClipSeconds(Number(shot.durationSeconds) || 5),
     projectId,

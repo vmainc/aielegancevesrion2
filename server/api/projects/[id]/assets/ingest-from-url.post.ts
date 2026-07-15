@@ -1,6 +1,5 @@
 import { createError, getRouterParam, readBody } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { fetchBinaryFromUrlForIngest } from '~/server/utils/fetch-url-for-project-ingest'
 import {
   parseMusicResultIdFromPath,
@@ -12,7 +11,6 @@ import {
   pocketBaseErrorStatus
 } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import type { ProjectAssetKind } from '~/types/project-asset'
 
@@ -25,7 +23,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing project id' })
   }
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
+  const { pb, access } = await requireProjectOwner(event, projectId)
   const body = await readBody(event).catch(() => null) as Record<string, unknown> | null
 
   const sourceUrl = typeof body?.url === 'string' ? body.url.trim() : ''
@@ -48,13 +46,6 @@ export default defineEventHandler(async (event) => {
   let metadata: Record<string, unknown> | null = null
   if (body?.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)) {
     metadata = body.metadata as Record<string, unknown>
-  }
-
-  const pb = await getAuthenticatedPocketBase()
-  const project = await pb.collection('creative_projects').getOne(projectId)
-  const owner = pbRecordOwnerId(project as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 
   const config = useRuntimeConfig()
@@ -98,7 +89,7 @@ export default defineEventHandler(async (event) => {
     (isMusicAsset ? 'music.mp3' : 'video.mp4')
 
   const formData = new FormData()
-  formData.append('owned_by', userId)
+  formData.append('owned_by', access.ownerId)
   formData.append('project', projectId)
   formData.append('kind', kind)
   formData.append('title', title.slice(0, 500))

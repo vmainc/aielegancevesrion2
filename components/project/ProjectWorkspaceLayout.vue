@@ -17,7 +17,7 @@
   </div>
 
   <div v-else class="min-h-[calc(100vh-5rem)] flex flex-col lg:flex-row bg-gray-50">
-    <!-- Mobile: section picker (9 workflow steps don't fit a horizontal tab bar) -->
+    <!-- Mobile: project section picker -->
     <div class="lg:hidden border-b border-gray-200 bg-white px-4 py-3 shadow-sm space-y-2">
       <NuxtLink
         to="/projects"
@@ -167,7 +167,6 @@ const sectionLabels: Record<string, string> = {
   scenes: 'Scenes',
   storyboard: 'Storyboard',
   video: 'Video',
-  timeline: 'Timeline',
   guide: 'Project Guide',
   bible: 'Production Bible',
   review: 'Review Dashboard'

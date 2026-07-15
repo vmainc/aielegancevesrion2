@@ -9,11 +9,11 @@ import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-co
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
-  const { userId, pb } = await requireProjectOwner(event, projectId || '')
+  const { pb } = await requireProjectOwner(event, projectId || '')
 
   try {
     const rows = await pb.collection('guide_messages').getFullList({
-      filter: `project = "${projectId}" && owned_by = "${userId}"`,
+      filter: `project = "${projectId}"`,
       sort: 'created_at_client,created',
       batch: 200
     })

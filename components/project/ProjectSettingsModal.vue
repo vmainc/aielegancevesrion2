@@ -56,6 +56,55 @@
           </div>
 
           <div class="space-y-3">
+            <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wide">Share</h3>
+            <p v-if="isMember" class="text-sm text-gray-600">
+              This project is shared with you. Only the owner can manage members.
+            </p>
+            <template v-else-if="isCloud">
+              <p class="text-sm text-gray-500 mb-2">
+                Invite teammates by email. They get full access to this project and all its assets.
+              </p>
+              <form class="flex gap-2" @submit.prevent="inviteMember">
+                <input
+                  v-model="inviteEmail"
+                  type="email"
+                  placeholder="colleague@example.com"
+                  class="flex-1 px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary text-sm"
+                  :disabled="inviting"
+                >
+                <button
+                  type="submit"
+                  class="shrink-0 px-3 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm disabled:opacity-50"
+                  :disabled="inviting || !inviteEmail.trim()"
+                >
+                  {{ inviting ? 'Adding…' : 'Add' }}
+                </button>
+              </form>
+              <ul v-if="members.length" class="mt-3 space-y-2">
+                <li
+                  v-for="m in members"
+                  :key="m.id"
+                  class="flex items-center justify-between gap-2 rounded-lg border border-gray-200 px-3 py-2 text-sm"
+                >
+                  <div class="min-w-0">
+                    <p class="font-medium text-gray-900 truncate">{{ m.name || m.email }}</p>
+                    <p v-if="m.name" class="text-xs text-gray-500 truncate">{{ m.email }}</p>
+                  </div>
+                  <button
+                    type="button"
+                    class="shrink-0 text-xs text-red-600 hover:text-red-700"
+                    :disabled="removingId === m.userId"
+                    @click="removeMember(m.userId)"
+                  >
+                    {{ removingId === m.userId ? 'Removing…' : 'Remove' }}
+                  </button>
+                </li>
+              </ul>
+              <p v-else-if="membersLoaded" class="text-sm text-gray-500">No members yet.</p>
+            </template>
+          </div>
+
+          <div class="space-y-3">
             <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wide">Edit</h3>
             <div>
               <label for="set-name" class="block text-sm text-gray-600 mb-1">Name</label>
@@ -118,6 +167,10 @@
 
           <div class="pt-2 border-t border-gray-200">
             <h3 class="text-xs font-medium text-red-400/90 uppercase tracking-wide mb-2">Danger zone</h3>
+            <p v-if="isMember" class="text-sm text-gray-500 mb-3">
+              Only the project owner can delete this project.
+            </p>
+            <template v-else>
             <p class="text-sm text-gray-500 mb-3">
               Permanently delete this project{{ isCloud ? ' and its scenes & characters in the cloud' : '' }}.
             </p>
@@ -150,6 +203,7 @@
                 </button>
               </div>
             </template>
+            </template>
           </div>
 
           <p v-if="errorMsg" class="text-sm text-red-400">{{ errorMsg }}</p>
@@ -161,6 +215,7 @@
 
 <script setup lang="ts">
 import { normalizeWorkflowMode } from '~/lib/project-workflow-mode'
+import type { ProjectMember } from '~/types/project-member'
 import type {
   CreativeProject,
   ProjectAspectRatio,
@@ -192,8 +247,14 @@ const saving = ref(false)
 const deleting = ref(false)
 const confirmDelete = ref(false)
 const errorMsg = ref('')
+const inviteEmail = ref('')
+const inviting = ref(false)
+const members = ref<ProjectMember[]>([])
+const membersLoaded = ref(false)
+const removingId = ref('')
 
 const isCloud = computed(() => props.project.source === 'pocketbase')
+const isMember = computed(() => props.project.accessRole === 'member')
 
 function close () {
   emit('update:open', false)
@@ -215,6 +276,71 @@ function syncDraft () {
   draft.aspectRatio = props.project.aspectRatio
   draft.goal = props.project.goal
   draft.workflowMode = normalizeWorkflowMode(props.project.workflowMode) || 'import'
+}
+
+async function loadMembers () {
+  const pid = props.project.id
+  const token = getAuthToken()
+  membersLoaded.value = false
+  if (!token || isMember.value || !isCloud.value) {
+    members.value = []
+    membersLoaded.value = true
+    return
+  }
+  try {
+    const res = await $fetch<{ items: ProjectMember[] }>(`/api/projects/${pid}/members`, {
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    if (props.project.id !== pid) return
+    members.value = res.items || []
+  } catch {
+    if (props.project.id !== pid) return
+    members.value = []
+  } finally {
+    if (props.project.id === pid) membersLoaded.value = true
+  }
+}
+
+async function inviteMember () {
+  errorMsg.value = ''
+  const email = inviteEmail.value.trim()
+  if (!email) return
+  const token = getAuthToken()
+  if (!token) return
+  inviting.value = true
+  try {
+    const res = await $fetch<{ member: ProjectMember }>(`/api/projects/${props.project.id}/members`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: { email }
+    })
+    if (res.member) members.value = [...members.value, res.member]
+    inviteEmail.value = ''
+    toast.showToast('Member added.', 'success')
+  } catch (e: any) {
+    errorMsg.value = e?.data?.message || e?.message || 'Could not add member.'
+  } finally {
+    inviting.value = false
+  }
+}
+
+async function removeMember (userId: string) {
+  errorMsg.value = ''
+  const token = getAuthToken()
+  if (!token) return
+  removingId.value = userId
+  try {
+    await $fetch(`/api/projects/${props.project.id}/members/${userId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    members.value = members.value.filter(m => m.userId !== userId)
+    toast.showToast('Member removed.', 'info')
+  } catch (e: any) {
+    errorMsg.value = e?.data?.message || e?.message || 'Could not remove member.'
+  } finally {
+    removingId.value = ''
+  }
 }
 
 async function loadCloudStats () {
@@ -249,7 +375,7 @@ watch(
     if (!v) return
     syncDraft()
     if (isCloud.value) {
-      await loadCloudStats()
+      await Promise.all([loadCloudStats(), loadMembers()])
     } else {
       stats.sceneCount = 0
       stats.characterCount = 0
@@ -262,7 +388,7 @@ watch(
   async () => {
     if (!props.open || !isCloud.value) return
     syncDraft()
-    await loadCloudStats()
+    await Promise.all([loadCloudStats(), loadMembers()])
   }
 )
 

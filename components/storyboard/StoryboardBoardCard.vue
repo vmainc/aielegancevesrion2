@@ -51,120 +51,80 @@
         </button>
       </div>
     </div>
+
     <div
-      :class="[
-        framePreviewBoxClass,
-        'relative shrink-0 w-full rounded-none border-0 border-b border-gray-200 bg-gray-900 max-w-none mx-0',
-        !hasDisplayableFrame(shot) && !framePreviewLoading[shot.id] ? 'border-dashed border-b-gray-300' : ''
-      ]"
+      class="grid grid-cols-2 gap-px bg-gray-200 border-b border-gray-200 shrink-0"
+      :class="!hasAnyDisplayableFrame(shot) ? 'border-b-gray-300' : ''"
     >
-      <button
-        v-if="panelImageSrc(shot)"
-        type="button"
-        class="absolute inset-0 w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
-        :aria-label="`View full size: ${shot.title || 'storyboard frame'}`"
-        @click="onOpenFramePreview(shot)"
-      >
-        <img
-          :key="`${shot.id}-${panelImageSrc(shot).slice(0, 80)}`"
-          :src="panelImageSrc(shot)"
-          :alt="shot.title || 'Storyboard frame'"
-          class="absolute inset-0 w-full h-full object-contain object-center pointer-events-none"
-          loading="eager"
-          @error="onFramePreviewImgError(shot)"
-        >
-      </button>
-      <div
-        v-else-if="framePreviewLoading[shot.id] || imageGenId === shot.id || frameUploadingId === shot.id"
-        class="absolute inset-0 flex items-center justify-center bg-gray-950/80 z-10"
-      >
-        <FilmReelLoader
-          size="sm"
-          :label="frameUploadingId === shot.id ? 'Uploading…' : imageGenId === shot.id ? 'Generating…' : 'Loading frame…'"
-        />
-      </div>
-      <div
-        v-else
-        class="absolute inset-0 flex flex-col items-center justify-center gap-2 px-3 text-center"
-      >
-        <p v-if="framePreviewFailed[shot.id]" class="text-xs text-amber-300">
-          Saved frame could not load — try Upload or Generate again.
-        </p>
-        <template v-else>
-          <p class="text-xs text-gray-400">
-            No frame yet
-          </p>
-          <div class="flex flex-wrap items-center justify-center gap-2">
-            <button
-              type="button"
-              class="px-2.5 py-1 text-xs font-medium rounded-md border border-gray-600 bg-gray-800 text-gray-100 hover:bg-gray-700 disabled:opacity-45"
-              :disabled="frameUploadingId === shot.id || imageGenId === shot.id"
-              @click="onTriggerStoryboardUpload(shot)"
-            >
-              Upload
-            </button>
-            <button
-              type="button"
-              class="px-2.5 py-1 text-xs font-semibold rounded-md bg-primary hover:bg-primary/90 text-gray-950 disabled:opacity-45"
-              :disabled="
-                imageGenId === shot.id ||
-                frameUploadingId === shot.id ||
-                generatingAllFrames ||
-                !((shot.imagePrompt || shot.description || '').trim())
-              "
-              @click="onGenerateFrame(shot)"
-            >
-              Generate
-            </button>
-          </div>
-          <p
-            v-if="frameBibleDebug[shot.id]"
-            class="mt-2 text-[10px] text-gray-500 text-center px-2"
-          >
-            {{ frameBibleDebug[shot.id] }}
-          </p>
-        </template>
-      </div>
-      <button
-        v-if="panelImageSrc(shot)"
-        type="button"
-        class="absolute top-2 right-2 z-10 px-2 py-1 text-[11px] font-semibold rounded-md bg-gray-950/75 text-white hover:bg-red-700 border border-white/20 disabled:opacity-50"
-        :disabled="frameDeletingId === shot.id"
-        :aria-label="`Remove frame for ${shot.title || 'board'}`"
-        @click.stop="onClearStoryboardFrame(shot)"
-      >
-        {{ frameDeletingId === shot.id ? 'Removing…' : 'Remove' }}
-      </button>
+      <StoryboardPanelFrame
+        :shot="shot"
+        role="start"
+        :frame-preview-box-class="framePreviewBoxClass"
+        :image-gen-id="imageGenId"
+        :frame-uploading-id="frameUploadingId"
+        :frame-deleting-id="frameDeletingId"
+        :generating-all-frames="generatingAllFrames"
+        :frame-preview-loading="framePreviewLoading"
+        :frame-preview-failed="framePreviewFailed"
+        :panel-image-src="panelImageSrc"
+        :has-displayable-frame="hasDisplayableFrame"
+        :can-generate="canGenerateFrame"
+        :on-open-frame-preview="onOpenFramePreview"
+        :on-frame-preview-img-error="onFramePreviewImgError"
+        :on-trigger-storyboard-upload="onTriggerStoryboardUpload"
+        :on-generate-frame="onGenerateFrame"
+        :on-clear-storyboard-frame="onClearStoryboardFrame"
+      />
+      <StoryboardPanelFrame
+        :shot="shot"
+        role="end"
+        :frame-preview-box-class="framePreviewBoxClass"
+        :image-gen-id="imageGenId"
+        :frame-uploading-id="frameUploadingId"
+        :frame-deleting-id="frameDeletingId"
+        :generating-all-frames="generatingAllFrames"
+        :frame-preview-loading="framePreviewLoading"
+        :frame-preview-failed="framePreviewFailed"
+        :panel-image-src="panelImageSrc"
+        :has-displayable-frame="hasDisplayableFrame"
+        :can-generate="canGenerateFrame"
+        :on-open-frame-preview="onOpenFramePreview"
+        :on-frame-preview-img-error="onFramePreviewImgError"
+        :on-trigger-storyboard-upload="onTriggerStoryboardUpload"
+        :on-generate-frame="onGenerateFrame"
+        :on-clear-storyboard-frame="onClearStoryboardFrame"
+      />
     </div>
+
     <div
-      v-if="panelImageSrc(shot)"
+      v-if="hasAnyDisplayableFrame(shot)"
       class="px-3 py-2 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-gray-50 shrink-0"
     >
-      <button
-        type="button"
-        class="px-2.5 py-1 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-800 hover:bg-gray-100 disabled:opacity-45"
-        :disabled="frameUploadingId === shot.id || imageGenId === shot.id"
-        @click="onTriggerStoryboardUpload(shot)"
-      >
-        {{ frameUploadingId === shot.id ? 'Uploading…' : 'Replace' }}
-      </button>
-      <button
-        type="button"
-        class="px-2.5 py-1 text-xs font-semibold rounded-md bg-primary hover:bg-primary/90 text-gray-950 disabled:opacity-45"
-        :disabled="
-          imageGenId === shot.id ||
-          frameUploadingId === shot.id ||
-          generatingAllFrames ||
-          !((shot.imagePrompt || shot.description || '').trim())
-        "
-        @click="onGenerateFrame(shot)"
-      >
-        {{ imageGenId === shot.id ? 'Generating…' : 'Regenerate' }}
-      </button>
+      <span class="text-[10px] font-medium text-gray-500 uppercase tracking-wide">Frames</span>
+      <template v-for="role in (['start', 'end'] as const)" :key="role">
+        <button
+          v-if="hasDisplayableFrame(shot, role)"
+          type="button"
+          class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-300 bg-white text-gray-800 hover:bg-gray-100 disabled:opacity-45"
+          :disabled="isSlotBusy(shot, role)"
+          @click="onTriggerStoryboardUpload(shot, role)"
+        >
+          {{ frameUploadingId === frameSlotKey(shot, role) ? 'Uploading…' : `Replace ${role}` }}
+        </button>
+        <button
+          type="button"
+          class="px-2 py-0.5 text-[10px] font-semibold rounded bg-primary hover:bg-primary/90 text-gray-950 disabled:opacity-45"
+          :disabled="isSlotBusy(shot, role) || generatingAllFrames || !canGenerateFrame(shot, role)"
+          @click="onGenerateFrame(shot, role)"
+        >
+          {{ imageGenId === frameSlotKey(shot, role) ? 'Generating…' : `Regen ${role}` }}
+        </button>
+      </template>
       <span class="text-[11px] text-gray-500 ml-auto hidden sm:inline">
         {{ shot.shotType || 'Shot' }} · {{ shot.durationSeconds }}s
       </span>
     </div>
+
     <div
       v-if="shotCharacterMatches(shot).length"
       class="px-3 py-1.5 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-white shrink-0"
@@ -196,6 +156,7 @@
         </li>
       </ul>
     </div>
+
     <details
       class="group/board border-t border-gray-200"
       :open="boardDetailsOpenFor(shot)"
@@ -223,29 +184,24 @@
           {{ frameBibleDebug[shot.id] }}
         </p>
         <div
-          v-if="!hasDisplayableFrame(shot) && !framePreviewLoading[shot.id]"
+          v-if="!hasDisplayableFrame(shot, 'start') && !framePreviewLoading[frameSlotKey(shot, 'start')]"
           class="flex flex-wrap items-center gap-2"
         >
           <button
             type="button"
             class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-45"
-            :disabled="frameUploadingId === shot.id || imageGenId === shot.id"
-            @click="onTriggerStoryboardUpload(shot)"
+            :disabled="isSlotBusy(shot, 'start')"
+            @click="onTriggerStoryboardUpload(shot, 'start')"
           >
-            {{ frameUploadingId === shot.id ? 'Uploading…' : 'Upload image' }}
+            {{ frameUploadingId === frameSlotKey(shot, 'start') ? 'Uploading…' : 'Upload start frame' }}
           </button>
           <button
             type="button"
             class="px-3 py-1.5 text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-gray-950 disabled:opacity-45"
-            :disabled="
-              imageGenId === shot.id ||
-              frameUploadingId === shot.id ||
-              generatingAllFrames ||
-              !((shot.imagePrompt || shot.description || '').trim())
-            "
-            @click="onGenerateFrame(shot)"
+            :disabled="isSlotBusy(shot, 'start') || generatingAllFrames || !canGenerateFrame(shot, 'start')"
+            @click="onGenerateFrame(shot, 'start')"
           >
-            {{ imageGenId === shot.id ? 'Generating…' : `Generate image (${activeImageModelLabel})` }}
+            {{ imageGenId === frameSlotKey(shot, 'start') ? 'Generating…' : `Generate start (${activeImageModelLabel})` }}
           </button>
         </div>
         <div>
@@ -360,7 +316,7 @@
             @blur="onSaveShot(shot)"
           />
           <p class="mt-1.5 text-[11px] text-gray-500 leading-snug">
-            Used for Generate image and the Video step.
+            Used for Generate image and the Video step. End frames use the start frame as a reference when available.
           </p>
         </div>
       </div>
@@ -371,6 +327,8 @@
 <script setup lang="ts">
 import type { CreativeShot } from '~/types/creative-shot'
 import type { ProjectCharacterRef } from '~/lib/shot-character-continuity'
+import type { StoryboardFrameRole } from '~/lib/storyboard-frame-role'
+import StoryboardPanelFrame from '~/components/storyboard/StoryboardPanelFrame.vue'
 
 defineProps<{
   shot: CreativeShot
@@ -390,8 +348,12 @@ defineProps<{
   framePreviewFailed: Record<string, boolean>
   frameBibleDebug: Record<string, string>
   activeImageModelLabel: string
-  panelImageSrc: (shot: CreativeShot) => string
-  hasDisplayableFrame: (shot: CreativeShot) => boolean
+  panelImageSrc: (shot: CreativeShot, role: StoryboardFrameRole) => string
+  hasDisplayableFrame: (shot: CreativeShot, role: StoryboardFrameRole) => boolean
+  hasAnyDisplayableFrame: (shot: CreativeShot) => boolean
+  canGenerateFrame: (shot: CreativeShot, role: StoryboardFrameRole) => boolean
+  isSlotBusy: (shot: CreativeShot, role: StoryboardFrameRole) => boolean
+  frameSlotKey: (shot: CreativeShot, role: StoryboardFrameRole) => string
   shotCharacterMatches: (shot: CreativeShot) => ProjectCharacterRef[]
   characterProfileTo: (c: ProjectCharacterRef) => string
   boardDetailsOpenFor: (shot: CreativeShot) => boolean
@@ -402,11 +364,11 @@ defineProps<{
   onDropAtSlot: (index: number, event: DragEvent) => void
   onGripPress: (shotId: string) => void
   onDeleteBoard: (shot: CreativeShot) => void
-  onOpenFramePreview: (shot: CreativeShot) => void
-  onFramePreviewImgError: (shot: CreativeShot) => void
-  onTriggerStoryboardUpload: (shot: CreativeShot) => void
-  onGenerateFrame: (shot: CreativeShot) => void
-  onClearStoryboardFrame: (shot: CreativeShot) => void
+  onOpenFramePreview: (shot: CreativeShot, role: StoryboardFrameRole) => void
+  onFramePreviewImgError: (shot: CreativeShot, role: StoryboardFrameRole) => void
+  onTriggerStoryboardUpload: (shot: CreativeShot, role: StoryboardFrameRole) => void
+  onGenerateFrame: (shot: CreativeShot, role: StoryboardFrameRole) => void
+  onClearStoryboardFrame: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onBoardDetailsToggle: (event: Event, shot: CreativeShot) => void
   onSaveShot: (shot: CreativeShot) => void
 }>()

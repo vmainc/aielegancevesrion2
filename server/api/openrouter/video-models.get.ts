@@ -1,16 +1,18 @@
 import { modelSupportsNativeNegativePrompt } from '~/lib/video-negative-prompt'
 
+/** Hidden from the video model picker — still reachable via API if needed elsewhere. */
+const EXCLUDED_OPENROUTER_VIDEO_MODEL_IDS = new Set([
+  'alibaba/happyhorse-1.0',
+  'alibaba/happyhorse-1.1',
+  'alibaba/wan-2.6',
+])
+
+function isExcludedOpenRouterVideoModel (id: string): boolean {
+  return EXCLUDED_OPENROUTER_VIDEO_MODEL_IDS.has(id.trim().toLowerCase())
+}
+
 /** Matches OpenRouter’s directory when the API is unavailable or key is missing. */
 const FALLBACK_VIDEO_MODELS = [
-  {
-    id: 'alibaba/wan-2.6',
-    name: 'Alibaba: Wan 2.6',
-    description: 'Experimental video generation (API-only, alpha).',
-    provider: 'Alibaba',
-    generateAudio: true,
-    supportsNegativePrompt: true,
-    supportedFrameImages: ['first_frame'] as const,
-  },
   {
     id: 'bytedance/seedance-1.5-pro',
     name: 'ByteDance: Seedance 1.5 Pro',
@@ -200,10 +202,12 @@ export default defineEventHandler(async () => {
     })
   }
 
-  rows.sort((a, b) => a.name.localeCompare(b.name))
+  const visibleRows = rows.filter(row => !isExcludedOpenRouterVideoModel(row.id))
+
+  visibleRows.sort((a, b) => a.name.localeCompare(b.name))
 
   const catalogById = await loadVideoCatalogById()
-  for (const row of rows) {
+  for (const row of visibleRows) {
     const meta = catalogById.get(row.id)
     if (!meta) continue
     if (meta.supportedDurations.length) row.supportedDurations = meta.supportedDurations
@@ -218,16 +222,16 @@ export default defineEventHandler(async () => {
     }
   }
 
-  if (rows.length === 0) {
+  if (visibleRows.length === 0) {
     return {
       source: 'fallback' as const,
-      models: FALLBACK_VIDEO_MODELS,
+      models: FALLBACK_VIDEO_MODELS.filter(m => !isExcludedOpenRouterVideoModel(m.id)),
       notice: 'No video models returned from OpenRouter. Showing reference models.',
     }
   }
 
   return {
     source: 'api' as const,
-    models: rows,
+    models: visibleRows,
   }
 })

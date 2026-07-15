@@ -256,14 +256,6 @@ const sectionCards = computed(() => {
     })
   }
 
-  cards.push({
-    path: 'timeline',
-    title: 'Timeline',
-    stat: 'Edit',
-    statTone: 'partial',
-    blurb: 'Assemble clips, audio, and export.'
-  })
-
   return cards
 })
 

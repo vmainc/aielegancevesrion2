@@ -191,7 +191,7 @@ export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): s
   })
   if (isMusicVideoTarget(ctx.targetLength)) {
     prompt +=
-      '\n\nMusic video: visuals only — sync to the external track on the timeline; no dialogue or vocals in the clip.'
+      '\n\nMusic video: visuals only — sync to the external track during post-production; no dialogue or vocals in the clip.'
   }
   return applyVideoNoBackgroundMusicPolicy(prompt)
 }

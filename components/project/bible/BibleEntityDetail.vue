@@ -268,7 +268,7 @@
           class="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-5 text-sm text-gray-600"
         >
           <p class="font-medium text-gray-800 mb-1">No facts yet</p>
-          <p>Add attributable claims — wardrobe, rules, timeline notes, and constraints.</p>
+          <p>Add attributable claims — wardrobe, rules, chronology notes, and constraints.</p>
         </div>
 
         <ul v-else class="space-y-2">

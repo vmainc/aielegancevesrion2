@@ -3,8 +3,21 @@ import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
+import {
+  assertUserHasProjectAccess,
+  loadProjectRecordOrThrow
+} from '~/server/utils/project-access'
 
 const PB_ID = /^[a-z0-9]{15}$/
+
+function projectIdOnAsset (raw: Record<string, unknown>): string {
+  const p = raw.project
+  if (typeof p === 'string') return p
+  if (p && typeof p === 'object' && 'id' in p && typeof (p as { id?: string }).id === 'string') {
+    return (p as { id: string }).id
+  }
+  return ''
+}
 
 export default defineEventHandler(async (event) => {
   const assetId = getRouterParam(event, 'assetId')
@@ -38,36 +51,29 @@ export default defineEventHandler(async (event) => {
     throw e
   }
 
-  const owner = pbRecordOwnerId(existing as { owned_by?: unknown; owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
+  const currentProjectId = projectIdOnAsset(existing)
+  if (currentProjectId) {
+    await assertUserHasProjectAccess(pb, userId, currentProjectId)
+  } else {
+    const owner = pbRecordOwnerId(existing as { owned_by?: unknown; owner?: unknown; user?: unknown })
+    if (owner !== userId) {
+      throw createError({ statusCode: 403, message: 'Forbidden' })
+    }
   }
-
-  const currentProjectId =
-    typeof existing.project === 'string'
-      ? existing.project
-      : existing.project && typeof existing.project === 'object' && 'id' in existing.project
-        ? String((existing.project as { id: string }).id)
-        : ''
 
   if (currentProjectId === targetProjectId) {
     throw createError({ statusCode: 400, message: 'Clip is already in that project' })
   }
 
-  let targetProject: Record<string, unknown>
+  await loadProjectRecordOrThrow(pb, targetProjectId)
   try {
-    targetProject = (await pb.collection('creative_projects').getOne(targetProjectId)) as Record<string, unknown>
+    await assertUserHasProjectAccess(pb, userId, targetProjectId)
   } catch (e: unknown) {
-    const status = (e as { status?: number })?.status
-    if (status === 404) {
-      throw createError({ statusCode: 404, message: 'Target project not found' })
+    const status = (e as { statusCode?: number })?.statusCode
+    if (status === 403) {
+      throw createError({ statusCode: 403, message: 'You do not have access to that project' })
     }
     throw e
-  }
-
-  const targetOwner = pbRecordOwnerId(targetProject as { owner?: unknown; user?: unknown })
-  if (targetOwner !== userId) {
-    throw createError({ statusCode: 403, message: 'You do not have access to that project' })
   }
 
   const updated = await pb.collection('project_assets').update(assetId, {

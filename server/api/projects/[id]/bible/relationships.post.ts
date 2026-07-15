@@ -19,7 +19,7 @@ import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collectio
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
-  const { userId, pb } = await requireProjectOwner(event, projectId || '')
+  const { userId, pb, access } = await requireProjectOwner(event, projectId || '')
 
   const body = await readBody<{
     projectId?: string
@@ -60,7 +60,7 @@ export default defineEventHandler(async (event) => {
   const actorType = parseBibleActorType(body?.actorType)
 
   const payload: Record<string, unknown> = {
-    owned_by: userId,
+    owned_by: access.ownerId,
     project: projectId,
     from_type: fromType,
     from_id: fromId,

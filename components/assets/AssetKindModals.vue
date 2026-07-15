@@ -115,7 +115,7 @@
             </select>
           </div>
           <p class="text-xs text-gray-500">
-            The file stays in your library — only the project folder changes. Timeline clips already placed are not updated.
+            The file stays in your library — only the project folder changes.
           </p>
           <p v-if="moveError" class="text-sm text-red-700">{{ moveError }}</p>
           <div class="flex justify-end gap-2 pt-2">

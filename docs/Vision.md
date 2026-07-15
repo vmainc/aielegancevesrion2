@@ -68,7 +68,7 @@ AI proposes; the filmmaker approves. Structured suggestions (Project Guide), con
 | **Creative bible** | Director preset + continuity memory + per-character locks |
 | **Continuity Engine** | Validates and repairs consistency across shots at scale |
 | **Director AI** | Project Guide + director bible + prompt assembly |
-| **Production pipeline** | Storyboard frames → video → timeline, all context-aware |
+| **Production pipeline** | Storyboard frames → generated video assets, all context-aware |
 | **Memory & provenance** | Decision log, generation history, model/version tracking |
 
 ---

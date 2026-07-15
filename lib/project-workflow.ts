@@ -20,8 +20,7 @@ const WORKFLOW_PATHS = [
   'characters',
   'scenes',
   'storyboard',
-  'video',
-  'timeline'
+  'video'
 ] as const
 
 export type WorkflowPath = (typeof WORKFLOW_PATHS)[number]

@@ -1,7 +1,7 @@
 import { createError, getRequestHeader, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { assertUserHasProjectAccess } from '~/server/utils/project-access'
 import { pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 
 const PASSTHROUGH_HEADERS = [
@@ -21,8 +21,10 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing project or asset id' })
   }
 
+  // allowAccessTokenQuery for <video>/<audio> tags that cannot send Authorization headers.
   const userId = await getPocketBaseUserIdFromRequest(event, { allowAccessTokenQuery: true })
   const pb = await getAuthenticatedPocketBase()
+  await assertUserHasProjectAccess(pb, userId, projectId)
 
   let record: Record<string, unknown>
   try {
@@ -42,9 +44,6 @@ export default defineEventHandler(async (event) => {
         ? String((recProject as { id: string }).id)
         : ''
   if (rowProjectId !== projectId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
-  if (pbRecordOwnerId(record) !== userId) {
     throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 

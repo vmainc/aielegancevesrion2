@@ -6,12 +6,10 @@ import {
 } from '~/lib/bible-trust'
 import { readGenerationObservability } from '~/lib/generation-observability'
 import { metadataHasFullPromptLeak } from '~/lib/legacy-asset-prompt-metadata'
-import { timelineMediaReliabilitySummary } from '~/lib/timeline-clip-media-reliability'
 import type { BibleEntity } from '~/types/bible-entity'
 import type { BibleFact } from '~/types/bible-fact'
 import type { BibleRelationship } from '~/types/bible-relationship'
 import type { ProjectAsset } from '~/types/project-asset'
-import type { TimelineEditorClip } from '~/types/timeline-editor'
 
 /** Assets with observability or legacy generation markers in the last N days. */
 export const RECENT_GENERATED_ASSET_DAYS = 30
@@ -21,16 +19,6 @@ export interface ProjectReviewBibleCounts {
   tentativeEntities: number
   tentativeRelationships: number
   retiredOrContradicted: number
-}
-
-export interface ProjectReviewTimelineCounts {
-  cloudTimelineExists: boolean
-  localOnly: boolean
-  queuedCloudSave: boolean
-  missingMedia: number
-  localBlob: number
-  recoverable: number
-  totalClips: number
 }
 
 export interface ProjectReviewAssetCounts {
@@ -50,7 +38,6 @@ export interface ProjectReviewGenerationCounts {
 
 export interface ProjectReviewDashboardCounts {
   bible: ProjectReviewBibleCounts
-  timeline: ProjectReviewTimelineCounts
   assets: ProjectReviewAssetCounts
   generation: ProjectReviewGenerationCounts
 }
@@ -60,12 +47,6 @@ export interface ProjectReviewDashboardInput {
   entities: BibleEntity[]
   relationships: BibleRelationship[]
   assets: ProjectAsset[]
-  timelineClips: TimelineEditorClip[] | null
-  cloudTimelineExists: boolean
-  localTimelineClipCount: number
-  queuedCloudSave: boolean
-  assetsById?: Map<string, ProjectAsset>
-  projectId?: string
 }
 
 function assetMetadata (asset: ProjectAsset): Record<string, unknown> {
@@ -119,12 +100,6 @@ export function computeProjectReviewDashboard (
     input.entities.filter((e) => isExcludedBibleStatus(e.status)).length +
     input.relationships.filter((r) => isExcludedBibleStatus(r.status)).length
 
-  const clips = input.timelineClips ?? []
-  const mediaSummary = timelineMediaReliabilitySummary(clips, {
-    projectId: input.projectId,
-    assetsById: input.assetsById
-  })
-
   let withObservability = 0
   let withoutObservability = 0
   let legacyPromptMetadata = 0
@@ -154,15 +129,6 @@ export function computeProjectReviewDashboard (
       tentativeEntities: tentativeEntityCount,
       tentativeRelationships: tentativeRelationshipCount,
       retiredOrContradicted
-    },
-    timeline: {
-      cloudTimelineExists: input.cloudTimelineExists,
-      localOnly: !input.cloudTimelineExists && input.localTimelineClipCount > 0,
-      queuedCloudSave: input.queuedCloudSave,
-      missingMedia: mediaSummary.missing,
-      localBlob: mediaSummary.local_blob,
-      recoverable: mediaSummary.recoverable,
-      totalClips: clips.length
     },
     assets: {
       withObservability,

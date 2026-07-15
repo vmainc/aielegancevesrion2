@@ -1,9 +1,7 @@
 import { readMultipartFormData, createError, getRouterParam } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { formatPocketBaseRecordError, isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import type { ProjectAssetKind } from '~/types/project-asset'
 
 const KINDS: ProjectAssetKind[] = ['script', 'character', 'storyboard', 'video', 'other']
@@ -15,14 +13,7 @@ export default defineEventHandler(async (event) => {
   if (!projectId) {
     throw createError({ statusCode: 400, message: 'Missing project id' })
   }
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
-
-  const project = await pb.collection('creative_projects').getOne(projectId)
-  const owner = pbRecordOwnerId(project as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  const { pb, access } = await requireProjectOwner(event, projectId)
 
   const parts = await readMultipartFormData(event)
   if (!parts?.length) {
@@ -96,7 +87,7 @@ export default defineEventHandler(async (event) => {
   const safeFilename = filename.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 180) || 'upload.png'
 
   const formData = new FormData()
-  formData.append('owned_by', userId)
+  formData.append('owned_by', access.ownerId)
   formData.append('project', projectId)
   formData.append('kind', kind)
   formData.append('title', title.slice(0, 500))

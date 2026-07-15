@@ -1,4 +1,3 @@
-import { createError } from 'h3'
 import {
   formatDirectorForAiPrompt,
   pbRecordToCreativeProject,
@@ -9,7 +8,7 @@ import {
   pbRecordToCreativeCharacter,
   projectIdOnCharacterRow
 } from '~/server/utils/creative-character-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
+import { assertUserHasProjectAccess } from '~/server/utils/project-access'
 import type PocketBase from 'pocketbase'
 
 export type ProjectGuideContext = {
@@ -29,9 +28,7 @@ export async function loadProjectGuideContext (
   userId: string
 ): Promise<ProjectGuideContext> {
   const projectRow = await pb.collection('creative_projects').getOne(projectId)
-  if (pbRecordOwnerId(projectRow as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  await assertUserHasProjectAccess(pb, userId, projectId)
 
   const project = pbRecordToCreativeProject(projectRow as Parameters<typeof pbRecordToCreativeProject>[0])
   const director = parseDirectorField((projectRow as { director?: unknown }).director) || project.director
@@ -62,7 +59,6 @@ export async function loadProjectGuideContext (
   const characterIdsByName = new Map<string, string>()
   const charLines: string[] = []
   for (const row of characterRows) {
-    if (pbRecordOwnerId(row as { owner?: unknown; user?: unknown }) !== userId) continue
     if (projectIdOnCharacterRow(row) !== projectId) continue
     const c = pbRecordToCreativeCharacter(row)
     characterIdsByName.set(normalizeName(c.name), c.id)

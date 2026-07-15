@@ -1,9 +1,7 @@
 import { createError, getRouterParam, readBody } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { pbRecordToCreativeCharacter } from '~/server/utils/creative-character-map'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 
 function clampPct (v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null
@@ -18,13 +16,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing project id' })
   }
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
-
-  const project = await pb.collection('creative_projects').getOne(projectId)
-  if (pbRecordOwnerId(project as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  const { pb, access } = await requireProjectOwner(event, projectId)
 
   const body = await readBody<{
     name?: string
@@ -42,7 +34,7 @@ export default defineEventHandler(async (event) => {
   const screenSharePercent = clampPct(body?.screenSharePercent)
 
   const payload: Record<string, unknown> = {
-    owned_by: userId,
+    owned_by: access.ownerId,
     project: projectId,
     name,
     role_description: roleDescription

@@ -21,7 +21,7 @@ function parseSource (value: unknown): ProjectTimelineSource | undefined {
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
-  const { userId, pb } = await requireProjectOwner(event, projectId || '')
+  const { pb, access } = await requireProjectOwner(event, projectId || '')
 
   const body = await readBody<ProjectTimelinePutBody>(event)
   const normalized = normalizeProjectTimelineDocument(body?.document)
@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     const existing = await pb.collection('project_timelines').getList(1, 1, {
-      filter: `project = "${projectId}" && owned_by = "${userId}"`,
+      filter: `project = "${projectId}"`,
       sort: PROJECT_TIMELINE_LIST_SORT
     })
 
@@ -53,7 +53,7 @@ export default defineEventHandler(async (event) => {
 
     if (!row) {
       const fields = projectTimelineDocumentToPbFields({
-        ownerId: userId,
+        ownerId: access.ownerId,
         projectId: projectId || '',
         document,
         title: title || 'Main timeline',
@@ -89,7 +89,7 @@ export default defineEventHandler(async (event) => {
 
     const nextRevision = current.revision + 1
     const fields = projectTimelineDocumentToPbFields({
-      ownerId: userId,
+      ownerId: access.ownerId,
       projectId: projectId || '',
       document,
       title: title || current.title,

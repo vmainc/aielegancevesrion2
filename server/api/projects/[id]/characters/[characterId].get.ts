@@ -1,6 +1,5 @@
 import { createError, getQuery, getRouterParam } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import {
   pbRecordToCreativeCharacter,
   projectIdOnCharacterRow
@@ -11,7 +10,6 @@ import {
   isPocketBaseMissingCollectionError,
   pocketBaseErrorStatus
 } from '~/server/utils/pb-missing-collection-error'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
 import type { ProjectAsset } from '~/types/project-asset'
 import type { CreativeCharacter } from '~/types/creative-project'
@@ -43,13 +41,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing project or character id' })
   }
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
-
-  const project = await pb.collection('creative_projects').getOne(projectId)
-  if (pbRecordOwnerId(project as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  const { userId, pb } = await requireProjectOwner(event, projectId)
 
   // Self-heal: image/voice assets can keep a stale `character_id` after a
   // character row is deleted and recreated. When the id misses (or points at
@@ -65,7 +57,6 @@ export default defineEventHandler(async (event) => {
         filter: `project = "${projectId}"`
       })
       for (const item of list.items as Array<Record<string, unknown>>) {
-        if (pbRecordOwnerId(item as { owner?: unknown; user?: unknown }) !== userId) continue
         if (normalizeName(String(item.name || '')) === hintedName) return item
       }
     } catch {
@@ -82,19 +73,12 @@ export default defineEventHandler(async (event) => {
     row = null
   }
 
-  // Wrong project / wrong owner / missing → try the name fallback before giving up.
-  if (
-    !row ||
-    projectIdOnCharacterRow(row) !== projectId ||
-    pbRecordOwnerId(row as { owner?: unknown; user?: unknown }) !== userId
-  ) {
+  // Wrong project / missing → try the name fallback before giving up.
+  if (!row || projectIdOnCharacterRow(row) !== projectId) {
     row = await findByName()
   }
   if (row && projectIdOnCharacterRow(row) !== projectId) {
     throw createError({ statusCode: 403, message: 'Character does not belong to this project' })
-  }
-  if (row && pbRecordOwnerId(row as { owner?: unknown; user?: unknown }) !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
   }
 
   // Load all character assets for this project up front so we can both match

@@ -1,31 +1,16 @@
 import { createError, getRouterParam } from 'h3'
-import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
-import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
-import { pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
   if (!id) {
     throw createError({ statusCode: 400, message: 'Missing project id' })
   }
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  const pb = await getAuthenticatedPocketBase()
 
-  let record: unknown
-  try {
-    record = await pb.collection('creative_projects').getOne(id)
-  } catch (e: unknown) {
-    if (pocketBaseErrorStatus(e) === 404) {
-      throw createError({ statusCode: 404, message: 'Project not found' })
-    }
-    throw e
-  }
-  const owner = pbRecordOwnerId(record as { owner?: unknown; user?: unknown })
-  if (owner !== userId) {
-    throw createError({ statusCode: 403, message: 'Forbidden' })
-  }
+  const { pb, access } = await requireProjectOwner(event, id)
+
+  const record = await pb.collection('creative_projects').getOne(id)
 
   let sceneCount = 0
   let characterCount = 0
@@ -42,7 +27,10 @@ export default defineEventHandler(async (event) => {
   }
 
   return {
-    project: pbRecordToCreativeProject(record as Parameters<typeof pbRecordToCreativeProject>[0]),
+    project: pbRecordToCreativeProject(
+      record as Parameters<typeof pbRecordToCreativeProject>[0],
+      { accessRole: access.role }
+    ),
     stats: { sceneCount, characterCount }
   }
 })

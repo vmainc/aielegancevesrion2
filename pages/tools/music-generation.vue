@@ -5,7 +5,7 @@
         Music generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Compose score beds and themes with Google Lyria via OpenRouter. Save to your project library and drop tracks on the timeline audio track.
+        Compose score beds and themes with Google Lyria via OpenRouter. Save tracks to your project library for playback and download.
       </p>
     </header>
 
@@ -56,7 +56,6 @@
                 Find it under
                 <NuxtLink to="/assets/music" class="text-primary font-medium hover:underline">Assets → My Music</NuxtLink>
                 <template v-if="savedProjectName"> for {{ savedProjectName }}</template>.
-                <template v-if="addToTimeline && savedProjectId"> It was also added to the project timeline.</template>
               </template>
               <template v-else>
                 Preview below, then save to your project library or discard and try again.
@@ -104,13 +103,6 @@
               class="inline-flex items-center px-5 py-2.5 border border-primary/40 text-primary font-medium rounded-lg text-sm hover:bg-primary/5"
             >
               Open My Music
-            </NuxtLink>
-            <NuxtLink
-              v-if="trackSaved && savedProjectId && addToTimeline"
-              :to="`/projects/${savedProjectId}/timeline`"
-              class="inline-flex items-center px-5 py-2.5 border border-primary/40 text-primary font-medium rounded-lg text-sm hover:bg-primary/5"
-            >
-              Open timeline
             </NuxtLink>
           </div>
         </section>
@@ -245,15 +237,6 @@
               </button>
             </div>
 
-            <label class="inline-flex items-center gap-2 text-sm text-gray-800 cursor-pointer">
-              <input
-                v-model="addToTimeline"
-                type="checkbox"
-                class="rounded border-gray-300 text-primary focus:ring-primary"
-                :disabled="!selectedProjectId"
-              >
-              Add to project timeline (audio track)
-            </label>
           </div>
         </section>
 
@@ -331,9 +314,6 @@
 <script setup lang="ts">
 definePageMeta({ ssr: false })
 
-import { appendAudioToProjectTimeline } from '~/lib/append-project-timeline-audio'
-import { timelineAppendToast } from '~/lib/timeline-append-feedback'
-import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { MUSIC_STYLE_PRESETS } from '~/lib/music-generation-prompt'
 import { DEFAULT_MUSIC_MODEL_ID } from '~/lib/music-generation-models'
@@ -341,7 +321,6 @@ import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import {
   generateOpenRouterMusic,
-  playbackUrlForProjectMusicAsset,
   saveMusicToProjectLibrary
 } from '~/composables/useOpenRouterMusicGen'
 import type { CreativeProject } from '~/types/creative-project'
@@ -390,12 +369,10 @@ const formError = ref('')
 const playbackUrl = ref('')
 const resultModel = ref('')
 const transcript = ref('')
-const savedAssetId = ref('')
 const savedProjectId = ref('')
 const trackSaved = ref(false)
 
 const saveToProject = ref(true)
-const addToTimeline = ref(true)
 const selectedProjectId = ref('')
 
 const showCreateProject = ref(false)
@@ -409,7 +386,7 @@ const pbProjects = computed(() =>
 
 const saveButtonLabel = computed(() => {
   if (!saveToProject.value) return 'Done'
-  return addToTimeline.value ? 'Save & add to timeline' : 'Save to project'
+  return 'Save to project'
 })
 
 const savedProjectName = computed(() =>
@@ -493,7 +470,7 @@ async function persistGeneratedTrackToProject (): Promise<void> {
   }
 
   const title = prompt.value.trim().slice(0, 80) || 'Generated music'
-  const asset = await saveMusicToProjectLibrary({
+  await saveMusicToProjectLibrary({
     projectId,
     playbackUrl: playbackUrl.value,
     title,
@@ -506,25 +483,9 @@ async function persistGeneratedTrackToProject (): Promise<void> {
     headers: { Authorization: `Bearer ${token}` }
   })
 
-  savedAssetId.value = asset.id
   savedProjectId.value = projectId
   trackSaved.value = true
-
-  let timelineUrl = playbackUrlForProjectMusicAsset(projectId, asset.id)
-  timelineUrl = appendPlaybackAccessToken(timelineUrl, token)
-
-  if (addToTimeline.value) {
-    const appendResult = await appendAudioToProjectTimeline(projectId, {
-      url: timelineUrl,
-      label: title,
-      duration: selectedModelId.value.includes('pro') ? 180 : 30,
-      assetId: asset.id
-    }, { authHeaders: pocketBaseBearerHeaders(token) })
-    const t = timelineAppendToast(appendResult.outcome, 'audio')
-    toast.showToast(t.message, t.type)
-  } else {
-    toast.showToast(`Track saved to “${savedProjectName.value || 'project'}”. Open Assets → My Music to play it.`, 'success')
-  }
+  toast.showToast(`Track saved to “${savedProjectName.value || 'project'}”. Open Assets → My Music to play it.`, 'success')
 }
 
 async function onSubmit () {
@@ -542,7 +503,6 @@ async function onSubmit () {
   uiPhase.value = 'generating'
   playbackUrl.value = ''
   transcript.value = ''
-  savedAssetId.value = ''
   savedProjectId.value = ''
   trackSaved.value = false
 
@@ -607,7 +567,6 @@ function discardAndRetry () {
   playbackUrl.value = ''
   transcript.value = ''
   formError.value = ''
-  savedAssetId.value = ''
   savedProjectId.value = ''
   trackSaved.value = false
   uiPhase.value = 'form'

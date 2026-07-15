@@ -33,14 +33,14 @@ function parseMessages (raw: unknown): GuideChatMessage[] {
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
-  const { userId, pb } = await requireProjectOwner(event, projectId || '')
+  const { userId, pb, access } = await requireProjectOwner(event, projectId || '')
 
   const body = await readBody<{ messages?: unknown }>(event)
   const messages = parseMessages(body?.messages)
 
   try {
     const existing = await pb.collection('guide_messages').getFullList({
-      filter: `project = "${projectId}" && owned_by = "${userId}"`,
+      filter: `project = "${projectId}"`,
       batch: 200
     })
 
@@ -66,7 +66,7 @@ export default defineEventHandler(async (event) => {
 
     for (const message of messages) {
       const fields = guideChatMessageToPbFields({
-        ownerId: userId,
+        ownerId: access.ownerId,
         projectId: projectId || '',
         message
       })
@@ -80,7 +80,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const saved = await pb.collection('guide_messages').getFullList({
-      filter: `project = "${projectId}" && owned_by = "${userId}"`,
+      filter: `project = "${projectId}"`,
       sort: 'created_at_client,created',
       batch: 200
     })
