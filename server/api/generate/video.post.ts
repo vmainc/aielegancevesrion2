@@ -13,6 +13,7 @@ import {
 } from '~/lib/video-generation-audio-policy'
 import { registerVideoGenerationJob } from '~/server/utils/video-generation-job-registry'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { checkRateLimit, rateLimitKey } from '~/server/utils/rate-limit'
 
 type Aspect =
   | '16:9'
@@ -45,6 +46,7 @@ function normalizeResolution (v: unknown): '480p' | '720p' | '1080p' | '1K' | '2
 
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
+  checkRateLimit(rateLimitKey(userId, 'generate-video'), 8, 60_000)
   const body = await readBody(event).catch(() => ({}))
   const prompt = typeof body?.prompt === 'string' ? body.prompt : ''
   const model = typeof body?.model === 'string' ? body.model : ''

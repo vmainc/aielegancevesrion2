@@ -302,6 +302,74 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
       console.log('⚠️  project_assets not found. Skipping...\n');
     }
 
+    // project_assets — scene / shot / character relations (formal linkage)
+    console.log('📦 Checking "project_assets" story linkage fields...');
+    try {
+      const col = await pb.collections.getFirstListItem('name="project_assets"');
+      const currentSchema = col.fields || col.schema || [];
+      const fieldsToAdd = [];
+
+      const creativeScenesId = await pb.collections.getFirstListItem('name="creative_scenes"').then((c) => c.id).catch(() => null);
+      const creativeShotsId = await pb.collections.getFirstListItem('name="creative_shots"').then((c) => c.id).catch(() => null);
+      const creativeCharactersId = await pb.collections.getFirstListItem('name="creative_characters"').then((c) => c.id).catch(() => null);
+
+      if (!fieldExists(col, 'scene') && creativeScenesId) {
+        fieldsToAdd.push({
+          name: 'scene',
+          type: 'relation',
+          required: false,
+          options: {
+            collectionId: creativeScenesId,
+            cascadeDelete: false,
+            minSelect: null,
+            maxSelect: 1,
+            displayFields: ['heading']
+          }
+        });
+        console.log('  ➕ Will add: scene (relation)');
+      }
+      if (!fieldExists(col, 'shot') && creativeShotsId) {
+        fieldsToAdd.push({
+          name: 'shot',
+          type: 'relation',
+          required: false,
+          options: {
+            collectionId: creativeShotsId,
+            cascadeDelete: false,
+            minSelect: null,
+            maxSelect: 1,
+            displayFields: ['title']
+          }
+        });
+        console.log('  ➕ Will add: shot (relation)');
+      }
+      if (!fieldExists(col, 'character') && creativeCharactersId) {
+        fieldsToAdd.push({
+          name: 'character',
+          type: 'relation',
+          required: false,
+          options: {
+            collectionId: creativeCharactersId,
+            cascadeDelete: false,
+            minSelect: null,
+            maxSelect: 1,
+            displayFields: ['name']
+          }
+        });
+        console.log('  ➕ Will add: character (relation)');
+      }
+
+      if (fieldsToAdd.length) {
+        const updatedFields = [...currentSchema.map(flattenField), ...fieldsToAdd.map(flattenField)];
+        await pb.collections.update(col.id, { fields: updatedFields });
+        console.log('  ✅ project_assets linkage fields added\n');
+      } else {
+        console.log('  ✓ project_assets linkage fields already present\n');
+      }
+    } catch (_e) {
+      console.log('⚠️  project_assets not found. Skipping linkage fields...\n');
+    }
+
     // bible_facts — review statuses for continuity write-back (existing installs)
     console.log('📖 Checking "bible_facts" status values...');
     try {

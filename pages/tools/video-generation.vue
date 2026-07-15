@@ -330,7 +330,7 @@
           </h2>
           <p v-if="!isAuthenticated" class="text-sm text-amber-800">
             <NuxtLink to="/login" class="text-primary font-medium underline">Sign in</NuxtLink>
-            to save clips to a project library and timeline.
+            to save clips to a project library.
           </p>
           <template v-else>
             <label class="inline-flex items-center gap-2 text-sm text-gray-800 cursor-pointer">
@@ -367,18 +367,6 @@
                 No projects yet — use <span class="font-medium text-gray-800">+ New project</span> to create one here.
               </p>
             </div>
-            <label
-              class="inline-flex items-center gap-2 text-sm text-gray-800 cursor-pointer"
-              :class="{ 'opacity-50 pointer-events-none': !saveToProject || !selectedProjectId }"
-            >
-              <input
-                v-model="addToTimeline"
-                type="checkbox"
-                class="rounded border-gray-300 text-primary focus:ring-primary"
-                :disabled="!saveToProject || !selectedProjectId"
-              >
-              Add to project timeline after each clip is saved
-            </label>
           </template>
         </section>
 
@@ -594,9 +582,6 @@ definePageMeta({
     `video-generation:${route.query.projectId || ''}:${route.query.sceneId || ''}:${route.query.shotId || ''}`
 })
 
-import { appendVideoToProjectTimeline } from '~/lib/append-project-timeline-video'
-import { timelineAppendToast } from '~/lib/timeline-append-feedback'
-import { pocketBaseBearerHeaders } from '~/lib/pocketbase-auth-headers'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
 import { productionBibleGenerationDebugLabel } from '~/lib/production-bible-generation-context'
@@ -725,7 +710,6 @@ const formError = ref('')
 const generating = ref(false)
 const doneCount = ref(0)
 const saveToProject = ref(boot?.saveToProject ?? true)
-const addToTimeline = ref(boot?.addToTimeline ?? false)
 const selectedProjectId = ref(
   panelProjectId.value ||
     (boot?.projectId && PB_ID.test(boot.projectId) ? boot.projectId : '')
@@ -863,7 +847,6 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
     durationSeconds.value = p.durationSeconds
   }
   if (p.saveToProject !== undefined) saveToProject.value = p.saveToProject
-  if (p.addToTimeline !== undefined) addToTimeline.value = p.addToTimeline
   if (p.projectId && PB_ID.test(p.projectId)) {
     pinnedProjectId.value = p.projectId
     selectedProjectId.value = p.projectId
@@ -880,7 +863,7 @@ function stripPanelQueryFromRoute () {
   if (!import.meta.client) return
   const q = { ...route.query }
   let changed = false
-  for (const key of ['projectId', 'sceneId', 'shotId', 'addToTimeline'] as const) {
+  for (const key of ['projectId', 'sceneId', 'shotId'] as const) {
     if (key in q) {
       delete q[key]
       changed = true
@@ -908,11 +891,7 @@ async function fetchPanelPrefillFromApi (): Promise<boolean> {
         headers: { Authorization: `Bearer ${token}` }
       }
     )
-    const addFromQuery = route.query.addToTimeline === '1'
-    applyVideoGenerationPrefill({
-      ...res,
-      addToTimeline: addFromQuery || res.addToTimeline
-    })
+    applyVideoGenerationPrefill(res)
     prefillApplied.value = true
     clearVideoGenerationPanelPrefill()
     stripPanelQueryFromRoute()
@@ -979,10 +958,6 @@ watch(isAuthenticated, (v) => {
       syncSelectedProjectFromPin()
     })
   }
-})
-
-watch(saveToProject, (v) => {
-  if (!v) addToTimeline.value = false
 })
 
 const hasAnySlot = computed(() => Object.keys(slotByModel).length > 0)
@@ -1299,18 +1274,6 @@ async function keepClipAndContinue () {
       .filter(r => r.modelId !== pick && r.assetId)
       .map(r => r.assetId!)
     await deleteRunAssets(discardIds)
-
-    if (addToTimeline.value && selectedProjectId.value) {
-      const appendResult = await appendVideoToProjectTimeline(selectedProjectId.value, {
-        url: playbackSrc(kept.playbackUrl),
-        label: clipTitle(),
-        assetId: kept.assetId,
-        ...(panelPrefill.value?.sceneId ? { sceneId: panelPrefill.value.sceneId } : {}),
-        ...(panelPrefill.value?.shotId ? { shotId: panelPrefill.value.shotId } : {})
-      }, { authHeaders: pocketBaseBearerHeaders(getAuthToken()) })
-      const t = timelineAppendToast(appendResult.outcome, 'video')
-      toast.showToast(t.message, t.type)
-    }
 
     const pid = selectedProjectId.value.trim()
     const pre = panelPrefill.value

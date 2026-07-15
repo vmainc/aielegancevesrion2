@@ -21,7 +21,14 @@
           class="flex-1 overflow-y-auto px-4 py-4 space-y-4 bg-gray-50/60"
         >
           <div
-            v-if="!messages.length"
+            v-if="guideLoading && !messages.length"
+            class="rounded-lg border border-gray-200 bg-white px-4 py-6"
+          >
+            <FilmReelLoader size="sm" label="Loading chat" sub-label="Fetching your guide history…" />
+          </div>
+
+          <div
+            v-else-if="!messages.length"
             class="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-sm text-gray-600"
           >
             <p class="font-medium text-gray-900 mb-2">Start a conversation</p>
@@ -143,13 +150,7 @@
 </template>
 
 <script setup lang="ts">
-import {
-  loadGuideMessages,
-  newGuideMessageId,
-  saveGuideMessages,
-  type GuideChatMessage,
-  type GuideSuggestion
-} from '~/lib/project-guide'
+import { newGuideMessageId, type GuideChatMessage, type GuideSuggestion } from '~/lib/project-guide'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import type { CreativeProject, ProjectDirector } from '~/types/creative-project'
 
@@ -165,7 +166,16 @@ const canUseGuide = computed(
   () => !!activeProject.value && PB_ID.test(projectId.value) && isAuthenticated.value
 )
 
-const messages = ref<GuideChatMessage[]>([])
+const {
+  messages,
+  loading: guideLoading,
+  appendMessage,
+  clearMessages,
+  logDecision,
+  flushSync,
+  patchMessages
+} = useProjectGuidePersistence(projectId)
+
 const draft = ref('')
 const sending = ref(false)
 const applyingSuggestionId = ref('')
@@ -180,21 +190,11 @@ const starters = [
   'What should I focus on before generating storyboard frames?'
 ]
 
-function persistMessages () {
-  if (projectId.value) saveGuideMessages(projectId.value, messages.value)
-}
-
-function loadMessagesForProject () {
-  messages.value = projectId.value ? loadGuideMessages(projectId.value) : []
-  appliedSuggestionIds.value = new Set()
-}
-
 watch(projectId, () => {
-  loadMessagesForProject()
+  appliedSuggestionIds.value = new Set()
 }, { immediate: true })
 
 watch(messages, () => {
-  persistMessages()
   nextTick(() => {
     scrollEl.value?.scrollTo({ top: scrollEl.value.scrollHeight, behavior: 'smooth' })
   })
@@ -203,6 +203,28 @@ watch(messages, () => {
 function sendStarter (text: string) {
   draft.value = text
   void sendMessage()
+}
+
+function readFieldValue (
+  target: GuideSuggestion['target'],
+  field: string,
+  characterId?: string
+): string {
+  const project = activeProject.value
+  if (!project) return ''
+  if (target === 'project') {
+    const v = (project as Record<string, unknown>)[field]
+    return typeof v === 'string' ? v : ''
+  }
+  if (target === 'director') {
+    const director = project.director || {}
+    const v = (director as Record<string, unknown>)[field]
+    return typeof v === 'string' ? v : ''
+  }
+  if (target === 'character' && characterId) {
+    return ''
+  }
+  return ''
 }
 
 async function sendMessage () {
@@ -218,7 +240,7 @@ async function sendMessage () {
     content: text,
     createdAt: new Date().toISOString()
   }
-  messages.value.push(userMsg)
+  appendMessage(userMsg)
   draft.value = ''
   sending.value = true
 
@@ -232,7 +254,7 @@ async function sendMessage () {
         body: { messages: history }
       }
     )
-    messages.value.push({
+    appendMessage({
       id: newGuideMessageId(),
       role: 'assistant',
       content: res.reply || 'Done.',
@@ -241,7 +263,7 @@ async function sendMessage () {
     })
   } catch (e: unknown) {
     toast.showToast(formatApiFetchError(e, 'Could not reach Project Guide'), 'error')
-    messages.value.push({
+    appendMessage({
       id: newGuideMessageId(),
       role: 'assistant',
       content: 'Sorry — I could not respond right now. Check your connection and try again.',
@@ -257,6 +279,8 @@ async function applySuggestion (s: GuideSuggestion) {
   const token = getAuthToken()
   const pid = projectId.value
   if (!token || !pid || appliedSuggestionIds.value.has(s.id)) return
+
+  const oldValue = readFieldValue(s.target, s.field, s.characterId)
 
   applyingSuggestionId.value = s.id
   try {
@@ -278,6 +302,21 @@ async function applySuggestion (s: GuideSuggestion) {
     } else {
       throw new Error('Unsupported suggestion')
     }
+
+    const targetId =
+      s.target === 'character' && s.characterId ? s.characterId : pid
+
+    await logDecision({
+      sourceType: 'guide_suggestion',
+      sourceId: s.id,
+      targetType: s.target,
+      targetId,
+      field: s.field,
+      oldValue,
+      newValue: s.value,
+      rationale: s.rationale
+    })
+
     appliedSuggestionIds.value = new Set([...appliedSuggestionIds.value, s.id])
     toast.showToast(`Applied: ${s.label}`, 'success')
   } catch (e: unknown) {
@@ -288,17 +327,26 @@ async function applySuggestion (s: GuideSuggestion) {
 }
 
 function dismissSuggestion (messageId: string, suggestionId: string) {
-  const msg = messages.value.find(m => m.id === messageId)
-  if (!msg?.suggestions) return
-  msg.suggestions = msg.suggestions.filter(s => s.id !== suggestionId)
-  persistMessages()
+  patchMessages((current) =>
+    current.map((msg) => {
+      if (msg.id !== messageId || !msg.suggestions) return msg
+      return {
+        ...msg,
+        suggestions: msg.suggestions.filter(s => s.id !== suggestionId)
+      }
+    })
+  )
 }
 
-function clearChat () {
+async function clearChat () {
   if (!globalThis.confirm('Clear this chat history? Project data will not be changed.')) return
-  messages.value = []
+  clearMessages()
   appliedSuggestionIds.value = new Set()
-  persistMessages()
+  try {
+    await flushSync()
+  } catch {
+    /* local cleared */
+  }
 }
 
 useHead({ title: 'Project Guide' })

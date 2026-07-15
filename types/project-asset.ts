@@ -10,6 +10,10 @@ export interface ProjectAsset {
   title: string
   notes: string
   metadata: Record<string, unknown> | null
+  /** Formal PocketBase relations (preferred over metadata conventions). */
+  sceneId?: string
+  shotId?: string
+  characterId?: string
   sortOrder: number
   /** Resolved file URL when a file is attached */
   fileUrl: string | null

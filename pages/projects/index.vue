@@ -190,7 +190,7 @@
 import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import type { ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
-const { projects, createProject, clientReady, registerImportedProject } = useCreativeProject()
+const { projects, clientReady, registerImportedProject } = useCreativeProject()
 const { isAuthenticated, getAuthToken } = useAuth()
 const toast = useToast()
 
@@ -236,51 +236,43 @@ async function submitCreate () {
   createError.value = ''
   const displayName = form.name.trim() || 'New project'
 
-  if (isAuthenticated.value) {
-    const token = getAuthToken()
-    if (!token) {
-      createError.value = 'Session expired — sign in again.'
-      return
-    }
-    creating.value = true
-    try {
-      const res = await $fetch<{ project: import('~/types/creative-project').CreativeProject }>(
-        '/api/projects/create',
-        {
-          method: 'POST',
-          headers: { Authorization: `Bearer ${token}` },
-          body: {
-            name: displayName,
-            aspectRatio: form.aspectRatio,
-            goal: form.goal,
-            workflowMode: form.workflowMode
-          }
-        }
-      )
-      writeSessionWorkflow(res.project.id, res.project.workflowMode || form.workflowMode)
-      registerImportedProject(res.project)
-      openCreate.value = false
-      toast.showToast('Project created.', 'success')
-      await navigateTo(`/projects/${res.project.id}/home`)
-    } catch (e: unknown) {
-      createError.value =
-        (e as { data?: { message?: string } })?.data?.message ||
-        (e instanceof Error ? e.message : '') ||
-        'Could not create project.'
-    } finally {
-      creating.value = false
-    }
+  if (!isAuthenticated.value) {
+    createError.value = 'Sign in to create a project.'
     return
   }
 
-  const p = createProject({
-    name: displayName,
-    aspectRatio: form.aspectRatio,
-    goal: form.goal,
-    workflowMode: form.workflowMode
-  })
-  writeSessionWorkflow(p.id, p.workflowMode || form.workflowMode)
-  openCreate.value = false
-  await navigateTo(`/projects/${p.id}/home`)
+  const token = getAuthToken()
+  if (!token) {
+    createError.value = 'Session expired — sign in again.'
+    return
+  }
+  creating.value = true
+  try {
+    const res = await $fetch<{ project: import('~/types/creative-project').CreativeProject }>(
+      '/api/projects/create',
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}` },
+        body: {
+          name: displayName,
+          aspectRatio: form.aspectRatio,
+          goal: form.goal,
+          workflowMode: form.workflowMode
+        }
+      }
+    )
+    writeSessionWorkflow(res.project.id, res.project.workflowMode || form.workflowMode)
+    registerImportedProject(res.project)
+    openCreate.value = false
+    toast.showToast('Project created.', 'success')
+    await navigateTo(`/projects/${res.project.id}/home`)
+  } catch (e: unknown) {
+    createError.value =
+      (e as { data?: { message?: string } })?.data?.message ||
+      (e instanceof Error ? e.message : '') ||
+      'Could not create project.'
+  } finally {
+    creating.value = false
+  }
 }
 </script>

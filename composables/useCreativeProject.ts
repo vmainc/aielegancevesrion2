@@ -1,42 +1,11 @@
 import { getCurrentInstance, onMounted } from 'vue'
-import { defaultDirector } from '~/lib/director-presets'
 import { applyClientWorkflowOverlay, initialConceptNotesForWorkflow, writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import type { CreativeProject, ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
-const STORAGE_KEY = 'aielegance-creative-projects'
+const PB_ID = /^[a-z0-9]{15}$/
 
-function nowIso () {
-  return new Date().toISOString()
-}
-
-function mockSeed (): CreativeProject[] {
-  const t = nowIso()
-  return [
-    {
-      id: 'demo-neon-dreams',
-      name: 'Neon Dreams',
-      aspectRatio: '16:9',
-      goal: 'film',
-      synopsis: 'A courier crosses a rain-soaked megacity to deliver a memory that was never hers.',
-      treatment: '',
-      conceptNotes: 'Blade Runner tone, practical neon where possible.',
-      createdAt: t,
-      updatedAt: t,
-      source: 'local'
-    },
-    {
-      id: 'demo-vertical-drop',
-      name: 'Vertical Drop',
-      aspectRatio: '9:16',
-      goal: 'social',
-      synopsis: '',
-      treatment: '',
-      conceptNotes: '',
-      createdAt: t,
-      updatedAt: t,
-      source: 'local'
-    }
-  ]
+export function isCloudProjectId (id: string): boolean {
+  return PB_ID.test(id)
 }
 
 export function useCreativeProject () {
@@ -46,46 +15,12 @@ export function useCreativeProject () {
   const hydrated = useState('creative-projects-hydrated', () => false)
   const clientReady = useState('creative-projects-client-ready', () => false)
 
-  const persistLocal = () => {
-    if (!import.meta.client) return
-    try {
-      const locals = projects.value.filter(p => p.source !== 'pocketbase')
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(locals))
-    } catch {
-      /* ignore quota */
-    }
-  }
-
-  const hydrateLocalOnly = () => {
-    if (!import.meta.client || hydrated.value) return
-    hydrated.value = true
-    try {
-      const raw = localStorage.getItem(STORAGE_KEY)
-      if (raw) {
-        const parsed = JSON.parse(raw) as CreativeProject[]
-        if (Array.isArray(parsed) && parsed.length > 0) {
-          projects.value = parsed.map(p => ({
-            ...p,
-            source: p.source || 'local',
-            director: p.director ?? defaultDirector(),
-            continuityMemory: p.continuityMemory ?? '',
-            continuityLastIssues: p.continuityLastIssues ?? ''
-          }))
-          return
-        }
-      }
-    } catch {
-      /* ignore */
-    }
-    projects.value = mockSeed()
-    persistLocal()
-  }
-
   const loadServerProjects = async () => {
     if (!import.meta.client) return
     const token = auth.getAuthToken()
     if (!token) {
-      hydrateLocalOnly()
+      projects.value = []
+      hydrated.value = true
       return
     }
     try {
@@ -93,21 +28,23 @@ export function useCreativeProject () {
         headers: { Authorization: `Bearer ${token}` }
       })
       const serverIds = new Set(res.items.map(r => r.id))
-      // Keep PocketBase projects not yet returned by /my (e.g. immediately after create).
       const recentPb = projects.value.filter(
         p => p.source === 'pocketbase' && !serverIds.has(p.id)
       )
-      const locals = projects.value.filter(p => p.source === 'local' || !p.source)
-      const merged = [
+      projects.value = [
         ...res.items.map((item) => applyClientWorkflowOverlay(item)),
-        ...recentPb.map(p => applyClientWorkflowOverlay(p)),
-        ...locals.filter(l => !serverIds.has(l.id) && !recentPb.some(r => r.id === l.id))
+        ...recentPb.map(p => applyClientWorkflowOverlay(p))
       ]
-      projects.value = merged
       hydrated.value = true
-    } catch (e: any) {
-      console.warn('Failed to load PocketBase projects:', e?.data?.message || e?.message)
-      hydrateLocalOnly()
+    } catch (e: unknown) {
+      const msg =
+        e && typeof e === 'object' && 'data' in e
+          ? String((e as { data?: { message?: string } }).data?.message || '')
+          : e instanceof Error
+            ? e.message
+            : ''
+      console.warn('Failed to load PocketBase projects:', msg)
+      hydrated.value = true
     }
   }
 
@@ -116,7 +53,8 @@ export function useCreativeProject () {
     if (auth.isAuthenticated.value) {
       void loadServerProjects()
     } else {
-      hydrateLocalOnly()
+      projects.value = []
+      hydrated.value = true
     }
   }
 
@@ -125,36 +63,30 @@ export function useCreativeProject () {
     return hit ? applyClientWorkflowOverlay(hit) : null
   }
 
-  const createProject = (input: {
+  const createProject = async (input: {
     name: string
     aspectRatio: ProjectAspectRatio
     goal: ProjectGoal
     workflowMode?: ProjectWorkflowMode
-  }): CreativeProject => {
-    if (!hydrated.value) hydrateLocalOnly()
-    const t = nowIso()
-    const mode = input.workflowMode || 'import'
-    const project: CreativeProject = {
-      id: typeof crypto !== 'undefined' && crypto.randomUUID
-        ? `proj-${crypto.randomUUID()}`
-        : `proj-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-      name: input.name.trim() || 'Untitled project',
-      aspectRatio: input.aspectRatio,
-      goal: input.goal,
-      workflowMode: mode,
-      preferredModelId: 'claude',
-      targetLength: 'short',
-      synopsis: '',
-      treatment: '',
-      conceptNotes: initialConceptNotesForWorkflow(mode),
-      director: defaultDirector(),
-      continuityMemory: '',
-      continuityLastIssues: '',
-      createdAt: t,
-      updatedAt: t,
-      source: 'local'
+  }): Promise<CreativeProject> => {
+    const token = auth.getAuthToken()
+    if (!token) {
+      throw new Error('Sign in to create a project')
     }
-    projects.value = [...projects.value, project]
+    const res = await $fetch<{ project: CreativeProject }>('/api/projects/create', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        name: input.name.trim() || 'Untitled project',
+        aspectRatio: input.aspectRatio,
+        goal: input.goal,
+        workflowMode: input.workflowMode || 'import'
+      }
+    })
+    const project = applyClientWorkflowOverlay(res.project)
+    writeSessionWorkflow(project.id, project.workflowMode ?? 'import')
+    projects.value = [project, ...projects.value.filter(p => p.id !== project.id)]
+    hydrated.value = true
     return project
   }
 
@@ -174,61 +106,51 @@ export function useCreativeProject () {
     if (idx === -1) return
 
     const current = projects.value[idx]
-    if (current.source === 'pocketbase') {
-      const token = auth.getAuthToken()
-      if (!token) return
-      try {
-        const body: Record<string, unknown> = {}
-        if (patch.synopsis !== undefined) body.synopsis = patch.synopsis
-        if (patch.conceptNotes !== undefined) body.conceptNotes = patch.conceptNotes
-        if (patch.treatment !== undefined) body.treatment = patch.treatment
-        if (patch.name !== undefined) body.name = patch.name
-        if (patch.aspectRatio !== undefined) body.aspectRatio = patch.aspectRatio
-        if (patch.goal !== undefined) body.goal = patch.goal
-        if (patch.workflowMode !== undefined) body.workflowMode = patch.workflowMode
-        if (patch.genre !== undefined) body.genre = patch.genre
-        if (patch.tone !== undefined) body.tone = patch.tone
-        if (patch.targetLength !== undefined) body.targetLength = patch.targetLength
-        if (patch.targetDurationSeconds !== undefined) {
-          body.targetDurationSeconds = patch.targetDurationSeconds
-        }
-        if (patch.director !== undefined) body.director = patch.director
-        if (patch.continuityMemory !== undefined) body.continuityMemory = patch.continuityMemory
-        if (patch.continuityLastIssues !== undefined) body.continuityLastIssues = patch.continuityLastIssues
-
-        const res = await $fetch<{ project: CreativeProject }>(`/api/projects/${id}`, {
-          method: 'PATCH',
-          headers: { Authorization: `Bearer ${token}` },
-          body
-        })
-        const merged = applyClientWorkflowOverlay(res.project)
-        if (patch.workflowMode) writeSessionWorkflow(id, merged.workflowMode)
-        const copy = [...projects.value]
-        copy[idx] = merged
-        projects.value = copy
-      } catch (e) {
-        console.error('updateProject API failed', e)
-        throw e
-      }
-      return
+    if (!isCloudProjectId(id)) {
+      throw new Error('Only cloud projects can be updated')
     }
 
-    const next = {
-      ...current,
-      ...patch,
-      updatedAt: nowIso()
-    } as CreativeProject
-    const copy = [...projects.value]
-    copy[idx] = next
-    projects.value = copy
-    persistLocal()
+    const token = auth.getAuthToken()
+    if (!token) return
+    try {
+      const body: Record<string, unknown> = {}
+      if (patch.synopsis !== undefined) body.synopsis = patch.synopsis
+      if (patch.conceptNotes !== undefined) body.conceptNotes = patch.conceptNotes
+      if (patch.treatment !== undefined) body.treatment = patch.treatment
+      if (patch.name !== undefined) body.name = patch.name
+      if (patch.aspectRatio !== undefined) body.aspectRatio = patch.aspectRatio
+      if (patch.goal !== undefined) body.goal = patch.goal
+      if (patch.workflowMode !== undefined) body.workflowMode = patch.workflowMode
+      if (patch.genre !== undefined) body.genre = patch.genre
+      if (patch.tone !== undefined) body.tone = patch.tone
+      if (patch.targetLength !== undefined) body.targetLength = patch.targetLength
+      if (patch.targetDurationSeconds !== undefined) {
+        body.targetDurationSeconds = patch.targetDurationSeconds
+      }
+      if (patch.director !== undefined) body.director = patch.director
+      if (patch.continuityMemory !== undefined) body.continuityMemory = patch.continuityMemory
+      if (patch.continuityLastIssues !== undefined) body.continuityLastIssues = patch.continuityLastIssues
+
+      const res = await $fetch<{ project: CreativeProject }>(`/api/projects/${id}`, {
+        method: 'PATCH',
+        headers: { Authorization: `Bearer ${token}` },
+        body
+      })
+      const merged = applyClientWorkflowOverlay(res.project)
+      if (patch.workflowMode) writeSessionWorkflow(id, merged.workflowMode)
+      const copy = [...projects.value]
+      copy[idx] = merged
+      projects.value = copy
+    } catch (e) {
+      console.error('updateProject API failed', e)
+      throw e
+    }
   }
 
   const deleteProject = async (id: string) => {
     const idx = projects.value.findIndex(p => p.id === id)
     if (idx === -1) return
-    const current = projects.value[idx]
-    if (current.source === 'pocketbase') {
+    if (isCloudProjectId(id)) {
       const token = auth.getAuthToken()
       if (!token) throw new Error('Not signed in')
       await $fetch(`/api/projects/${id}`, {
@@ -237,7 +159,6 @@ export function useCreativeProject () {
       })
     }
     projects.value = projects.value.filter(p => p.id !== id)
-    persistLocal()
   }
 
   const activeProjectId = computed(() => {
@@ -263,7 +184,8 @@ export function useCreativeProject () {
       if (auth.isAuthenticated.value) {
         await loadServerProjects()
       } else {
-        hydrateLocalOnly()
+        projects.value = []
+        hydrated.value = true
       }
       clientReady.value = true
     }
@@ -284,17 +206,9 @@ export function useCreativeProject () {
         } else {
           hydrated.value = false
           projects.value = []
-          hydrateLocalOnly()
+          hydrated.value = true
         }
       }
-    )
-
-    watch(
-      projects,
-      () => {
-        if (hydrated.value) persistLocal()
-      },
-      { deep: true }
     )
   }
 
@@ -312,6 +226,6 @@ export function useCreativeProject () {
     activeProjectId,
     activeProject,
     withProjectQuery,
-    persist: persistLocal
+    isCloudProjectId
   }
 }

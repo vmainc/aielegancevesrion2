@@ -3,7 +3,7 @@
     <div class="mb-8">
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Script Wizard</h1>
       <p class="text-sm text-gray-600 max-w-3xl">
-        Start from an AI story idea or upload a screenplay for analysis, then generate treatment and three-act breakdown. Attach scripts to projects from Assets when you are ready.
+        Start from an AI story idea or upload a screenplay. Uploads create a cloud project and attach the script — continue in the project Overview with analyze or full import.
       </p>
     </div>
 
@@ -43,7 +43,7 @@
             :disabled="uploading || !selectedFile"
             @click="uploadScript"
           >
-            {{ uploading ? 'Working…' : 'Add to Script Wizard' }}
+            {{ uploading ? 'Working…' : 'Create project from script' }}
           </button>
         </div>
         <div
@@ -404,28 +404,23 @@ async function uploadScript () {
   try {
     const form = new FormData()
     form.append('file', selectedFile.value)
-    form.append('status', 'in_progress')
-    const res = await $fetch<{ script: CreativeScript; notice?: string; warning?: string }>(
-      '/api/script-wizard/scripts',
-      {
-        method: 'POST',
-        body: form,
-        headers: { Authorization: `Bearer ${token}` },
-        timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
-      }
-    )
-    const newId = res.script.id
+    const res = await $fetch<{
+      project: import('~/types/creative-project').CreativeProject
+      sceneCount: number
+      redirectPath: string
+    }>('/api/script-wizard/import-to-project', {
+      method: 'POST',
+      body: form,
+      headers: { Authorization: `Bearer ${token}` },
+      timeout: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
+    })
     selectedFile.value = null
-    selectedScriptId.value = newId
-    toast.showToast('Analysis saved. Use Generate treatment or Run Script Wizard breakdown next.', 'success')
-    if (res.notice) {
-      toast.showToast(res.notice, 'info')
-    }
-    if (res.warning) {
-      toast.showToast(res.warning, 'info')
-    }
-    await loadScripts()
-    await loadMovies(newId)
+    registerImportedProject(res.project)
+    toast.showToast(
+      `Project created with screenplay (${res.sceneCount} scenes detected). Run full import from Overview.`,
+      'success'
+    )
+    await navigateTo(res.redirectPath || `/projects/${res.project.id}/overview`)
   } catch (e: unknown) {
     const msg = formatApiFetchError(e, 'Upload failed')
     uploadError.value = msg

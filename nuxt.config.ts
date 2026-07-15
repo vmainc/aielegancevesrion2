@@ -70,17 +70,7 @@ export default defineNuxtConfig({
   nitro: {
     preset: 'node-server',
     routeRules: {
-      '/pb/**': { proxy: `${pocketbaseProxyTarget}/**` },
-      '/ask': { redirect: { to: '/', statusCode: 301 } },
-      '/explore': { redirect: { to: '/', statusCode: 301 } },
-      '/vault': { redirect: { to: '/', statusCode: 301 } },
-      '/leaderboard': { redirect: { to: '/', statusCode: 301 } },
-      '/meet-the-models': { redirect: { to: '/', statusCode: 301 } },
-      '/my-questions': { redirect: { to: '/projects', statusCode: 301 } },
-      '/my-questions/**': { redirect: { to: '/projects', statusCode: 301 } },
-      '/questions/**': { redirect: { to: '/', statusCode: 301 } },
-      '/dashboard': { redirect: { to: '/projects', statusCode: 301 } },
-      '/dashboard/**': { redirect: { to: '/projects', statusCode: 301 } }
+      '/pb/**': { proxy: `${pocketbaseProxyTarget}/**` }
     }
   }
 })

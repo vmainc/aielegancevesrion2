@@ -49,457 +49,50 @@
           Showing images for: <span class="font-semibold">{{ characterFilterLabel }}</span>
         </div>
 
-        <template v-if="props.kind === 'video' && videoProjectGroups.length">
-          <details
-            v-for="g in videoProjectGroups"
-            :key="g.key"
-            :class="PROJECT_GROUP_CARD_CLASS"
-          >
-            <summary
-              class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50/90 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80 border-b border-transparent group-open:border-gray-200"
-            >
-              <div class="flex items-start gap-2 min-w-0 flex-1">
-                <span
-                  class="text-gray-400 text-xs shrink-0 mt-0.5 transition-transform group-open:rotate-90"
-                  aria-hidden="true"
-                >▶</span>
-                <div class="min-w-0">
-                  <h2 class="text-sm font-semibold text-gray-900 truncate">
-                    {{ g.title }}
-                  </h2>
-                  <p v-if="g.subtitle" class="text-xs text-gray-500 mt-0.5">
-                    {{ g.subtitle }}
-                    <span class="text-gray-400"> · {{ g.items.length }} clip{{ g.items.length === 1 ? '' : 's' }}</span>
-                  </p>
-                  <p v-else class="text-xs text-gray-500 mt-0.5">
-                    {{ g.items.length }} clip{{ g.items.length === 1 ? '' : 's' }}
-                  </p>
-                </div>
-              </div>
-              <NuxtLink
-                v-if="g.projectId && PB_ID.test(g.projectId)"
-                :to="`/projects/${g.projectId}/video`"
-                class="text-xs font-medium text-primary hover:underline shrink-0"
-                @click.stop
-              >
-                Open Video step →
-              </NuxtLink>
-            </summary>
-            <div class="divide-y divide-gray-200">
-              <details
-                v-for="scene in videoSceneGroupsForProject(g)"
-                :key="`${g.key}:${scene.key}`"
-                class="group"
-              >
-                <summary
-                  class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-white flex flex-wrap items-center justify-between gap-2 hover:bg-gray-50"
-                >
-                  <div class="flex items-center gap-2 min-w-0">
-                    <span
-                      class="text-gray-400 text-[10px] shrink-0 transition-transform group-open:rotate-90"
-                      aria-hidden="true"
-                    >▶</span>
-                    <span class="text-sm font-medium text-gray-900 truncate">{{ scene.title }}</span>
-                    <span class="text-xs text-gray-500">· {{ scene.items.length }} clip{{ scene.items.length === 1 ? '' : 's' }}</span>
-                  </div>
-                </summary>
-                <ul class="divide-y divide-gray-100 bg-gray-50/40">
-                  <li
-                    v-for="a in scene.items"
-                    :key="a.id"
-                    class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
-                  >
-                    <div class="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-start gap-3">
-                      <div
-                        v-if="a.fileUrl"
-                        class="w-full max-w-[min(100%,20rem)] sm:max-w-xs rounded-lg border border-gray-200 overflow-hidden bg-black shrink-0"
-                      >
-                        <video
-                          :src="videoAssetPlaybackSrc(a)"
-                          class="w-full aspect-video object-contain"
-                          controls
-                          playsinline
-                          preload="metadata"
-                        />
-                      </div>
-                      <div class="min-w-0 flex-1">
-                        <p class="font-medium text-gray-900">{{ a.title }}</p>
-                        <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
-                        <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
-                      </div>
-                    </div>
-                    <div class="shrink-0">
-                      <details class="relative open:z-30">
-                        <summary
-                          class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                        >
-                          Actions
-                        </summary>
-                        <div :class="ACTIONS_MENU_PANEL_CLASS">
-                          <a
-                            v-if="a.fileUrl"
-                            :href="videoAssetPlaybackSrc(a)"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                          >
-                            Download file
-                          </a>
-                          <NuxtLink
-                            v-if="a.projectId"
-                            :to="`/projects/${a.projectId}/overview`"
-                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                          >
-                            Open project
-                          </NuxtLink>
-                          <NuxtLink
-                            v-if="a.projectId && PB_ID.test(a.projectId)"
-                            :to="`/projects/${a.projectId}/timeline`"
-                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                          >
-                            Open timeline
-                          </NuxtLink>
-                          <button
-                            v-if="a.projectId && a.fileUrl"
-                            type="button"
-                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                            @click="addVideoAssetToTimeline(a)"
-                          >
-                            Add to timeline
-                          </button>
-                          <button
-                            v-if="a.projectId && moveTargetProjects(a).length"
-                            type="button"
-                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                            @click="openMoveVideo(a)"
-                          >
-                            Move to project…
-                          </button>
-                          <button
-                            type="button"
-                            class="block w-full text-left px-3 py-2 rounded-md text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
-                            :disabled="deletingId === a.id"
-                            @click="removeAsset(a)"
-                          >
-                            {{ deletingId === a.id ? 'Removing…' : 'Remove' }}
-                          </button>
-                        </div>
-                      </details>
-                    </div>
-                  </li>
-                </ul>
-              </details>
-            </div>
-          </details>
-        </template>
+        <AssetKindVideoGroups
+          v-if="props.kind === 'video' && videoProjectGroups.length"
+          :groups="videoProjectGroups"
+          :deleting-id="deletingId"
+          :scene-groups-for-project="videoSceneGroupsForProject"
+          :video-asset-playback-src="videoAssetPlaybackSrc"
+          :format-date="formatDate"
+          :move-target-projects="moveTargetProjects"
+          :add-video-asset-to-timeline="addVideoAssetToTimeline"
+          :open-move-video="openMoveVideo"
+          :remove-asset="removeAsset"
+        />
 
-        <template v-else-if="props.kind === 'character' && characterProjectGroups.length">
-          <details
-            v-for="g in characterProjectGroups"
-            :key="g.key"
-            :class="PROJECT_GROUP_CARD_CLASS"
-          >
-            <summary
-              class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50/90 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80 border-b border-transparent group-open:border-gray-200"
-            >
-              <div class="flex items-start gap-2 min-w-0 flex-1">
-                <span
-                  class="text-gray-400 text-xs shrink-0 mt-0.5 transition-transform group-open:rotate-90"
-                  aria-hidden="true"
-                >▶</span>
-                <div class="min-w-0">
-                  <h2 class="text-sm font-semibold text-gray-900 truncate">
-                    {{ g.title }}
-                  </h2>
-                  <p v-if="g.subtitle" class="text-xs text-gray-500 mt-0.5">
-                    {{ g.subtitle }}
-                    <span class="text-gray-400"> · {{ g.items.length }} character{{ g.items.length === 1 ? '' : 's' }}</span>
-                  </p>
-                  <p v-else class="text-xs text-gray-500 mt-0.5">
-                    {{ g.items.length }} character{{ g.items.length === 1 ? '' : 's' }}
-                  </p>
-                </div>
-              </div>
-              <NuxtLink
-                v-if="g.projectId && PB_ID.test(g.projectId)"
-                :to="`/projects/${g.projectId}/characters`"
-                class="text-xs font-medium text-primary hover:underline shrink-0"
-                @click.stop
-              >
-                Open Characters step →
-              </NuxtLink>
-            </summary>
-            <ul class="divide-y divide-gray-200">
-              <li
-                v-for="a in g.items"
-                :key="a.id"
-                class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3"
-              >
-                <div class="min-w-0 flex-1 flex items-start gap-3">
-                  <NuxtLink
-                    v-if="a.fileUrl && characterProfileTo(a)"
-                    :to="characterProfileTo(a)"
-                    class="block w-14 h-14 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0 hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
-                    :aria-label="`Open profile: ${a.title}`"
-                  >
-                    <img
-                      :src="characterAssetPlaybackSrc(a)"
-                      alt=""
-                      class="w-full h-full object-cover"
-                      loading="lazy"
-                    >
-                  </NuxtLink>
-                  <button
-                    v-else-if="a.fileUrl"
-                    type="button"
-                    class="w-14 h-14 rounded-lg border border-gray-200 overflow-hidden bg-gray-100 shrink-0 cursor-zoom-in hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
-                    :aria-label="`View full image: ${a.title}`"
-                    @click="openImagePreview(a)"
-                  >
-                    <img
-                      :src="characterAssetPlaybackSrc(a)"
-                      alt=""
-                      class="w-full h-full object-cover pointer-events-none"
-                      loading="lazy"
-                    >
-                  </button>
-                  <button
-                    v-else-if="a.projectId"
-                    type="button"
-                    class="w-14 h-14 rounded-lg border border-dashed border-gray-300 bg-gray-50 shrink-0 flex flex-col items-center justify-center text-[10px] leading-tight text-gray-500 hover:border-primary/40 hover:text-primary px-1"
-                    :disabled="uploadingCharacterAssetId === a.id"
-                    @click="triggerCharacterImageUpload(a)"
-                  >
-                    {{ uploadingCharacterAssetId === a.id ? '…' : 'Add image' }}
-                  </button>
-                  <div class="min-w-0 flex-1">
-                    <NuxtLink
-                      v-if="characterProfileTo(a)"
-                      :to="characterProfileTo(a)"
-                      class="font-medium text-gray-900 hover:text-primary hover:underline"
-                    >
-                      {{ a.title }}
-                    </NuxtLink>
-                    <p v-else class="font-medium text-gray-900">{{ a.title }}</p>
-                    <p
-                      v-if="isFeaturedCharacterAsset(a)"
-                      class="text-[11px] font-semibold text-emerald-700 mt-0.5"
-                    >
-                      Featured image
-                    </p>
-                    <p v-if="scriptSourceLine(a)" class="text-xs font-medium text-primary mt-1">
-                      {{ scriptSourceLine(a) }}
-                    </p>
-                    <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
-                    <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
-                  </div>
-                </div>
-                <div class="shrink-0">
-                  <details class="relative open:z-30">
-                    <summary
-                      class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                    >
-                      Actions
-                    </summary>
-                    <div :class="ACTIONS_MENU_PANEL_CLASS">
-                      <NuxtLink
-                        v-if="characterProfileTo(a)"
-                        :to="characterProfileTo(a)"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-primary hover:bg-primary/5"
-                      >
-                        View character profile
-                      </NuxtLink>
-                      <button
-                        v-if="a.projectId"
-                        type="button"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-                        :disabled="uploadingCharacterAssetId === a.id"
-                        @click="triggerCharacterImageUpload(a)"
-                      >
-                        {{ uploadingCharacterAssetId === a.id ? 'Uploading…' : 'Upload image' }}
-                      </button>
-                      <a
-                        v-if="a.fileUrl"
-                        :href="a.fileUrl"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                      >
-                        Download file
-                      </a>
-                      <NuxtLink
-                        v-if="a.projectId"
-                        :to="`/projects/${a.projectId}/overview`"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                      >
-                        Open project
-                      </NuxtLink>
-                      <NuxtLink
-                        :to="characterCreatorTo(a)"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                      >
-                        Open in Character Creator
-                      </NuxtLink>
-                      <button
-                        v-if="a.projectId && a.fileUrl"
-                        type="button"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-                        :disabled="featuringId === a.id"
-                        @click="setFeaturedCharacterImage(a)"
-                      >
-                        {{ featuringId === a.id ? 'Setting…' : 'Set as featured' }}
-                      </button>
-                      <button
-                        type="button"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        :disabled="deletingId === a.id"
-                        @click="removeAsset(a)"
-                      >
-                        {{ deletingId === a.id ? 'Removing…' : 'Remove' }}
-                      </button>
-                    </div>
-                  </details>
-                </div>
-              </li>
-            </ul>
-          </details>
-        </template>
+        <AssetKindCharacterGroups
+          v-else-if="props.kind === 'character' && characterProjectGroups.length"
+          :groups="characterProjectGroups"
+          :deleting-id="deletingId"
+          :featuring-id="featuringId"
+          :uploading-character-asset-id="uploadingCharacterAssetId"
+          :character-profile-to="characterProfileTo"
+          :character-asset-playback-src="characterAssetPlaybackSrc"
+          :character-creator-to="characterCreatorTo"
+          :script-source-line="scriptSourceLine"
+          :format-date="formatDate"
+          :open-image-preview="openImagePreview"
+          :trigger-character-image-upload="triggerCharacterImageUpload"
+          :set-featured-character-image="setFeaturedCharacterImage"
+          :remove-asset="removeAsset"
+        />
 
-        <template v-else-if="libraryKindProjectGroups.length">
-          <details
-            v-for="g in libraryKindProjectGroups"
-            :key="g.key"
-            :class="PROJECT_GROUP_CARD_CLASS"
-          >
-            <summary
-              class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50/90 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80 border-b border-transparent group-open:border-gray-200"
-            >
-              <div class="flex items-start gap-2 min-w-0 flex-1">
-                <span
-                  class="text-gray-400 text-xs shrink-0 mt-0.5 transition-transform group-open:rotate-90"
-                  aria-hidden="true"
-                >▶</span>
-                <div class="min-w-0">
-                  <h2 class="text-sm font-semibold text-gray-900 truncate">
-                    {{ g.projectName }}
-                  </h2>
-                  <p class="text-xs text-gray-500 mt-0.5">
-                    {{ g.items.length }} {{ props.kind }}{{ g.items.length === 1 ? '' : 's' }}
-                  </p>
-                </div>
-              </div>
-              <NuxtLink
-                v-if="g.projectId && PB_ID.test(g.projectId)"
-                :to="projectHubStepTo(g.projectId)"
-                class="text-xs font-medium text-primary hover:underline shrink-0"
-                @click.stop
-              >
-                Open project →
-              </NuxtLink>
-            </summary>
-            <ul class="divide-y divide-gray-200">
-              <li
-                v-for="a in g.items"
-                :key="a.id"
-                class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 relative hover:z-10 focus-within:z-10"
-              >
-                <div class="min-w-0 flex-1 flex items-start gap-3">
-                  <button
-                    v-if="props.kind === 'storyboard' && libraryImageSrc(a)"
-                    type="button"
-                    class="w-16 h-24 rounded-lg border border-gray-200 overflow-hidden bg-gray-900 shrink-0 cursor-zoom-in hover:ring-2 hover:ring-primary/40 focus:outline-none focus:ring-2 focus:ring-primary transition-shadow"
-                    :aria-label="`View image: ${a.title}`"
-                    @click="openImagePreview(a)"
-                  >
-                    <img
-                      :src="libraryImageSrc(a)"
-                      alt=""
-                      class="w-full h-full object-contain pointer-events-none"
-                      loading="lazy"
-                    >
-                  </button>
-                  <div class="min-w-0 flex-1">
-                    <button
-                      v-if="props.kind === 'storyboard' && libraryImageSrc(a)"
-                      type="button"
-                      class="font-medium text-gray-900 text-left hover:text-primary hover:underline"
-                      @click="openImagePreview(a)"
-                    >
-                      {{ a.title }}
-                    </button>
-                    <p v-else class="font-medium text-gray-900">
-                      {{ a.title }}
-                    </p>
-                    <p v-if="scriptSourceLine(a)" class="text-xs font-medium text-primary mt-1">
-                      {{ scriptSourceLine(a) }}
-                    </p>
-                    <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
-                    <p class="text-xs text-gray-400 mt-2">{{ formatDate(a.updated || a.created) }}</p>
-                  </div>
-                </div>
-                <div class="shrink-0">
-                  <details class="relative open:z-30">
-                    <summary
-                      class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none inline-flex items-center px-3 py-1.5 rounded-lg border border-gray-300 text-sm font-medium text-gray-800 hover:bg-gray-50"
-                    >
-                      Actions
-                    </summary>
-                    <div :class="ACTIONS_MENU_PANEL_CLASS">
-                      <button
-                        v-if="props.kind === 'storyboard' && libraryImageSrc(a)"
-                        type="button"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                        @click="openImagePreview(a)"
-                      >
-                        View image
-                      </button>
-                      <button
-                        v-if="props.kind === 'script'"
-                        type="button"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-                        :disabled="readingScriptId === a.id"
-                        @click="readScriptAsset(a)"
-                      >
-                        {{ readingScriptId === a.id ? 'Loading…' : 'Read script' }}
-                      </button>
-                      <a
-                        v-if="libraryImageSrc(a)"
-                        :href="libraryImageSrc(a)"
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                      >
-                        Download file
-                      </a>
-                      <NuxtLink
-                        v-if="a.projectId"
-                        :to="`/projects/${a.projectId}/overview`"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                      >
-                        Open project
-                      </NuxtLink>
-                      <NuxtLink
-                        v-if="props.kind === 'storyboard' && a.projectId && PB_ID.test(a.projectId)"
-                        :to="`/projects/${a.projectId}/storyboard`"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-gray-800 hover:bg-gray-50"
-                      >
-                        Open storyboard
-                      </NuxtLink>
-                      <button
-                        type="button"
-                        class="block w-full text-left px-3 py-2 rounded-md text-sm text-red-700 hover:bg-red-50 disabled:opacity-50"
-                        :disabled="deletingId === a.id"
-                        @click="removeAsset(a)"
-                      >
-                        {{ deletingId === a.id ? 'Removing…' : 'Remove' }}
-                      </button>
-                    </div>
-                  </details>
-                </div>
-              </li>
-            </ul>
-          </details>
-        </template>
+        <AssetKindLibraryGroups
+          v-else-if="libraryKindProjectGroups.length"
+          :groups="libraryKindProjectGroups"
+          :kind="props.kind"
+          :deleting-id="deletingId"
+          :reading-script-id="readingScriptId"
+          :library-image-src="libraryImageSrc"
+          :script-source-line="scriptSourceLine"
+          :format-date="formatDate"
+          :project-hub-step-to="projectHubStepTo"
+          :open-image-preview="openImagePreview"
+          :open-script-reader="openScriptReader"
+          :remove-asset="removeAsset"
+        />
 
         <ul
           v-else-if="visibleItems.length"
@@ -654,222 +247,31 @@
       @change="onCharacterImageFilePicked"
     >
 
-    <Teleport to="body">
-      <div
-        v-if="expandedImage"
-        class="fixed inset-0 z-[110] bg-black/92 flex flex-col p-4 sm:p-6"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="expandedImage.title"
-        @click.self="closeImagePreview"
-      >
-        <div class="max-w-6xl w-full mx-auto flex flex-col flex-1 min-h-0">
-          <div class="flex justify-between items-center gap-3 mb-3 text-white shrink-0">
-            <p class="text-sm font-medium truncate">
-              {{ expandedImage.title }}
-            </p>
-            <div class="flex items-center gap-2 shrink-0">
-              <a
-                v-if="expandedImage.downloadUrl"
-                :href="expandedImage.downloadUrl"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
-              >
-                Download
-              </a>
-              <button
-                type="button"
-                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
-                @click="closeImagePreview"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-          <img
-            :src="expandedImage.url"
-            :alt="expandedImage.title"
-            class="w-full flex-1 min-h-[40vh] max-h-[calc(100vh-5rem)] rounded-lg object-contain mx-auto"
-          >
-        </div>
-      </div>
-
-      <div
-        v-if="expandedScript"
-        class="fixed inset-0 z-[110] flex items-end sm:items-center justify-center p-4 bg-black/50"
-        role="dialog"
-        aria-modal="true"
-        :aria-label="expandedScript.title"
-        @click.self="closeScriptReader"
-      >
-        <div
-          class="w-full max-w-3xl max-h-[min(92vh,48rem)] rounded-xl border border-gray-200 bg-white shadow-xl flex flex-col overflow-hidden"
-          @click.stop
-        >
-          <div class="flex justify-between items-start gap-3 px-5 py-4 border-b border-gray-200 shrink-0">
-            <div class="min-w-0">
-              <h2 class="text-lg font-semibold text-gray-900 truncate">
-                {{ expandedScript.title }}
-              </h2>
-              <p v-if="expandedScript.partial" class="text-xs text-amber-800 mt-1">
-                Showing synopsis only — full screenplay text was not available for this entry.
-              </p>
-            </div>
-            <button
-              type="button"
-              class="shrink-0 px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
-              @click="closeScriptReader"
-            >
-              Close
-            </button>
-          </div>
-          <pre class="flex-1 overflow-y-auto px-5 py-4 text-sm text-gray-800 whitespace-pre-wrap font-sans leading-relaxed">{{ expandedScript.text }}</pre>
-        </div>
-      </div>
-
-      <div
-        v-if="openMove"
-        class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/50"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="asset-move-title"
-        @click.self="closeMove"
-      >
-        <div
-          class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
-          @click.stop
-        >
-          <h2 id="asset-move-title" class="text-lg font-semibold text-gray-900 mb-1">
-            Move video clip
-          </h2>
-          <p v-if="moveTarget" class="text-sm text-gray-600 mb-4 truncate">
-            {{ moveTarget.title }}
-          </p>
-          <p v-if="!moveTargetProjects(moveTarget).length" class="text-sm text-amber-800 mb-4">
-            Create another project first — there is nowhere to move this clip.
-          </p>
-          <form v-else class="space-y-4" @submit.prevent="submitMove">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1" for="move-project">Destination project</label>
-              <select
-                id="move-project"
-                v-model="moveProjectId"
-                required
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm"
-              >
-                <option value="" disabled>Select project</option>
-                <option
-                  v-for="p in moveTargetProjects(moveTarget)"
-                  :key="p.id"
-                  :value="p.id"
-                >
-                  {{ p.name }}
-                </option>
-              </select>
-            </div>
-            <p class="text-xs text-gray-500">
-              The file stays in your library — only the project folder changes. Timeline clips already placed are not updated.
-            </p>
-            <p v-if="moveError" class="text-sm text-red-700">{{ moveError }}</p>
-            <div class="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
-                :disabled="moving"
-                @click="closeMove"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm disabled:opacity-50"
-                :disabled="moving"
-              >
-                {{ moving ? 'Moving…' : 'Move clip' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-
-      <div
-        v-if="openAdd"
-        class="fixed inset-0 z-[100] flex items-end sm:items-center justify-center p-4 bg-black/50"
-        role="dialog"
-        aria-modal="true"
-        :aria-labelledby="modalTitleId"
-        @click.self="closeAdd"
-      >
-        <div
-          class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
-          @click.stop
-        >
-          <h2 :id="modalTitleId" class="text-lg font-semibold text-gray-900 mb-4">
-            Add {{ addButtonLabel }}
-          </h2>
-          <p v-if="!pbProjects.length" class="text-sm text-amber-800 mb-4">
-            You need at least one project saved to your account. Create or import a project first.
-          </p>
-          <form v-else class="space-y-4" @submit.prevent="submitAdd">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1" for="asset-project">Project</label>
-              <select
-                id="asset-project"
-                v-model="addForm.projectId"
-                required
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm"
-              >
-                <option value="" disabled>Select project</option>
-                <option v-for="p in pbProjects" :key="p.id" :value="p.id">
-                  {{ p.name }}
-                </option>
-              </select>
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1" for="asset-title">Title</label>
-              <input
-                id="asset-title"
-                v-model="addForm.title"
-                type="text"
-                required
-                maxlength="500"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm"
-                placeholder="e.g. Draft v2, Reference sheet"
-              >
-            </div>
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1" for="asset-notes">Notes (optional)</label>
-              <textarea
-                id="asset-notes"
-                v-model="addForm.notes"
-                rows="4"
-                maxlength="20000"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm resize-y"
-                placeholder="Description, links, or paste text…"
-              />
-            </div>
-            <p v-if="addError" class="text-sm text-red-700">{{ addError }}</p>
-            <div class="flex justify-end gap-2 pt-2">
-              <button
-                type="button"
-                class="px-4 py-2 text-sm text-gray-600 hover:text-gray-900"
-                @click="closeAdd"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm disabled:opacity-50"
-                :disabled="adding"
-              >
-                {{ adding ? 'Saving…' : 'Save' }}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
-    </Teleport>
+    <AssetKindModals
+      :expanded-image="expandedImage"
+      :expanded-script="expandedScript"
+      :open-move="openMove"
+      :move-target="moveTarget"
+      :move-project-id="moveProjectId"
+      :move-destination-projects="moveDestinationProjects"
+      :moving="moving"
+      :move-error="moveError"
+      :open-add="openAdd"
+      :add-button-label="addButtonLabel"
+      :modal-title-id="modalTitleId"
+      :projects="pbProjects"
+      :add-form="addForm"
+      :add-error="addError"
+      :adding="adding"
+      @close-image="closeImagePreview"
+      @close-script="closeScriptReader"
+      @close-move="closeMove"
+      @submit-move="submitMove"
+      @close-add="closeAdd"
+      @submit-add="submitAdd"
+      @update:move-project-id="moveProjectId = $event"
+      @update:add-form="Object.assign(addForm, $event)"
+    />
   </div>
 </template>
 
@@ -883,17 +285,22 @@ import { visualBriefForCharacterCreator } from '~/lib/character-visual-descripti
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
 import { groupProjectAssetsByProject, sortProjectAssetsWithinProjectByKind } from '~/lib/project-asset-sort'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
+import {
+  ACTIONS_MENU_PANEL_CLASS,
+  PB_ID,
+  buildProjectAssetGroups,
+  characterMetaFromAsset,
+  dedupeCharacterAssets,
+  isFeaturedCharacterAsset,
+  isStoredProjectAsset,
+  normalizeName,
+  scriptNeedsFullImport as assetScriptNeedsFullImport,
+  scriptSourceLine as assetScriptSourceLine,
+  sortCharacterAssetsForDisplay,
+  type AssetProjectGroup
+} from '~/lib/asset-kind-display'
 import type { ProjectAsset, ProjectAssetKind } from '~/types/project-asset'
 import type { CreativeProject } from '~/types/creative-project'
-
-const PB_ID = /^[a-z0-9]{15}$/
-
-/** Opens upward so menus are not clipped at the bottom of scroll areas / viewport. */
-const ACTIONS_MENU_PANEL_CLASS =
-  'absolute right-0 bottom-full mb-2 z-50 min-w-[13rem] max-w-[calc(100vw-2rem)] max-h-[min(70vh,20rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg p-1'
-
-const PROJECT_GROUP_CARD_CLASS =
-  'mb-4 rounded-xl border border-gray-200 bg-white group overflow-visible'
 
 const props = defineProps<{
   kind: ProjectAssetKind
@@ -1043,13 +450,7 @@ function closeScriptReader () {
 
 /** Where a script file came from + whether AI import was run (scripts hub only). */
 function scriptNeedsFullImport (a: ProjectAsset): boolean {
-  if (props.kind !== 'script') return false
-  const meta = a.metadata
-  if (!meta || typeof meta !== 'object') return false
-  const source = typeof meta.source === 'string' ? meta.source : ''
-  if (source !== 'script_import') return false
-  const status = typeof meta.analysis_status === 'string' ? meta.analysis_status : ''
-  return status === 'pending' || status === ''
+  return assetScriptNeedsFullImport(props.kind, a)
 }
 
 function projectOverviewPath (a: ProjectAsset): string {
@@ -1064,68 +465,13 @@ function projectOverviewPath (a: ProjectAsset): string {
 }
 
 function scriptSourceLine (a: ProjectAsset): string {
-  if (props.kind !== 'script') return ''
-  const meta = a.metadata
-  if (!meta || typeof meta !== 'object') return ''
-  const source = typeof meta.source === 'string' ? meta.source : ''
-  const analysisStatus = typeof meta.analysis_status === 'string' ? meta.analysis_status : ''
-
-  if (source === 'script_import') {
-    if (analysisStatus === 'pending') {
-      return 'Saved from a project · run director analysis on Overview when ready'
-    }
-    if (analysisStatus === 'director_ready') {
-      return 'Director analysis done · generate scenes on Scenes, cast on Characters, panels on Storyboard'
-    }
-    if (analysisStatus === 'complete') {
-      return 'Saved from a project · scene breakdown saved (full workflow)'
-    }
-    return 'Saved from a project'
-  }
-  if (source === 'script_wizard_upload') {
-    return 'Script Wizard'
-  }
-  return ''
+  return assetScriptSourceLine(props.kind, a)
 }
 
 function firstQueryString (v: unknown): string {
   if (typeof v === 'string') return v
   if (Array.isArray(v) && typeof v[0] === 'string') return v[0]
   return ''
-}
-
-function normalizeName (v: string): string {
-  return v.trim().toLowerCase().replace(/\s+/g, ' ')
-}
-
-/** Synthetic list rows from `creative_characters` — not PATCHable as `project_assets`. */
-function isStoredProjectAsset (a: ProjectAsset): boolean {
-  return PB_ID.test(a.id) && !a.id.startsWith('charrow_')
-}
-
-function characterMetaFromAsset (a: ProjectAsset): { id: string; name: string } {
-  const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
-  const id = typeof meta.character_id === 'string' ? meta.character_id.trim() : ''
-  const name = typeof meta.character_name === 'string' ? meta.character_name.trim() : ''
-  if (name) return { id, name }
-  const baseTitle = (a.title || '').split('—')[0]?.trim() || ''
-  return { id, name: baseTitle }
-}
-
-function characterDedupeKey (a: ProjectAsset): string {
-  const pid = (a.projectId && PB_ID.test(a.projectId)) ? a.projectId : ''
-  const projectPrefix = pid ? `p:${pid}:` : 'p:__none__:'
-  const m = characterMetaFromAsset(a)
-  if (m.id && PB_ID.test(m.id)) return `${projectPrefix}id:${m.id}`
-  const n = normalizeName(m.name)
-  if (n) return `${projectPrefix}name:${n}`
-  // Last resort: keep each row distinct
-  return `${projectPrefix}asset:${a.id}`
-}
-
-function isFeaturedCharacterAsset (a: ProjectAsset): boolean {
-  const meta = a.metadata
-  return !!(meta && typeof meta === 'object' && meta.featured === true)
 }
 
 /** Profile page route when this row has a real project + character id, else '' (fall back to lightbox). */
@@ -1138,31 +484,6 @@ function characterProfileTo (a: ProjectAsset): string {
   // Pass the name so the profile can self-heal if the id is stale (deleted/recreated character).
   const q = m.name ? `?name=${encodeURIComponent(m.name)}` : ''
   return `/projects/${pid}/cast/${m.id}${q}`
-}
-
-function characterAssetRank (a: ProjectAsset): number {
-  let score = 0
-  if (a.fileUrl) score += 1_000_000
-  if (isFeaturedCharacterAsset(a)) score += 500_000
-  const ts = (a.updated || a.created || '').trim()
-  // ISO strings sort lexicographically; missing dates sink to bottom within same bucket.
-  for (let i = 0; i < ts.length; i++) score += ts.charCodeAt(i)
-  return score
-}
-
-function dedupeCharacterAssets (list: ProjectAsset[]): ProjectAsset[] {
-  if (props.kind !== 'character') return list
-  const best = new Map<string, ProjectAsset>()
-  for (const a of list) {
-    const k = characterDedupeKey(a)
-    const prev = best.get(k)
-    if (!prev) {
-      best.set(k, a)
-      continue
-    }
-    if (characterAssetRank(a) > characterAssetRank(prev)) best.set(k, a)
-  }
-  return [...best.values()]
 }
 
 function characterCreatorTo (a: ProjectAsset) {
@@ -1203,7 +524,7 @@ const visibleItems = computed(() => {
     out = out.filter(a => a.projectId === characterFilterProjectId.value)
   }
   if (!characterFilterId.value && !characterFilterName.value) {
-    return dedupeCharacterAssets(out)
+    return props.kind === 'character' ? dedupeCharacterAssets(out) : out
   }
   const wantedName = normalizeName(characterFilterName.value)
   const filtered = out.filter((a) => {
@@ -1215,69 +536,13 @@ const visibleItems = computed(() => {
     }
     return false
   })
-  return dedupeCharacterAssets(filtered)
+  return props.kind === 'character' ? dedupeCharacterAssets(filtered) : filtered
 })
-
-type AssetProjectGroup = {
-  key: string
-  projectId: string
-  title: string
-  subtitle: string
-  items: ProjectAsset[]
-}
 
 type AssetSceneGroup = {
   key: string
   title: string
   items: ProjectAsset[]
-}
-
-function sortCharacterAssetsForDisplay (list: ProjectAsset[]): ProjectAsset[] {
-  return [...list].sort((a, b) => {
-    const af = isFeaturedCharacterAsset(a) ? 1 : 0
-    const bf = isFeaturedCharacterAsset(b) ? 1 : 0
-    if (bf !== af) return bf - af
-    const ta = a.updated || a.created || ''
-    const tb = b.updated || b.created || ''
-    return tb.localeCompare(ta)
-  })
-}
-
-function buildProjectAssetGroups (
-  list: ProjectAsset[],
-  sortItems: (rows: ProjectAsset[]) => ProjectAsset[]
-): AssetProjectGroup[] {
-  const byPid = new Map<string, ProjectAsset[]>()
-  for (const a of list) {
-    const pid = (a.projectId && PB_ID.test(a.projectId)) ? a.projectId : ''
-    const key = pid || '__unassigned__'
-    const cur = byPid.get(key) || []
-    cur.push(a)
-    byPid.set(key, cur)
-  }
-  const groups: AssetProjectGroup[] = []
-  for (const [key, raw] of byPid.entries()) {
-    const pid = key === '__unassigned__' ? '' : key
-    const nameFromAsset = raw.find(a => a.projectName)?.projectName?.trim() || ''
-    const nameFromStore =
-      pid ? (projects.value.find(p => p.id === pid)?.name || '').trim() : ''
-    const projectName = nameFromAsset || nameFromStore || (pid ? 'Project' : '')
-    const title = pid ? projectName || 'Project' : 'No project assigned'
-    const subtitle = pid ? `Project id: ${pid}` : 'These entries are not linked to a PocketBase project id.'
-    groups.push({
-      key,
-      projectId: pid,
-      title,
-      subtitle,
-      items: sortItems(raw)
-    })
-  }
-  groups.sort((a, b) => {
-    if (!a.projectId && b.projectId) return 1
-    if (!b.projectId && a.projectId) return -1
-    return a.title.localeCompare(b.title)
-  })
-  return groups
 }
 
 function sortVideoAssetsForDisplay (list: ProjectAsset[]): ProjectAsset[] {
@@ -1296,12 +561,12 @@ function videoSceneGroupsForProject (group: AssetProjectGroup): AssetSceneGroup[
 
 const characterProjectGroups = computed<AssetProjectGroup[]>(() => {
   if (props.kind !== 'character') return []
-  return buildProjectAssetGroups(visibleItems.value, sortCharacterAssetsForDisplay)
+  return buildProjectAssetGroups(visibleItems.value, projects.value, sortCharacterAssetsForDisplay)
 })
 
 const videoProjectGroups = computed<AssetProjectGroup[]>(() => {
   if (props.kind !== 'video') return []
-  return buildProjectAssetGroups(visibleItems.value, sortVideoAssetsForDisplay)
+  return buildProjectAssetGroups(visibleItems.value, projects.value, sortVideoAssetsForDisplay)
 })
 
 watch(
@@ -1397,6 +662,8 @@ function moveTargetProjects (a: ProjectAsset | null): CreativeProject[] {
   if (!a?.projectId) return pbProjects.value
   return pbProjects.value.filter(p => p.id !== a.projectId)
 }
+
+const moveDestinationProjects = computed(() => moveTargetProjects(moveTarget.value))
 
 function openMoveVideo (a: ProjectAsset) {
   moveTarget.value = a

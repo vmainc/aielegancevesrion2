@@ -451,6 +451,9 @@ async function createCollections(adminEmail, adminPassword) {
     } catch (_missing) {
       try {
         const creativeProjectsId = await getCollectionIdByName(pb, 'creative_projects');
+        const creativeScenesId = await getCollectionIdByName(pb, 'creative_scenes');
+        const creativeShotsId = await getCollectionIdByName(pb, 'creative_shots');
+        const creativeCharactersId = await getCollectionIdByName(pb, 'creative_characters');
         await createCollectionThenRules(pb, {
           name: 'project_assets',
           type: 'base',
@@ -502,6 +505,42 @@ async function createCollections(adminEmail, adminPassword) {
             { name: 'title', type: 'text', required: true, options: { min: 1, max: 500 } },
             { name: 'notes', type: 'text', required: false, options: { max: 20000 } },
             { name: 'metadata', type: 'json', required: false },
+            {
+              name: 'scene',
+              type: 'relation',
+              required: false,
+              options: {
+                collectionId: creativeScenesId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['heading']
+              }
+            },
+            {
+              name: 'shot',
+              type: 'relation',
+              required: false,
+              options: {
+                collectionId: creativeShotsId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['title']
+              }
+            },
+            {
+              name: 'character',
+              type: 'relation',
+              required: false,
+              options: {
+                collectionId: creativeCharactersId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
             {
               name: 'sort_order',
               type: 'number',
@@ -844,6 +883,151 @@ async function createCollections(adminEmail, adminPassword) {
       console.log('⚠️  Could not ensure Production Bible collections:', e.message || e, '\n');
     }
 
+    // Guide messages + creative decisions — persistent memory (Phase 1)
+    console.log('💬 Ensuring guide_messages and creative_decisions collections...');
+    try {
+      const creativeProjectsId = await getCollectionIdByName(pb, 'creative_projects');
+
+      console.log('  Ensuring "guide_messages"...');
+      try {
+        await pb.collections.getFirstListItem('name="guide_messages"');
+        console.log('  ⚠️  "guide_messages" already exists, skipping...');
+      } catch (_missing) {
+        await createCollectionThenRules(pb, {
+          name: 'guide_messages',
+          type: 'base',
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'project',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: creativeProjectsId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            { name: 'client_id', type: 'text', required: true, options: { max: 50 } },
+            {
+              name: 'role',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [{ value: 'user' }, { value: 'assistant' }]
+              }
+            },
+            { name: 'content', type: 'text', required: true, options: { max: 12000 } },
+            { name: 'suggestions', type: 'json', required: false },
+            { name: 'created_at_client', type: 'text', required: false, options: { max: 50 } }
+          ]
+        });
+        console.log('  ✅ "guide_messages" created');
+      }
+
+      console.log('  Ensuring "creative_decisions"...');
+      try {
+        await pb.collections.getFirstListItem('name="creative_decisions"');
+        console.log('  ⚠️  "creative_decisions" already exists, skipping...');
+      } catch (_missing) {
+        await createCollectionThenRules(pb, {
+          name: 'creative_decisions',
+          type: 'base',
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '',
+          deleteRule: '',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'project',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: creativeProjectsId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            { name: 'actor_type', type: 'text', required: true, options: { max: 50 } },
+            { name: 'actor_id', type: 'text', required: false, options: { max: 200 } },
+            { name: 'source_type', type: 'text', required: true, options: { max: 100 } },
+            { name: 'source_id', type: 'text', required: false, options: { max: 200 } },
+            {
+              name: 'target_type',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [
+                  { value: 'project' },
+                  { value: 'director' },
+                  { value: 'character' }
+                ]
+              }
+            },
+            { name: 'target_id', type: 'text', required: true, options: { max: 200 } },
+            { name: 'field', type: 'text', required: true, options: { max: 200 } },
+            { name: 'old_value', type: 'text', required: false, options: { max: 50000 } },
+            { name: 'new_value', type: 'text', required: true, options: { max: 50000 } },
+            { name: 'rationale', type: 'text', required: false, options: { max: 2000 } },
+            {
+              name: 'status',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [
+                  { value: 'applied' },
+                  { value: 'rejected' },
+                  { value: 'superseded' }
+                ]
+              }
+            },
+            { name: 'applied_at', type: 'date', required: true }
+          ]
+        });
+        console.log('  ✅ "creative_decisions" created');
+      }
+
+      console.log('✅ Guide memory collections ensured\n');
+    } catch (e) {
+      console.log('⚠️  Could not ensure guide memory collections:', e.message || e, '\n');
+    }
+
     // Project timelines — PASS 28 cloud persistence
     console.log('🎬 Ensuring project_timelines collection...');
     try {
@@ -911,6 +1095,7 @@ async function createCollections(adminEmail, adminPassword) {
     console.log('  ✓ project_assets - Per-project assets (scripts, characters, storyboards, video, files)');
     console.log('  ✓ creative_scripts - Standalone Script Wizard library');
     console.log('  ✓ bible_entities / bible_facts / bible_relationships - Production Bible foundation (if created this run)');
+    console.log('  ✓ guide_messages / creative_decisions - Project Guide chat + decision log (if created this run)');
     console.log('  ✓ project_timelines - Per-project timeline documents (if created this run)');
     console.log('  ✓ users - Created automatically by PocketBase');
     console.log('\n✨ You can now use the application!');

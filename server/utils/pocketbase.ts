@@ -2,6 +2,16 @@ import PocketBase from 'pocketbase'
 import { createError } from 'h3'
 import { resolvePocketBaseAdmin } from '~/server/utils/server-env'
 
+const isDev = process.env.NODE_ENV !== 'production'
+
+function pbDebug (...args: unknown[]) {
+  if (isDev) console.log(...args)
+}
+
+function pbWarn (...args: unknown[]) {
+  if (isDev) console.warn(...args)
+}
+
 // Cache the authenticated PocketBase instance to avoid rate limiting
 let cachedPocketBase: PocketBase | null = null
 let authPromise: Promise<PocketBase> | null = null
@@ -48,16 +58,11 @@ export async function getAuthenticatedPocketBase() {
       // Authenticate as admin if credentials are provided (runtimeConfig and/or process.env)
       if (admin.email && admin.password) {
         try {
-          console.log('🔐 Attempting admin authentication...')
-          console.log('   Email:', admin.email ? `${admin.email.substring(0, 3)}***` : 'not set')
-          console.log('   Email length:', admin.email?.length || 0)
-          console.log('   Password configured:', !!admin.password)
-          console.log('   Password length:', admin.password?.length || 0)
-          console.log('   PocketBase URL:', pbUrl)
+          pbDebug('PocketBase admin authentication starting')
           
           // Validate credentials format
           if (!admin.email.includes('@')) {
-            console.error('⚠️  Warning: Admin email does not contain @ symbol')
+            console.error('PocketBase admin email does not contain @ symbol')
           }
           
           // PocketBase 0.23+ uses _superusers; legacy pb.admins.* targets removed API
@@ -66,10 +71,7 @@ export async function getAuthenticatedPocketBase() {
             admin.password
           )
           
-          const authData = pb.authStore.model
-          console.log('✅ PocketBase admin authenticated successfully')
-          console.log('   Admin ID:', authData?.id || 'unknown')
-          console.log('   Token valid:', pb.authStore.isValid)
+          pbDebug('PocketBase admin authenticated successfully')
           
           // Cache the authenticated instance
           cachedPocketBase = pb
@@ -77,16 +79,7 @@ export async function getAuthenticatedPocketBase() {
           authPromise = null
           return pb
         } catch (error: any) {
-          console.error('❌ Failed to authenticate PocketBase admin')
-          console.error('   Error message:', error.message)
-          console.error('   Error status:', error.status)
-          console.error('   Error statusCode:', error.statusCode)
-          console.error('   Error response:', error.response)
-          console.error('   Error data:', error.data)
-          console.error('   PocketBase URL:', pbUrl)
-          console.error('   Admin email configured:', !!admin.email)
-          console.error('   Admin email (first 3 chars):', admin.email ? admin.email.substring(0, 3) + '***' : 'not set')
-          console.error('   Admin password configured:', !!admin.password)
+          console.error('Failed to authenticate PocketBase admin:', error.message || error)
           
           // Extract more detailed error information
           let detailedMessage = error.message || 'Unknown error'
@@ -108,9 +101,7 @@ export async function getAuthenticatedPocketBase() {
           
           // Handle rate limiting specially
           if (error.status === 429) {
-            console.error('⚠️  Rate limit detected (429) - Too many authentication requests')
-            console.error('   This should be resolved with authentication caching')
-            console.error('   Waiting a moment before retrying...')
+            pbWarn('PocketBase rate limit (429) — waiting before retry')
             
             // Wait a bit before clearing promise (allow retry)
             await new Promise(resolve => setTimeout(resolve, 1000))
@@ -123,9 +114,7 @@ export async function getAuthenticatedPocketBase() {
           }
           
           if (pbUrl.includes('pockethost.io') || pbUrl.includes('pockethost')) {
-            console.error('⚠️  PocketHost-style URL detected')
-            console.error('   If credentials work in the admin UI, check env values for stray whitespace')
-            console.error('   and that POCKETBASE_ADMIN_* are available to the Node server process.')
+            pbWarn('PocketHost URL detected — verify POCKETBASE_ADMIN_* env vars')
           }
           
           // Clear cache on error
@@ -139,12 +128,9 @@ export async function getAuthenticatedPocketBase() {
           })
         }
       } else {
-        const hasEmail = !!admin.email
-        const hasPassword = !!admin.password
-        console.warn('⚠️  PocketBase admin credentials not configured.')
-        console.warn(`   Email configured: ${hasEmail}, Password configured: ${hasPassword}`)
-        console.warn('   Set POCKETBASE_ADMIN_EMAIL and POCKETBASE_ADMIN_PASSWORD environment variables.')
-        console.warn('   Server-side operations may fail without admin authentication.')
+        pbWarn(
+          'PocketBase admin credentials not configured — set POCKETBASE_ADMIN_EMAIL and POCKETBASE_ADMIN_PASSWORD'
+        )
         
         authPromise = null
         throw createError({

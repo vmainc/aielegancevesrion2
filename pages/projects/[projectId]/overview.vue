@@ -64,112 +64,26 @@
       v-else-if="hasConcept"
       class="rounded-xl border border-gray-200 bg-white shadow-sm p-6 sm:p-8 mb-10"
     >
-      <div
+      <OverviewScriptAnalyzePanel
         v-if="screenplayWorkflowEnabled && canCloudImport && hasWorkflowScreenplaySaved"
-        class="mb-6 rounded-xl border-2 border-primary/40 bg-primary/10 p-4 sm:p-5"
-      >
-        <p class="text-xs font-bold uppercase tracking-wide text-primary mb-2">
-          Screenplay ready
-        </p>
-        <p class="text-sm text-gray-700 mb-3">
-          Run analysis for a cold read of your saved screenplay — synopsis, tone, three-act map, and director notes faithful to what you wrote (no invented story beats).
-        </p>
-        <div class="mt-5 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-          <p class="text-sm font-semibold text-gray-900 mb-2">Choose your guide/director model</p>
-          <p class="text-xs text-gray-600 mb-3">
-            <template v-if="analysisCompareMode">
-              Pick one or more models, compare outputs, then choose which one should guide this project.
-            </template>
-            <template v-else>
-              Pick the model that will analyze your screenplay and build synopsis, treatment, and director notes.
-            </template>
-          </p>
-          <div v-if="!analysisCompareMode" class="flex flex-wrap gap-3 mb-3">
-            <label
-              v-for="m in modelOptions"
-              :key="`analyze-ready-${m.id}`"
-              class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-            >
-              <input
-                v-model="selectedAnalysisModelId"
-                type="radio"
-                name="analyze-model-ready"
-                :value="m.id"
-                class="border-gray-300 text-primary focus:ring-primary"
-              >
-              <span class="text-sm text-gray-800">{{ m.label }}</span>
-            </label>
-          </div>
-          <div v-else class="flex flex-wrap gap-3 mb-3">
-            <label
-              v-for="m in modelOptions"
-              :key="`analyze-ready-compare-${m.id}`"
-              class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-            >
-              <input
-                v-model="selectedAnalysisModelIds"
-                type="checkbox"
-                :value="m.id"
-                class="rounded border-gray-300 text-primary focus:ring-primary"
-              >
-              <span class="text-sm text-gray-800">{{ m.label }}</span>
-            </label>
-          </div>
-          <p class="text-xs mb-4">
-            <button
-              type="button"
-              class="text-primary font-medium hover:underline"
-              @click="toggleAnalysisCompareMode"
-            >
-              {{ analysisCompareMode ? 'Use single model instead' : 'Compare multiple models…' }}
-            </button>
-          </p>
-          <button
-            type="button"
-            class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-            :disabled="overviewPreviewing || overviewAnalyzing || (analysisCompareMode ? !selectedAnalysisModelIds.length : !selectedAnalysisModelId)"
-            @click="onAnalyzeScriptClick"
-          >
-            {{ overviewPreviewing || overviewAnalyzing ? 'Analyzing script…' : 'Analyze script' }}
-          </button>
-          <p v-if="overviewImportError" class="mt-3 text-sm text-red-700">{{ overviewImportError }}</p>
-        </div>
-        <div
-          v-if="overviewAnalyzing"
-          class="mt-4 rounded-xl border border-primary/20 bg-white/70 p-5"
-        >
-          <FilmReelLoader
-            size="sm"
-            label="Analyzing script"
-            sub-label="Reading your screenplay — synopsis, observations, three-act map, director notes…"
-          />
-        </div>
-        <div v-if="analysisCandidates.length" class="mt-5 grid gap-4">
-          <article
-            v-for="c in analysisCandidates"
-            :key="`ready-candidate-${c.modelId}`"
-            class="rounded-xl border border-gray-200 bg-white p-4"
-          >
-            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-              <p class="text-sm font-semibold text-gray-900">{{ c.label }}</p>
-              <button
-                v-if="!c.error"
-                type="button"
-                class="px-3 py-1.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
-                :disabled="overviewAnalyzing"
-                @click="applyCandidateModel(c.modelId)"
-              >
-                Use this analysis
-              </button>
-            </div>
-            <p v-if="c.error" class="text-sm text-red-700">{{ c.error }}</p>
-            <template v-else>
-              <p class="text-xs text-gray-500 mb-2">{{ c.genre || '—' }} · {{ c.tone || '—' }}</p>
-              <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ c.synopsis || 'No synopsis returned.' }}</p>
-            </template>
-          </article>
-        </div>
-      </div>
+        class="mb-6"
+        variant="ready"
+        :model-options="modelOptions"
+        :compare-mode="analysisCompareMode"
+        :selected-model-id="selectedAnalysisModelId"
+        :selected-model-ids="selectedAnalysisModelIds"
+        :analyzing="overviewAnalyzing"
+        :previewing="overviewPreviewing"
+        :error="overviewImportError"
+        :candidates="analysisCandidates"
+        :disabled="false"
+        radio-name="analyze-model-ready"
+        @analyze="onAnalyzeScriptClick"
+        @toggle-compare="toggleAnalysisCompareMode"
+        @apply-candidate="applyCandidateModel"
+        @update:selected-model-id="selectedAnalysisModelId = $event"
+        @update:selected-model-ids="selectedAnalysisModelIds = $event"
+      />
       <p class="text-xs font-semibold uppercase tracking-wide text-primary mb-3">Synopsis</p>
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-6">
         {{ project?.name }}
@@ -193,136 +107,22 @@
       </div>
 
       <template v-if="showImportedScriptOverview">
-        <div class="border-t border-gray-100 pt-6 mt-6">
-          <h2 class="text-lg font-semibold text-gray-900 mb-2">Three-act breakdown</h2>
-          <p class="text-sm text-gray-600 mb-3">
-            Structural map from your screenplay as written — not a new version of the story.
-          </p>
-          <pre
-            v-if="threeActBreakdown"
-            class="whitespace-pre-wrap font-sans text-gray-800 text-sm leading-relaxed rounded-lg border border-gray-200 bg-gray-50 p-4"
-          >{{ threeActBreakdown }}</pre>
-          <p v-else class="text-sm text-gray-500">
-            No act breakdown stored yet. Run director analysis again from Overview after saving your screenplay.
-          </p>
-        </div>
-
-        <div class="border-t border-gray-100 pt-6 mt-6">
-          <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
-            <h2 class="text-lg font-semibold text-gray-900">Comparable films</h2>
-            <button
-              v-if="canLoadImportedMovies"
-              type="button"
-              class="px-3 py-1.5 text-sm rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-900 disabled:opacity-50"
-              :disabled="loadingOverviewMovies"
-              @click="loadOverviewMovies"
-            >
-              {{ loadingOverviewMovies ? 'Refreshing…' : 'Refresh' }}
-            </button>
-          </div>
-          <p class="text-sm text-gray-600 mb-4">
-            Posters and ratings from OMDb, using titles extracted from your treatment — mirrors Script Wizard.
-          </p>
-          <p
-            v-if="!canLoadImportedMovies"
-            class="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4"
-          >
-            Sign in with a cloud-saved project to load film metadata.
-          </p>
-          <div v-else-if="loadingOverviewMovies" class="py-4">
-            <FilmReelLoader
-              size="sm"
-              label="Cueing comparable films"
-              sub-label="Looking up titles from your analysis…"
-            />
-          </div>
-          <p v-else-if="overviewMoviesError" class="text-sm text-red-700">{{ overviewMoviesError }}</p>
-          <ul v-else-if="overviewMovies.length" class="grid sm:grid-cols-2 gap-4">
-            <li
-              v-for="m in overviewMovies"
-              :key="m.imdbId || `${m.title}-${m.year}`"
-              class="rounded-xl border border-gray-200 bg-gray-50 p-4"
-            >
-              <div class="flex gap-3">
-                <img
-                  v-if="m.poster && m.poster !== 'N/A'"
-                  :src="m.poster"
-                  alt=""
-                  class="w-16 h-24 object-cover rounded border border-gray-200 shrink-0"
-                >
-                <div class="min-w-0">
-                  <p class="font-semibold text-gray-900 truncate">{{ m.title }}</p>
-                  <p class="text-xs text-gray-500 mb-1">{{ m.year || '—' }} · {{ m.genre || '—' }}</p>
-                  <p class="text-xs text-gray-600 line-clamp-2 mb-1">{{ m.plot || 'No plot from OMDb.' }}</p>
-                  <p class="text-xs text-gray-500">IMDb: {{ m.imdbRating || '—' }} · RT: {{ m.rottenTomatoes || '—' }}</p>
-                </div>
-              </div>
-            </li>
-          </ul>
-          <p v-else class="text-sm text-gray-500">
-            <template v-if="overviewOmdbConfigured === false">
-              Comparable film posters use OMDb. Add <code class="text-xs bg-gray-100 px-1 rounded">OMDB_API_KEY</code> to the server environment, redeploy, then tap Refresh.
-            </template>
-            <template v-else-if="!overviewCandidates.length">
-              No comparable titles were found in your treatment yet. Run director analysis again after saving your screenplay so the “Comparable films” block is filled in.
-            </template>
-            <template v-else-if="overviewOmdbConfigured === true">
-              OMDb is configured, but no posters or ratings came back for the extracted titles. Check spelling/year, or try Refresh after a new analysis.
-            </template>
-            <template v-else>
-              No posters or ratings yet. Set <code class="text-xs bg-gray-100 px-1 rounded">OMDB_API_KEY</code> on the server if you have not, redeploy, then Refresh; if the key is already set, run director analysis again and check the extracted titles below.
-            </template>
-          </p>
-          <p v-if="overviewMoviesWarning" class="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mt-3">
-            {{ overviewMoviesWarning }}
-          </p>
-          <p v-if="overviewCandidates.length && !overviewMovies.length && !loadingOverviewMovies" class="text-xs text-gray-500 mt-3">
-            Extracted titles: {{ overviewCandidates.map(c => c.title).join(', ') }}
-          </p>
-        </div>
-
-        <div class="border-t border-gray-100 pt-6 mt-6">
-          <div class="flex flex-wrap items-center justify-between gap-3 mb-2">
-            <h2 class="text-lg font-semibold text-gray-900">Characters from your screenplay</h2>
-            <button
-              v-if="canLoadImportedMovies"
-              type="button"
-              class="px-3 py-1.5 text-sm rounded-lg bg-gray-200 hover:bg-gray-300 text-gray-900 disabled:opacity-50"
-              :disabled="loadingOverviewCharacters"
-              @click="loadOverviewCharacters"
-            >
-              {{ loadingOverviewCharacters ? 'Refreshing…' : 'Refresh' }}
-            </button>
-          </div>
-          <p class="text-sm text-gray-600 mb-4">
-            Each row is a speaking or named role from your uploaded script, with a short description produced by the same AI import that built your synopsis and treatment.
-          </p>
-          <p
-            v-if="!canLoadImportedMovies"
-            class="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4"
-          >
-            Sign in with a cloud-saved project to load the character table.
-          </p>
-          <ProjectCharactersDescriptionTable
-            v-else
-            :characters="overviewCharacters"
-            :loading="loadingOverviewCharacters"
-            :error="overviewCharactersError || null"
-            heading="Cast"
-            subheading="Use Characters → “Build / refresh cast from script” after director analysis; descriptions follow your latest synopsis, treatment, and Director-tab notes."
-            empty-hint="No cast rows loaded yet. Open Characters and run “Build / refresh cast from script” (or add rows manually)."
-            aria-label="Characters from imported screenplay"
-          />
-          <p class="text-sm text-gray-500 mt-4">
-            <NuxtLink
-              :to="`/projects/${projectId}/characters`"
-              class="text-primary font-medium hover:underline"
-            >
-              Open full Characters step
-            </NuxtLink>
-            for screen-share chart and asset links.
-          </p>
-        </div>
+        <OverviewImportedInsights
+          :project-id="projectId"
+          :three-act-breakdown="threeActBreakdown"
+          :can-load="canLoadImportedMovies"
+          :candidates="importedInsights.candidates"
+          :movies="importedInsights.movies"
+          :loading-movies="importedInsights.loadingMovies"
+          :movies-error="importedInsights.moviesError"
+          :omdb-configured="importedInsights.omdbConfigured"
+          :movies-warning="importedInsights.moviesWarning"
+          :characters="importedInsights.characters"
+          :loading-characters="importedInsights.loadingCharacters"
+          :characters-error="importedInsights.charactersError"
+          @refresh-movies="importedInsights.loadMovies"
+          @refresh-characters="importedInsights.loadCharacters"
+        />
 
         <p class="text-sm text-gray-500 mt-6 pt-6 border-t border-gray-100">
           <template v-if="showImportedScriptOverview">
@@ -574,103 +374,23 @@
             v-if="hasWorkflowScreenplaySaved && canCloudImport"
             class="mt-4"
           >
-            <div class="mt-4 rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
-              <p class="text-sm font-semibold text-gray-900 mb-2">Choose your guide/director model</p>
-              <p class="text-xs text-gray-600 mb-3">
-                <template v-if="analysisCompareMode">
-                  Pick one or more models, compare outputs, then choose which one should guide this project.
-                </template>
-                <template v-else>
-                  Pick the model that will analyze your screenplay and build synopsis, treatment, and director notes.
-                </template>
-              </p>
-              <div v-if="!analysisCompareMode" class="flex flex-wrap gap-3 mb-3">
-                <label
-                  v-for="m in modelOptions"
-                  :key="`analyze-generator-${m.id}`"
-                  class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-                >
-                  <input
-                    v-model="selectedAnalysisModelId"
-                    type="radio"
-                    name="analyze-model-generator"
-                    :value="m.id"
-                    class="border-gray-300 text-primary focus:ring-primary"
-                  >
-                  <span class="text-sm text-gray-800">{{ m.label }}</span>
-                </label>
-              </div>
-              <div v-else class="flex flex-wrap gap-3 mb-3">
-                <label
-                  v-for="m in modelOptions"
-                  :key="`analyze-generator-compare-${m.id}`"
-                  class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-                >
-                  <input
-                    v-model="selectedAnalysisModelIds"
-                    type="checkbox"
-                    :value="m.id"
-                    class="rounded border-gray-300 text-primary focus:ring-primary"
-                  >
-                  <span class="text-sm text-gray-800">{{ m.label }}</span>
-                </label>
-              </div>
-              <p class="text-xs mb-4">
-                <button
-                  type="button"
-                  class="text-primary font-medium hover:underline"
-                  @click="toggleAnalysisCompareMode"
-                >
-                  {{ analysisCompareMode ? 'Use single model instead' : 'Compare multiple models…' }}
-                </button>
-              </p>
-              <button
-                type="button"
-                class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
-                :disabled="overviewPreviewing || overviewAnalyzing || (analysisCompareMode ? !selectedAnalysisModelIds.length : !selectedAnalysisModelId)"
-                @click="onAnalyzeScriptClick"
-              >
-                {{ overviewPreviewing || overviewAnalyzing ? 'Analyzing script…' : 'Analyze script' }}
-              </button>
-              <p v-if="overviewImportError" class="mt-3 text-sm text-red-700">{{ overviewImportError }}</p>
-              <div
-                v-if="overviewPreviewing || overviewAnalyzing"
-                class="mt-4 rounded-xl border border-primary/20 bg-primary/5 p-5"
-              >
-                <FilmReelLoader
-                  size="sm"
-                  :label="overviewPreviewing ? 'Comparing script analyses' : 'Analyzing script'"
-                  :sub-label="overviewPreviewing
-                    ? 'Running selected models in parallel and preparing synopsis options…'
-                    : 'Applying your selected model to build synopsis, treatment, and director notes…'"
-                />
-              </div>
-              <div v-if="analysisCandidates.length" class="mt-4 grid gap-3">
-                <article
-                  v-for="c in analysisCandidates"
-                  :key="`generator-candidate-${c.modelId}`"
-                  class="rounded-xl border border-gray-200 bg-white p-4"
-                >
-                  <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-                    <p class="text-sm font-semibold text-gray-900">{{ c.label }}</p>
-                    <button
-                      v-if="!c.error"
-                      type="button"
-                      class="px-3 py-1.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-xs font-semibold transition-colors disabled:opacity-50"
-                      :disabled="overviewAnalyzing"
-                      @click="applyCandidateModel(c.modelId)"
-                    >
-                      Use this analysis
-                    </button>
-                  </div>
-                  <p v-if="c.error" class="text-sm text-red-700">{{ c.error }}</p>
-                  <template v-else>
-                    <p class="text-xs text-gray-500 mb-2">{{ c.genre || '—' }} · {{ c.tone || '—' }}</p>
-                    <p class="text-sm text-gray-700 whitespace-pre-wrap">{{ c.synopsis || 'No synopsis returned.' }}</p>
-                  </template>
-                </article>
-              </div>
-            </div>
+            <OverviewScriptAnalyzePanel
+              :model-options="modelOptions"
+              :compare-mode="analysisCompareMode"
+              :selected-model-id="selectedAnalysisModelId"
+              :selected-model-ids="selectedAnalysisModelIds"
+              :analyzing="overviewAnalyzing"
+              :previewing="overviewPreviewing"
+              :error="overviewImportError"
+              :candidates="analysisCandidates"
+              :disabled="false"
+              radio-name="analyze-model-generator"
+              @analyze="onAnalyzeScriptClick"
+              @toggle-compare="toggleAnalysisCompareMode"
+              @apply-candidate="applyCandidateModel"
+              @update:selected-model-id="selectedAnalysisModelId = $event"
+              @update:selected-model-ids="selectedAnalysisModelIds = $event"
+            />
           </div>
         </div>
         <button
@@ -893,7 +613,6 @@ import {
   stripConceptMetadataMarkers,
   upsertDurationMarkerInConceptNotes
 } from '~/lib/format-stored-concept'
-import { defaultDurationSecondsForProject } from '~/lib/project-duration-budget'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import { pollScriptAnalyzeJob } from '~/lib/poll-script-analyze-job'
 import type {
@@ -901,20 +620,8 @@ import type {
   StoryOwnIdeaApplyPayload
 } from '~/components/story/StoryIdeaGeneratorPanel.vue'
 import type { ConceptGeneratorResultItem, GeneratedConceptItem } from '~/types/concept-generator'
-import type { CreativeCharacter, CreativeProject } from '~/types/creative-project'
+import type { CreativeProject } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
-
-type OverviewComparableCandidate = { title: string; year?: string }
-type OverviewOmdbMovie = {
-  title: string
-  year?: string
-  imdbId?: string
-  genre?: string
-  plot?: string
-  poster?: string
-  imdbRating?: string
-  rottenTomatoes?: string
-}
 
 const { activeProject, activeProjectId, updateProject, registerImportedProject, withProjectQuery, clientReady } =
   useCreativeProject()
@@ -926,18 +633,6 @@ const PB_ID = /^[a-z0-9]{15}$/
 
 const projectId = activeProjectId
 const project = activeProject
-
-const overviewCandidates = ref<OverviewComparableCandidate[]>([])
-const overviewMovies = ref<OverviewOmdbMovie[]>([])
-const loadingOverviewMovies = ref(false)
-const overviewMoviesError = ref('')
-/** false = server has no OMDB_API_KEY; true = key present; null = not loaded yet */
-const overviewOmdbConfigured = ref<boolean | null>(null)
-const overviewMoviesWarning = ref('')
-
-const overviewCharacters = ref<CreativeCharacter[]>([])
-const loadingOverviewCharacters = ref(false)
-const overviewCharactersError = ref('')
 
 const showImportedScriptOverview = computed(() => projectStorySatisfiedByScriptImport(project.value))
 
@@ -951,6 +646,12 @@ const canLoadImportedMovies = computed(
     PB_ID.test(projectId.value) &&
     showImportedScriptOverview.value
 )
+
+const importedInsights = reactive(useOverviewImportedInsights({
+  projectId,
+  canLoad: canLoadImportedMovies,
+  showImported: showImportedScriptOverview
+}))
 
 const isLocalProject = computed(() => !PB_ID.test(projectId.value))
 
@@ -1178,7 +879,7 @@ async function runScriptAnalyzeFromOverview (chosenModelId?: string) {
     if (polled.scriptAsset && !polled.scriptAsset.ok) {
       toast.showToast(polled.scriptAsset.message || 'Project updated; asset notes may be incomplete.', 'info')
     }
-    void loadOverviewCharacters()
+    void importedInsights.loadCharacters()
   } catch (e: unknown) {
     overviewImportError.value = formatApiFetchError(e, 'AI import failed')
     toast.showToast(overviewImportError.value, 'error')
@@ -1241,9 +942,12 @@ const conceptResults = ref<ConceptGeneratorResultItem[] | null>(null)
 const applyingModel = ref<string | null>(null)
 const showGeneratorForm = ref(true)
 const deletingConcept = ref(false)
-const targetDurationSeconds = ref<string>('')
-const targetDurationTouched = ref(false)
 const scratchIdeaPanelRef = ref<{ clearApplying: () => void; clearResults: () => void } | null>(null)
+
+const {
+  parsedTargetDurationSeconds,
+  persistTargetDuration
+} = useProjectTargetDuration(projectId)
 
 const conceptSynopsisDisplay = computed(() => {
   const p = project.value
@@ -1344,153 +1048,14 @@ watch(hasConcept, (has) => {
   showGeneratorForm.value = !has
 }, { immediate: true })
 
-function syncTargetDurationFromProject (forceDefault = false) {
-  const p = project.value
-  if (!p) {
-    targetDurationSeconds.value = ''
-    return
-  }
-  if (typeof p.targetDurationSeconds === 'number' && p.targetDurationSeconds > 0) {
-    targetDurationSeconds.value = String(p.targetDurationSeconds)
-    return
-  }
-  if (!targetDurationTouched.value || forceDefault) {
-    const def = defaultDurationSecondsForProject({
-      goal: p.goal,
-      targetLength: p.targetLength
-    })
-    targetDurationSeconds.value = def != null ? String(def) : ''
-  }
-}
-
-watch(projectId, () => {
-  targetDurationTouched.value = false
-  syncTargetDurationFromProject(true)
-}, { immediate: true })
-
-watch(
-  () => project.value?.targetDurationSeconds,
-  (v) => {
-    if (targetDurationTouched.value) return
-    if (typeof v === 'number' && v > 0) {
-      targetDurationSeconds.value = String(v)
-    }
-  }
-)
-
-function parsedTargetDurationSeconds (): number | null {
-  const raw = String(targetDurationSeconds.value || '').trim()
-  if (!raw) return null
-  const n = Math.floor(Number(raw))
-  if (!Number.isFinite(n) || n < 15 || n > 3600) return null
-  return n
-}
-
-function onTargetDurationInput () {
-  targetDurationTouched.value = true
-}
-
-async function persistTargetDuration () {
-  const id = projectId.value
-  if (!id || !canCloudImport.value) return
-  const n = parsedTargetDurationSeconds()
-  try {
-    await updateProject(id, {
-      targetDurationSeconds: n
-    })
-    targetDurationTouched.value = true
-  } catch {
-    toast.showToast('Could not save target runtime.', 'error')
-  }
-}
-
 const {
   conceptBootstrapRunning,
   scratchNeedsDirectorBuild,
   runConceptBootstrap
 } = useScratchConceptBootstrap({
-  persistBeforeBootstrap: persistTargetDuration,
+  persistBeforeBootstrap: async () => { await persistTargetDuration() },
   resolveTargetDurationSeconds: parsedTargetDurationSeconds
 })
-
-async function loadOverviewMovies () {
-  const id = projectId.value
-  const token = getAuthToken()
-  overviewMoviesError.value = ''
-  overviewMoviesWarning.value = ''
-  if (!id || !token || !PB_ID.test(id) || !showImportedScriptOverview.value) {
-    overviewCandidates.value = []
-    overviewMovies.value = []
-    overviewOmdbConfigured.value = null
-    return
-  }
-  loadingOverviewMovies.value = true
-  try {
-    const res = await $fetch<{
-      candidates: OverviewComparableCandidate[]
-      movies: OverviewOmdbMovie[]
-      omdbConfigured?: boolean
-      warning?: string
-    }>(
-      `/api/projects/${id}/script-wizard/movies`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-    overviewCandidates.value = res.candidates || []
-    overviewMovies.value = res.movies || []
-    overviewOmdbConfigured.value =
-      typeof res.omdbConfigured === 'boolean' ? res.omdbConfigured : null
-    if (res.warning) {
-      overviewMoviesWarning.value = res.warning
-    }
-  } catch (e: unknown) {
-    overviewMoviesError.value = formatApiFetchError(e, 'Could not load comparable films')
-    overviewOmdbConfigured.value = null
-  } finally {
-    loadingOverviewMovies.value = false
-  }
-}
-
-async function loadOverviewCharacters () {
-  const id = projectId.value
-  const token = getAuthToken()
-  overviewCharactersError.value = ''
-  if (!id || !token || !PB_ID.test(id) || !showImportedScriptOverview.value) {
-    overviewCharacters.value = []
-    return
-  }
-  loadingOverviewCharacters.value = true
-  try {
-    const res = await $fetch<{ characters: CreativeCharacter[] }>(
-      `/api/projects/${id}/characters`,
-      { headers: { Authorization: `Bearer ${token}` } }
-    )
-    overviewCharacters.value = res.characters || []
-  } catch (e: unknown) {
-    overviewCharactersError.value = formatApiFetchError(e, 'Could not load characters')
-    overviewCharacters.value = []
-  } finally {
-    loadingOverviewCharacters.value = false
-  }
-}
-
-watch(
-  () => [projectId.value, project.value?.treatment, canLoadImportedMovies.value] as const,
-  () => {
-    if (canLoadImportedMovies.value) {
-      void loadOverviewMovies()
-      void loadOverviewCharacters()
-    } else {
-      overviewCandidates.value = []
-      overviewMovies.value = []
-      overviewMoviesError.value = ''
-      overviewOmdbConfigured.value = null
-      overviewMoviesWarning.value = ''
-      overviewCharacters.value = []
-      overviewCharactersError.value = ''
-    }
-  },
-  { immediate: true }
-)
 
 const canGenerate = computed(() => {
   if (generating.value) return false

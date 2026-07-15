@@ -3,6 +3,7 @@ import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { checkRateLimit, rateLimitKey } from '~/server/utils/rate-limit'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 import { loadProjectGuideContext } from '~/server/utils/project-guide-context'
@@ -22,6 +23,9 @@ export default defineEventHandler(async (event) => {
     throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'Missing project id')
   }
 
+  const userId = await getPocketBaseUserIdFromRequest(event)
+  checkRateLimit(rateLimitKey(userId, 'project-guide'), 30, 60_000)
+
   const body = await readBody<{ messages?: ChatTurn[] }>(event)
   const messages = Array.isArray(body?.messages) ? body.messages : []
   const trimmed = messages
@@ -35,7 +39,6 @@ export default defineEventHandler(async (event) => {
     throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'messages must include at least one user turn')
   }
 
-  const userId = await getPocketBaseUserIdFromRequest(event)
   const pb = await getAuthenticatedPocketBase()
   const ctx = await loadProjectGuideContext(pb, projectId, userId)
 

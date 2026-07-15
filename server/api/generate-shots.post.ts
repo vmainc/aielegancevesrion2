@@ -1,5 +1,6 @@
 import { readBody, setResponseStatus } from 'h3'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { checkRateLimit, rateLimitKey } from '~/server/utils/rate-limit'
 import { createGenerateShotsJob } from '~/server/utils/generate-shots-job-registry'
 import { runGenerateShotsJob } from '~/server/utils/run-generate-shots-job'
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
@@ -10,6 +11,8 @@ import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
  */
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
+  checkRateLimit(rateLimitKey(userId, 'generate-shots'), 10, 60_000)
+
   const body = await readBody(event).catch(() => null) as {
     project_id?: string
     scene_id?: string

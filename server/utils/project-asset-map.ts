@@ -27,6 +27,14 @@ function toSafeAssetUrl (rawUrl: string): string {
   }
 }
 
+function relationId (raw: unknown): string {
+  if (typeof raw === 'string') return raw
+  if (raw && typeof raw === 'object' && 'id' in raw) {
+    return String((raw as { id: string }).id)
+  }
+  return ''
+}
+
 export function pbRecordToProjectAsset (
   record: Record<string, unknown>,
   pb: PocketBase
@@ -71,6 +79,19 @@ export function pbRecordToProjectAsset (
     }
   }
 
+  const sceneId =
+    relationId(record.scene) ||
+    (typeof metadata?.scene_id === 'string' ? metadata.scene_id : '') ||
+    undefined
+  const shotId =
+    relationId(record.shot) ||
+    (typeof metadata?.shot_id === 'string' ? metadata.shot_id : '') ||
+    undefined
+  const characterId =
+    relationId(record.character) ||
+    (typeof metadata?.character_id === 'string' ? metadata.character_id : '') ||
+    undefined
+
   return {
     id: String(record.id ?? ''),
     projectId,
@@ -79,6 +100,9 @@ export function pbRecordToProjectAsset (
     title: typeof record.title === 'string' ? record.title : '',
     notes: typeof record.notes === 'string' ? record.notes : '',
     metadata,
+    sceneId,
+    shotId,
+    characterId,
     sortOrder: typeof record.sort_order === 'number' ? record.sort_order : 0,
     fileUrl,
     created: typeof record.created === 'string' ? record.created : '',
