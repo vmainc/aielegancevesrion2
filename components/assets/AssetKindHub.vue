@@ -23,14 +23,16 @@
       >
         {{ a.label }}
       </NuxtLink>
-      <button
-        v-if="isAuthenticated"
-        type="button"
-        class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-800 hover:bg-gray-50 transition-colors"
-        @click="openAdd = true"
-      >
-        Add {{ addButtonLabel }}
-      </button>
+      <ClientOnly>
+        <button
+          v-if="isAuthenticated"
+          type="button"
+          class="inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-800 hover:bg-gray-50 transition-colors"
+          @click="openAdd = true"
+        >
+          Add {{ addButtonLabel }}
+        </button>
+      </ClientOnly>
     </div>
 
     <ClientOnly>
@@ -299,6 +301,10 @@ import {
   sortCharacterAssetsForDisplay,
   type AssetProjectGroup
 } from '~/lib/asset-kind-display'
+import AssetKindVideoGroups from '~/components/assets/AssetKindVideoGroups.vue'
+import AssetKindCharacterGroups from '~/components/assets/AssetKindCharacterGroups.vue'
+import AssetKindLibraryGroups from '~/components/assets/AssetKindLibraryGroups.vue'
+import AssetKindModals from '~/components/assets/AssetKindModals.vue'
 import type { ProjectAsset, ProjectAssetKind } from '~/types/project-asset'
 import type { CreativeProject } from '~/types/creative-project'
 

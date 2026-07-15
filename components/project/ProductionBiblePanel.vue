@@ -26,6 +26,10 @@ import type { LegacyAssetPromptRedactionResult } from '~/types/legacy-asset-prom
 import type { CreativeCharacter } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
 import { isLegacySeededFactCandidate } from '~/lib/legacy-seeded-fact-match'
+import BibleReviewQueues from '~/components/project/bible/BibleReviewQueues.vue'
+import BibleEntityList from '~/components/project/bible/BibleEntityList.vue'
+import BibleEntityDetail from '~/components/project/bible/BibleEntityDetail.vue'
+import BibleAdminModals from '~/components/project/bible/BibleAdminModals.vue'
 
 const props = defineProps<{
   projectId: string

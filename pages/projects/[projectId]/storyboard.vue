@@ -418,6 +418,9 @@ import {
   projectAssetPlaybackSrc
 } from '~/lib/project-asset-playback-url'
 import { isCloudProjectId } from '~/composables/useCreativeProject'
+import StoryboardBoardCard from '~/components/storyboard/StoryboardBoardCard.vue'
+import StoryboardAddBoardCard from '~/components/storyboard/StoryboardAddBoardCard.vue'
+import StoryboardFramePreviewDialog from '~/components/storyboard/StoryboardFramePreviewDialog.vue'
 
 const {
   activeProject,

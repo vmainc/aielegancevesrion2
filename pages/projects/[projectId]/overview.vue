@@ -622,6 +622,8 @@ import type {
 import type { ConceptGeneratorResultItem, GeneratedConceptItem } from '~/types/concept-generator'
 import type { CreativeProject } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
+import OverviewScriptAnalyzePanel from '~/components/project/overview/OverviewScriptAnalyzePanel.vue'
+import OverviewImportedInsights from '~/components/project/overview/OverviewImportedInsights.vue'
 
 const { activeProject, activeProjectId, updateProject, registerImportedProject, withProjectQuery, clientReady } =
   useCreativeProject()
