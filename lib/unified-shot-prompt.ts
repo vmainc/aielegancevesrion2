@@ -12,7 +12,8 @@
  */
 import {
   canonicalizeShotCastNames,
-  castNameConventionPromptBlock
+  castNameConventionPromptBlock,
+  formatCastNameForPrompt
 } from '~/lib/cast-name-convention'
 import {
   buildCastBibleParagraph,
@@ -175,6 +176,9 @@ export function buildUnifiedProductionPrompt (
     : ''
 
   const panelEmphasis = buildPanelActionEmphasis(shotCanon, ctx.panelIndex)
+  const castInPanelLine = inShot.length
+    ? `Cast in this panel: ${inShot.map(c => formatCastNameForPrompt(c.name)).join(', ')}.`
+    : 'Cast in this panel: none (establishing / environment only).'
   const castNaming = castNameConventionPromptBlock(cast)
 
   const negative = mergeNegativePromptParts(
@@ -184,7 +188,7 @@ export function buildUnifiedProductionPrompt (
   const negBlock = formatNegativePromptForImageModel(negative)
 
   const parts = [
-    panelEmphasis,
+    `${panelEmphasis}\n${castInPanelLine}`,
     SINGLE_STORYBOARD_FRAME_DIRECTIVE,
     aspectLine,
     castNaming,

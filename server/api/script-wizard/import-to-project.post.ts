@@ -66,7 +66,7 @@ export default defineEventHandler(async (event) => {
       owned_by: userId,
       aspect_ratio: '16:9',
       goal: 'film',
-      preferred_model_id: 'claude',
+      preferred_model_id: 'gpt-4o',
       target_length: 'short',
       workflow_mode: 'import',
       synopsis: '',

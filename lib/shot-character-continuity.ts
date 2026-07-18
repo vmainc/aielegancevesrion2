@@ -9,6 +9,7 @@ import {
   formatNegativePromptForImageModel,
   isAnimalOnlyCast,
   mergeNegativePromptParts,
+  shotTextForCastMatch,
   trimPromptForImageModel
 } from '~/lib/storyboard-continuity-prompts'
 
@@ -55,26 +56,20 @@ export function projectCharacterRefToCastMember (c: ProjectCharacterRef) {
   }
 }
 
-function shotRawText (
-  shot: Pick<CreativeShot, 'title' | 'description' | 'imagePrompt' | 'videoPrompt'>
-): string {
-  return [shot.title, shot.description, shot.imagePrompt, shot.videoPrompt].filter(Boolean).join(' ')
-}
-
 function isCharacterFocusedShot (
   shot: Pick<CreativeShot, 'title' | 'description' | 'imagePrompt' | 'videoPrompt' | 'shotType'>
 ): boolean {
-  const t = `${shot.shotType || ''} ${shot.title || ''} ${shot.imagePrompt || ''} ${shot.description || ''}`.toLowerCase()
+  const t = `${shot.shotType || ''} ${shot.title || ''} ${shot.description || ''}`.toLowerCase()
   return /close-up|close up|portrait|face|eyes|expression|reaction|greeting|dialogue|character|medium shot|two shot|over-the-shoulder|ots\b/.test(t)
 }
 
-/** Characters whose names appear in shot copy (longest names first to avoid partial hits). */
+/** Characters named in this panel's beat — not everyone listed in the cast bible blocks. */
 export function findCharactersInShot (
   shot: Pick<CreativeShot, 'title' | 'description' | 'imagePrompt' | 'videoPrompt' | 'shotType'>,
   cast: ProjectCharacterRef[],
   sceneSummary?: string
 ): ProjectCharacterRef[] {
-  const raw = shotRawText(shot)
+  const raw = shotTextForCastMatch(shot)
   const sorted = [...cast].sort((a, b) => b.name.length - a.name.length)
   const hits: ProjectCharacterRef[] = []
   const seen = new Set<string>()
@@ -92,11 +87,11 @@ export function findCharactersInShot (
     for (const c of sorted) tryAdd(c, raw)
   }
 
-  if (!hits.length && sceneSummary?.trim()) {
+  // Scene summary lists scene-level cast — only use for tiny casts when the beat is silent.
+  if (!hits.length && sceneSummary?.trim() && cast.length <= 6) {
     for (const c of sorted) tryAdd(c, sceneSummary)
   }
 
-  // Small casts: always treat every character as in-scope (matches server castMembersInShot).
   if (!hits.length && cast.length > 0 && cast.length <= 6) {
     return cast
   }

@@ -37,7 +37,7 @@
           :key="item.path"
           :value="item.path"
         >
-          {{ toolSections.some(t => t.path === item.path) ? item.label : `${i + 1}. ${item.label}` }}
+          {{ mobileOptionLabel(item, i) }}
         </option>
       </select>
     </div>
@@ -51,6 +51,19 @@
         >
           <span aria-hidden="true">←</span> All projects
         </NuxtLink>
+        <nav class="space-y-0.5 mb-4">
+          <NuxtLink
+            v-for="item in primarySections"
+            :key="item.path"
+            :to="`/projects/${projectId}/${item.path}`"
+            class="block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors"
+            :class="isActive(item.path)
+              ? 'bg-primary/15 text-primary border border-primary/30'
+              : 'text-gray-900 hover:bg-gray-100'"
+          >
+            {{ item.label }}
+          </NuxtLink>
+        </nav>
         <p class="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Workflow</p>
         <ol class="space-y-1 text-xs text-gray-500">
           <li v-for="(item, i) in sections" :key="item.path">
@@ -159,23 +172,25 @@ watch(
 )
 
 const sectionLabels: Record<string, string> = {
-  home: 'Overview',
+  home: 'Steps',
   overview: 'Story',
   director: 'Director',
-  story: 'Script',
   characters: 'Characters',
   scenes: 'Scenes',
   storyboard: 'Storyboard',
   video: 'Video',
-  guide: 'Project Guide',
+  guide: 'Guide',
   bible: 'Production Bible',
   review: 'Review Dashboard'
 }
 
 const toolSections: Array<{ path: string; label: string }> = [
   { path: 'review', label: 'Review Dashboard' },
-  { path: 'guide', label: 'Project Guide' },
   { path: 'bible', label: 'Production Bible' }
+]
+
+const primarySections: Array<{ path: string; label: string }> = [
+  { path: 'guide', label: 'Guide' }
 ]
 
 const sections = computed(() => {
@@ -187,14 +202,18 @@ const sections = computed(() => {
 })
 
 const workflowSections = sections
-const allSections = computed(() => [...sections.value, ...toolSections])
+const allSections = computed(() => [
+  ...primarySections,
+  ...sections.value,
+  ...toolSections
+])
 
 const isActive = (path: string) => activeSectionPath.value === path
 
 const activeSectionPath = computed(() => {
   const tail = route.path.split('/').pop() || ''
   if (allSections.value.some(s => s.path === tail)) return tail
-  return sections.value[0]?.path ?? 'home'
+  return 'guide'
 })
 
 function onMobileSectionChange (ev: Event) {
@@ -204,9 +223,18 @@ function onMobileSectionChange (ev: Event) {
 }
 
 const sectionSubtitle = computed(() => {
+  if (activeSectionPath.value === 'guide') return 'Chat with your project'
   const found = allSections.value.find(s => s.path === activeSectionPath.value)
   return found ? `${found.label} · project workspace` : 'Project workspace'
 })
+
+function mobileOptionLabel (item: { path: string; label: string }, index: number): string {
+  if (primarySections.some(p => p.path === item.path)) return item.label
+  if (toolSections.some(t => t.path === item.path)) return item.label
+  const workflowIndex = sections.value.findIndex(s => s.path === item.path)
+  if (workflowIndex >= 0) return `${workflowIndex + 1}. ${item.label}`
+  return `${index + 1}. ${item.label}`
+}
 
 function goalLabel (g: ProjectGoal) {
   const map: Record<ProjectGoal, string> = {

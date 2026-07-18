@@ -194,10 +194,10 @@
         ← Story
       </NuxtLink>
       <NuxtLink
-        :to="`/projects/${projectId}/${directorContinuePath}`"
+        :to="`/projects/${projectId}/scenes`"
         class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
       >
-        {{ directorContinuePath === 'characters' ? 'Continue to Characters →' : 'Continue to Script →' }}
+        Continue to Scenes →
       </NuxtLink>
     </div>
   </div>
@@ -205,10 +205,6 @@
 
 <script setup lang="ts">
 import { DIRECTOR_PRESETS, defaultDirector, presetToDirector } from '~/lib/director-presets'
-import {
-  isScratchWorkflowProject,
-  projectStorySatisfiedByScriptImport
-} from '~/lib/project-workflow'
 import type { ProjectDirector } from '~/types/creative-project'
 
 const { activeProject, activeProjectId, updateProject } = useCreativeProject()
@@ -217,13 +213,6 @@ const toast = useToast()
 
 const projectId = activeProjectId
 const project = activeProject
-
-const storySatisfiedByImport = computed(() => projectStorySatisfiedByScriptImport(project.value))
-const scratchWorkflow = computed(() => isScratchWorkflowProject(project.value))
-const directorContinuePath = computed(() => {
-  if (storySatisfiedByImport.value || scratchWorkflow.value) return 'characters'
-  return 'story'
-})
 
 const {
   conceptBootstrapRunning,

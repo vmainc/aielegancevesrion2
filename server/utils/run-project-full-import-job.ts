@@ -10,12 +10,14 @@ import {
   type AspectRatio,
   type ProjectGoal
 } from '~/server/utils/import-script-core'
+import { getConceptGeneratorModelById } from '~/lib/concept-generator-models'
 
 export async function runProjectFullImportJob (input: {
   jobId: string
   userId: string
   projectId: string
   assetId?: string
+  chosenModelId?: string
 }): Promise<void> {
   const { jobId, userId, projectId, assetId } = input
   try {
@@ -42,6 +44,8 @@ export async function runProjectFullImportJob (input: {
     const goalRaw = String(projectRow.goal || 'film')
     const goal: ProjectGoal =
       goalRaw === 'social' || goalRaw === 'commercial' || goalRaw === 'other' ? goalRaw : 'film'
+    const chosenModel = getConceptGeneratorModelById(input.chosenModelId || 'gpt-4o')
+      || getConceptGeneratorModelById('gpt-4o')
 
     const { project, scriptAsset } = await runFullImportFromParsed({
       userId,
@@ -52,7 +56,9 @@ export async function runProjectFullImportJob (input: {
       aspectRatio,
       goal,
       existingProjectId: projectId,
-      reuseAssetId: resolvedAssetId
+      reuseAssetId: resolvedAssetId,
+      preferredModelId: chosenModel?.id || 'gpt-4o',
+      openrouterModelId: chosenModel?.openrouterModelId || 'openai/gpt-4o'
     })
 
     completeScriptImportJob(jobId, {

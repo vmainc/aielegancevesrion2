@@ -17,6 +17,7 @@ import {
   inferCharactersWithScreenShareFromScript,
   inferScenesFromScriptWithClaude,
   buildCharacterRowsFromFallback,
+  mergeDetectedCharacterNamesIntoRows,
   normalizeCharacterShares,
   type CharacterWithShare
 } from '~/server/utils/script-import-ai'
@@ -211,10 +212,11 @@ function recordIsoTime (row: Record<string, unknown>): string {
 function buildSceneOutlineForAi (parsed: ParsedScript): string {
   // If parser can't segment scenes, we keep one FULL SCRIPT block. Give AI much more
   // context in that case; 2.5k chars was too short and produced generic analyses.
-  const perSceneLimit = parsed.scenes.length <= 1 ? 20000 : 2500
+  const perSceneLimit = parsed.scenes.length <= 1 ? 40_000 : 4_000
   return parsed.scenes
     .map((s, i) => `## Scene ${i + 1}\nHeading: ${s.heading}\n---\n${s.body.slice(0, perSceneLimit)}`)
     .join('\n\n')
+    .slice(0, 80_000)
 }
 
 /**
@@ -1165,6 +1167,9 @@ export async function runFullImportFromParsed (input: {
   prefillEnrichment?: ScriptImportPrefillEnrichment
   /** Cast names from concept generator — merged before screenplay / AI cast inference. */
   conceptCharacterNames?: string[]
+  /** Explicit model for every AI pass in this import. */
+  openrouterModelId?: string
+  preferredModelId?: string
 }): Promise<{
   project: CreativeProject
   scriptAsset: ScriptAssetAttachResult
@@ -1233,7 +1238,11 @@ export async function runFullImportFromParsed (input: {
     noteTitle = (newProjectName && newProjectName.trim()) || stemTitle || 'Imported project'
   }
 
-  const pref = resolveProjectPreferredOpenRouterModel(projectRowForPref)
+  const projectPref = resolveProjectPreferredOpenRouterModel(projectRowForPref)
+  const pref = {
+    preferredModelId: input.preferredModelId?.trim() || projectPref.preferredModelId,
+    openrouterModelId: input.openrouterModelId?.trim() || projectPref.openrouterModelId
+  }
 
   const prefill = input.prefillEnrichment
   const enrichment = prefill
@@ -1252,7 +1261,8 @@ export async function runFullImportFromParsed (input: {
     : await enrichScriptWithAi({
         projectName: noteTitle,
         sceneOutline,
-        characterNames: mergedCharacterNames
+        characterNames: mergedCharacterNames,
+        openrouterModelId: pref.openrouterModelId
       })
 
   const prose = prefill
@@ -1349,6 +1359,15 @@ export async function runFullImportFromParsed (input: {
     }
   }
 
+  // Always keep every parser/heuristic name — AI often returns only principals.
+  characterRows = mergeDetectedCharacterNamesIntoRows(characterRows, [
+    ...mergedCharacterNames,
+    ...heuristicCharacterNamesFromScenes(parsed.scenes),
+    ...heuristicCharacterNamesFromScenes([
+      { heading: 'FULL SCRIPT', body: fullScriptText.slice(0, 150_000) }
+    ])
+  ])
+
   characterRows = filterCastCharacterRows(characterRows)
 
   const treatmentHasThreeAct =
@@ -1403,12 +1422,17 @@ export async function runFullImportFromParsed (input: {
 
   const conceptNotes =
     `Imported from ${filename}. ${sceneRowsForCreate.length} scene(s)${
-      usedClaudeScenes ? ' (Claude breakdown — see Scenes tab)' : ''
+      usedClaudeScenes ? ' (AI scene breakdown — see Scenes tab)' : ''
     }. ` +
-    'Synopsis: logline + one-page narrative. Treatment: comparable films, theme notes, and three-act breakdown — see Overview and Story tabs.' +
+    'Synopsis: logline + one-page narrative. Treatment: theme notes and three-act breakdown — see Overview.' +
     (directorFilled
       ? ' Director bible (style, camera, lighting, pacing) was drafted from the script — review on the Director tab.'
       : '')
+
+  const preferredModelPatch =
+    (input.preferredModelId || '').trim()
+      ? { preferred_model_id: input.preferredModelId!.trim() }
+      : {}
 
   if (existingProjectId) {
     await pb.collection('creative_projects').update(existingProjectId, {
@@ -1419,6 +1443,7 @@ export async function runFullImportFromParsed (input: {
       tone: enrichment.tone,
       themes: enrichment.themes.length ? enrichment.themes : null,
       source_filename: filename,
+      ...preferredModelPatch,
       ...(directorFilled ? { director: directorBible } : {})
     })
     projectId = existingProjectId
@@ -1436,6 +1461,7 @@ export async function runFullImportFromParsed (input: {
       tone: enrichment.tone,
       themes: enrichment.themes.length ? enrichment.themes : null,
       source_filename: filename,
+      preferred_model_id: (input.preferredModelId || '').trim() || 'gpt-4o',
       ...(directorFilled ? { director: directorBible } : {})
     })
     projectId = project.id

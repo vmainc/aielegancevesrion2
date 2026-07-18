@@ -1,6 +1,6 @@
 <template>
   <div class="max-w-3xl">
-    <p v-if="!scriptUploadedAwaitingAnalyze" class="text-sm text-gray-500 mb-6">
+    <p v-if="!scriptImportInProgress" class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
       <template v-if="ideaFirstWorkflow && isIdeaWorkflow && !hasConcept">
         · Paste your story idea and continue to Director.
@@ -25,36 +25,36 @@
       to sync with your account.
     </p>
 
-    <template v-if="scriptUploadedAwaitingAnalyze">
+    <template v-if="scriptImportInProgress">
       <p class="text-sm text-gray-600 mb-6">
         <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-        · Screenplay saved — AI Elegance is reading it now.
+        · {{ scriptImportStatusLine }}
       </p>
       <section class="rounded-xl border-2 border-primary/40 bg-gradient-to-b from-primary/10 to-white shadow-sm p-6 sm:p-10 mb-8">
         <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-3">
           {{ project?.name }}
         </h1>
         <p class="text-base text-gray-700 mb-6 max-w-xl leading-relaxed">
-          Your screenplay is saved. GPT-4o is reading the file, building scenes and cast, seeding storyboard panels, and setting up director notes — then you can generate video from the Storyboard step.
+          {{ scriptImportIntro }}
         </p>
         <button
           v-if="overviewImportError"
           type="button"
           class="px-5 py-3 bg-primary hover:bg-primary/90 text-gray-950 rounded-xl text-base font-semibold transition-colors disabled:opacity-50"
-          :disabled="overviewFullImporting || !scriptWorkflowAssetId"
+          :disabled="overviewFullImporting || overviewImporting || !scriptWorkflowAssetId"
           @click="runProjectFullImport"
         >
           Retry script import
         </button>
         <p v-if="overviewImportError" class="mt-3 text-sm text-red-700">{{ overviewImportError }}</p>
         <div
-          v-if="overviewFullImporting || !overviewImportError"
+          v-if="scriptImportLoaderVisible"
           class="mt-5 rounded-xl border border-primary/20 bg-primary/5 p-6"
         >
           <FilmReelLoader
-            size="sm"
-            label="Importing screenplay"
-            sub-label="Synopsis, treatment, director bible, scenes, cast, and storyboard panels — this can take several minutes."
+            size="md"
+            :label="scriptImportLoaderLabel"
+            :sub-label="scriptImportLoaderSubLabel"
           />
         </div>
       </section>
@@ -64,26 +64,6 @@
       v-else-if="hasConcept"
       class="rounded-xl border border-gray-200 bg-white shadow-sm p-6 sm:p-8 mb-10"
     >
-      <OverviewScriptAnalyzePanel
-        v-if="screenplayWorkflowEnabled && canCloudImport && hasWorkflowScreenplaySaved"
-        class="mb-6"
-        variant="ready"
-        :model-options="modelOptions"
-        :compare-mode="analysisCompareMode"
-        :selected-model-id="selectedAnalysisModelId"
-        :selected-model-ids="selectedAnalysisModelIds"
-        :analyzing="overviewAnalyzing"
-        :previewing="overviewPreviewing"
-        :error="overviewImportError"
-        :candidates="analysisCandidates"
-        :disabled="false"
-        radio-name="analyze-model-ready"
-        @analyze="onAnalyzeScriptClick"
-        @toggle-compare="toggleAnalysisCompareMode"
-        @apply-candidate="applyCandidateModel"
-        @update:selected-model-id="selectedAnalysisModelId = $event"
-        @update:selected-model-ids="selectedAnalysisModelIds = $event"
-      />
       <p class="text-xs font-semibold uppercase tracking-wide text-primary mb-3">Synopsis</p>
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-6">
         {{ project?.name }}
@@ -92,8 +72,8 @@
         v-if="project?.genre || project?.tone || (project?.themes && project.themes.length)"
         class="flex flex-wrap gap-2 mb-6"
       >
-        <span v-if="project?.genre" class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-800 capitalize">{{ project.genre }}</span>
-        <span v-if="project?.tone" class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">{{ project.tone }}</span>
+        <span v-if="displayGenreOrTone(project?.genre)" class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-800 capitalize">{{ displayGenreOrTone(project?.genre) }}</span>
+        <span v-if="displayGenreOrTone(project?.tone)" class="text-xs px-2.5 py-1 rounded-full bg-gray-100 text-gray-700">{{ displayGenreOrTone(project?.tone) }}</span>
         <span
           v-for="t in (project?.themes ?? [])"
           :key="t"
@@ -108,25 +88,12 @@
 
       <template v-if="showImportedScriptOverview">
         <OverviewImportedInsights
-          :project-id="projectId"
           :three-act-breakdown="threeActBreakdown"
-          :can-load="canLoadImportedMovies"
-          :candidates="importedInsights.candidates"
-          :movies="importedInsights.movies"
-          :loading-movies="importedInsights.loadingMovies"
-          :movies-error="importedInsights.moviesError"
-          :omdb-configured="importedInsights.omdbConfigured"
-          :movies-warning="importedInsights.moviesWarning"
-          :characters="importedInsights.characters"
-          :loading-characters="importedInsights.loadingCharacters"
-          :characters-error="importedInsights.charactersError"
-          @refresh-movies="importedInsights.loadMovies"
-          @refresh-characters="importedInsights.loadCharacters"
         />
 
         <p class="text-sm text-gray-500 mt-6 pt-6 border-t border-gray-100">
           <template v-if="showImportedScriptOverview">
-            Synopsis and treatment came from your screenplay import — the Story step is skipped in the sidebar. Continue with
+            Story, director notes, cast, scenes, and storyboard came from your screenplay import. Continue with
             <NuxtLink :to="`/projects/${projectId}/characters`" class="text-primary font-medium hover:underline">Characters</NuxtLink>.
           </template>
           <template v-else>
@@ -139,7 +106,7 @@
 
     <!-- Screenplay upload lives here only until a file is saved; then the focused block above or Assets handles replacement. -->
     <ProjectOverviewScriptImportPanel
-      v-if="screenplayWorkflowEnabled && canCloudImport && hasConcept && !showGeneratorForm && !scriptUploadedAwaitingAnalyze && !hasWorkflowScreenplaySaved"
+      v-if="screenplayWorkflowEnabled && canCloudImport && hasConcept && !showGeneratorForm && !scriptImportInProgress && !hasWorkflowScreenplaySaved"
       v-model:aspect="overviewAspect"
       v-model:goal="overviewGoal"
       :show-aspect-goal="false"
@@ -157,7 +124,7 @@
 
     <!-- Saved concept: actions (generator hidden until they choose "different AI") -->
     <div
-      v-if="hasConcept && !showGeneratorForm && !scriptUploadedAwaitingAnalyze"
+      v-if="hasConcept && !showGeneratorForm && !scriptImportInProgress"
       class="rounded-xl border border-primary/30 bg-primary/5 p-5 sm:p-6 mb-8"
     >
       <h2 class="text-lg font-semibold text-gray-900 mb-1">
@@ -370,28 +337,6 @@
               }}
             </template>
           </p>
-          <div
-            v-if="hasWorkflowScreenplaySaved && canCloudImport"
-            class="mt-4"
-          >
-            <OverviewScriptAnalyzePanel
-              :model-options="modelOptions"
-              :compare-mode="analysisCompareMode"
-              :selected-model-id="selectedAnalysisModelId"
-              :selected-model-ids="selectedAnalysisModelIds"
-              :analyzing="overviewAnalyzing"
-              :previewing="overviewPreviewing"
-              :error="overviewImportError"
-              :candidates="analysisCandidates"
-              :disabled="false"
-              radio-name="analyze-model-generator"
-              @analyze="onAnalyzeScriptClick"
-              @toggle-compare="toggleAnalysisCompareMode"
-              @apply-candidate="applyCandidateModel"
-              @update:selected-model-id="selectedAnalysisModelId = $event"
-              @update:selected-model-ids="selectedAnalysisModelIds = $event"
-            />
-          </div>
         </div>
         <button
           v-if="hasConcept"
@@ -538,7 +483,7 @@
     </section>
 
     <div
-      v-if="!scriptUploadedAwaitingAnalyze"
+      v-if="!scriptImportInProgress"
       class="rounded-xl border border-gray-200 bg-white p-4 mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
     >
       <div>
@@ -555,8 +500,8 @@
       </NuxtLink>
     </div>
 
-    <h2 v-if="!scriptUploadedAwaitingAnalyze" class="text-lg font-semibold text-gray-900 mb-3">Quick actions</h2>
-    <div v-if="!scriptUploadedAwaitingAnalyze" class="flex flex-wrap gap-3">
+    <h2 v-if="!scriptImportInProgress" class="text-lg font-semibold text-gray-900 mb-3">Quick actions</h2>
+    <div v-if="!scriptImportInProgress" class="flex flex-wrap gap-3">
       <NuxtLink
         :to="`/projects/${projectId}/scenes`"
         class="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
@@ -570,26 +515,17 @@
         Director →
       </NuxtLink>
       <NuxtLink
-        v-if="!showImportedScriptOverview && !ideaFirstWorkflow"
-        :to="`/projects/${projectId}/story`"
+        :to="`/projects/${projectId}/storyboard`"
+        class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-sm font-semibold transition-colors inline-flex items-center"
+      >
+        Storyboard →
+      </NuxtLink>
+      <NuxtLink
+        :to="`/projects/${projectId}/characters`"
         class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
       >
-        Script →
+        Characters →
       </NuxtLink>
-      <template v-else>
-        <NuxtLink
-          :to="`/projects/${projectId}/storyboard`"
-          class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-sm font-semibold transition-colors inline-flex items-center"
-        >
-          Storyboard →
-        </NuxtLink>
-        <NuxtLink
-          :to="`/projects/${projectId}/characters`"
-          class="px-4 py-2 border border-primary/40 text-primary hover:bg-primary/10 rounded-lg text-sm font-medium transition-colors inline-flex items-center"
-        >
-          Characters →
-        </NuxtLink>
-      </template>
     </div>
   </div>
 </template>
@@ -607,11 +543,11 @@ import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { pollScriptImportJob } from '~/lib/poll-script-import-job'
 import {
   conceptNotesHaveUserContent,
+  displayProjectSynopsis,
   formatStoredConceptNotes,
   formatUserProvidedConceptNotes,
-  parseLoglineFromConceptNotes,
-  stripConceptMetadataMarkers,
-  upsertDurationMarkerInConceptNotes
+  upsertDurationMarkerInConceptNotes,
+  displayGenreOrTone
 } from '~/lib/format-stored-concept'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
 import { pollScriptAnalyzeJob } from '~/lib/poll-script-analyze-job'
@@ -622,7 +558,6 @@ import type {
 import type { ConceptGeneratorResultItem, GeneratedConceptItem } from '~/types/concept-generator'
 import type { CreativeProject } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
-import OverviewScriptAnalyzePanel from '~/components/project/overview/OverviewScriptAnalyzePanel.vue'
 import OverviewImportedInsights from '~/components/project/overview/OverviewImportedInsights.vue'
 
 const { activeProject, activeProjectId, updateProject, registerImportedProject, withProjectQuery, clientReady } =
@@ -641,19 +576,6 @@ const showImportedScriptOverview = computed(() => projectStorySatisfiedByScriptI
 const threeActBreakdown = computed(() =>
   extractThreeActBreakdownFromTreatment(project.value?.treatment || '')
 )
-
-const canLoadImportedMovies = computed(
-  () =>
-    isAuthenticated.value &&
-    PB_ID.test(projectId.value) &&
-    showImportedScriptOverview.value
-)
-
-const importedInsights = reactive(useOverviewImportedInsights({
-  projectId,
-  canLoad: canLoadImportedMovies,
-  showImported: showImportedScriptOverview
-}))
 
 const isLocalProject = computed(() => !PB_ID.test(projectId.value))
 
@@ -766,14 +688,14 @@ async function importScriptFromOverview () {
     })
     registerImportedProject(res.project)
     overviewImportFile.value = null
-    fullImportAttempted.value = false
+    fullImportAttempted.value = true
     if (res.scriptAsset?.ok && res.scriptAsset.id) {
       scriptWorkflowAssetId.value = res.scriptAsset.id
     } else {
       await syncScriptWorkflowAssetFromServer()
     }
     toast.showToast(
-      'Screenplay uploaded — GPT-4o is reading it and building the project now.',
+      'Screenplay uploaded — ChatGPT is reading it and building the project now.',
       'success'
     )
     if (res.upload?.parseWarning) {
@@ -785,6 +707,11 @@ async function importScriptFromOverview () {
         'warning'
       )
     }
+    if (!scriptWorkflowAssetId.value) {
+      fullImportAttempted.value = false
+      throw new Error('The screenplay uploaded, but its project asset could not be found.')
+    }
+    await runProjectFullImport()
   } catch (e: unknown) {
     overviewImportError.value = formatApiFetchError(e, 'Save failed')
     toast.showToast(overviewImportError.value, 'error')
@@ -806,7 +733,10 @@ async function runProjectFullImport () {
       {
         method: 'POST',
         headers,
-        body: { assetId: scriptWorkflowAssetId.value }
+        body: {
+          assetId: scriptWorkflowAssetId.value,
+          chosenModelId: 'gpt-4o'
+        }
       }
     )
     if (!started.jobId) {
@@ -819,8 +749,8 @@ async function runProjectFullImport () {
     if (polled.scriptAsset?.ok && polled.scriptAsset.id) {
       scriptWorkflowAssetId.value = polled.scriptAsset.id
     }
-    toast.showToast('Script imported — open Storyboard to generate video clips.', 'success')
-    await navigateTo(`/projects/${id}/storyboard`)
+    toast.showToast('Script imported — review Characters, then continue to Director.', 'success')
+    await navigateTo(`/projects/${id}/characters`)
   } catch (e: unknown) {
     overviewImportError.value = formatApiFetchError(e, 'Full script import failed')
     toast.showToast(overviewImportError.value, 'error')
@@ -881,7 +811,6 @@ async function runScriptAnalyzeFromOverview (chosenModelId?: string) {
     if (polled.scriptAsset && !polled.scriptAsset.ok) {
       toast.showToast(polled.scriptAsset.message || 'Project updated; asset notes may be incomplete.', 'info')
     }
-    void importedInsights.loadCharacters()
   } catch (e: unknown) {
     overviewImportError.value = formatApiFetchError(e, 'AI import failed')
     toast.showToast(overviewImportError.value, 'error')
@@ -954,17 +883,13 @@ const {
 const conceptSynopsisDisplay = computed(() => {
   const p = project.value
   if (!p) return ''
-  const syn = (p.synopsis || '').trim()
-  if (syn) return syn
-  const logline = parseLoglineFromConceptNotes(p.conceptNotes || '')
-  if (logline) return logline
-  return stripConceptMetadataMarkers(p.conceptNotes || '')
+  return displayProjectSynopsis(p)
 })
 
 const hasConcept = computed(() => {
   const p = project.value
   if (!p) return false
-  return Boolean((p.synopsis || '').trim() || conceptNotesHaveUserContent(p.conceptNotes || ''))
+  return Boolean(displayProjectSynopsis(p).trim() || conceptNotesHaveUserContent(p.conceptNotes || ''))
 })
 
 const importWorkflow = computed(() => isImportWorkflowProject(project.value))
@@ -982,7 +907,7 @@ const showIdeaFirstPanel = computed(
     workflowReady.value &&
     ideaFirstWorkflow.value &&
     (showGeneratorForm.value || !hasConcept.value) &&
-    !scriptUploadedAwaitingAnalyze.value
+    !scriptImportInProgress.value
 )
 
 const showImportWorkflowOverview = computed(
@@ -990,7 +915,7 @@ const showImportWorkflowOverview = computed(
     workflowReady.value &&
     importWorkflow.value &&
     (showGeneratorForm.value || !hasConcept.value) &&
-    !scriptUploadedAwaitingAnalyze.value
+    !scriptImportInProgress.value
 )
 
 const ideaPanelHeading = computed(() => {
@@ -1026,15 +951,51 @@ const generateIdeasButtonLabel = computed(() => {
   return 'Generate concepts'
 })
 
-/** After screenplay upload: single-focus auto-import progress screen. */
-const scriptUploadedAwaitingAnalyze = computed(
+/** Screenplay upload + full import — keep the reel loader until import finishes. */
+const scriptImportInProgress = computed(
   () =>
-    screenplayWorkflowEnabled.value &&
-    canCloudImport.value &&
-    hasConcept.value &&
-    Boolean(scriptWorkflowAssetId.value) &&
-    !showImportedScriptOverview.value
+    overviewImporting.value ||
+    overviewFullImporting.value ||
+    (
+      screenplayWorkflowEnabled.value &&
+      canCloudImport.value &&
+      Boolean(scriptWorkflowAssetId.value) &&
+      !showImportedScriptOverview.value
+    )
 )
+
+const scriptImportLoaderVisible = computed(
+  () =>
+    overviewImporting.value ||
+    overviewFullImporting.value ||
+    !overviewImportError.value
+)
+
+const scriptImportStatusLine = computed(() => {
+  if (overviewImporting.value && !overviewFullImporting.value) {
+    return 'Uploading screenplay — stay on this page.'
+  }
+  return 'Screenplay saved — AI Elegance is reading it now.'
+})
+
+const scriptImportIntro = computed(() => {
+  if (overviewImporting.value && !overviewFullImporting.value) {
+    return 'Your file is uploading. When it finishes, ChatGPT reads the screenplay and builds story, cast, director notes, scenes, and storyboard panels — then you’ll land on Characters.'
+  }
+  return 'ChatGPT is reading your screenplay and building story, cast, director notes, scenes, and storyboard panels — then you’ll land on Characters. This can take several minutes.'
+})
+
+const scriptImportLoaderLabel = computed(() => {
+  if (overviewImporting.value && !overviewFullImporting.value) return 'Saving screenplay'
+  return 'Importing screenplay'
+})
+
+const scriptImportLoaderSubLabel = computed(() => {
+  if (overviewImporting.value && !overviewFullImporting.value) {
+    return 'Uploading your file to project assets…'
+  }
+  return 'Synopsis, cast, director bible, scenes, and storyboard panels — stay on this page until import finishes.'
+})
 
 /** Workflow screenplay file saved to project assets (Overview import). */
 const hasWorkflowScreenplaySaved = computed(

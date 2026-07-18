@@ -44,7 +44,7 @@
               </div>
               <NuxtLink
                 v-if="g.projectId"
-                :to="`/projects/${g.projectId}/home`"
+                :to="`/projects/${g.projectId}/guide`"
                 class="shrink-0 text-sm text-primary font-medium hover:underline"
                 @click.stop
               >

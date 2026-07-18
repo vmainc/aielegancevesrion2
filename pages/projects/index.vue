@@ -35,7 +35,7 @@
     <ul v-else class="grid gap-4 sm:grid-cols-2">
       <li v-for="p in projects" :key="p.id">
         <NuxtLink
-          :to="`/projects/${p.id}/home`"
+          :to="`/projects/${p.id}/guide`"
           class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:border-primary/50 hover:bg-gray-50 transition-all p-5 h-full"
         >
           <div class="flex items-start justify-between gap-3 mb-3">
@@ -51,9 +51,9 @@
             </div>
           </div>
           <p class="text-sm text-gray-500 line-clamp-2 mb-3">
-            {{ p.synopsis || 'No synopsis yet — open to get started.' }}
+            {{ projectSynopsisPreview(p) || 'No synopsis yet — open to get started.' }}
           </p>
-          <span class="text-sm text-primary font-medium">Open workspace →</span>
+          <span class="text-sm text-primary font-medium">Open →</span>
         </NuxtLink>
       </li>
     </ul>
@@ -112,7 +112,7 @@
                 >
                 <span class="text-sm text-gray-700">
                   <span class="font-medium text-gray-900">Import script</span><br>
-                  Upload a screenplay on Overview and run director analysis.
+                  Land on Story to upload your screenplay — ChatGPT reads it and builds the project.
                 </span>
               </label>
             </div>
@@ -195,7 +195,9 @@
 </template>
 
 <script setup lang="ts">
+import { projectCreateLandingPath } from '~/lib/project-workflow'
 import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
+import { projectSynopsisPreview } from '~/lib/format-stored-concept'
 import type { ProjectAspectRatio, ProjectGoal, ProjectWorkflowMode } from '~/types/creative-project'
 
 const { projects, clientReady, registerImportedProject } = useCreativeProject()
@@ -273,7 +275,7 @@ async function submitCreate () {
     registerImportedProject(res.project)
     openCreate.value = false
     toast.showToast('Project created.', 'success')
-    await navigateTo(`/projects/${res.project.id}/home`)
+    await navigateTo(projectCreateLandingPath(res.project.id, form.workflowMode))
   } catch (e: unknown) {
     createError.value =
       (e as { data?: { message?: string } })?.data?.message ||

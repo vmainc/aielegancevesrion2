@@ -129,7 +129,7 @@ withDefaults(
   {
     heading: 'Screenplay',
     intro:
-      'Choose a screenplay file. After upload, GPT-4o reads it automatically and builds synopsis, director notes, cast, scenes, and storyboard panels.',
+      'Choose a screenplay file. After upload, ChatGPT reads it automatically and builds the story, cast, director notes, scenes, and storyboard — then opens Characters.',
     saveButtonLabel: 'Upload and analyze screenplay',
     analyzeButtonLabel: 'Run director analysis',
     showAspectGoal: true,

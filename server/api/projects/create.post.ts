@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
     owned_by: userId,
     aspect_ratio: aspectRatio,
     goal,
-    preferred_model_id: 'claude',
+    preferred_model_id: 'gpt-4o',
     target_length: 'short',
     synopsis: '',
     treatment: '',

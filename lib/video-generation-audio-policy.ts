@@ -72,13 +72,42 @@ export function applyVideoGenerationPromptPolicy (
   return `${base}\n\n${audioPolicyBlock(opts)}`
 }
 
+export type SpokenDialogueLineOptions = {
+  /** Character name who delivers the line. */
+  speakerName?: string
+  /** Delivery tone, e.g. urgent, whispered, calm. */
+  tone?: string
+}
+
 /** Append an explicit line for the model to speak (shown in UI + sent to API). */
-export function appendSpokenDialogueLine (prompt: string, dialogueLine: string): string {
+export function appendSpokenDialogueLine (
+  prompt: string,
+  dialogueLine: string,
+  opts?: SpokenDialogueLineOptions
+): string {
   const base = prompt.trim()
   const line = dialogueLine.trim()
   if (!line) return base
-  const block = `SPOKEN DIALOGUE (must be clearly audible in the clip):\n"${line}"`
-  if (base.includes(line)) return base
+  const speaker = (opts?.speakerName || '').trim()
+  const tone = (opts?.tone || '').trim()
+  const parts: string[] = ['SPOKEN DIALOGUE (must be clearly audible in the clip):']
+  if (speaker) {
+    parts.push(`Speaker: ${speaker}`)
+  }
+  if (tone) {
+    parts.push(`Tone / delivery: ${tone}`)
+  }
+  if (speaker) {
+    parts.push(
+      tone
+        ? `${speaker} says this line aloud in a ${tone.toLowerCase()} tone: "${line}"`
+        : `${speaker} says this line aloud: "${line}"`
+    )
+  } else {
+    parts.push(`Line (spoken aloud): "${line}"`)
+  }
+  const block = parts.join('\n')
+  if (base.includes(line) && (!speaker || base.includes(speaker))) return base
   return base ? `${base}\n\n${block}` : block
 }
 
@@ -97,12 +126,17 @@ export function resolveVideoGenerationUserPrompt (opts: {
   prompt: string
   dialogueLine?: string
   includeSpokenDialogue?: boolean
+  dialogueSpeakerName?: string
+  dialogueTone?: string
   ambientSoundPrompt?: string
   includeAmbientSound?: boolean
 }): string {
   let out = opts.prompt.trim()
   if (opts.includeSpokenDialogue && opts.dialogueLine?.trim()) {
-    out = appendSpokenDialogueLine(out, opts.dialogueLine)
+    out = appendSpokenDialogueLine(out, opts.dialogueLine, {
+      speakerName: opts.dialogueSpeakerName,
+      tone: opts.dialogueTone
+    })
   }
   if (opts.includeAmbientSound && opts.ambientSoundPrompt?.trim()) {
     out = appendAmbientSoundPrompt(out, opts.ambientSoundPrompt)

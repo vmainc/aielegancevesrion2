@@ -103,29 +103,75 @@ export function buildCastBibleParagraph (cast: CastMemberForContinuity[]): strin
     .join('\n')
 }
 
-function shotTextBlobRaw (shot: {
+/**
+ * Continuity / bible headers that list the full project cast.
+ * Matching against these makes every board appear to include everyone.
+ */
+const CAST_MATCH_STRIP_FROM =
+  /(?:^|\n)\s*(?:CAST NAME TOKENS|FULL CAST BIBLE|DIRECTOR BIBLE|CHARACTER LOCK|CHARACTER CONTINUITY|CONTINUITY MEMORY|SETTING \(locked|STRICT EXCLUSIONS|ANIMAL-ONLY|STILL FRAME FOR THIS PANEL|Frame aspect ratio:)/i
+
+/** Extract the panel-only beat from a unified production prompt. */
+export function extractPrimaryActionForCastMatch (prompt: string): string {
+  const m = prompt.match(
+    /===\s*PRIMARY ACTION[^=]*===([\s\S]*?)(?=\n===|\nCAST NAME TOKENS|\nDIRECTOR BIBLE|\nFULL CAST BIBLE|\nCHARACTER LOCK|\nCHARACTER CONTINUITY|\nSTILL FRAME|\nFrame aspect ratio:|$)/i
+  )
+  return (m?.[1] || '').trim()
+}
+
+/**
+ * Shot-local text for per-panel cast chips / CHARACTER LOCK.
+ * Prefer title + description + PRIMARY ACTION; never grep FULL CAST BIBLE / CAST NAME TOKENS.
+ */
+export function shotTextForCastMatch (shot: {
   title?: string
   description?: string
   image_prompt?: string
   imagePrompt?: string
+  video_prompt?: string
+  videoPrompt?: string
 }): string {
-  return [
-    shot.title,
-    shot.description,
-    shot.image_prompt,
-    shot.imagePrompt
-  ]
-    .filter(Boolean)
-    .join(' ')
+  const title = (shot.title || '').trim()
+  const description = (shot.description || '').trim()
+  const image = (shot.image_prompt || shot.imagePrompt || '').trim()
+  const video = (shot.video_prompt || shot.videoPrompt || '').trim()
+
+  const parts: string[] = []
+  if (title) parts.push(title)
+  if (description) parts.push(description)
+
+  if (image) {
+    const primary = extractPrimaryActionForCastMatch(image)
+    if (primary) {
+      parts.push(primary)
+    } else {
+      const cut = image.search(CAST_MATCH_STRIP_FROM)
+      parts.push((cut >= 0 ? image.slice(0, cut) : image).trim())
+    }
+  }
+
+  if (video && !/FULL CAST BIBLE|CAST NAME TOKENS/i.test(video)) {
+    const cut = video.search(CAST_MATCH_STRIP_FROM)
+    const motion = (cut >= 0 ? video.slice(0, cut) : video).trim()
+    if (motion) parts.push(motion.slice(0, 2000))
+  }
+
+  return parts.join('\n')
 }
 
-/** Characters whose names appear in this shot's copy. */
+/** Characters whose names appear in this shot's beat (not the full cast bible). */
 export function castMembersInShot (
-  shot: { title?: string; description?: string; image_prompt?: string; imagePrompt?: string },
+  shot: {
+    title?: string
+    description?: string
+    image_prompt?: string
+    imagePrompt?: string
+    video_prompt?: string
+    videoPrompt?: string
+  },
   cast: CastMemberForContinuity[]
 ): CastMemberForContinuity[] {
-  const raw = shotTextBlobRaw(shot)
-  if (!raw.trim()) return cast
+  const raw = shotTextForCastMatch(shot)
+  if (!raw.trim()) return []
   const sorted = [...cast].sort((a, b) => b.name.length - a.name.length)
   const hits: CastMemberForContinuity[] = []
   const seen = new Set<string>()
@@ -137,7 +183,7 @@ export function castMembersInShot (
       hits.push(c)
     }
   }
-  return hits.length ? hits : cast
+  return hits
 }
 
 export function buildCharacterLockForShot (

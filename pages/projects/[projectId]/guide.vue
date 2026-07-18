@@ -1,20 +1,34 @@
 <template>
   <div class="max-w-3xl flex flex-col min-h-[calc(100vh-14rem)]">
-    <div class="mb-4">
-      <p class="text-sm text-gray-500">
-        <span class="text-primary font-medium">Project Guide</span>
-        · Chat about your film. The guide reads your story, cast, and scenes — and can suggest updates you approve before anything changes.
-      </p>
-    </div>
-
     <div
       v-if="!canUseGuide"
       class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
     >
-      Sign in and open a cloud project to use the Project Guide.
+      Sign in and open a cloud project to use the Guide.
     </div>
 
     <template v-else>
+      <div
+        v-if="statusBits.length"
+        class="mb-4 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-gray-500"
+      >
+        <span
+          v-for="(bit, i) in statusBits"
+          :key="bit"
+          class="inline-flex items-center gap-2"
+        >
+          <span v-if="i > 0" class="text-gray-300" aria-hidden="true">·</span>
+          <span>{{ bit }}</span>
+        </span>
+        <NuxtLink
+          v-if="needsStory"
+          :to="`/projects/${projectId}/overview`"
+          class="ml-1 text-primary font-medium hover:underline"
+        >
+          Add story →
+        </NuxtLink>
+      </div>
+
       <div class="flex-1 flex flex-col rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden min-h-[28rem]">
         <div
           ref="scrollEl"
@@ -29,20 +43,35 @@
 
           <div
             v-else-if="!messages.length"
-            class="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-6 text-sm text-gray-600"
+            class="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-8 text-sm text-gray-600"
           >
-            <p class="font-medium text-gray-900 mb-2">Start a conversation</p>
-            <p class="mb-3">
-              Ask about continuity, character motivation, tone, or what to refine next. When you decide something, the guide can suggest saving it to your project bible or character profiles.
+            <p class="text-base font-semibold text-gray-900 mb-1">
+              {{ needsStory ? 'Start with your story' : 'Ask anything about this project' }}
             </p>
-            <ul class="space-y-2 text-xs text-gray-500">
+            <p class="mb-5 text-gray-500 max-w-md">
+              <template v-if="needsStory">
+                Import a screenplay or add a synopsis on Story — then come back here to talk it through.
+              </template>
+              <template v-else>
+                The guide reads your story, cast, and scenes. Suggested changes only apply when you approve them.
+              </template>
+            </p>
+            <div v-if="needsStory" class="mb-4">
+              <NuxtLink
+                :to="`/projects/${projectId}/overview`"
+                class="inline-flex items-center px-4 py-2 rounded-lg bg-primary text-gray-950 text-sm font-semibold hover:bg-primary/90"
+              >
+                Go to Story →
+              </NuxtLink>
+            </div>
+            <ul v-else class="grid gap-2 sm:grid-cols-2">
               <li
                 v-for="(starter, i) in starters"
                 :key="i"
               >
                 <button
                   type="button"
-                  class="text-left w-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                  class="text-left w-full h-full rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 text-sm text-gray-800 hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
                   :disabled="sending"
                   @click="sendStarter(starter)"
                 >
@@ -121,7 +150,9 @@
             v-model="draft"
             rows="3"
             maxlength="4000"
-            placeholder="Ask about your story, characters, continuity…"
+            :placeholder="needsStory
+              ? 'Add a story first — or ask a general question…'
+              : 'Ask about your story, characters, continuity…'"
             class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary resize-y min-h-[4.5rem]"
             :disabled="sending"
             @keydown.enter.exact.prevent="sendMessage"
@@ -151,12 +182,13 @@
 
 <script setup lang="ts">
 import { newGuideMessageId, type GuideChatMessage, type GuideSuggestion } from '~/lib/project-guide'
+import { displayProjectSynopsis } from '~/lib/format-stored-concept'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
-import type { CreativeProject, ProjectDirector } from '~/types/creative-project'
+import type { CreativeProject, ProjectDirector, CreativeCharacter } from '~/types/creative-project'
+import type { CreativeSceneListItem } from '~/types/creative-scene'
 
 const PB_ID = /^[a-z0-9]{15}$/
 
-const route = useRoute()
 const { activeProject, activeProjectId, updateProject } = useCreativeProject()
 const { getAuthToken, isAuthenticated } = useAuth()
 const toast = useToast()
@@ -182,13 +214,69 @@ const applyingSuggestionId = ref('')
 const appliedSuggestionIds = ref(new Set<string>())
 const scrollEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLTextAreaElement | null>(null)
+const castCount = ref(0)
+const panelCount = ref(0)
 
-const starters = [
-  'What continuity gaps do you see in this project?',
-  'Claude should feel more haunted — help me refine his character profile.',
-  'Summarize the tone and visual style we should keep consistent.',
-  'What should I focus on before generating storyboard frames?'
-]
+const needsStory = computed(() => !displayProjectSynopsis(activeProject.value || {}).trim())
+
+const directorReady = computed(() => {
+  const d = activeProject.value?.director
+  if (!d) return false
+  return Boolean(
+    d.name?.trim() ||
+    d.style?.trim() ||
+    d.tone?.trim() ||
+    d.camera_preferences?.trim()
+  )
+})
+
+const statusBits = computed(() => {
+  const bits: string[] = []
+  if (!activeProject.value) return bits
+  bits.push(needsStory.value ? 'No story yet' : 'Story')
+  if (castCount.value > 0) bits.push(`${castCount.value} cast`)
+  if (directorReady.value) bits.push('Director')
+  if (panelCount.value > 0) bits.push(`${panelCount.value} panels`)
+  return bits
+})
+
+const starters = computed(() => {
+  if (needsStory.value) return [] as string[]
+  const list = [
+    'Summarize this story in three sentences.',
+    'What’s missing before I can generate video?',
+    'Who are the main characters, and what should stay consistent about them?',
+    'What should I focus on next?'
+  ]
+  if (!directorReady.value) {
+    list[1] = 'Help me set a clear visual tone for the director bible.'
+  }
+  return list
+})
+
+async function loadStatus () {
+  castCount.value = 0
+  panelCount.value = 0
+  if (!canUseGuide.value) return
+  const token = getAuthToken()
+  const id = projectId.value
+  if (!token || !id) return
+  try {
+    const headers = { Authorization: `Bearer ${token}` }
+    const [charRes, sceneRes] = await Promise.all([
+      $fetch<{ characters?: CreativeCharacter[] }>(`/api/projects/${id}/characters`, { headers }),
+      $fetch<{ scenes?: CreativeSceneListItem[] }>(`/api/projects/${id}/scenes`, { headers })
+    ])
+    castCount.value = charRes.characters?.length ?? 0
+    panelCount.value = (sceneRes.scenes ?? []).reduce((n, s) => n + (s.shotCount || 0), 0)
+  } catch {
+    /* status strip is optional */
+  }
+}
+
+watch([canUseGuide, projectId], () => {
+  void loadStatus()
+}, { immediate: true })
 
 watch(projectId, () => {
   appliedSuggestionIds.value = new Set()
@@ -262,7 +350,7 @@ async function sendMessage () {
       createdAt: new Date().toISOString()
     })
   } catch (e: unknown) {
-    toast.showToast(formatApiFetchError(e, 'Could not reach Project Guide'), 'error')
+    toast.showToast(formatApiFetchError(e, 'Could not reach Guide'), 'error')
     appendMessage({
       id: newGuideMessageId(),
       role: 'assistant',
@@ -349,5 +437,5 @@ async function clearChat () {
   }
 }
 
-useHead({ title: 'Project Guide' })
+useHead({ title: 'Guide' })
 </script>

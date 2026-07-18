@@ -1,4 +1,4 @@
-import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
+import { parseDurationFromConceptNotes, normalizeSynopsisText } from '~/lib/format-stored-concept'
 import { workflowModeFromProjectRecord } from '~/lib/project-workflow-mode'
 import type {
   CreativeProject,
@@ -90,15 +90,15 @@ export function pbRecordToCreativeProject (
     aspectRatio: (r.aspect_ratio || '16:9') as ProjectAspectRatio,
     goal: (r.goal || 'film') as ProjectGoal,
     workflowMode: workflowModeFromProjectRecord(r) as ProjectWorkflowMode,
-    preferredModelId: String(r.preferred_model_id || '').trim() || 'claude',
+    preferredModelId: String(r.preferred_model_id || '').trim() || 'gpt-4o',
     targetLength,
     targetDurationSeconds:
       typeof r.target_duration_seconds === 'number' && r.target_duration_seconds > 0
         ? Math.floor(r.target_duration_seconds)
         : parseDurationFromConceptNotes(r.concept_notes || ''),
-    synopsis: r.synopsis || '',
-    treatment: r.treatment || '',
-    conceptNotes: r.concept_notes || '',
+    synopsis: normalizeSynopsisText(r.synopsis),
+    treatment: typeof r.treatment === 'string' ? r.treatment : '',
+    conceptNotes: typeof r.concept_notes === 'string' ? r.concept_notes : '',
     genre: r.genre,
     tone: r.tone,
     themes,

@@ -5,7 +5,7 @@
         Video generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Clips are silent by default (no AI background music). Optionally add <span class="font-medium text-gray-800">spoken dialogue</span> or <span class="font-medium text-gray-800">ambient sound</span> (rain, hallway echo, etc.) for models that support audio.
+        Pick model, format, and project first — prompt options adapt to what your model supports.
       </p>
       <p
         v-if="loadingPanelPrefill"
@@ -154,10 +154,225 @@
       </div>
 
       <form v-else class="space-y-8 mb-10" @submit.prevent="onSubmit">
-        <section class="rounded-xl border border-gray-200 bg-gray-50/80 p-5 sm:p-6 space-y-4">
+        <!-- 1. Model, format & project (collapsible) -->
+        <details
+          class="rounded-xl border border-gray-200 bg-white overflow-hidden group"
+          open
+        >
+          <summary
+            class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-5 py-4 sm:px-6 flex items-start justify-between gap-3 hover:bg-gray-50/80 border-b border-transparent group-open:border-gray-200"
+          >
+            <div class="flex items-start gap-2.5 min-w-0 flex-1">
+              <span
+                class="text-gray-400 text-xs shrink-0 mt-0.5 transition-transform group-open:rotate-90"
+                aria-hidden="true"
+              >▶</span>
+              <div class="min-w-0">
+                <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+                  Model, format & project
+                </h2>
+                <p class="text-xs text-gray-500 mt-1 group-open:hidden truncate">
+                  {{ setupAccordionSummary }}
+                </p>
+                <p class="text-xs text-gray-500 mt-1 hidden group-open:block">
+                  Pick model and clip format first — prompt options below adapt to what your model supports.
+                </p>
+              </div>
+            </div>
+          </summary>
+
+          <div class="px-5 py-5 sm:px-6 sm:py-6 space-y-5 border-t border-gray-100">
+          <div>
+            <label for="vg-model" class="block text-sm font-medium text-gray-700 mb-1.5">Video model</label>
+            <select
+              id="vg-model"
+              v-model="primaryModelId"
+              required
+              class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+            >
+              <option value="" disabled>Select a model</option>
+              <option v-for="m in models" :key="m.id" :value="m.id">
+                {{ m.name }}
+              </option>
+            </select>
+            <div
+              v-if="primaryModel"
+              class="mt-2 flex flex-wrap gap-1.5"
+            >
+              <span
+                v-if="modelSupportsLastFrame(primaryModel)"
+                class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-emerald-50 text-emerald-800 border border-emerald-200"
+              >Start + end frame</span>
+              <span
+                v-if="primaryModel.generateAudio"
+                class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/15 text-primary border border-primary/25"
+              >Audio</span>
+              <span
+                v-if="primaryModel.supportsNegativePrompt"
+                class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-violet-100 text-violet-800 border border-violet-200"
+              >Negative prompts</span>
+              <span
+                v-if="!primaryModel.generateAudio && !primaryModel.supportsNegativePrompt && !modelSupportsLastFrame(primaryModel)"
+                class="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-medium text-gray-600 bg-gray-100 border border-gray-200"
+              >Silent · prompt + start frame</span>
+            </div>
+            <p v-if="primaryModel?.description" class="mt-2 text-xs text-gray-500 line-clamp-2">
+              {{ primaryModel.description }}
+            </p>
+          </div>
+
+          <details v-if="primaryModelId && compareModelOptions.length" class="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2">
+            <summary class="text-sm font-medium text-gray-800 cursor-pointer select-none py-1">
+              Compare with another model (optional)
+            </summary>
+            <p class="text-xs text-gray-500 mt-1 mb-2">
+              Runs a second generation in parallel so you can pick the better clip.
+            </p>
+            <div class="flex flex-wrap gap-2 pb-1">
+              <label
+                v-for="m in compareModelOptions"
+                :key="m.id"
+                class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 text-sm"
+              >
+                <input
+                  v-model="compareModelIds"
+                  type="checkbox"
+                  :value="m.id"
+                  class="rounded border-gray-300 text-primary focus:ring-primary"
+                >
+                <span class="text-gray-800">{{ m.name }}</span>
+              </label>
+            </div>
+          </details>
+
+          <div class="grid sm:grid-cols-2 gap-4">
+            <div>
+              <label for="vg-aspect" class="block text-sm font-medium text-gray-700 mb-1.5">Aspect ratio</label>
+              <select
+                id="vg-aspect"
+                v-model="aspectRatio"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              >
+                <option value="16:9">16:9 (landscape)</option>
+                <option value="9:16">9:16 (vertical)</option>
+                <option value="1:1">1:1 (square)</option>
+              </select>
+            </div>
+            <div>
+              <label for="vg-duration" class="block text-sm font-medium text-gray-700 mb-1.5">Clip length</label>
+              <select
+                id="vg-duration"
+                v-model.number="durationSeconds"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              >
+                <option :value="5">5 seconds</option>
+                <option :value="10">10 seconds</option>
+              </select>
+            </div>
+          </div>
+
+          <template v-if="isAuthenticated">
+            <div>
+              <label for="vg-project" class="block text-sm font-medium text-gray-700 mb-1.5">Save to project</label>
+              <div class="flex flex-wrap items-end gap-2">
+                <select
+                  id="vg-project"
+                  v-model="selectedProjectId"
+                  class="flex-1 min-w-[12rem] px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                >
+                  <option value="" disabled>Select project</option>
+                  <option v-for="p in pbProjects" :key="p.id" :value="p.id">
+                    {{ p.name }}{{ p.accessRole === 'member' ? ' (shared)' : '' }}
+                  </option>
+                </select>
+                <button
+                  type="button"
+                  class="shrink-0 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-800"
+                  @click="openCreateProjectModal"
+                >
+                  + New project
+                </button>
+              </div>
+              <p v-if="!pbProjects.length" class="mt-2 text-xs text-gray-600">
+                No projects yet — use <span class="font-medium text-gray-800">+ New project</span>.
+              </p>
+            </div>
+            <label class="inline-flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+              <input
+                v-model="saveToProject"
+                type="checkbox"
+                class="rounded border-gray-300 text-primary focus:ring-primary"
+              >
+              Save clip to project library (Assets → Video)
+            </label>
+          </template>
+          <p v-else class="text-sm text-amber-800">
+            <NuxtLink to="/login" class="text-primary font-medium underline">Sign in</NuxtLink>
+            to attach clips to a project.
+          </p>
+          </div>
+        </details>
+
+        <!-- 2. Prompt & generation settings (after model) -->
+        <section
+          v-if="hasModelSelected"
+          class="rounded-xl border border-gray-200 bg-gray-50/80 p-5 sm:p-6 space-y-4"
+        >
           <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-            Video
+            Shot description
           </h2>
+
+          <div
+            v-if="showCharacterPicker"
+            class="rounded-lg border border-gray-200 bg-white px-4 py-3 space-y-2"
+          >
+            <div>
+              <label for="vg-characters" class="block text-sm font-medium text-gray-700">
+                Characters in this shot
+              </label>
+              <p class="text-xs text-gray-500 mt-0.5">
+                <template v-if="panelPrefill?.sceneId && panelSceneLabel">
+                  Scene: {{ panelSceneLabel }}. Selected cast is woven into the prompt and frame generation.
+                </template>
+                <template v-else>
+                  Select cast to include in frame generation and saved clip metadata.
+                </template>
+              </p>
+            </div>
+            <p v-if="projectCharactersLoading" class="text-xs text-gray-500">Loading cast…</p>
+            <p v-else-if="projectCharactersError" class="text-xs text-red-600">{{ projectCharactersError }}</p>
+            <p v-else-if="!projectCharacterOptions.length" class="text-xs text-gray-500">
+              No characters on this project yet — add them on the Characters step.
+            </p>
+            <template v-else>
+              <select
+                id="vg-characters"
+                v-model="selectedCharacterIds"
+                multiple
+                class="w-full min-h-[6.5rem] px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              >
+                <option
+                  v-for="c in projectCharacterOptions"
+                  :key="c.id"
+                  :value="c.id"
+                >
+                  {{ c.name }}{{ c.inScene ? '' : ' (not in scene text)' }}
+                </option>
+              </select>
+              <p class="text-xs text-gray-500">
+                Hold <kbd class="px-1 rounded bg-gray-100 border border-gray-200 text-[10px]">⌘</kbd> or
+                <kbd class="px-1 rounded bg-gray-100 border border-gray-200 text-[10px]">Ctrl</kbd>
+                to select multiple.
+                <span v-if="selectedCharacterIds.length" class="text-gray-700">
+                  — {{ selectedCharacterSummary }}
+                </span>
+              </p>
+              <p v-if="refreshingPromptForCast" class="text-xs text-primary animate-pulse">
+                Updating prompt for selected cast…
+              </p>
+            </template>
+          </div>
+
           <div>
             <div class="flex justify-between items-center gap-2 mb-1.5">
               <label for="vg-prompt" class="text-sm font-medium text-gray-700">Prompt</label>
@@ -177,7 +392,7 @@
               {{ productionBibleDebugLine }}
             </p>
           </div>
-          <div>
+          <div v-if="anySelectedSupportsNegative">
             <label for="vg-negative" class="block text-sm font-medium text-gray-700 mb-1.5">
               Negative prompt
               <span class="font-normal text-gray-500">(what to avoid)</span>
@@ -205,9 +420,10 @@
             :bible-project-id="startFrameBibleProjectId"
             :bible-scene-id="panelPrefill?.sceneId"
             :bible-shot-id="panelPrefill?.shotId"
-            :bible-character-ids="panelPrefill?.characterIds"
+            :bible-character-ids="effectiveCharacterIds"
           />
           <VideoStartFramePicker
+            v-if="anySelectedSupportsEndFrame"
             v-model:frame-image-url="endFrameUrl"
             role="end"
             :prompt="prompt"
@@ -215,10 +431,10 @@
             :bible-project-id="startFrameBibleProjectId"
             :bible-scene-id="panelPrefill?.sceneId"
             :bible-shot-id="panelPrefill?.shotId"
-            :bible-character-ids="panelPrefill?.characterIds"
+            :bible-character-ids="effectiveCharacterIds"
           />
           <p
-            v-if="endFrameCompatibilityHint"
+            v-if="anySelectedSupportsEndFrame && endFrameCompatibilityHint"
             class="text-xs rounded-lg px-3 py-2"
             :class="endFrameCompatibilityWarn
               ? 'text-amber-900 bg-amber-50 border border-amber-200'
@@ -226,33 +442,8 @@
           >
             {{ endFrameCompatibilityHint }}
           </p>
-          <div class="grid sm:grid-cols-2 gap-4">
-            <div>
-              <label for="vg-aspect" class="block text-sm font-medium text-gray-700 mb-1.5">Aspect ratio</label>
-              <select
-                id="vg-aspect"
-                v-model="aspectRatio"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-              >
-                <option value="16:9">16:9 (landscape)</option>
-                <option value="9:16">9:16 (vertical)</option>
-                <option value="1:1">1:1 (square)</option>
-              </select>
-            </div>
-            <div>
-              <label for="vg-duration" class="block text-sm font-medium text-gray-700 mb-1.5">Clip length</label>
-              <select
-                id="vg-duration"
-                v-model.number="durationSeconds"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-              >
-                <option :value="5">5 seconds</option>
-                <option :value="10">10 seconds</option>
-              </select>
-            </div>
-          </div>
 
-          <div class="rounded-lg border border-gray-200 bg-white px-4 py-3 space-y-3">
+          <div v-if="anySelectedSupportsAudio" class="rounded-lg border border-gray-200 bg-white px-4 py-3 space-y-3">
             <label class="inline-flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
               <input
                 v-model="includeSpokenDialogue"
@@ -262,23 +453,68 @@
               <span>
                 <span class="font-medium text-gray-900">Include spoken dialogue</span>
                 <span class="block text-xs text-gray-500 mt-0.5">
-                  Quick talking clips — the model synthesizes speech in the video file (no background music).
-                  Works best with models marked <span class="font-medium text-gray-700">Audio</span> below.
+                  The model synthesizes speech in the video file (no background music).
                 </span>
               </span>
             </label>
-            <div v-if="includeSpokenDialogue">
-              <label for="vg-dialogue" class="block text-sm font-medium text-gray-700 mb-1.5">What they say</label>
-              <textarea
-                id="vg-dialogue"
-                v-model="dialogueLine"
-                rows="2"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-                placeholder='e.g. "We have to leave — now."'
-              />
-              <p class="mt-1.5 text-xs text-gray-500">
-                Optional if the line is already in your prompt above. Lip-sync quality varies by model.
-              </p>
+            <div v-if="includeSpokenDialogue" class="space-y-3">
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label for="vg-dialogue-speaker" class="block text-sm font-medium text-gray-700 mb-1.5">
+                    Who speaks
+                  </label>
+                  <select
+                    id="vg-dialogue-speaker"
+                    v-model="dialogueSpeakerId"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                    :disabled="!dialogueSpeakerOptions.length"
+                  >
+                    <option value="" disabled>
+                      {{ dialogueSpeakerOptions.length ? 'Select character…' : 'No characters in shot' }}
+                    </option>
+                    <option
+                      v-for="c in dialogueSpeakerOptions"
+                      :key="c.id"
+                      :value="c.id"
+                    >
+                      {{ c.name }}
+                    </option>
+                  </select>
+                  <p v-if="!dialogueSpeakerOptions.length" class="mt-1 text-xs text-amber-800">
+                    Select characters in this shot above so we can name who speaks.
+                  </p>
+                </div>
+                <div>
+                  <label for="vg-dialogue-tone" class="block text-sm font-medium text-gray-700 mb-1.5">
+                    Tone
+                  </label>
+                  <select
+                    id="vg-dialogue-tone"
+                    v-model="dialogueTone"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                  >
+                    <option
+                      v-for="t in dialogueToneOptions"
+                      :key="t.value"
+                      :value="t.value"
+                    >
+                      {{ t.label }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label for="vg-dialogue" class="block text-sm font-medium text-gray-700 mb-1.5">
+                  What {{ dialogueSpeakerName || 'they' }} say
+                </label>
+                <textarea
+                  id="vg-dialogue"
+                  v-model="dialogueLine"
+                  rows="2"
+                  class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                  placeholder='e.g. "We have to leave — now."'
+                />
+              </div>
             </div>
 
             <label class="inline-flex items-start gap-2 text-sm text-gray-800 cursor-pointer pt-1 border-t border-gray-100">
@@ -290,7 +526,7 @@
               <span>
                 <span class="font-medium text-gray-900">Include ambient / background sound</span>
                 <span class="block text-xs text-gray-500 mt-0.5">
-                  Diegetic in-scene sound — rain, wind, hallway echo, office hum, crowd murmur. Still no musical score.
+                  Diegetic in-scene sound — rain, wind, hallway echo. Still no musical score.
                 </span>
               </span>
             </label>
@@ -307,7 +543,7 @@
               <div class="flex flex-wrap gap-1.5 mt-2">
                 <button
                   v-for="preset in ambientSoundPresets"
-                  :key="preset"
+                  :key="preset.label"
                   type="button"
                   class="px-2 py-1 text-[11px] rounded-md border border-gray-200 bg-gray-50 text-gray-700 hover:border-primary/40 hover:bg-primary/5"
                   @click="applyAmbientPreset(preset)"
@@ -326,8 +562,7 @@
           </div>
 
           <p class="text-xs text-gray-500">
-            By default clips are silent. Dialogue and ambient options ask the model to synthesize sound in the file (still no AI background music).
-            Video on OpenRouter is API-only and may be in alpha.
+            Clips are silent by default unless you enable audio above.
             <a
               href="https://openrouter.ai/models?fmt=cards&output_modalities=video"
               target="_blank"
@@ -337,105 +572,12 @@
           </p>
         </section>
 
-        <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-            Save to project
-          </h2>
-          <p v-if="!isAuthenticated" class="text-sm text-amber-800">
-            <NuxtLink to="/login" class="text-primary font-medium underline">Sign in</NuxtLink>
-            to save clips to a project library.
-          </p>
-          <template v-else>
-            <label class="inline-flex items-center gap-2 text-sm text-gray-800 cursor-pointer">
-              <input
-                v-model="saveToProject"
-                type="checkbox"
-                class="rounded border-gray-300 text-primary focus:ring-primary"
-              >
-              Save to project library (Assets → Video)
-            </label>
-            <div v-if="saveToProject">
-              <label for="vg-project" class="block text-sm font-medium text-gray-700 mb-1.5">Project</label>
-              <div class="flex flex-wrap items-end gap-2">
-                <select
-                  id="vg-project"
-                  v-model="selectedProjectId"
-                  required
-                  class="flex-1 min-w-[12rem] sm:max-w-md px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-                >
-                  <option value="" disabled>Select project</option>
-                  <option v-for="p in pbProjects" :key="p.id" :value="p.id">
-                    {{ p.name }}
-                  </option>
-                </select>
-                <button
-                  type="button"
-                  class="shrink-0 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-800"
-                  @click="openCreateProjectModal"
-                >
-                  + New project
-                </button>
-              </div>
-              <p v-if="!pbProjects.length" class="mt-2 text-xs text-gray-600">
-                No projects yet — use <span class="font-medium text-gray-800">+ New project</span> to create one here.
-              </p>
-            </div>
-          </template>
-        </section>
-
-        <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
-          <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">
-            Models
-          </h2>
-          <p class="text-xs text-gray-500 mb-4">
-            Select one or more; generations run in parallel.
-            Models marked <span class="font-medium text-gray-700">Start+End</span> accept an ending frame.
-            <span v-if="data?.source === 'api'" class="block sm:inline sm:ml-1 mt-1 sm:mt-0">
-              Live list (<code class="rounded bg-gray-100 px-1 py-0.5 text-gray-800">output_modalities=video</code>).
-            </span>
-          </p>
-          <div v-if="!models.length" class="text-sm text-gray-500 py-2">
-            No models loaded.
-          </div>
-          <div v-else class="flex flex-wrap gap-3">
-            <label
-              v-for="m in models"
-              :key="m.id"
-              class="inline-flex items-start gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 max-w-full sm:max-w-[calc(50%-0.375rem)]"
-            >
-              <input
-                v-model="selectedModelIds"
-                type="checkbox"
-                :value="m.id"
-                class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
-              >
-              <span class="min-w-0">
-                <span class="block text-sm text-gray-800 font-medium leading-snug">
-                  {{ m.name }}
-                  <span
-                    v-if="modelSupportsLastFrame(m)"
-                    class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-emerald-50 text-emerald-800 border border-emerald-200 align-middle"
-                    title="Supports starting and ending frame control"
-                  >Start+End</span>
-                  <span
-                    v-if="m.generateAudio"
-                    class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-primary/15 text-primary border border-primary/25 align-middle"
-                  >Audio</span>
-                  <span
-                    v-if="m.supportsNegativePrompt"
-                    class="ml-1.5 inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide bg-violet-100 text-violet-800 border border-violet-200 align-middle"
-                    title="Supports native negative prompt via OpenRouter"
-                  >Negatives</span>
-                </span>
-                <span class="block text-xs font-mono text-gray-500 truncate mt-0.5" :title="m.id">{{ m.id }}</span>
-                <span
-                  v-if="m.description"
-                  class="block text-xs text-gray-500 line-clamp-2 mt-1"
-                >{{ m.description }}</span>
-              </span>
-            </label>
-          </div>
-        </section>
+        <p
+          v-else
+          class="rounded-xl border border-dashed border-gray-300 bg-gray-50/80 px-5 py-8 text-center text-sm text-gray-600"
+        >
+          Select a video model above to configure your prompt and frames.
+        </p>
 
         <div v-if="formError" class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
           {{ formError }}
@@ -447,7 +589,7 @@
             class="px-6 py-3 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="!canSubmit"
           >
-            {{ generating ? `Generating… ${doneCount}/${selectedModelIds.length}` : 'Generate Video' }}
+            {{ generating ? `Generating… ${doneCount}/${selectedModelIdsList.length}` : 'Generate Video' }}
           </button>
         </div>
       </form>
@@ -457,7 +599,7 @@
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <article
             v-for="m in models"
-            v-show="selectedModelIds.includes(m.id) && slotByModel[m.id]"
+            v-show="selectedModelIdsList.includes(m.id) && slotByModel[m.id]"
             :key="m.id"
             class="rounded-xl overflow-hidden border border-gray-200 bg-white flex flex-col shadow-sm"
           >
@@ -609,7 +751,22 @@ import {
 } from '~/composables/useOpenRouterVideoGen'
 import { resolveVideoGenerationUserPrompt } from '~/lib/video-generation-audio-policy'
 import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
+import {
+  defaultAspectRatioFromPrefs,
+  defaultDurationFromPrefs,
+  parseVideoGenerationAspectRatio,
+  parseVideoGenerationDurationSeconds,
+  readVideoGenerationPrefs,
+  writeVideoGenerationPrefs
+} from '~/lib/video-generation-prefs'
+import {
+  findCharactersInShot,
+  type ProjectCharacterRef
+} from '~/lib/shot-character-continuity'
 import type { CreativeProject, ProjectAspectRatio } from '~/types/creative-project'
+import type { CreativeShot } from '~/types/creative-shot'
+import type { CreativeSceneListItem } from '~/types/creative-scene'
+import { useProjectCharacterRefs } from '~/composables/useProjectCharacterRefs'
 
 const PB_ID = /^[a-z0-9]{15}$/
 
@@ -692,17 +849,35 @@ const endFrameUrl = ref<string | null>(
     ? appendPlaybackAccessToken(boot.endFrameUrl.trim(), getAuthToken())
     : null
 )
-const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(boot?.aspectRatio ?? '16:9')
-const durationSeconds = ref(
-  typeof boot?.durationSeconds === 'number' &&
-    (boot.durationSeconds === 5 || boot.durationSeconds === 10)
-    ? boot.durationSeconds
-    : 5
+const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(
+  defaultAspectRatioFromPrefs(boot?.aspectRatio)
+)
+const durationSeconds = ref<5 | 10>(
+  defaultDurationFromPrefs(boot?.durationSeconds)
 )
 const includeSpokenDialogue = ref(false)
 const dialogueLine = ref('')
+const dialogueSpeakerId = ref('')
+const dialogueTone = ref('neutral')
 const includeAmbientSound = ref(false)
 const ambientSoundPrompt = ref('')
+
+const dialogueToneOptions = [
+  { value: 'neutral', label: 'Neutral' },
+  { value: 'calm', label: 'Calm' },
+  { value: 'soft', label: 'Soft' },
+  { value: 'whispered', label: 'Whispered' },
+  { value: 'urgent', label: 'Urgent' },
+  { value: 'tense', label: 'Tense' },
+  { value: 'angry', label: 'Angry' },
+  { value: 'fearful', label: 'Fearful' },
+  { value: 'sad', label: 'Sad' },
+  { value: 'excited', label: 'Excited' },
+  { value: 'confident', label: 'Confident' },
+  { value: 'deadpan', label: 'Deadpan' },
+  { value: 'warm', label: 'Warm' },
+  { value: 'cold', label: 'Cold' }
+] as const
 
 const ambientSoundPresets = [
   { label: 'Rain & thunder', text: 'Soft rain on surfaces, occasional distant thunder, no music.' },
@@ -716,7 +891,10 @@ function applyAmbientPreset (preset: (typeof ambientSoundPresets)[number]) {
   ambientSoundPrompt.value = preset.text
   includeAmbientSound.value = true
 }
-const selectedModelIds = ref<string[]>([])
+const primaryModelId = ref('')
+const compareModelIds = ref<string[]>([])
+const prefsHydrated = ref(false)
+const modelsPrefsHydrated = ref(false)
 const formError = ref('')
 const generating = ref(false)
 const doneCount = ref(0)
@@ -747,11 +925,227 @@ const startFrameBibleProjectId = computed(() => {
   const selected = selectedProjectId.value.trim()
   return PB_ID.test(selected) ? selected : ''
 })
+
+const characterProjectId = computed(() => startFrameBibleProjectId.value)
+const {
+  refs: projectCharacterRefs,
+  loading: projectCharactersLoading,
+  loadError: projectCharactersError
+} = useProjectCharacterRefs(characterProjectId)
+
+const selectedCharacterIds = ref<string[]>(
+  boot?.characterIds?.filter(id => PB_ID.test(id)) ?? []
+)
+const suppressCastPromptRefresh = ref(false)
+const refreshingPromptForCast = ref(false)
+const initialSceneSelectionApplied = ref(false)
+const panelScene = ref<Pick<CreativeSceneListItem, 'heading' | 'summary'> | null>(null)
+const panelShot = ref<CreativeShot | null>(null)
+
+const showCharacterPicker = computed(() =>
+  Boolean(isAuthenticated.value && startFrameBibleProjectId.value && primaryModelId.value)
+)
+
+const sceneCharacterIds = computed(() => {
+  if (!panelShot.value || !projectCharacterRefs.value.length) return new Set<string>()
+  const inShot = findCharactersInShot(
+    panelShot.value,
+    projectCharacterRefs.value,
+    panelScene.value?.summary
+  )
+  return new Set(inShot.map(c => c.id))
+})
+
+type CharacterOption = ProjectCharacterRef & { inScene: boolean }
+
+const projectCharacterOptions = computed<CharacterOption[]>(() => {
+  const inScene = sceneCharacterIds.value
+  const hasSceneContext = Boolean(panelPrefill.value?.sceneId && panelShot.value)
+  return projectCharacterRefs.value
+    .map(c => ({
+      ...c,
+      inScene: hasSceneContext ? inScene.has(c.id) : true
+    }))
+    .sort((a, b) => {
+      if (a.inScene !== b.inScene) return a.inScene ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+})
+
+const effectiveCharacterIds = computed(() =>
+  selectedCharacterIds.value.filter(id => projectCharacterRefs.value.some(c => c.id === id))
+)
+
+const selectedCharacterSummary = computed(() => {
+  const names = projectCharacterRefs.value
+    .filter(c => selectedCharacterIds.value.includes(c.id))
+    .map(c => c.name)
+  if (!names.length) return 'No characters selected'
+  if (names.length <= 3) return names.join(', ')
+  return `${names.slice(0, 3).join(', ')} +${names.length - 3} more`
+})
+
+const panelSceneLabel = computed(() => {
+  const heading = (panelScene.value?.heading || '').trim()
+  if (heading) return heading
+  return (panelPrefill.value?.shotTitle || '').trim()
+})
+
+const dialogueSpeakerOptions = computed(() => {
+  const selected = new Set(effectiveCharacterIds.value)
+  if (selected.size) {
+    return projectCharacterRefs.value.filter(c => selected.has(c.id))
+  }
+  const inScene = projectCharacterOptions.value.filter(c => c.inScene)
+  return inScene.length ? inScene : projectCharacterOptions.value
+})
+
+const dialogueSpeakerName = computed(() => {
+  const id = dialogueSpeakerId.value
+  if (!id) return ''
+  return dialogueSpeakerOptions.value.find(c => c.id === id)?.name
+    || projectCharacterRefs.value.find(c => c.id === id)?.name
+    || ''
+})
+
+function syncDialogueSpeakerSelection () {
+  const options = dialogueSpeakerOptions.value
+  if (!options.length) {
+    dialogueSpeakerId.value = ''
+    return
+  }
+  if (options.some(c => c.id === dialogueSpeakerId.value)) return
+  dialogueSpeakerId.value = options[0]?.id || ''
+}
+
+watch(dialogueSpeakerOptions, () => {
+  syncDialogueSpeakerSelection()
+}, { deep: true })
+
+watch(includeSpokenDialogue, (on) => {
+  if (on) syncDialogueSpeakerSelection()
+})
+
+let refreshPromptTimer: ReturnType<typeof setTimeout> | null = null
+
+async function loadPanelSceneContext () {
+  const pre = panelPrefill.value
+  const pid = startFrameBibleProjectId.value
+  if (!pre?.sceneId || !pre?.shotId || !PB_ID.test(pid)) {
+    panelScene.value = null
+    panelShot.value = null
+    return
+  }
+  const headers = authHeaders()
+  if (!headers) return
+  try {
+    const [sceneRes, shotsRes] = await Promise.all([
+      $fetch<{ scene: CreativeSceneListItem }>(`/api/projects/${pid}/scenes/${pre.sceneId}`, { headers }),
+      $fetch<{ shots: CreativeShot[] }>(`/api/projects/${pid}/scenes/${pre.sceneId}/shots`, { headers })
+    ])
+    panelScene.value = {
+      heading: sceneRes.scene.heading,
+      summary: sceneRes.scene.summary
+    }
+    panelShot.value = shotsRes.shots.find(s => s.id === pre.shotId) || null
+    applySceneDefaultCharacterSelection()
+  } catch {
+    panelScene.value = null
+    panelShot.value = null
+  }
+}
+
+function applySceneDefaultCharacterSelection () {
+  if (initialSceneSelectionApplied.value || !panelShot.value || !projectCharacterRefs.value.length) return
+  const inScene = findCharactersInShot(
+    panelShot.value,
+    projectCharacterRefs.value,
+    panelScene.value?.summary
+  )
+  if (!inScene.length) return
+  suppressCastPromptRefresh.value = true
+  selectedCharacterIds.value = inScene.map(c => c.id)
+  suppressCastPromptRefresh.value = false
+  initialSceneSelectionApplied.value = true
+}
+
+function applyProjectDefaultCharacterSelection () {
+  if (panelPrefill.value?.sceneId || !projectCharacterRefs.value.length) return
+  if (selectedCharacterIds.value.length) return
+  selectedCharacterIds.value = projectCharacterRefs.value.map(c => c.id)
+}
+
+async function refreshPromptForSelectedCharacters () {
+  const pre = panelPrefill.value
+  const pid = startFrameBibleProjectId.value
+  if (!pre?.sceneId || !pre?.shotId || !PB_ID.test(pid)) return
+  const headers = authHeaders()
+  if (!headers) return
+  refreshingPromptForCast.value = true
+  try {
+    const res = await $fetch<VideoGenerationPrefill>(
+      `/api/projects/${pid}/video-panel-prefill`,
+      {
+        query: {
+          sceneId: pre.sceneId,
+          shotId: pre.shotId,
+          characterIds: selectedCharacterIds.value.join(',')
+        },
+        headers
+      }
+    )
+    suppressCastPromptRefresh.value = true
+    prompt.value = res.prompt
+    negativePrompt.value = (res.negativePrompt || '').trim()
+    panelPrefill.value = {
+      ...pre,
+      characterIds: [...selectedCharacterIds.value],
+      productionBibleContext: res.productionBibleContext ?? pre.productionBibleContext
+    }
+  } catch {
+    // User may have cleared all cast — keep their selection.
+  } finally {
+    suppressCastPromptRefresh.value = false
+    refreshingPromptForCast.value = false
+  }
+}
+
+watch(selectedCharacterIds, () => {
+  if (suppressCastPromptRefresh.value) return
+  const pre = panelPrefill.value
+  if (!pre?.sceneId || !pre?.shotId) return
+  if (refreshPromptTimer) clearTimeout(refreshPromptTimer)
+  refreshPromptTimer = setTimeout(() => void refreshPromptForSelectedCharacters(), 400)
+}, { deep: true })
+
+watch(projectCharacterRefs, () => {
+  applySceneDefaultCharacterSelection()
+  applyProjectDefaultCharacterSelection()
+})
+
+watch(startFrameBibleProjectId, (pid, prev) => {
+  if (pid === prev) return
+  if (!pid) {
+    selectedCharacterIds.value = []
+    panelScene.value = null
+    panelShot.value = null
+    initialSceneSelectionApplied.value = false
+    return
+  }
+  if (!panelPrefill.value?.sceneId) {
+    panelScene.value = null
+    panelShot.value = null
+    initialSceneSelectionApplied.value = false
+    if (!panelPrefill.value?.characterIds?.length) {
+      selectedCharacterIds.value = []
+    }
+  }
+})
 const prefillBanner = ref(
   boot?.shotTitle?.trim()
-    ? `Opened from project storyboard — “${boot.shotTitle.trim()}”. Prompt, negative prompt, and seed frame are prefilled; pick one or more models below.`
+    ? `Opened from project storyboard — “${boot.shotTitle.trim()}”. Prompt and frames are prefilled; confirm model and project above.`
     : boot?.prompt?.trim()
-      ? 'Opened from a project panel — prompt, negative prompt, and seed frame are prefilled; pick one or more models below.'
+      ? 'Opened from a project panel — prompt and frames are prefilled; confirm model and project above.'
       : ''
 )
 const prefillApplied = ref(Boolean(boot?.prompt?.trim()))
@@ -768,6 +1162,38 @@ const createProjectForm = reactive({
 const pbProjects = computed(() =>
   projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
 )
+
+const selectedModelIdsList = computed(() => {
+  const ids = [primaryModelId.value, ...compareModelIds.value].filter(Boolean)
+  return [...new Set(ids)]
+})
+
+const primaryModel = computed(() =>
+  models.value.find(m => m.id === primaryModelId.value)
+)
+
+const compareModelOptions = computed(() =>
+  models.value.filter(m => m.id !== primaryModelId.value)
+)
+
+const hasModelSelected = computed(() => Boolean(primaryModelId.value))
+
+const setupAccordionSummary = computed(() => {
+  const parts: string[] = []
+  parts.push(primaryModel.value?.name || 'No model selected')
+  parts.push(aspectRatio.value)
+  parts.push(`${durationSeconds.value}s`)
+  if (isAuthenticated.value && selectedProjectId.value) {
+    const project = pbProjects.value.find(p => p.id === selectedProjectId.value)
+    parts.push(project?.name || 'Project')
+  } else if (!isAuthenticated.value) {
+    parts.push('Not signed in')
+  }
+  if (compareModelIds.value.length) {
+    parts.push(`+${compareModelIds.value.length} compare`)
+  }
+  return parts.join(' · ')
+})
 
 function syncSelectedProjectFromPin () {
   const pin = pinnedProjectId.value.trim()
@@ -794,10 +1220,88 @@ watch([pbProjects, clientReady], () => {
     syncSelectedProjectFromPin()
     return
   }
-  if (!selectedProjectId.value && pbProjects.value.length) {
+  hydrateVideoGenerationPrefs()
+  if (!selectedProjectId.value && pbProjects.value.length && prefsHydrated.value) {
     selectedProjectId.value = pbProjects.value[0].id
   }
 }, { immediate: true })
+
+function hydrateVideoGenerationPrefs () {
+  if (!import.meta.client) return
+  const prefs = readVideoGenerationPrefs()
+
+  if (!pinnedProjectId.value && prefs.projectId && PB_ID.test(prefs.projectId)) {
+    if (!pbProjects.value.length || pbProjects.value.some(p => p.id === prefs.projectId)) {
+      selectedProjectId.value = prefs.projectId
+      saveToProject.value = true
+    }
+  }
+
+  if (!modelsPrefsHydrated.value && models.value.length) {
+    const validPrimary =
+      prefs.primaryModelId && models.value.some(m => m.id === prefs.primaryModelId)
+        ? prefs.primaryModelId
+        : models.value[0]?.id || ''
+    if (validPrimary) {
+      primaryModelId.value = validPrimary
+    }
+    if (prefs.compareModelIds?.length) {
+      compareModelIds.value = prefs.compareModelIds.filter(
+        id => id !== primaryModelId.value && models.value.some(m => m.id === id)
+      )
+    }
+    modelsPrefsHydrated.value = true
+  }
+
+  if (!prefillApplied.value && !boot?.aspectRatio) {
+    const ar = parseVideoGenerationAspectRatio(prefs.aspectRatio)
+    if (ar) aspectRatio.value = ar
+  }
+  if (!prefillApplied.value && !boot?.durationSeconds) {
+    const dur = parseVideoGenerationDurationSeconds(prefs.durationSeconds)
+    if (dur) durationSeconds.value = dur
+  }
+
+  if (modelsPrefsHydrated.value && (primaryModelId.value || !models.value.length)) {
+    prefsHydrated.value = true
+  }
+}
+
+watch(models, () => {
+  hydrateVideoGenerationPrefs()
+}, { immediate: true })
+
+function persistVideoGenerationPrefs () {
+  if (!import.meta.client) return
+  writeVideoGenerationPrefs({
+    primaryModelId: primaryModelId.value || undefined,
+    compareModelIds: compareModelIds.value.length ? [...compareModelIds.value] : undefined,
+    projectId:
+      selectedProjectId.value && PB_ID.test(selectedProjectId.value)
+        ? selectedProjectId.value
+        : undefined,
+    aspectRatio: aspectRatio.value,
+    durationSeconds: durationSeconds.value
+  })
+}
+
+watch(
+  [primaryModelId, compareModelIds, selectedProjectId, aspectRatio, durationSeconds],
+  persistVideoGenerationPrefs,
+  { deep: true }
+)
+
+watch(primaryModelId, (id) => {
+  compareModelIds.value = compareModelIds.value.filter(mid => mid !== id)
+  const m = models.value.find(x => x.id === id)
+  if (!m?.generateAudio) {
+    includeSpokenDialogue.value = false
+    includeAmbientSound.value = false
+  }
+  if (!modelSupportsLastFrame(m)) {
+    endFrameUrl.value = null
+  }
+})
 
 function openCreateProjectModal () {
   createProjectForm.name = ''
@@ -870,10 +1374,15 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
     saveToProject.value = true
     syncSelectedProjectFromPin()
   }
+  suppressCastPromptRefresh.value = true
+  selectedCharacterIds.value = (p.characterIds || []).filter(id => PB_ID.test(id))
+  suppressCastPromptRefresh.value = false
+  initialSceneSelectionApplied.value = false
+  void loadPanelSceneContext()
   const label = (p.shotTitle || '').trim()
   prefillBanner.value = label
-    ? `Opened from project storyboard — “${label}”. Prompt, negative prompt, and seed frame are prefilled; pick one or more models below.`
-    : 'Opened from a project panel — prompt, negative prompt, and seed frame are prefilled; pick one or more models below.'
+    ? `Opened from project storyboard — “${label}”. Prompt and frames are prefilled; confirm model and project above.`
+    : 'Opened from a project panel — prompt and frames are prefilled; confirm model and project above.'
 }
 
 function stripPanelQueryFromRoute () {
@@ -954,6 +1463,11 @@ onMounted(async () => {
   if (!tryApplyStashedPrefill() && hasPanelDeepLink.value) {
     await fetchPanelPrefillFromApi()
   }
+  if (panelPrefill.value?.sceneId && panelPrefill.value?.shotId) {
+    void loadPanelSceneContext()
+  } else {
+    applyProjectDefaultCharacterSelection()
+  }
   if (isAuthenticated.value && clientReady.value) {
     void loadServerProjects().then(() => {
       syncSelectedProjectFromPin()
@@ -986,7 +1500,7 @@ watch(isAuthenticated, (v) => {
 const hasAnySlot = computed(() => Object.keys(slotByModel).length > 0)
 
 const successfulResults = computed(() =>
-  selectedModelIds.value
+  selectedModelIdsList.value
     .filter(id => slotByModel[id]?.status === 'done' && slotByModel[id]?.playbackUrl)
     .map(id => ({
       modelId: id,
@@ -997,7 +1511,7 @@ const successfulResults = computed(() =>
 )
 
 const failedResults = computed(() =>
-  selectedModelIds.value
+  selectedModelIdsList.value
     .filter(id => slotByModel[id]?.status === 'error')
     .map(id => ({
       modelId: id,
@@ -1007,7 +1521,7 @@ const failedResults = computed(() =>
 )
 
 const generatingSubLabel = computed(() => {
-  const total = selectedModelIds.value.length
+  const total = selectedModelIdsList.value.length
   if (!total) return 'Starting…'
   return `Finished ${doneCount.value} of ${total} model${total === 1 ? '' : 's'}…`
 })
@@ -1043,45 +1557,62 @@ function modelSupportsLastFrame (m: VideoModel | undefined): boolean {
   )
 }
 
+const anySelectedSupportsNegative = computed(() =>
+  selectedModelIdsList.value.some(
+    id => models.value.find(m => m.id === id)?.supportsNegativePrompt === true
+  )
+)
+
+const anySelectedSupportsAudio = computed(() =>
+  selectedModelIdsList.value.some(
+    id => models.value.find(m => m.id === id)?.generateAudio === true
+  )
+)
+
+const anySelectedSupportsEndFrame = computed(() =>
+  selectedModelIdsList.value.some(id => modelSupportsLastFrame(models.value.find(m => m.id === id)))
+)
+
 const selectedLastFrameModels = computed(() =>
-  selectedModelIds.value
+  selectedModelIdsList.value
     .map(id => models.value.find(m => m.id === id))
     .filter((m): m is VideoModel => Boolean(m) && modelSupportsLastFrame(m))
 )
 
 const selectedNonLastFrameModels = computed(() =>
-  selectedModelIds.value
+  selectedModelIdsList.value
     .map(id => models.value.find(m => m.id === id))
     .filter((m): m is VideoModel => Boolean(m) && !modelSupportsLastFrame(m))
 )
 
 const endFrameCompatibilityWarn = computed(() =>
-  Boolean(endFrameUrl.value && selectedModelIds.value.length && !selectedLastFrameModels.value.length)
+  Boolean(endFrameUrl.value && selectedModelIdsList.value.length && !selectedLastFrameModels.value.length)
 )
 
 const endFrameCompatibilityHint = computed(() => {
+  if (!anySelectedSupportsEndFrame.value) return ''
   if (!endFrameUrl.value) {
-    return 'Tip: pick a model marked Start+End (Veo, Kling, Seedance, Wan 2.7) so your ending frame is used.'
+    return 'Optional: add an ending frame for models that support Start + end frame.'
   }
-  if (!selectedModelIds.value.length) {
-    return 'Ending frame is set — choose a Start+End model below to use it.'
+  if (!selectedModelIdsList.value.length) {
+    return 'Ending frame is set — choose a model that supports it.'
   }
   if (!selectedLastFrameModels.value.length) {
     const names = selectedNonLastFrameModels.value.map(m => m.name).join(', ')
-    return `Ending frame won’t be sent — ${names || 'the selected model(s)'} only support a starting frame (or none). Switch to Veo, Kling, Seedance, or Wan 2.7.`
+    return `Ending frame won’t be sent — ${names || 'the selected model(s)'} only support a starting frame.`
   }
   if (selectedNonLastFrameModels.value.length) {
     const ok = selectedLastFrameModels.value.map(m => m.name).join(', ')
     const skip = selectedNonLastFrameModels.value.map(m => m.name).join(', ')
     return `Ending frame will be used for ${ok}. Skipped for ${skip}.`
   }
-  return 'Ending frame will be sent to the selected Start+End model(s).'
+  return 'Ending frame will be sent to the selected model(s).'
 })
 
 const generatedAudioModelWarning = computed(() => {
   const wantsAudio = includeSpokenDialogue.value || includeAmbientSound.value
-  if (!wantsAudio || !selectedModelIds.value.length) return ''
-  const picked = selectedModelIds.value
+  if (!wantsAudio || !selectedModelIdsList.value.length) return ''
+  const picked = selectedModelIdsList.value
     .map(id => models.value.find(m => m.id === id))
     .filter(Boolean) as VideoModel[]
   const withoutAudio = picked.filter(m => m.generateAudio !== true)
@@ -1103,8 +1634,8 @@ const wantsGeneratedAudio = computed(
 
 const negativeDeliveryHint = computed(() => {
   const neg = negativePrompt.value.trim()
-  if (!neg || !selectedModelIds.value.length) return ''
-  const picked = selectedModelIds.value
+  if (!neg || !selectedModelIdsList.value.length) return ''
+  const picked = selectedModelIdsList.value
     .map(id => models.value.find(m => m.id === id))
     .filter(Boolean) as VideoModel[]
   const native = picked.filter(m => m.supportsNegativePrompt === true)
@@ -1126,6 +1657,8 @@ function resolvedGenerationPrompt (): string {
     prompt: prompt.value,
     dialogueLine: dialogueLine.value,
     includeSpokenDialogue: includeSpokenDialogue.value,
+    dialogueSpeakerName: dialogueSpeakerName.value,
+    dialogueTone: dialogueTone.value,
     ambientSoundPrompt: ambientSoundPrompt.value,
     includeAmbientSound: includeAmbientSound.value
   })
@@ -1135,9 +1668,13 @@ const canSubmit = computed(() =>
   uiPhase.value === 'form' &&
   !generating.value &&
   !loadingPanelPrefill.value &&
-  selectedModelIds.value.length > 0 &&
+  hasModelSelected.value &&
   prompt.value.trim().length > 0 &&
   !pending.value &&
+  (!includeSpokenDialogue.value || (
+    dialogueLine.value.trim().length > 0 &&
+    (!dialogueSpeakerOptions.value.length || Boolean(dialogueSpeakerId.value))
+  )) &&
   (!saveToProject.value || (selectedProjectId.value && pbProjects.value.some(p => p.id === selectedProjectId.value)))
 )
 
@@ -1227,7 +1764,18 @@ async function runOneModel (modelId: string) {
         include_spoken_dialogue: includeSpokenDialogue.value,
         include_ambient_sound: includeAmbientSound.value,
         ...(includeSpokenDialogue.value && dialogueLine.value.trim()
-          ? { dialogue_line: dialogueLine.value.trim().slice(0, 500) }
+          ? {
+              dialogue_line: dialogueLine.value.trim().slice(0, 500),
+              ...(dialogueSpeakerId.value
+                ? { dialogue_speaker_id: dialogueSpeakerId.value }
+                : {}),
+              ...(dialogueSpeakerName.value
+                ? { dialogue_speaker_name: dialogueSpeakerName.value.slice(0, 200) }
+                : {}),
+              ...(dialogueTone.value
+                ? { dialogue_tone: dialogueTone.value.slice(0, 80) }
+                : {})
+            }
           : {}),
         ...(includeAmbientSound.value && ambientSoundPrompt.value.trim()
           ? { ambient_sound_prompt: ambientSoundPrompt.value.trim().slice(0, 500) }
@@ -1247,7 +1795,9 @@ async function runOneModel (modelId: string) {
           projectId: selectedProjectId.value,
           sceneId: pre?.sceneId,
           shotId: pre?.shotId,
-          characterIds: pre?.characterIds,
+          characterIds: effectiveCharacterIds.value.length
+            ? effectiveCharacterIds.value
+            : pre?.characterIds,
           model: modelId,
           provider: 'openrouter',
           promptForHash: resolvedGenerationPrompt(),
@@ -1304,7 +1854,7 @@ async function deleteRunAssets (assetIds: string[]) {
 }
 
 function resetGenerationRun () {
-  for (const id of selectedModelIds.value) {
+  for (const id of selectedModelIdsList.value) {
     delete slotByModel[id]
   }
   doneCount.value = 0
@@ -1360,13 +1910,23 @@ async function keepClipAndContinue () {
 
 async function onSubmit () {
   formError.value = ''
+  if (!primaryModelId.value) {
+    formError.value = 'Select a model.'
+    return
+  }
   if (!prompt.value.trim()) {
     formError.value = 'Enter a prompt.'
     return
   }
-  if (!selectedModelIds.value.length) {
-    formError.value = 'Select at least one model.'
-    return
+  if (includeSpokenDialogue.value) {
+    if (!dialogueLine.value.trim()) {
+      formError.value = 'Enter the spoken dialogue line.'
+      return
+    }
+    if (dialogueSpeakerOptions.value.length && !dialogueSpeakerId.value) {
+      formError.value = 'Choose which character speaks the line.'
+      return
+    }
   }
   if (saveToProject.value) {
     if (!isAuthenticated.value) {
@@ -1380,17 +1940,19 @@ async function onSubmit () {
     }
   }
 
+  persistVideoGenerationPrefs()
+
   generating.value = true
   uiPhase.value = 'generating'
   doneCount.value = 0
-  for (const id of selectedModelIds.value) {
+  for (const id of selectedModelIdsList.value) {
     delete slotByModel[id]
   }
-  for (const id of selectedModelIds.value) {
+  for (const id of selectedModelIdsList.value) {
     slotByModel[id] = { status: 'loading' }
   }
 
-  await Promise.all(selectedModelIds.value.map(id => runOneModel(id)))
+  await Promise.all(selectedModelIdsList.value.map(id => runOneModel(id)))
 
   generating.value = false
   uiPhase.value = 'complete'

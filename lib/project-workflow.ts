@@ -2,7 +2,7 @@ import type { CreativeProject, ProjectWorkflowMode } from '~/types/creative-proj
 import { resolveProjectWorkflowMode } from '~/lib/project-workflow-mode'
 
 /** Present in `treatment` after full script import AI (see `enrichmentToProjectFields`). */
-export const IMPORTED_SCRIPT_TREATMENT_MARKER = 'Imported script — creative development'
+export const IMPORTED_SCRIPT_TREATMENT_MARKER = 'Script analysis (cold read)'
 
 /** Story tab content is already satisfied by screenplay import + analysis. */
 export function projectStorySatisfiedByScriptImport (
@@ -15,9 +15,8 @@ export function projectStorySatisfiedByScriptImport (
 const WORKFLOW_PATHS = [
   'home',
   'overview',
-  'director',
-  'story',
   'characters',
+  'director',
   'scenes',
   'storyboard',
   'video'
@@ -47,7 +46,7 @@ export function isGenerateWorkflowProject (project: ProjectWorkflowInput): boole
   return projectWorkflowMode(project) === 'generate'
 }
 
-/** Idea-first projects (own idea or AI-generated) skip the Script sidebar step. */
+/** Idea-first projects (own idea or AI-generated). */
 export function isIdeaFirstWorkflowProject (project: ProjectWorkflowInput): boolean {
   const mode = projectWorkflowMode(project)
   return mode === 'idea' || mode === 'generate'
@@ -59,14 +58,8 @@ export function isScratchWorkflowProject (project: ProjectWorkflowInput): boolea
 }
 
 export function workflowPathsForProject (
-  project: Pick<CreativeProject, 'treatment' | 'workflowMode'> | null | undefined
+  _project: Pick<CreativeProject, 'treatment' | 'workflowMode'> | null | undefined
 ): readonly string[] {
-  if (projectStorySatisfiedByScriptImport(project)) {
-    return WORKFLOW_PATHS.filter(p => p !== 'story')
-  }
-  if (isIdeaFirstWorkflowProject(project)) {
-    return WORKFLOW_PATHS.filter(p => p !== 'story')
-  }
   return WORKFLOW_PATHS
 }
 
@@ -80,7 +73,7 @@ export function workflowStepOf (
   return { current: idx + 1, total: paths.length }
 }
 
-/** Next sidebar step after `current` (e.g. overview → director → characters …). */
+/** Next sidebar step after `current` (e.g. overview → characters → director …). */
 export function nextWorkflowPath (
   current: string,
   project: Pick<CreativeProject, 'treatment' | 'workflowMode'> | null | undefined
@@ -89,4 +82,20 @@ export function nextWorkflowPath (
   const idx = paths.indexOf(current)
   if (idx < 0 || idx >= paths.length - 1) return null
   return paths[idx + 1] as WorkflowPath
+}
+
+/** Where to send the user right after creating a project. */
+export function projectCreateLandingPath (
+  projectId: string,
+  mode: ProjectWorkflowMode
+): string {
+  if (mode === 'import' || mode === 'idea' || mode === 'generate') {
+    return `/projects/${projectId}/overview`
+  }
+  return `/projects/${projectId}/guide`
+}
+
+/** Where to send the user when opening an existing project. */
+export function projectOpenLandingPath (projectId: string): string {
+  return `/projects/${projectId}/guide`
 }

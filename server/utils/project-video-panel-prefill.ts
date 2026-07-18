@@ -166,8 +166,10 @@ export async function buildVideoPanelPrefill (input: {
   projectId: string
   sceneId: string
   shotId: string
+  /** When set, only these cast members are woven into the production prompt. */
+  characterIds?: string[]
 }): Promise<VideoGenerationPrefill> {
-  const { pb, userId, projectId, sceneId, shotId } = input
+  const { pb, userId, projectId, sceneId, shotId, characterIds: characterIdsFilter } = input
 
   const projectRow = await pb.collection('creative_projects').getOne(projectId)
   const project = pbRecordToCreativeProject(projectRow as Parameters<typeof pbRecordToCreativeProject>[0])
@@ -206,7 +208,11 @@ export async function buildVideoPanelPrefill (input: {
   }
   const endAsset = frameMap?.end
 
-  const cast = await loadProjectCharacterRefs(pb, projectId, userId)
+  let cast = await loadProjectCharacterRefs(pb, projectId, userId)
+  if (characterIdsFilter !== undefined) {
+    const allowed = new Set(characterIdsFilter.filter(Boolean))
+    cast = cast.filter((c) => allowed.has(c.id))
+  }
   const castMembers = cast.map(c => projectCharacterRefToCastMember(c))
 
   const { context: productionBible } = await resolveProductionBibleForGeneration(pb, projectId, {

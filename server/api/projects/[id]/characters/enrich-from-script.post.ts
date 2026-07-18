@@ -86,12 +86,38 @@ export default defineEventHandler(async (event) => {
     rows = await listProjectCharacterRows(pb, projectId, access.ownerId)
   }
 
+  const scriptNames = filterLikelyCharacterNames([
+    ...parsed.characterNames,
+    ...heuristicCharacterNamesFromScenes(parsed.scenes)
+  ])
+  const existingNorm = new Set(
+    rows
+      .map((r) => String((r as { name?: string }).name || '').trim().toLowerCase())
+      .filter(Boolean)
+  )
+  for (const name of scriptNames.slice(0, 64)) {
+    const n = name.slice(0, 200).trim()
+    if (!n || isMetaCastCharacterEntry(n)) continue
+    if (existingNorm.has(n.toLowerCase())) continue
+    try {
+      await pb.collection('creative_characters').create({
+        owned_by: access.ownerId,
+        project: projectId,
+        name: n,
+        role_description: ''
+      })
+      existingNorm.add(n.toLowerCase())
+      seeded++
+    } catch (e: unknown) {
+      console.warn('[characters enrich] seed create failed:', n, formatPocketBaseRecordError(e))
+    }
+  }
+  if (seeded > 0 || !rows.length) {
+    rows = await listProjectCharacterRows(pb, projectId, access.ownerId)
+  }
+
   if (!rows.length) {
-    const names = filterLikelyCharacterNames([
-      ...parsed.characterNames,
-      ...heuristicCharacterNamesFromScenes(parsed.scenes)
-    ])
-    if (!names.length) {
+    if (!scriptNames.length) {
       throwApiError(
         400,
         ApiErrorCode.VALIDATION_ERROR,
@@ -99,25 +125,6 @@ export default defineEventHandler(async (event) => {
         { projectId }
       )
     }
-    for (const name of names.slice(0, 48)) {
-      const n = name.slice(0, 200).trim()
-      if (!n || isMetaCastCharacterEntry(n)) continue
-      try {
-        await pb.collection('creative_characters').create({
-          owned_by: access.ownerId,
-          project: projectId,
-          name: n,
-          role_description: ''
-        })
-        seeded++
-      } catch (e: unknown) {
-        console.warn('[characters enrich] seed create failed:', n, formatPocketBaseRecordError(e))
-      }
-    }
-    rows = await listProjectCharacterRows(pb, projectId, access.ownerId)
-  }
-
-  if (!rows.length) {
     throwApiError(
       500,
       ApiErrorCode.SERVICE_UNAVAILABLE,
@@ -127,8 +134,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const sceneOutline = parsed.scenes
-    .map((s, i) => `## Scene ${i}\nHeading: ${s.heading}\n---\n${s.body.slice(0, 2500)}`)
+    .map((s, i) => `## Scene ${i}\nHeading: ${s.heading}\n---\n${s.body.slice(0, 4000)}`)
     .join('\n\n')
+    .slice(0, 48_000)
 
   const pr = projectRow as Record<string, unknown>
   const projectName = String(pr.name || 'Project').trim() || 'Project'

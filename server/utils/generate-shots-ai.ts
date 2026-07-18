@@ -20,6 +20,8 @@ export interface GeneratedShot {
   image_prompt: string
   video_prompt: string
   negative_prompt: string
+  /** Exact cast names visible in this panel (from CHARACTERS list). */
+  characters?: string[]
 }
 
 export interface GenerateShotsContext {
@@ -90,6 +92,26 @@ function buildFallbackVideoPrompt (
   return `${description}. ${type}, ${move}, atmospheric lighting, filmic motion.`.slice(0, 8000)
 }
 
+function parseShotCharacterNames (o: Record<string, unknown>): string[] {
+  const raw = o.characters ?? o.cast ?? o.character_names ?? o.characterNames
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const item of raw) {
+    const name = typeof item === 'string'
+      ? item.trim()
+      : item && typeof item === 'object' && typeof (item as { name?: unknown }).name === 'string'
+        ? String((item as { name: string }).name).trim()
+        : ''
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(name.slice(0, 120))
+  }
+  return out.slice(0, 12)
+}
+
 /** Reconcile order field: prefer 1-based order from model, fall back to index. */
 export function normalizeShotsFromModelArray (rawList: unknown[]): GeneratedShot[] {
   const out: GeneratedShot[] = []
@@ -115,6 +137,7 @@ export function normalizeShotsFromModelArray (rawList: unknown[]): GeneratedShot
       'exclusions'
     )
     if (!image_prompt.trim()) return
+    const characters = parseShotCharacterNames(o)
     out.push({
       order: orderVal,
       title: title.slice(0, 300),
@@ -126,7 +149,8 @@ export function normalizeShotsFromModelArray (rawList: unknown[]): GeneratedShot
       ),
       image_prompt: image_prompt.slice(0, 8000),
       video_prompt: video_prompt.slice(0, 8000),
-      negative_prompt: negative_prompt.slice(0, 4000)
+      negative_prompt: negative_prompt.slice(0, 4000),
+      ...(characters.length ? { characters } : {})
     })
   })
   out.sort((a, b) => a.order - b.order)
@@ -234,10 +258,11 @@ ANIMAL-ONLY CAST (critical):
   const system = `You are a professional storyboard artist and director of photography focused on VISUAL CONTINUITY across panels. You break each scene into a clear SEQUENCE OF PANELS — strict story order (establish geography → develop action → emotional turn → cut point).
 
 Output ONLY valid JSON (no markdown), exactly this shape:
-{"shots":[{"order":1,"title":"short label","description":"story beat in plain language","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static","duration_seconds":5,"image_prompt":"LONG detailed still-frame prompt (see rules)","video_prompt":"LONG motion prompt (see rules)","negative_prompt":"comma-separated exclusions"}]}
+{"shots":[{"order":1,"title":"short label","description":"story beat in plain language","shot_type":"e.g. wide establishing | medium | close-up | insert","camera_move":"e.g. slow push in | handheld | static","duration_seconds":5,"characters":["ONLY names from CHARACTERS who are visible in THIS panel — empty array if none"],"image_prompt":"LONG detailed still-frame prompt (see rules)","video_prompt":"LONG motion prompt (see rules)","negative_prompt":"comma-separated exclusions"}]}
 Rules:
 - Produce ${shotMin === shotMax ? `exactly ${shotMax}` : `between ${shotMin} and ${shotMax}`} shots for THIS scene only; order 1..N; duration_seconds MUST be exactly 5 or 10 (integer).
-- image_prompt: MINIMUM ~120 words. Production-ready STILL frame. START with the UNIQUE action, pose, and composition for THIS panel only (order N) — each panel must look like a different moment. Then include: (1) which cast members appear and their COMPLETE visual design copied from CHARACTERS (materials, colors, proportions, wardrobe, expression); (2) locked environment/props/lighting for this scene; (3) lens/framing for shot_type; (4) same art direction as director bible. Repeat the same character DESIGN wording across shots for consistency — never repeat the same pose, blocking, or framing.
+- characters: array of exact character names from CHARACTERS who appear on-screen in THIS panel only. Empty [] for establishing/environment inserts with no people. Never list the whole cast.
+- image_prompt: MINIMUM ~120 words. Production-ready STILL frame. START with the UNIQUE action, pose, and composition for THIS panel only (order N) — each panel must look like a different moment. Then include: (1) which cast members appear (must match the characters array) and their COMPLETE visual design copied from CHARACTERS (materials, colors, proportions, wardrobe, expression); (2) locked environment/props/lighting for this scene; (3) lens/framing for shot_type; (4) same art direction as director bible. Repeat the same character DESIGN wording across shots for consistency — never repeat the same pose, blocking, or framing.
 - video_prompt: MINIMUM ~80 words. Motion-only delta on the still: camera_move, subject action, lighting shifts — do NOT introduce new characters or redesign anyone.
 - negative_prompt: comma-separated forbidden elements (watermark, text, blurry, wrong species, extra characters, style drift).${animalRules}
 - Same character = SAME design in every panel; close-ups must match wide shots.

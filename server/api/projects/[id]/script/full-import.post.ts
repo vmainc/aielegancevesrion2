@@ -15,8 +15,13 @@ export default defineEventHandler(async (event) => {
   }
 
   const userId = await getPocketBaseUserIdFromRequest(event)
-  const body = await readBody<{ assetId?: string }>(event).catch(() => ({}))
+  const body: { assetId?: string; chosenModelId?: string } =
+    await readBody<{ assetId?: string; chosenModelId?: string }>(event).catch(() => ({}))
   const assetId = typeof body?.assetId === 'string' ? body.assetId.trim() : undefined
+  const chosenModelId =
+    typeof body?.chosenModelId === 'string' && body.chosenModelId.trim()
+      ? body.chosenModelId.trim()
+      : 'gpt-4o'
 
   const jobId = createScriptImportJob(userId)
 
@@ -24,7 +29,8 @@ export default defineEventHandler(async (event) => {
     jobId,
     userId,
     projectId,
-    assetId: assetId || undefined
+    assetId: assetId || undefined,
+    chosenModelId
   })
 
   setResponseStatus(event, 202)

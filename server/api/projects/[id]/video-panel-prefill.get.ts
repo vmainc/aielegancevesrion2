@@ -14,11 +14,20 @@ export default defineEventHandler(async (event) => {
 
   const { userId, pb } = await requireProjectOwner(event, projectId)
 
+  const characterIds =
+    query.characterIds !== undefined
+      ? (typeof query.characterIds === 'string' ? query.characterIds : '')
+          .split(',')
+          .map((id) => id.trim())
+          .filter(Boolean)
+      : undefined
+
   return buildVideoPanelPrefill({
     pb,
     userId,
     projectId,
     sceneId,
-    shotId
+    shotId,
+    characterIds
   })
 })

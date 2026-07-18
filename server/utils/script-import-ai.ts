@@ -1,5 +1,6 @@
 import { OPENROUTER_ENRICH_MS, OPENROUTER_THREE_ACT_MS } from '~/lib/script-wizard-timeouts'
 import { filterCastCharacterRows, isMetaCastCharacterEntry } from '~/lib/screenplay-character-filter'
+import { isPlaceholderGenreOrTone, normalizeSynopsisText } from '~/lib/format-stored-concept'
 import { defaultDirector } from '~/lib/director-presets'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import type { ProjectDirector } from '~/types/creative-project'
@@ -94,7 +95,24 @@ function extractJsonObject (text: string): Record<string, unknown> | null {
 }
 
 function asStr (v: unknown): string {
-  return typeof v === 'string' ? v : ''
+  if (typeof v === 'string') return v
+  if (v && typeof v === 'object' && !Array.isArray(v)) {
+    const o = v as Record<string, unknown>
+    for (const key of [
+      'text',
+      'content',
+      'synopsis',
+      'one_page_synopsis',
+      'onePageSynopsis',
+      'logline',
+      'summary',
+      'story',
+      'overview'
+    ]) {
+      if (typeof o[key] === 'string' && o[key].trim()) return o[key].trim()
+    }
+  }
+  return ''
 }
 
 function asStrArr (v: unknown): string[] {
@@ -168,8 +186,8 @@ function fallbackEnrichment (input: { projectName: string; characterNames: strin
     comparableFilms: [],
     themeExploration: '',
     summary: stub,
-    genre: 'unknown',
-    tone: 'unknown',
+    genre: '',
+    tone: '',
     themes: [],
     sceneSummaries: [],
     characterRoles: input.characterNames.map(name => ({
@@ -363,8 +381,10 @@ ${input.sceneOutline.slice(0, 48_000)}`
     asStr(parsed.themeExploration) ||
     ''
 
-  const genre = asStr(parsed.genre) || 'unknown'
-  const tone = asStr(parsed.tone) || 'unknown'
+  const genreRaw = asStr(parsed.genre)
+  const toneRaw = asStr(parsed.tone)
+  const genre = isPlaceholderGenreOrTone(genreRaw) ? '' : genreRaw
+  const tone = isPlaceholderGenreOrTone(toneRaw) ? '' : toneRaw
   const themes = asStrArr(parsed.themes)
   const summary =
     logline.slice(0, 500) ||
@@ -378,7 +398,7 @@ ${input.sceneOutline.slice(0, 48_000)}`
       .join(' ')
       .replace(/\s+/g, ' ')
       .trim()
-    const hasGenreTone = (genre && genre !== 'unknown') || (tone && tone !== 'unknown')
+    const hasGenreTone = Boolean(genre || tone)
     if (meaningful.length < 28 && !hasGenreTone) {
       throw new Error('Model returned an empty or unusable analysis.')
     }
@@ -411,7 +431,7 @@ export function enrichmentToProjectFields (e: ScriptAiEnrichment): {
   treatment: string
 } {
   const synopsis =
-    buildSynopsisField(e.logline, e.onePageSynopsis) || e.summary
+    normalizeSynopsisText(buildSynopsisField(e.logline, e.onePageSynopsis) || e.summary)
   const treatment = buildTreatmentFromScriptRead({
     themeExploration: e.themeExploration,
     themes: e.themes,
@@ -852,7 +872,7 @@ export async function inferCharactersWithScreenShareFromScript (input: {
   const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) return []
 
-  const system = `You are a screenplay analyst doing a cold read. List principal named characters present in the excerpt.
+  const system = `You are a screenplay analyst doing a cold read. List EVERY named speaking or featured character present in the excerpt — do not stop at principals only.
 
 Reply with ONLY valid JSON (no markdown fences), shape:
 {
@@ -865,8 +885,9 @@ Reply with ONLY valid JSON (no markdown fences), shape:
   ]
 }
 Rules:
-- screen_share_percent: estimate share of dialogue lines + meaningful presence in the excerpt (principal cast ~100 total).
-- Include at most 18 rows; merge true extras into one "OTHER (extras)" row if needed with a small combined percent.
+- screen_share_percent: estimate share of dialogue lines + meaningful presence in the excerpt (named cast ~100 total).
+- Include up to 48 named characters. Prefer the parser-detected name list when present — cover every name from that list that appears in the script.
+- Only merge true unnamed crowd/extras into one "OTHER (extras)" row if needed with a small combined percent.
 - Do not invent characters, backstory, or motivations absent from the script text.
 - Never use CAST, CREDITS, ENSEMBLE, or section headings as character names.
 - Escape quotes inside JSON strings properly.`
@@ -884,14 +905,14 @@ Tone: ${input.tone}
 Logline / synopsis (context):
 ${[input.logline, input.onePageSynopsis].filter(Boolean).join('\n\n').slice(0, 6000)}
 
-Parser-detected character names (hints, may be incomplete):
+Parser-detected character names (include ALL of these that appear in the script):
 ${input.parserCharacterNames.join(', ') || '(none)'}
 
 Prior model character notes (hints):
 ${hints}
 
 Script excerpt (scene headings + dialogue and action — use this to judge presence and lines):
-${input.sceneOutline.slice(0, 14000)}`
+${input.sceneOutline.slice(0, 48_000)}`
 
   const model = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
   const body = buildOpenRouterChatCompletionBody({
@@ -900,8 +921,8 @@ ${input.sceneOutline.slice(0, 14000)}`
       { role: 'system', content: system },
       { role: 'user', content: user }
     ],
-    temperature: 0.35,
-    max_tokens: 1200
+    temperature: 0.25,
+    max_tokens: 4000
   })
 
   const res = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -944,6 +965,35 @@ ${input.sceneOutline.slice(0, 14000)}`
     withShares = applyMentionBasedSharesFromScript(input.sceneOutline, withShares)
   }
   return normalizeCharacterShares(filterCastCharacterRows(withShares))
+}
+
+/**
+ * Ensure every parser/heuristic name is present in the cast list (AI rows may omit some).
+ */
+export function mergeDetectedCharacterNamesIntoRows (
+  rows: CharacterWithShare[],
+  detectedNames: string[],
+  defaultRoleDescription =
+    'Identified from screenplay CAST and dialogue. Refresh cast descriptions on the Characters tab if needed.'
+): CharacterWithShare[] {
+  const merged = [...rows]
+  const seen = new Set(
+    merged.map(r => r.name.trim().toLowerCase()).filter(Boolean)
+  )
+  for (const raw of detectedNames) {
+    const name = raw.trim().slice(0, 200)
+    if (!name) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    if (isMetaCastCharacterEntry(name)) continue
+    seen.add(key)
+    merged.push({
+      name,
+      role_description: defaultRoleDescription,
+      screen_share_percent: 0
+    })
+  }
+  return normalizeCharacterShares(filterCastCharacterRows(merged))
 }
 
 /**
@@ -1002,7 +1052,7 @@ Fixed cast — return exactly one row per line (same name strings):
 ${names.map((n, i) => `${i + 1}. ${n}`).join('\n')}
 
 Script excerpt (scene headings + action and dialogue — use this to infer visual design and percentages):
-${input.sceneOutline.slice(0, 14000)}`
+${input.sceneOutline.slice(0, 48_000)}`
 
   const model = input.openrouterModelId || OPENROUTER_TEXT_MODEL_MAP.Claude
   const body = buildOpenRouterChatCompletionBody({
