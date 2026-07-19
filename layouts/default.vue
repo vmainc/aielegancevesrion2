@@ -3,22 +3,22 @@
     <nav class="shrink-0 bg-white border-b border-gray-200">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div
-          class="flex justify-between items-center gap-4 min-h-[4.5rem] sm:min-h-[5rem] py-2"
+          class="flex justify-between items-center gap-4 h-[4.5rem] sm:h-20"
         >
           <!-- Logo (left) -->
           <NuxtLink
             :to="showAuthenticatedUi ? '/projects' : '/'"
-            class="flex items-center shrink-0"
+            class="flex items-center h-full shrink-0"
           >
             <img
               :src="logo"
               alt="AI Elegance"
-              class="h-10 sm:h-11 w-auto rounded-md shadow-sm object-contain object-center block"
+              class="h-10 sm:h-12 w-auto block"
             />
           </NuxtLink>
 
           <!-- Menu + account (right) -->
-          <div class="flex items-center justify-end gap-1 sm:gap-2 lg:gap-6 shrink-0 min-w-0">
+          <div class="flex items-center justify-end h-full gap-1 sm:gap-2 lg:gap-6 shrink-0 min-w-0">
             <ClientOnly>
               <!-- Desktop nav -->
               <div v-if="showAuthenticatedUi" class="hidden lg:flex items-center gap-6">
@@ -226,7 +226,7 @@
             <ClientOnly>
               <div class="flex items-center">
                 <template v-if="showAuthenticatedUi">
-                  <div ref="accountMenuRef" class="relative hidden lg:block">
+                  <div ref="accountMenuRef" class="relative hidden lg:flex items-center">
                     <button
                       type="button"
                       class="inline-flex items-center gap-1.5 text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
