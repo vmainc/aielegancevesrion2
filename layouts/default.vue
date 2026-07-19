@@ -7,7 +7,7 @@
         >
           <!-- Logo (left) -->
           <NuxtLink
-            :to="showAuthenticatedUi ? '/projects' : '/'"
+            :to="showAuthenticatedUi ? '/guide' : '/'"
             class="flex items-center h-full shrink-0"
           >
             <img
@@ -22,6 +22,12 @@
             <ClientOnly>
               <!-- Desktop nav -->
               <div v-if="showAuthenticatedUi" class="hidden lg:flex items-center gap-6">
+                <NuxtLink
+                  to="/guide"
+                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
+                >
+                  Guide
+                </NuxtLink>
                 <div ref="generateMenuRef" class="relative">
                   <button
                     type="button"
@@ -327,6 +333,13 @@
           <div class="px-4 py-4 space-y-2">
             <ClientOnly>
               <template v-if="showAuthenticatedUi">
+                <NuxtLink
+                  to="/guide"
+                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
+                >
+                  Guide
+                </NuxtLink>
                 <div class="rounded-lg border border-gray-200 overflow-hidden">
                   <div class="block px-4 py-3.5 text-gray-900 font-medium bg-gray-50 border-b border-gray-200">
                     Generate

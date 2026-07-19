@@ -1,6 +1,7 @@
 import { safeInternalPath } from '~/lib/safe-internal-path'
 
 const NEEDS_AUTH = [
+  /^\/guide(\/|$)/,
   /^\/projects(\/|$)/,
   /^\/assets(\/|$)/,
   /^\/tools(\/|$)/,
@@ -20,7 +21,7 @@ export default defineNuxtRouteMiddleware(async (to) => {
 
   if (isAuthenticated.value) return
 
-  const next = safeInternalPath(to.fullPath, '/projects')
+  const next = safeInternalPath(to.fullPath, '/guide')
   return navigateTo({
     path: '/login',
     query: { redirect: next }
