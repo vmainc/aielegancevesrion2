@@ -5,33 +5,64 @@
         <div
           class="flex justify-between items-center gap-4 min-h-[4.5rem] sm:min-h-[5rem] py-2"
         >
-          <!-- Logo -->
-          <div class="flex items-center min-h-0 space-x-4 lg:space-x-8">
-            <NuxtLink
-              :to="showAuthenticatedUi ? '/tools/video-generation' : '/'"
-              class="flex items-center shrink-0"
-            >
-              <img
-                :src="logo"
-                alt="AI Elegance"
-                class="h-10 sm:h-11 w-auto rounded-md shadow-sm object-contain object-center block"
-              />
-            </NuxtLink>
-            <!-- Desktop: workspace nav (logged in) or marketing anchors (guest) -->
+          <!-- Logo (left) -->
+          <NuxtLink
+            :to="showAuthenticatedUi ? '/projects' : '/'"
+            class="flex items-center shrink-0"
+          >
+            <img
+              :src="logo"
+              alt="AI Elegance"
+              class="h-10 sm:h-11 w-auto rounded-md shadow-sm object-contain object-center block"
+            />
+          </NuxtLink>
+
+          <!-- Menu + account (right) -->
+          <div class="flex items-center justify-end gap-1 sm:gap-2 lg:gap-6 shrink-0 min-w-0">
             <ClientOnly>
-              <div v-if="showAuthenticatedUi" class="hidden lg:flex items-center space-x-8">
-                <NuxtLink
-                  to="/tools/video-generation"
-                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
-                >
-                  Video
-                </NuxtLink>
-                <NuxtLink
-                  to="/tools/music-generation"
-                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
-                >
-                  Music
-                </NuxtLink>
+              <!-- Desktop nav -->
+              <div v-if="showAuthenticatedUi" class="hidden lg:flex items-center gap-6">
+                <div ref="generateMenuRef" class="relative">
+                  <button
+                    type="button"
+                    class="inline-flex items-center gap-1 text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
+                    :aria-expanded="generateDropdownOpen"
+                    aria-haspopup="true"
+                    aria-label="Generate menu"
+                    @click.stop="toggleGenerateDropdown"
+                  >
+                    Generate
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  <div
+                    v-if="generateDropdownOpen"
+                    class="absolute right-0 top-full mt-2 min-w-[12rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
+                  >
+                    <NuxtLink
+                      to="/tools/video-generation"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-t-lg"
+                      @click="closeGenerateDropdown"
+                    >
+                      Video
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/tools/music-generation"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
+                      @click="closeGenerateDropdown"
+                    >
+                      Music
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/character-creator"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
+                      @click="closeGenerateDropdown"
+                    >
+                      Character
+                    </NuxtLink>
+                  </div>
+                </div>
                 <NuxtLink
                   to="/projects"
                   class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
@@ -41,11 +72,11 @@
                 <div ref="assetsMenuRef" class="relative">
                   <button
                     type="button"
-                    @click.stop="toggleAssetsDropdown"
                     class="inline-flex items-center gap-1 text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                     :aria-expanded="assetsDropdownOpen"
                     aria-haspopup="true"
                     aria-label="Assets menu"
+                    @click.stop="toggleAssetsDropdown"
                   >
                     Assets
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -54,7 +85,7 @@
                   </button>
                   <div
                     v-if="assetsDropdownOpen"
-                    class="absolute left-0 top-full mt-2 min-w-[12rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
+                    class="absolute right-0 top-full mt-2 min-w-[12rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
                   >
                     <NuxtLink
                       to="/assets/video"
@@ -96,11 +127,11 @@
                 <div ref="toolsMenuRef" class="relative">
                   <button
                     type="button"
-                    @click.stop="toggleToolsDropdown"
                     class="inline-flex items-center gap-1 text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                     :aria-expanded="toolsDropdownOpen"
                     aria-haspopup="true"
                     aria-label="Tools menu"
+                    @click.stop="toggleToolsDropdown"
                   >
                     Tools
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -109,25 +140,11 @@
                   </button>
                   <div
                     v-if="toolsDropdownOpen"
-                    class="absolute left-0 top-full mt-2 min-w-[14rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
+                    class="absolute right-0 top-full mt-2 min-w-[14rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
                   >
                     <NuxtLink
-                      to="/tools/video-generation"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-t-lg"
-                      @click="closeToolsDropdown"
-                    >
-                      Video generation
-                    </NuxtLink>
-                    <NuxtLink
-                      to="/tools/music-generation"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
-                      @click="closeToolsDropdown"
-                    >
-                      Music generation
-                    </NuxtLink>
-                    <NuxtLink
                       to="/tools"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-t-lg"
                       @click="closeToolsDropdown"
                     >
                       Overview
@@ -140,13 +157,6 @@
                       Script Wizard
                     </NuxtLink>
                     <NuxtLink
-                      to="/character-creator"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
-                      @click="closeToolsDropdown"
-                    >
-                      Character Creator
-                    </NuxtLink>
-                    <NuxtLink
                       to="/tools/storyboard-builder"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
                       @click="closeToolsDropdown"
@@ -156,7 +166,7 @@
                   </div>
                 </div>
               </div>
-              <div v-else class="hidden lg:flex items-center space-x-8">
+              <div v-else class="hidden lg:flex items-center gap-6">
                 <NuxtLink
                   to="/#capabilities"
                   class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
@@ -183,7 +193,7 @@
                 </NuxtLink>
               </div>
               <template #fallback>
-                <div class="hidden lg:flex items-center space-x-8">
+                <div class="hidden lg:flex items-center gap-6">
                   <NuxtLink
                     to="/#capabilities"
                     class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
@@ -211,13 +221,71 @@
                 </div>
               </template>
             </ClientOnly>
-          </div>
-          <!-- Mobile menu + auth -->
-          <div class="flex items-center justify-end space-x-2 sm:space-x-4 shrink-0">
+
+            <!-- Account / login (part of right menu) -->
+            <ClientOnly>
+              <div class="flex items-center">
+                <template v-if="showAuthenticatedUi">
+                  <div ref="accountMenuRef" class="relative hidden lg:block">
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-1.5 text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
+                      :aria-expanded="dropdownOpen"
+                      aria-haspopup="true"
+                      aria-label="Account"
+                      @click.stop="toggleDropdown"
+                    >
+                      <span>{{ userFirstName || 'Account' }}</span>
+                      <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    <div
+                      v-if="dropdownOpen"
+                      ref="dropdownRef"
+                      class="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
+                    >
+                      <NuxtLink
+                        to="/account"
+                        class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-t-lg"
+                        @click="closeDropdown"
+                      >
+                        Settings
+                      </NuxtLink>
+                      <button
+                        type="button"
+                        class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors rounded-b-lg"
+                        @click="handleLogout"
+                      >
+                        Logout
+                      </button>
+                    </div>
+                  </div>
+                </template>
+                <template v-else>
+                  <NuxtLink
+                    to="/login"
+                    class="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-sm sm:text-base leading-none"
+                  >
+                    Login
+                  </NuxtLink>
+                </template>
+              </div>
+              <template #fallback>
+                <NuxtLink
+                  to="/login"
+                  class="hidden lg:inline-flex items-center justify-center px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors leading-none"
+                >
+                  Login
+                </NuxtLink>
+              </template>
+            </ClientOnly>
+
             <button
-              @click.stop="toggleMobileMenu"
+              type="button"
               class="lg:hidden inline-flex items-center justify-center p-2 text-gray-700 hover:text-primary transition-colors rounded-lg hover:bg-gray-100"
               aria-label="Toggle menu"
+              @click.stop="toggleMobileMenu"
             >
               <svg
                 v-if="!mobileMenuOpen"
@@ -238,75 +306,6 @@
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
-
-            <ClientOnly>
-              <div class="flex items-center space-x-2 sm:space-x-4">
-                <template v-if="showAuthenticatedUi">
-                  <div class="relative flex items-center">
-                    <button
-                      @click="toggleDropdown"
-                      class="inline-flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-2 text-gray-700 hover:text-primary transition-colors rounded-lg hover:bg-gray-100 leading-none"
-                      aria-label="Account"
-                    >
-                      <svg
-                        class="w-5 h-5 sm:w-6 sm:h-6"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                        xmlns="http://www.w3.org/2000/svg"
-                      >
-                        <path
-                          stroke-linecap="round"
-                          stroke-linejoin="round"
-                          stroke-width="2"
-                          d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                        />
-                      </svg>
-                      <span v-if="userFirstName" class="hidden sm:inline text-sm font-medium text-gray-700">
-                        {{ userFirstName }}
-                      </span>
-                    </button>
-                    <div
-                      v-if="dropdownOpen"
-                      ref="dropdownRef"
-                      class="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50"
-                    >
-                      <NuxtLink
-                        to="/account"
-                        @click="closeDropdown"
-                        class="block px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors first:rounded-t-lg"
-                      >
-                        Settings
-                      </NuxtLink>
-                      <button
-                        @click="handleLogout"
-                        class="w-full text-left px-4 py-3 text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors last:rounded-b-lg"
-                      >
-                        Logout
-                      </button>
-                    </div>
-                  </div>
-                </template>
-                <template v-else>
-                  <NuxtLink
-                    to="/login"
-                    class="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-sm sm:text-base leading-none"
-                  >
-                    Login
-                  </NuxtLink>
-                </template>
-              </div>
-              <template #fallback>
-                <div class="flex items-center space-x-4">
-                  <NuxtLink
-                    to="/login"
-                    class="inline-flex items-center justify-center px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors leading-none"
-                  >
-                    Login
-                  </NuxtLink>
-                </div>
-              </template>
-            </ClientOnly>
           </div>
         </div>
       </div>
@@ -328,24 +327,36 @@
           <div class="px-4 py-4 space-y-2">
             <ClientOnly>
               <template v-if="showAuthenticatedUi">
-                <NuxtLink
-                  to="/tools/video-generation"
-                  @click="closeMobileMenu"
-                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
-                >
-                  Video
-                </NuxtLink>
-                <NuxtLink
-                  to="/tools/music-generation"
-                  @click="closeMobileMenu"
-                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
-                >
-                  Music
-                </NuxtLink>
+                <div class="rounded-lg border border-gray-200 overflow-hidden">
+                  <div class="block px-4 py-3.5 text-gray-900 font-medium bg-gray-50 border-b border-gray-200">
+                    Generate
+                  </div>
+                  <NuxtLink
+                    to="/tools/video-generation"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
+                  >
+                    Video
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/tools/music-generation"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
+                  >
+                    Music
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/character-creator"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
+                  >
+                    Character
+                  </NuxtLink>
+                </div>
                 <NuxtLink
                   to="/projects"
-                  @click="closeMobileMenu"
                   class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
                 >
                   Projects
                 </NuxtLink>
@@ -355,36 +366,36 @@
                   </div>
                   <NuxtLink
                     to="/assets/video"
-                    @click="closeMobileMenu"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
                   >
                     My Videos
                   </NuxtLink>
                   <NuxtLink
                     to="/assets/scripts"
-                    @click="closeMobileMenu"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
                   >
                     Scripts
                   </NuxtLink>
                   <NuxtLink
                     to="/assets/characters"
-                    @click="closeMobileMenu"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
                   >
                     Characters
                   </NuxtLink>
                   <NuxtLink
                     to="/assets/storyboards"
-                    @click="closeMobileMenu"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
                   >
                     Storyboards
                   </NuxtLink>
                   <NuxtLink
                     to="/assets/music"
-                    @click="closeMobileMenu"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
                   >
                     My Music
                   </NuxtLink>
@@ -392,127 +403,114 @@
                 <div class="rounded-lg border border-gray-200 overflow-hidden">
                   <NuxtLink
                     to="/tools"
-                    @click="closeMobileMenu"
                     class="block px-4 py-3.5 text-gray-900 font-medium bg-gray-50 border-b border-gray-200"
+                    @click="closeMobileMenu"
                   >
                     Tools
                   </NuxtLink>
                   <NuxtLink
-                    to="/tools/video-generation"
-                    @click="closeMobileMenu"
-                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
-                  >
-                    Video generation
-                  </NuxtLink>
-                  <NuxtLink
-                    to="/tools/music-generation"
-                    @click="closeMobileMenu"
-                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
-                  >
-                    Music generation
-                  </NuxtLink>
-                  <NuxtLink
-                    to="/character-creator"
-                    @click="closeMobileMenu"
-                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
-                  >
-                    Character Creator
-                  </NuxtLink>
-                  <NuxtLink
                     to="/tools/script-wizard"
-                    @click="closeMobileMenu"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
                   >
                     Script Wizard
                   </NuxtLink>
                   <NuxtLink
                     to="/tools/storyboard-builder"
-                    @click="closeMobileMenu"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
                   >
                     Storyboard Builder
                   </NuxtLink>
                 </div>
-                <NuxtLink
-                  to="/account"
-                  @click="closeMobileMenu"
-                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
-                >
-                  Settings
-                </NuxtLink>
+                <div class="pt-2 border-t border-gray-200 mt-2 space-y-1">
+                  <p v-if="userFirstName" class="px-4 py-1 text-xs font-medium uppercase tracking-wide text-gray-400">
+                    {{ userFirstName }}
+                  </p>
+                  <NuxtLink
+                    to="/account"
+                    class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                    @click="closeMobileMenu"
+                  >
+                    Settings
+                  </NuxtLink>
+                  <button
+                    type="button"
+                    class="w-full text-left px-4 py-3.5 text-gray-700 hover:text-red-600 hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                    @click="handleMobileLogout"
+                  >
+                    Logout
+                  </button>
+                </div>
               </template>
               <template v-else>
                 <NuxtLink
                   to="/#capabilities"
-                  @click="closeMobileMenu"
                   class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
                 >
                   Capabilities
                 </NuxtLink>
                 <NuxtLink
                   to="/#how-it-works"
-                  @click="closeMobileMenu"
                   class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
                 >
                   How it works
                 </NuxtLink>
                 <NuxtLink
                   to="/#compare"
-                  @click="closeMobileMenu"
                   class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
                 >
                   Compare AI
                 </NuxtLink>
                 <NuxtLink
                   to="/#workflow"
-                  @click="closeMobileMenu"
                   class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
                 >
                   Workflow
                 </NuxtLink>
-              </template>
-              <template #fallback>
-                <NuxtLink
-                  to="/#capabilities"
-                  @click="closeMobileMenu"
-                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
-                >
-                  Capabilities
-                </NuxtLink>
-                <NuxtLink
-                  to="/#how-it-works"
-                  @click="closeMobileMenu"
-                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
-                >
-                  How it works
-                </NuxtLink>
-                <NuxtLink
-                  to="/#compare"
-                  @click="closeMobileMenu"
-                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
-                >
-                  Compare AI
-                </NuxtLink>
-                <NuxtLink
-                  to="/#workflow"
-                  @click="closeMobileMenu"
-                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
-                >
-                  Workflow
-                </NuxtLink>
-              </template>
-            </ClientOnly>
-            <ClientOnly>
-              <template v-if="!showAuthenticatedUi">
                 <div class="pt-2 border-t border-gray-200 mt-2">
                   <NuxtLink
                     to="/login"
-                    @click="closeMobileMenu"
                     class="block px-4 py-3.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-center"
+                    @click="closeMobileMenu"
                   >
                     Login
                   </NuxtLink>
                 </div>
+              </template>
+              <template #fallback>
+                <NuxtLink
+                  to="/#capabilities"
+                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
+                >
+                  Capabilities
+                </NuxtLink>
+                <NuxtLink
+                  to="/#how-it-works"
+                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
+                >
+                  How it works
+                </NuxtLink>
+                <NuxtLink
+                  to="/#compare"
+                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
+                >
+                  Compare AI
+                </NuxtLink>
+                <NuxtLink
+                  to="/#workflow"
+                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
+                >
+                  Workflow
+                </NuxtLink>
               </template>
             </ClientOnly>
           </div>
@@ -532,6 +530,9 @@ const { showAuthenticatedUi, logout, user } = useAuth()
 
 const dropdownOpen = ref(false)
 const dropdownRef = ref(null)
+const accountMenuRef = ref(null)
+const generateDropdownOpen = ref(false)
+const generateMenuRef = ref(null)
 const assetsDropdownOpen = ref(false)
 const assetsMenuRef = ref(null)
 const toolsDropdownOpen = ref(false)
@@ -544,20 +545,37 @@ const userFirstName = computed(() => {
   return user.value.name.split(' ')[0]
 })
 
+function closeAllDesktopDropdowns () {
+  dropdownOpen.value = false
+  generateDropdownOpen.value = false
+  assetsDropdownOpen.value = false
+  toolsDropdownOpen.value = false
+}
+
 const toggleDropdown = () => {
-  if (assetsDropdownOpen.value) assetsDropdownOpen.value = false
-  if (toolsDropdownOpen.value) toolsDropdownOpen.value = false
-  dropdownOpen.value = !dropdownOpen.value
+  const next = !dropdownOpen.value
+  closeAllDesktopDropdowns()
+  dropdownOpen.value = next
 }
 
 const closeDropdown = () => {
   dropdownOpen.value = false
 }
 
+const toggleGenerateDropdown = () => {
+  const next = !generateDropdownOpen.value
+  closeAllDesktopDropdowns()
+  generateDropdownOpen.value = next
+}
+
+const closeGenerateDropdown = () => {
+  generateDropdownOpen.value = false
+}
+
 const toggleAssetsDropdown = () => {
-  if (dropdownOpen.value) dropdownOpen.value = false
-  if (toolsDropdownOpen.value) toolsDropdownOpen.value = false
-  assetsDropdownOpen.value = !assetsDropdownOpen.value
+  const next = !assetsDropdownOpen.value
+  closeAllDesktopDropdowns()
+  assetsDropdownOpen.value = next
 }
 
 const closeAssetsDropdown = () => {
@@ -565,9 +583,9 @@ const closeAssetsDropdown = () => {
 }
 
 const toggleToolsDropdown = () => {
-  if (dropdownOpen.value) dropdownOpen.value = false
-  if (assetsDropdownOpen.value) assetsDropdownOpen.value = false
-  toolsDropdownOpen.value = !toolsDropdownOpen.value
+  const next = !toolsDropdownOpen.value
+  closeAllDesktopDropdowns()
+  toolsDropdownOpen.value = next
 }
 
 const closeToolsDropdown = () => {
@@ -576,15 +594,7 @@ const closeToolsDropdown = () => {
 
 const toggleMobileMenu = () => {
   mobileMenuOpen.value = !mobileMenuOpen.value
-  if (dropdownOpen.value) {
-    dropdownOpen.value = false
-  }
-  if (assetsDropdownOpen.value) {
-    assetsDropdownOpen.value = false
-  }
-  if (toolsDropdownOpen.value) {
-    toolsDropdownOpen.value = false
-  }
+  closeAllDesktopDropdowns()
 }
 
 const closeMobileMenu = () => {
@@ -596,12 +606,17 @@ const handleLogout = () => {
   logout()
 }
 
+const handleMobileLogout = () => {
+  closeMobileMenu()
+  logout()
+}
+
 const handleClickOutside = (event) => {
-  if (dropdownOpen.value && dropdownRef.value && !dropdownRef.value.contains(event.target)) {
-    const button = event.target.closest('button[aria-label="Account"]')
-    if (!button) {
-      closeDropdown()
-    }
+  if (dropdownOpen.value && accountMenuRef.value && !accountMenuRef.value.contains(event.target)) {
+    closeDropdown()
+  }
+  if (generateDropdownOpen.value && generateMenuRef.value && !generateMenuRef.value.contains(event.target)) {
+    closeGenerateDropdown()
   }
   if (assetsDropdownOpen.value && assetsMenuRef.value && !assetsMenuRef.value.contains(event.target)) {
     closeAssetsDropdown()
