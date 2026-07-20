@@ -531,12 +531,37 @@
               </span>
             </label>
             <div v-if="includeAmbientSound">
-              <label for="vg-ambient" class="block text-sm font-medium text-gray-700 mb-1.5">Soundscape</label>
+              <div class="flex justify-between items-center gap-2 mb-1.5">
+                <label for="vg-ambient" class="text-sm font-medium text-gray-700">Soundscape</label>
+                <button
+                  type="button"
+                  class="inline-flex items-center gap-1.5 shrink-0 px-2.5 py-1 rounded-md text-xs font-medium text-gray-700 hover:text-primary hover:bg-primary/5 border border-gray-200 hover:border-primary/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  :disabled="generatingSoundscape || !prompt.trim()"
+                  :aria-busy="generatingSoundscape"
+                  :title="!prompt.trim() ? 'Add a video prompt first' : 'Generate a diegetic soundscape from the prompt'"
+                  @click="generateSoundscape"
+                >
+                  <svg
+                    v-if="generatingSoundscape"
+                    class="w-3.5 h-3.5 animate-spin text-primary"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    aria-hidden="true"
+                  >
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
+                    <path
+                      class="opacity-75"
+                      fill="currentColor"
+                      d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                    />
+                  </svg>
+                  {{ generatingSoundscape ? 'Generating…' : 'Generate soundscape' }}
+                </button>
+              </div>
               <textarea
                 id="vg-ambient"
                 v-model="ambientSoundPrompt"
                 rows="2"
-                maxlength="500"
                 class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
                 placeholder="e.g. Soft rain on leaves, distant thunder, quiet forest birdsong"
               />
@@ -861,6 +886,7 @@ const dialogueSpeakerId = ref('')
 const dialogueTone = ref('neutral')
 const includeAmbientSound = ref(false)
 const ambientSoundPrompt = ref('')
+const generatingSoundscape = ref(false)
 
 const dialogueToneOptions = [
   { value: 'neutral', label: 'Neutral' },
@@ -890,6 +916,35 @@ const ambientSoundPresets = [
 function applyAmbientPreset (preset: (typeof ambientSoundPresets)[number]) {
   ambientSoundPrompt.value = preset.text
   includeAmbientSound.value = true
+}
+
+async function generateSoundscape () {
+  const scene = prompt.value.trim()
+  if (!scene || generatingSoundscape.value) return
+  generatingSoundscape.value = true
+  try {
+    const res = await $fetch<{ enhanced: string }>('/api/prompt/enhance', {
+      method: 'POST',
+      body: {
+        prompt: scene,
+        context: 'soundscape',
+        fieldHint: 'Ambient / SFX soundscape',
+        projectId:
+          selectedProjectId.value && PB_ID.test(selectedProjectId.value)
+            ? selectedProjectId.value
+            : undefined
+      }
+    })
+    const next = (res.enhanced || '').trim()
+    if (!next) throw new Error('Empty soundscape')
+    ambientSoundPrompt.value = next
+    includeAmbientSound.value = true
+    toast.showToast('Soundscape generated.', 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not generate soundscape'), 'error')
+  } finally {
+    generatingSoundscape.value = false
+  }
 }
 const primaryModelId = ref('')
 const compareModelIds = ref<string[]>([])
@@ -1778,7 +1833,7 @@ async function runOneModel (modelId: string) {
             }
           : {}),
         ...(includeAmbientSound.value && ambientSoundPrompt.value.trim()
-          ? { ambient_sound_prompt: ambientSoundPrompt.value.trim().slice(0, 500) }
+          ? { ambient_sound_prompt: ambientSoundPrompt.value.trim() }
           : {}),
         ...(negativePrompt.value.trim()
           ? { negative_prompt: negativePrompt.value.trim().slice(0, 4000) }

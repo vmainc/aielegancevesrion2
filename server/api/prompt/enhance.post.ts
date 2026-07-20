@@ -29,6 +29,8 @@ const CONTEXT_HINTS: Record<string, string> = {
     'Single-frame image prompt for a storyboard shot.',
   shot_video:
     'Motion/video prompt for a storyboard shot. No background music or score unless the user explicitly requests it.',
+  soundscape:
+    'Diegetic ambient / SFX soundscape for AI video audio. Environment and in-scene sounds only — never music, score, or soundtrack.',
   question:
     'Question to AI models: clear, specific, one main ask.',
   comment:
@@ -48,6 +50,35 @@ function stripCodeFences (text: string): string {
     lines[lines.length - 1] = lines[lines.length - 1].replace(/```\s*$/, '').trimEnd()
   }
   return lines.join('\n').trim()
+}
+
+function buildEnhanceSystemPrompt (ctxKey: string): string {
+  if (ctxKey === 'soundscape') {
+    return `You write diegetic ambient soundscape / SFX descriptions for AI video models (ChatGPT-style clarity).
+
+Given a video or scene prompt, invent a matching soundscape the viewer would hear in that place and moment.
+
+Rules:
+- Output ONLY the soundscape text. No title, no quotes, no markdown fences, no preamble.
+- Diegetic in-scene sounds only: weather, room tone, nature, traffic, footsteps, machinery, distant crowd murmur, etc.
+- Never include background music, score, soundtrack, songs, or musical beds.
+- Do not invent spoken dialogue lines; brief unintelligible ambience is OK if the scene implies a crowd.
+- Match location, time of day, weather, materials, and mood implied by the scene.
+- Prefer 1–4 dense sentences or a vivid comma-separated list of layered sounds.
+- Preserve the same language as the input.
+
+${CONTEXT_HINTS.soundscape}`
+  }
+
+  return `You are an expert prompt engineer. Improve the user's prompt for clarity, specificity, and results—without changing their intent or language.
+
+Rules:
+- Output ONLY the improved prompt text. No title, no quotes, no markdown fences, no preamble.
+- Preserve the same language as the input (e.g. English stays English).
+- Do not add meta-commentary like "Here is" or "Improved prompt:".
+- Keep proper nouns and numbers unless clearly wrong.
+
+${CONTEXT_HINTS[ctxKey]}`
 }
 
 export default defineEventHandler(async (event) => {
@@ -80,25 +111,19 @@ export default defineEventHandler(async (event) => {
     )
   }
 
-  const system = `You are an expert prompt engineer. Improve the user's prompt for clarity, specificity, and results—without changing their intent or language.
-
-Rules:
-- Output ONLY the improved prompt text. No title, no quotes, no markdown fences, no preamble.
-- Preserve the same language as the input (e.g. English stays English).
-- Do not add meta-commentary like "Here is" or "Improved prompt:".
-- Keep proper nouns and numbers unless clearly wrong.
-
-${CONTEXT_HINTS[ctxKey]}`
+  const system = buildEnhanceSystemPrompt(ctxKey)
 
   const userParts = [
     fieldHint ? `Field: ${fieldHint}` : null,
-    `Original prompt:\n${raw.trim()}`
+    ctxKey === 'soundscape'
+      ? `Video / scene prompt:\n${raw.trim()}`
+      : `Original prompt:\n${raw.trim()}`
   ].filter(Boolean)
   const userContent = userParts.join('\n\n')
 
-  let enhanceModel = ENHANCE_MODEL
+  let enhanceModel = ctxKey === 'soundscape' ? 'openai/gpt-4o' : ENHANCE_MODEL
   const projectId = typeof body?.projectId === 'string' ? body.projectId.trim() : ''
-  if (projectId) {
+  if (projectId && ctxKey !== 'soundscape') {
     try {
       const userId = await getPocketBaseUserIdFromRequest(event)
       const pb = await getAuthenticatedPocketBase()
@@ -125,7 +150,12 @@ ${CONTEXT_HINTS[ctxKey]}`
     headers['X-Title'] = process.env.OPENROUTER_TITLE
   }
 
-  const candidates = [enhanceModel, ...ENHANCE_MODEL_FALLBACKS]
+  const fallbacks =
+    ctxKey === 'soundscape'
+      ? ['openai/gpt-4o-mini', 'anthropic/claude-sonnet-4', 'google/gemini-2.0-flash-001']
+      : ENHANCE_MODEL_FALLBACKS
+
+  const candidates = [enhanceModel, ...fallbacks]
     .map(m => m.trim())
     .filter(Boolean)
     .filter((m, i, arr) => arr.indexOf(m) === i)
