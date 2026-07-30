@@ -1,6 +1,9 @@
 /** Speech-to-text tool — shared types, validation, and formatting (client + server). */
 
-export const SPEECH_TO_TEXT_MAX_BYTES = 25 * 1024 * 1024
+export const SPEECH_TO_TEXT_MAX_BYTES = 100 * 1024 * 1024
+
+/** OpenAI /v1/audio/transcriptions request body limit — larger uploads are compressed first. */
+export const SPEECH_TO_TEXT_PROVIDER_MAX_BYTES = 25 * 1024 * 1024
 
 /**
  * Placeholder for future credit / usage metering.

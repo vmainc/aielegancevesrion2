@@ -9,6 +9,7 @@ import {
   SPEECH_TO_TEXT_MAX_BYTES
 } from '~/lib/speech-to-text'
 import { resolveOpenAiApiKey, transcribeAudioWithOpenAi } from '~/server/utils/openai-transcription'
+import { prepareAudioForOpenAiTranscription } from '~/server/utils/prepare-audio-for-openai-transcription'
 import {
   deleteStagedSpeechToTextAudio,
   getSpeechToTextJob,
@@ -112,13 +113,24 @@ export default defineEventHandler(async (event) => {
     void (async () => {
       try {
         updateSpeechToTextJob(jobId, { phase: 'transcribing', status: 'transcribing' })
+        const prepared = await prepareAudioForOpenAiTranscription({
+          data: filePart!.data,
+          filename,
+          mime: mime || 'application/octet-stream'
+        })
         const result = await transcribeAudioWithOpenAi({
           apiKey,
-          file: filePart!.data,
-          filename,
-          mime: mime || 'application/octet-stream',
+          file: prepared.data,
+          filename: prepared.filename,
+          mime: prepared.mime,
           options
         })
+        if (prepared.compressed) {
+          result.warnings = [
+            ...(result.warnings || []),
+            'Audio was compressed to fit the transcription provider size limit.'
+          ]
+        }
         updateSpeechToTextJob(jobId, {
           status: 'completed',
           result,

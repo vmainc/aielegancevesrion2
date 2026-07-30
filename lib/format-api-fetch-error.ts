@@ -23,7 +23,7 @@ export function formatApiFetchError (e: unknown, fallback: string): string {
 
     const status = o.statusCode ?? o.status
     if (status === 413) {
-      return 'Request too large for the server. If you attached a reference image, use a smaller image or remove it and try again.'
+      return 'This upload is too large for the server right now. Try a smaller file, or ask your admin to raise the upload size limit.'
     }
 
     const fromData = pickMessageFromData(o.data) ||

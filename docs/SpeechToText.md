@@ -32,7 +32,15 @@ See `.env.example` and `ENV_SETUP.md`.
 
 ## File-size limit
 
-**25 MB** per upload — this matches OpenAI’s transcription request limit. Larger files are rejected with a clear error (no silent failure). Complex server-side chunking is intentionally not implemented in v1.
+**100 MB** per upload (application limit).
+
+OpenAI’s transcription API still caps each request at **25 MB**. Files larger than that are compressed server-side with **ffmpeg** (mono 16 kHz MP3) before transcription. Install `ffmpeg` on the VPS for large-file support.
+
+Nginx must allow bodies over 100 MB (`client_max_body_size 110m` in `deploy/nginx-aielegance-site.conf`). After updating nginx on the server:
+
+```bash
+sudo nginx -t && sudo systemctl reload nginx
+```
 
 ## Local development
 
@@ -63,7 +71,7 @@ There is no live billing system yet. `SPEECH_TO_TEXT_CREDITS_PER_AUDIO_MINUTE` i
 
 ## Known limitations
 
-- 25 MB provider cap; long high-bitrate WAV may need compression first
+- 100 MB app upload cap; files over 25 MB are compressed with ffmpeg before OpenAI
 - Speaker diarization is experimental and may fail over to plain Whisper
 - In-memory jobs are not durable across deploys/restarts
 - Recent history is local to the browser, not synced across devices
