@@ -45,6 +45,11 @@ const cards = [
     blurb: 'Build a scene board-by-board — starts with one panel, add more as you go.',
   },
   {
+    to: '/tools/speech-to-text',
+    title: 'Speech to Text',
+    blurb: 'Upload an audio recording and turn it into editable text.',
+  },
+  {
     to: '/character-creator',
     title: 'Character Creator',
     blurb: 'Generate character portraits and references with image models.',

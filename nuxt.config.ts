@@ -45,7 +45,7 @@ export default defineNuxtConfig({
     // Server-side only (private)
     openrouterApiKey:
       process.env.NUXT_OPENROUTER_API_KEY || process.env.OPENROUTER_API_KEY,
-    openaiApiKey: process.env.OPENAI_API_KEY,
+    openaiApiKey: process.env.NUXT_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
     omdbApiKey: process.env.NUXT_OMDB_API_KEY || process.env.OMDB_API_KEY || '',
     pocketbaseAdminEmail:
       process.env.NUXT_POCKETBASE_ADMIN_EMAIL || process.env.POCKETBASE_ADMIN_EMAIL,

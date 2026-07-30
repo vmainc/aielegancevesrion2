@@ -1,0 +1,76 @@
+# Speech to Text
+
+Upload an audio recording and convert spoken audio into an editable transcript.
+
+## Overview
+
+- Route: `/tools/speech-to-text` (signed-in Tools section)
+- Provider: OpenAI Audio Transcriptions API (`/v1/audio/transcriptions`)
+- Default model: `whisper-1`
+- Optional speaker labels: `gpt-4o-transcribe-diarize` (experimental; falls back to Whisper)
+- Processing: asynchronous job + client poll (same family as music/video jobs)
+- Temporary audio staged under `.data/speech-to-text/` and deleted after the job finishes
+
+## Required environment variables
+
+```env
+OPENAI_API_KEY=sk-...
+# or
+NUXT_OPENAI_API_KEY=sk-...
+```
+
+Also requires the usual PocketBase auth stack so API routes can resolve the signed-in user.
+
+See `.env.example` and `ENV_SETUP.md`.
+
+## Supported formats
+
+- MP3 (`.mp3`)
+- WAV (`.wav`)
+- M4A (`.m4a`)
+- WebM / OGG / MPEG / MPGA when the browser provides a valid audio MIME or extension
+
+## File-size limit
+
+**25 MB** per upload — this matches OpenAI’s transcription request limit. Larger files are rejected with a clear error (no silent failure). Complex server-side chunking is intentionally not implemented in v1.
+
+## Local development
+
+1. Set `OPENAI_API_KEY` in `.env`
+2. `npm run dev:pb` (or `npm run pb:serve` + `npm run dev`)
+3. Sign in → **Tools → Speech to Text**
+4. Upload an MP3/WAV and click **Transcribe Audio**
+
+## Options
+
+| Option | Behavior |
+|--------|----------|
+| Verbatim | Prompt asks the model to keep fillers and repetitions |
+| Cleaned | Prompt asks for filler removal and clearer punctuation |
+| Language | Auto-detect (default) or English; structured for more locales later |
+| Speaker labels | Experimental diarization model when available |
+| Timestamps | Segment timestamps in the editable transcript + SRT download |
+
+## Storage / history
+
+- Job state is **in-memory** (lost on server restart), matching other generation tools
+- Browser **Recent Transcriptions** uses `localStorage` for the current device only
+- No PocketBase collection in v1 (avoids a new schema migration)
+
+## Usage / credits
+
+There is no live billing system yet. `SPEECH_TO_TEXT_CREDITS_PER_AUDIO_MINUTE` in `lib/speech-to-text.ts` is a named placeholder so duration-based metering can be wired later without inventing prices. Jobs track `usageCharged` so a future hook will not double-charge retries.
+
+## Known limitations
+
+- 25 MB provider cap; long high-bitrate WAV may need compression first
+- Speaker diarization is experimental and may fail over to plain Whisper
+- In-memory jobs are not durable across deploys/restarts
+- Recent history is local to the browser, not synced across devices
+
+## Recommended next improvements
+
+- Persist transcripts in PocketBase when a shared history product need appears
+- Optional audio compression / splitting for files over 25 MB
+- More language presets
+- Project-scoped “attach transcript to scene/script asset” action

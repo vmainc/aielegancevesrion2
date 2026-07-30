@@ -34,6 +34,10 @@ POCKETBASE_ADMIN_PASSWORD=your-admin-password
 # OpenRouter API Key (required for querying AI models)
 # Get your API key from https://openrouter.ai
 OPENROUTER_API_KEY=your-openrouter-api-key
+
+# OpenAI API Key (required for Speech to Text transcription)
+# Get your API key from https://platform.openai.com/api-keys
+# OPENAI_API_KEY=your-openai-api-key
 ```
 
 ## Finding Your PocketBase Admin Credentials

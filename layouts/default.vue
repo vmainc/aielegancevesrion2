@@ -164,10 +164,17 @@
                     </NuxtLink>
                     <NuxtLink
                       to="/tools/storyboard-builder"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                       @click="closeToolsDropdown"
                     >
                       Storyboard Builder
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/tools/speech-to-text"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
+                      @click="closeToolsDropdown"
+                    >
+                      Speech to Text
                     </NuxtLink>
                   </div>
                 </div>
@@ -434,6 +441,13 @@
                     @click="closeMobileMenu"
                   >
                     Storyboard Builder
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/tools/speech-to-text"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
+                  >
+                    Speech to Text
                   </NuxtLink>
                 </div>
                 <div class="pt-2 border-t border-gray-200 mt-2 space-y-1">
