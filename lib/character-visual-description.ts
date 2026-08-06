@@ -37,10 +37,10 @@ export function castMemberToVisualInput (c: {
 }
 
 const STORY_HEAVY =
-  /\b(protagonist|antagonist|misadventure|story arc|throughout the (film|story|comedy|spot)|sole protagonist|this comedy|the narrative|character who|experiences a|journey through|falling in while|struggles to get out|regaining (her|his|their) composure|leading to (her|his|their))\b/i
+  /\b(protagonist|antagonist|misadventure|story arc|throughout the (film|story|comedy|spot)|sole protagonist|this comedy|the narrative|character who|experiences a|journey through|falling in while|struggles to get out|regaining (her|his|their) composure|leading to (her|his|their)|seeking attention|playfully leaps?|engaging with|leaps? over|interacts? with)\b/i
 
 const VISUAL_SIGNAL =
-  /\b(fur|coat|markings|pattern|whiskers|paws|snout|ears|tail|tabby|calico|breed|species|wardrobe|outfit|wearing|dressed|palette|anime|illustration|photoreal|3d render|cel[\s-]?shaded|build|stocky|slender|fluffy|short hair|eye color|orange|gray|grey|white|black|brown)\b/i
+  /\b(fur|coat|markings|pattern|whiskers|paws|snout|ears|tail|tabby|calico|breed|species|wardrobe|outfit|wearing|dressed|palette|anime|illustration|photoreal|3d render|cel[\s-]?shaded|build|stocky|slender|fluffy|short hair|eye color|orange|gray|grey|white|black|brown|golden retriever|retriever)\b/i
 
 /** True when text reads like plot/role summary, not an image-generation character sheet. */
 export function isStoryHeavyDescription (text: string): boolean {
@@ -52,8 +52,14 @@ export function isStoryHeavyDescription (text: string): boolean {
   if (hasStory && !hasVisual) return true
   if (hasStory && hasVisual) {
     const ploty =
-      /\b(who is the|they experience|before regaining|after (the|a)|leading to)\b/i.test(t)
+      /\b(who is the|they experience|before regaining|after (the|a)|leading to|who playfully|seeking attention|engaging with|leaps? over)\b/i.test(
+        t
+      )
     return ploty
+  }
+  // Action involving another ALL-CAPS cast token often means a scene beat, not a look sheet.
+  if (/\b[A-Z]{2,20}\b/.test(t) && /\b(leaps?|engages?|chases?|plays?|with the|over the)\b/i.test(t)) {
+    return true
   }
   return false
 }
@@ -110,11 +116,11 @@ export function resolveCharacterVisualDescription (input: CharacterVisualPromptI
 }
 
 const LIKELY_NARRATIVE_BEAT =
-  /\b(accidentally\s+falls|with a splash|paddles|underwater|then emerges|remarks about|the mishap|approaches the (water|pond|edge)|explores a tranquil|climbs out|wide-eyed curiosity)\b/i
+  /\b(accidentally\s+falls|with a splash|paddles|underwater|then emerges|remarks about|the mishap|approaches the (water|pond|edge)|explores a tranquil|climbs out|wide-eyed curiosity|playfully leaps?|leaps? over|seeking attention|engaging with|lighthearted manner)\b/i
 
 /** Plot pivots — keep the opening phrase before these (often species + vibe, not the beat). */
 const NARRATIVE_PIVOT =
-  /\b(who\s+(explores|approaches|falls|experiences|discovers|watches|accidentally)|,\s*the\s+\w+\s+(approaches|falls|paddles)|accidentally\b|with a splash|paddles\b|then emerges|makes lighthearted|leading to)\b/i
+  /\b(who\s+(explores|approaches|falls|experiences|discovers|watches|accidentally|playfully|eagerly|proudly|leaps|jumps|chases|engages|seeks)|,\s*the\s+\w+\s+(approaches|falls|paddles|leaps)|accidentally\b|with a splash|paddles\b|then emerges|makes lighthearted|leading to|seeking attention|engaging with|leaps? over)\b/i
 
 /** Legacy meta copy we used to put in the URL — never prefill this again. */
 const CREATOR_META_INSTRUCTION =

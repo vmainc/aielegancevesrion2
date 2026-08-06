@@ -5,7 +5,7 @@
         Character Creator
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Design your characters with multiple AI models
+        Design one character at a time — appearance only, isolated on a solid green (or black) background for clean reference plates.
       </p>
       <p
         v-if="bibleGenerationDebug?.label"
@@ -332,7 +332,7 @@ import {
   CHARACTER_CREATOR_IMAGE_MODELS,
   DEFAULT_IMAGE_MODEL_ID
 } from '~/lib/character-creator-models'
-import { buildCharacterImagePrompt, CHARACTER_STYLE_PRESETS } from '~/lib/character-image-prompt'
+import { buildCharacterImagePrompt, CHARACTER_STYLE_PRESETS, finalizeCharacterCreatorPrompt } from '~/lib/character-image-prompt'
 import {
   appendProductionBibleToPrompt,
   buildProductionBibleGenerationDebug,
@@ -559,8 +559,9 @@ async function resolveBibleAugmentedPrompt (basePrompt: string): Promise<{
 }> {
   bibleGenerationDebug.value = undefined
   if (!PB_ID.test(contextProjectId.value)) {
-    lastGenerationProvenance.value = { bibleContext: null, promptForHash: basePrompt }
-    return { prompt: basePrompt, bibleContext: null }
+    const finalized = finalizeCharacterCreatorPrompt(basePrompt)
+    lastGenerationProvenance.value = { bibleContext: null, promptForHash: finalized }
+    return { prompt: finalized, bibleContext: null }
   }
   const ctx = await productionBible.loadContextForPrompt(
     mergeProductionBibleGenerationOptions({
@@ -568,7 +569,7 @@ async function resolveBibleAugmentedPrompt (basePrompt: string): Promise<{
     })
   )
   bibleGenerationDebug.value = buildProductionBibleGenerationDebug(ctx)
-  const prompt = appendProductionBibleToPrompt(basePrompt, ctx)
+  const prompt = finalizeCharacterCreatorPrompt(appendProductionBibleToPrompt(basePrompt, ctx))
   lastGenerationProvenance.value = { bibleContext: ctx, promptForHash: prompt }
   return { prompt, bibleContext: ctx }
 }

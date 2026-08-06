@@ -1,4 +1,4 @@
-import { buildCharacterImagePrompt, isValidStylePreset } from '~/lib/character-image-prompt'
+import { buildCharacterImagePrompt, finalizeCharacterCreatorPrompt, isValidStylePreset } from '~/lib/character-image-prompt'
 import {
   appendProductionBibleToPrompt,
   buildProductionBibleGenerationDebug,
@@ -85,6 +85,8 @@ export default defineEventHandler(async (event): Promise<CharacterCreatorImageRe
     productionBibleDebug = buildProductionBibleGenerationDebug(context, failOpenReason)
     prompt_used = appendProductionBibleToPrompt(prompt_used, context)
   }
+
+  prompt_used = finalizeCharacterCreatorPrompt(prompt_used)
 
   const settled = await Promise.allSettled(
     models.map(async (modelId): Promise<CharacterCreatorImageResult> => {

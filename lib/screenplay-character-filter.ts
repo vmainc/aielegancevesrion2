@@ -36,13 +36,17 @@ export function isExcludedScreenplayCharacterLabel (raw: string): boolean {
     'DISSOLVE TO',
     'MONTAGE',
     'TITLE',
+    'TITLES',
     'OMITTED',
     'MORE',
     'CONTINUED',
+    'CONT',
+    "CONT'D",
     'LATER',
     'SAME',
     'FREEZE FRAME',
     'BLACK',
+    'WHITE',
     'CREDITS',
     'CAST',
     'CAST LIST',
@@ -57,9 +61,43 @@ export function isExcludedScreenplayCharacterLabel (raw: string): boolean {
     'VOICEOVER',
     'V.O.',
     'O.S.',
+    'O.C.',
     'ALL',
     'EVERYONE',
     'VARIOUS',
+    // Structural titles / section markers mistaken for cue lines
+    'OPENING',
+    'CLOSING',
+    'COLD OPEN',
+    'TEASER',
+    'PROLOGUE',
+    'EPILOGUE',
+    'PRELUDE',
+    'INTERMISSION',
+    'FINALE',
+    'ENDING',
+    'BEGINNING',
+    'START',
+    'FULL SCRIPT',
+    'SCRIPT',
+    'SCREENPLAY',
+    'MAIN TITLE',
+    'END TITLE',
+    'END TITLES',
+    'OPENING CREDITS',
+    'CLOSING CREDITS',
+    'END CREDITS',
+    'OPENING TITLES',
+    'CLOSING TITLES',
+    'TITLE SEQUENCE',
+    'OPENING SEQUENCE',
+    'CLOSING SEQUENCE',
+    'ACT',
+    'SCENE',
+    'SEQUENCE',
+    'PART',
+    'CHAPTER',
+    'EPISODE',
     // Generic screenplay placeholders — not real character names
     'HERO',
     'HEROINE',
@@ -96,6 +134,21 @@ export function isExcludedScreenplayCharacterLabel (raw: string): boolean {
   if (/^(?:TIME CUT|MOMENTS LATER|LATER THAT|NEXT DAY|SAME TIME|MEANWHILE)\b/i.test(check)) return true
   if (/^(?:STOCK SHOT|POV|ESTABLISHING|INSERT SHOT)\b/i.test(check)) return true
   if (/^(?:MUSIC|SOUND|SFX)\b/i.test(check)) return true
+  // OPENING / CLOSING + titles, credits, sequences (not cue names)
+  if (/^(?:OPENING|CLOSING|END)\s+(?:CREDITS|TITLES?|SEQUENCE|SHOT|IMAGE|CARD|SLATE)\b/i.test(check)) {
+    return true
+  }
+  if (/^COLD\s+OPEN\b/i.test(check)) return true
+  // Act / scene / sequence / part numbering used as headings
+  if (
+    /^(?:ACT|SCENE|SEQ\.?|SEQUENCE|PART|CHAPTER|EPISODE)\s*(?:#?\d{1,3}|[IVXLC]{1,8}|ONE|TWO|THREE|FOUR|FIVE|SIX|SEVEN|EIGHT|NINE|TEN|ELEVEN|TWELVE|A|B|C)?\.?$/i.test(
+      dePunct
+    )
+  ) {
+    return true
+  }
+  // Bare numbered scene markers: "1A", "12.", "II."
+  if (/^(?:\d{1,3}[A-Z]?|[IVXLC]{1,8})\.?$/i.test(dePunct)) return true
 
   return false
 }

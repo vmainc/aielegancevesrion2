@@ -12,7 +12,7 @@ const ENHANCE_MODEL_FALLBACKS = ['openai/gpt-4o', 'google/gemini-2.0-flash-001']
 
 const CONTEXT_HINTS: Record<string, string> = {
   character:
-    'Character portrait / reference image for film or games. Keep names and key facts if present; add lighting, wardrobe, and camera-friendly detail.',
+    'Character reference plate: appearance, species/breed, face, body, wardrobe, and materials only. Exactly one subject. Isolated on a solid chroma-key green (#00FF00) or solid black background. No story action, no other characters, no environment or set.',
   video:
     'AI video generation: motion, camera, lighting, time, mood. Be specific and film-literate. Never add background music, score, or soundtrack. Diegetic ambient sound or dialogue only if the user asks.',
   image:
