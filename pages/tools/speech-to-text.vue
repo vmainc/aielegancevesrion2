@@ -271,7 +271,16 @@
               >
                 Download SRT
               </button>
+              <button
+                type="button"
+                class="px-3 py-2 text-sm font-semibold rounded-lg bg-primary text-gray-950 hover:bg-primary/90 disabled:opacity-50"
+                :disabled="turningIntoFilm || !editableTranscript.trim()"
+                @click="turnIntoFilm"
+              >
+                {{ turningIntoFilm ? 'Creating project…' : 'Turn Into a Film' }}
+              </button>
             </div>
+            <p v-if="turnIntoFilmError" class="text-sm text-red-700" role="alert">{{ turnIntoFilmError }}</p>
           </template>
 
           <div class="flex flex-wrap gap-2 pt-2 border-t border-gray-100">
@@ -361,6 +370,11 @@ definePageMeta({ ssr: false })
 
 const { isAuthenticated, getAuthToken, initAuth } = useAuth()
 const toast = useToast()
+const { registerImportedProject } = useCreativeProject()
+
+const turningIntoFilm = ref(false)
+const turnIntoFilmError = ref('')
+const lastCompletedJobId = ref('')
 
 const maxMb = Math.floor(SPEECH_TO_TEXT_MAX_BYTES / (1024 * 1024))
 const acceptAttr = SPEECH_TO_TEXT_ACCEPT_EXTENSIONS.join(',')
@@ -513,6 +527,7 @@ async function pollJob (jobId: string): Promise<void> {
       resultFailed.value = false
       resultError.value = ''
       uiPhase.value = 'results'
+      lastCompletedJobId.value = jobId
 
       history.value = upsertSpeechToTextHistory(history.value, {
         id: jobId,
@@ -586,7 +601,14 @@ async function startTranscription () {
 
     await pollJob(start.jobId)
   } catch (e: unknown) {
-    formError.value = formatApiFetchError(e, 'Could not transcribe audio')
+    const status =
+      e && typeof e === 'object'
+        ? Number((e as { statusCode?: number; status?: number }).statusCode ?? (e as { status?: number }).status)
+        : 0
+    formError.value =
+      status === 413
+        ? 'The server rejected this upload as too large. Your file is fine for Speech to Text — the site upload limit needs to be raised (nginx). Try again after that, or use a smaller file for now.'
+        : formatApiFetchError(e, 'Could not transcribe audio')
     toast.showToast(formError.value, 'error')
     uiPhase.value = 'form'
   } finally {
@@ -640,6 +662,47 @@ function downloadBlob (content: string, filename: string, mime: string) {
 function downloadTxt () {
   const base = (resultFilename.value || 'transcript').replace(/\.[^.]+$/, '')
   downloadBlob(editableTranscript.value, `${base}.txt`, 'text/plain;charset=utf-8')
+}
+
+async function turnIntoFilm () {
+  turnIntoFilmError.value = ''
+  const text = editableTranscript.value.trim()
+  if (!text) {
+    turnIntoFilmError.value = 'Transcript is empty.'
+    return
+  }
+  const token = getAuthToken()
+  if (!token) {
+    turnIntoFilmError.value = 'Sign in to create a film project.'
+    return
+  }
+  turningIntoFilm.value = true
+  try {
+    const res = await $fetch<{
+      project: import('~/types/creative-project').CreativeProject
+      landingPath?: string
+    }>('/api/adapt-to-film/create', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: {
+        projectTitle: (resultFilename.value || 'Transcript Film').replace(/\.[^.]+$/, ''),
+        sourceTitle: resultFilename.value || 'Speech to Text transcript',
+        sourceType: 'transcript',
+        sourceText: text,
+        originalAudioFilename: resultFilename.value || undefined,
+        speechToTextJobId: lastCompletedJobId.value || undefined
+      }
+    })
+    registerImportedProject(res.project)
+    const { writeSessionWorkflow } = await import('~/lib/project-workflow-mode')
+    writeSessionWorkflow(res.project.id, 'adapt')
+    toast.showToast('Film project created from transcript.', 'success')
+    await navigateTo(res.landingPath || `/projects/${res.project.id}/adapt`)
+  } catch (e: unknown) {
+    turnIntoFilmError.value = formatApiFetchError(e, 'Could not create film project.')
+  } finally {
+    turningIntoFilm.value = false
+  }
 }
 
 function downloadSrt () {

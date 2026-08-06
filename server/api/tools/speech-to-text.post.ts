@@ -8,8 +8,9 @@ import {
   validateSpeechToTextFileMeta,
   SPEECH_TO_TEXT_MAX_BYTES
 } from '~/lib/speech-to-text'
-import { resolveOpenAiApiKey, transcribeAudioWithOpenAi } from '~/server/utils/openai-transcription'
+import { transcribeAudioWithOpenRouter } from '~/server/utils/openrouter-transcription'
 import { prepareAudioForOpenAiTranscription } from '~/server/utils/prepare-audio-for-openai-transcription'
+import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import {
   deleteStagedSpeechToTextAudio,
   getSpeechToTextJob,
@@ -28,12 +29,12 @@ export default defineEventHandler(async (event) => {
   checkRateLimit(rateLimitKey(userId, 'speech-to-text'), 8, 60_000)
 
   const config = useRuntimeConfig()
-  const apiKey = resolveOpenAiApiKey(config)
+  const apiKey = resolveOpenRouterApiKey(config)
   if (!apiKey) {
     throwApiError(
       500,
       ApiErrorCode.OPENROUTER_NOT_CONFIGURED,
-      'OpenAI API key not configured. Set OPENAI_API_KEY or NUXT_OPENAI_API_KEY.'
+      'OpenRouter API key not configured. Set OPENROUTER_API_KEY or NUXT_OPENROUTER_API_KEY.'
     )
   }
 
@@ -118,7 +119,7 @@ export default defineEventHandler(async (event) => {
           filename,
           mime: mime || 'application/octet-stream'
         })
-        const result = await transcribeAudioWithOpenAi({
+        const result = await transcribeAudioWithOpenRouter({
           apiKey,
           file: prepared.data,
           filename: prepared.filename,

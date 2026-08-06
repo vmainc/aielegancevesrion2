@@ -5,8 +5,8 @@ import { join } from 'node:path'
 import { SPEECH_TO_TEXT_PROVIDER_MAX_BYTES } from '~/lib/speech-to-text'
 
 /**
- * OpenAI transcription accepts ~25MB. For larger uploads (app allows up to 100MB),
- * compress to mono 16kHz MP3 suitable for speech.
+ * OpenRouter / upstream Whisper accept ~25MB per request. For larger uploads
+ * (app allows up to 100MB), compress to mono 16kHz MP3 suitable for speech.
  */
 export async function prepareAudioForOpenAiTranscription (input: {
   data: Buffer

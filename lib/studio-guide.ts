@@ -7,11 +7,33 @@ export type StudioGuideAction = {
   rationale?: string
 }
 
+/** Structured project brief the Guide gathers before creating a film project. */
+export type StudioGuideProjectBrief = {
+  title: string
+  logline: string
+  summary: string
+  genre: string
+  tone: string
+  aspectRatio: '16:9' | '9:16' | '1:1'
+  goal: 'film' | 'social' | 'commercial' | 'other'
+  targetDurationSeconds?: number
+  characters: string[]
+  visualStyle?: string
+  workflowMode: 'idea' | 'generate'
+}
+
+export type StudioGuideBuildProject = {
+  confirmLabel: string
+  brief: StudioGuideProjectBrief
+}
+
 export type StudioGuideChatMessage = {
   id: string
   role: 'user' | 'assistant'
   content: string
   actions?: StudioGuideAction[]
+  /** When set, UI shows a Build card so the Guide can create the project. */
+  buildProject?: StudioGuideBuildProject
   createdAt: string
 }
 
@@ -178,6 +200,22 @@ export const STUDIO_GUIDE_PROJECT_DESTINATIONS: Array<{
 ]
 
 export const STUDIO_GUIDE_STORAGE_KEY = 'aielegance-studio-guide'
+/** Multi-chat store (ChatGPT-style). Migrates from legacy single-thread key. */
+export const STUDIO_GUIDE_CHATS_STORAGE_KEY = 'aielegance-studio-guide-chats'
+
+export type StudioGuideChat = {
+  id: string
+  title: string
+  messages: StudioGuideChatMessage[]
+  createdAt: string
+  updatedAt: string
+}
+
+export type StudioGuideChatStore = {
+  version: 1
+  activeChatId: string | null
+  chats: StudioGuideChat[]
+}
 
 const STATIC_PATHS = new Set(STUDIO_GUIDE_STATIC_DESTINATIONS.map(d => d.path))
 const PROJECT_SUFFIX_SET = new Set<string>(STUDIO_GUIDE_PROJECT_SUFFIXES)
@@ -235,6 +273,10 @@ export function newStudioGuideMessageId (): string {
   return `sg${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
 }
 
+export function newStudioGuideChatId (): string {
+  return `sc${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+}
+
 function parseActions (raw: unknown): StudioGuideAction[] | undefined {
   if (!Array.isArray(raw)) return undefined
   const out: StudioGuideAction[] = []
@@ -258,6 +300,152 @@ function parseActions (raw: unknown): StudioGuideAction[] | undefined {
   return out.length ? out : undefined
 }
 
+const ASPECTS = new Set(['16:9', '9:16', '1:1'])
+const GOALS = new Set(['film', 'social', 'commercial', 'other'])
+
+export function parseStudioGuideProjectBrief (raw: unknown): StudioGuideProjectBrief | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  const title = typeof o.title === 'string' ? o.title.trim().slice(0, 200) : ''
+  const logline = typeof o.logline === 'string' ? o.logline.trim().slice(0, 500) : ''
+  const summary = typeof o.summary === 'string' ? o.summary.trim().slice(0, 8000) : ''
+  if (!title || !(summary || logline)) return null
+
+  const aspectRaw = typeof o.aspectRatio === 'string' ? o.aspectRatio.trim() : '16:9'
+  const goalRaw = typeof o.goal === 'string' ? o.goal.trim() : 'film'
+  const workflowRaw = typeof o.workflowMode === 'string' ? o.workflowMode.trim() : 'idea'
+  const characters = Array.isArray(o.characters)
+    ? o.characters
+        .map(c => (typeof c === 'string' ? c.trim().slice(0, 80) : ''))
+        .filter(Boolean)
+        .slice(0, 12)
+    : []
+
+  let targetDurationSeconds: number | undefined
+  if (typeof o.targetDurationSeconds === 'number' && Number.isFinite(o.targetDurationSeconds)) {
+    targetDurationSeconds = Math.floor(o.targetDurationSeconds)
+  } else if (typeof o.targetDurationSeconds === 'string' && o.targetDurationSeconds.trim()) {
+    const n = Math.floor(Number(o.targetDurationSeconds))
+    if (Number.isFinite(n)) targetDurationSeconds = n
+  }
+  if (targetDurationSeconds != null) {
+    if (targetDurationSeconds < 15) targetDurationSeconds = 15
+    if (targetDurationSeconds > 3600) targetDurationSeconds = 3600
+  }
+
+  return {
+    title,
+    logline: logline || summary.split('\n')[0]!.slice(0, 500),
+    summary: summary || logline,
+    genre: typeof o.genre === 'string' ? o.genre.trim().slice(0, 80) : '',
+    tone: typeof o.tone === 'string' ? o.tone.trim().slice(0, 120) : '',
+    aspectRatio: (ASPECTS.has(aspectRaw) ? aspectRaw : '16:9') as StudioGuideProjectBrief['aspectRatio'],
+    goal: (GOALS.has(goalRaw) ? goalRaw : 'film') as StudioGuideProjectBrief['goal'],
+    targetDurationSeconds,
+    characters,
+    visualStyle:
+      typeof o.visualStyle === 'string' ? o.visualStyle.trim().slice(0, 300) : undefined,
+    workflowMode: workflowRaw === 'generate' ? 'generate' : 'idea'
+  }
+}
+
+export function parseStudioGuideBuildProject (raw: unknown): StudioGuideBuildProject | undefined {
+  if (!raw || typeof raw !== 'object') return undefined
+  const o = raw as Record<string, unknown>
+  const brief = parseStudioGuideProjectBrief(o.brief)
+  if (!brief) return undefined
+  const confirmLabel =
+    typeof o.confirmLabel === 'string' && o.confirmLabel.trim()
+      ? o.confirmLabel.trim().slice(0, 60)
+      : 'Build this project'
+  return { confirmLabel, brief }
+}
+
+export function studioGuideBriefIsReady (brief: StudioGuideProjectBrief): boolean {
+  return Boolean(brief.title.trim() && (brief.summary.trim() || brief.logline.trim()))
+}
+
+/** Seed concept_notes so bootstrap / story UI can read title, logline, and cast. */
+export function formatStudioGuideBriefAsConceptNotes (brief: StudioGuideProjectBrief): string {
+  const castMarker =
+    brief.characters.length > 0
+      ? `\n<!-- aielegance:characters=${JSON.stringify(brief.characters)} -->\n`
+      : ''
+  const style =
+    brief.visualStyle?.trim()
+      ? `\n**Visual style:** ${brief.visualStyle.trim().slice(0, 300)}\n`
+      : ''
+  return `<!-- aielegance:source=studio-guide -->
+**Title:** ${brief.title}
+
+**Logline:** ${brief.logline || brief.summary.split('\n')[0] || ''}
+${castMarker}${style}
+---
+
+${brief.summary || brief.logline}
+`
+}
+
+function parseMessage (m: unknown): StudioGuideChatMessage | null {
+  if (!m || typeof m !== 'object') return null
+  const msg = m as StudioGuideChatMessage
+  if (
+    typeof msg.id !== 'string' ||
+    (msg.role !== 'user' && msg.role !== 'assistant') ||
+    typeof msg.content !== 'string'
+  ) {
+    return null
+  }
+  return {
+    id: msg.id,
+    role: msg.role,
+    content: msg.content,
+    createdAt: typeof msg.createdAt === 'string' ? msg.createdAt : new Date().toISOString(),
+    actions: parseActions(msg.actions),
+    buildProject: parseStudioGuideBuildProject(msg.buildProject)
+  }
+}
+
+/** Title from the first user message (ChatGPT-style). */
+export function titleFromStudioGuideMessages (messages: StudioGuideChatMessage[]): string {
+  const firstUser = messages.find(m => m.role === 'user' && m.content.trim())
+  if (!firstUser) return 'New chat'
+  const t = firstUser.content.trim().replace(/\s+/g, ' ')
+  return t.length > 48 ? `${t.slice(0, 48).trim()}…` : t
+}
+
+export function createEmptyStudioGuideChat (): StudioGuideChat {
+  const now = new Date().toISOString()
+  return {
+    id: newStudioGuideChatId(),
+    title: 'New chat',
+    messages: [],
+    createdAt: now,
+    updatedAt: now
+  }
+}
+
+export function emptyStudioGuideChatStore (): StudioGuideChatStore {
+  return { version: 1, activeChatId: null, chats: [] }
+}
+
+function parseChat (raw: unknown): StudioGuideChat | null {
+  if (!raw || typeof raw !== 'object') return null
+  const o = raw as Record<string, unknown>
+  if (typeof o.id !== 'string') return null
+  const messages = Array.isArray(o.messages)
+    ? o.messages.map(parseMessage).filter((m): m is StudioGuideChatMessage => !!m)
+    : []
+  const createdAt = typeof o.createdAt === 'string' ? o.createdAt : new Date().toISOString()
+  const updatedAt = typeof o.updatedAt === 'string' ? o.updatedAt : createdAt
+  const title =
+    typeof o.title === 'string' && o.title.trim()
+      ? o.title.trim().slice(0, 80)
+      : titleFromStudioGuideMessages(messages)
+  return { id: o.id, title, messages, createdAt, updatedAt }
+}
+
+/** Legacy single-thread message array. */
 export function loadStudioGuideMessages (): StudioGuideChatMessage[] {
   if (typeof localStorage === 'undefined') return []
   try {
@@ -265,18 +453,7 @@ export function loadStudioGuideMessages (): StudioGuideChatMessage[] {
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
-    return parsed.filter((m): m is StudioGuideChatMessage => {
-      if (!m || typeof m !== 'object') return false
-      const msg = m as StudioGuideChatMessage
-      return (
-        typeof msg.id === 'string' &&
-        (msg.role === 'user' || msg.role === 'assistant') &&
-        typeof msg.content === 'string'
-      )
-    }).map(m => ({
-      ...m,
-      actions: parseActions(m.actions)
-    }))
+    return parsed.map(parseMessage).filter((m): m is StudioGuideChatMessage => !!m)
   } catch {
     return []
   }
@@ -291,11 +468,134 @@ export function saveStudioGuideMessages (messages: StudioGuideChatMessage[]): vo
   }
 }
 
+export function loadStudioGuideChatStore (): StudioGuideChatStore {
+  if (typeof localStorage === 'undefined') return emptyStudioGuideChatStore()
+  try {
+    const raw = localStorage.getItem(STUDIO_GUIDE_CHATS_STORAGE_KEY)
+    if (raw) {
+      const parsed = JSON.parse(raw) as unknown
+      if (parsed && typeof parsed === 'object') {
+        const o = parsed as Record<string, unknown>
+        const chats = Array.isArray(o.chats)
+          ? o.chats.map(parseChat).filter((c): c is StudioGuideChat => !!c)
+          : []
+        let activeChatId =
+          typeof o.activeChatId === 'string' && chats.some(c => c.id === o.activeChatId)
+            ? o.activeChatId
+            : chats[0]?.id || null
+        return { version: 1, activeChatId, chats }
+      }
+    }
+  } catch {
+    /* fall through to migrate */
+  }
+
+  // Migrate legacy single thread into one chat.
+  const legacy = loadStudioGuideMessages()
+  if (legacy.length) {
+    const now = new Date().toISOString()
+    const chat: StudioGuideChat = {
+      id: newStudioGuideChatId(),
+      title: titleFromStudioGuideMessages(legacy),
+      messages: legacy.slice(-80),
+      createdAt: legacy[0]?.createdAt || now,
+      updatedAt: legacy[legacy.length - 1]?.createdAt || now
+    }
+    const store: StudioGuideChatStore = {
+      version: 1,
+      activeChatId: chat.id,
+      chats: [chat]
+    }
+    saveStudioGuideChatStore(store)
+    return store
+  }
+
+  return emptyStudioGuideChatStore()
+}
+
+export function saveStudioGuideChatStore (store: StudioGuideChatStore): void {
+  if (typeof localStorage === 'undefined') return
+  try {
+    const chats = store.chats
+      .slice()
+      .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+      .slice(0, 40)
+      .map(c => ({
+        ...c,
+        messages: c.messages.slice(-80)
+      }))
+    const activeChatId =
+      store.activeChatId && chats.some(c => c.id === store.activeChatId)
+        ? store.activeChatId
+        : chats[0]?.id || null
+    localStorage.setItem(
+      STUDIO_GUIDE_CHATS_STORAGE_KEY,
+      JSON.stringify({ version: 1, activeChatId, chats } satisfies StudioGuideChatStore)
+    )
+    // Keep legacy key in sync with active chat for older code paths.
+    const active = chats.find(c => c.id === activeChatId)
+    saveStudioGuideMessages(active?.messages || [])
+  } catch {
+    /* quota / private mode */
+  }
+}
+
+export function upsertStudioGuideChat (
+  store: StudioGuideChatStore,
+  chat: StudioGuideChat
+): StudioGuideChatStore {
+  const others = store.chats.filter(c => c.id !== chat.id)
+  return {
+    version: 1,
+    activeChatId: chat.id,
+    chats: [chat, ...others]
+  }
+}
+
+export function deleteStudioGuideChat (
+  store: StudioGuideChatStore,
+  chatId: string
+): StudioGuideChatStore {
+  const chats = store.chats.filter(c => c.id !== chatId)
+  const activeChatId =
+    store.activeChatId === chatId ? chats[0]?.id || null : store.activeChatId
+  return { version: 1, activeChatId, chats }
+}
+
+export function formatStudioGuideChatTime (iso: string): string {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  const now = new Date()
+  const sameDay =
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  if (sameDay) {
+    return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })
+  }
+  const yesterday = new Date(now)
+  yesterday.setDate(now.getDate() - 1)
+  if (
+    d.getFullYear() === yesterday.getFullYear() &&
+    d.getMonth() === yesterday.getMonth() &&
+    d.getDate() === yesterday.getDate()
+  ) {
+    return 'Yesterday'
+  }
+  return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+}
+
 /** Starter chips shown on the empty Studio Guide state. */
 export const STUDIO_GUIDE_STARTERS: Array<{ label: string; prompt: string }> = [
   {
-    label: 'Start a new project',
-    prompt: 'I want to start a new film or content project.'
+    label: 'Help me invent a project',
+    prompt:
+      'I want to create a new film project. Ask me a few questions about the story, then build it for me.'
+  },
+  {
+    label: 'I already have an idea',
+    prompt:
+      'I have a story idea. Interview me about it, then create the project and generate the starting materials.'
   },
   {
     label: 'Import a screenplay',
@@ -304,10 +604,6 @@ export const STUDIO_GUIDE_STARTERS: Array<{ label: string; prompt: string }> = [
   {
     label: 'Generate video',
     prompt: 'I want to generate a video clip.'
-  },
-  {
-    label: 'Create a character',
-    prompt: 'I want to create a character look.'
   },
   {
     label: 'Continue a project',

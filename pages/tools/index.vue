@@ -50,6 +50,11 @@ const cards = [
     blurb: 'Upload an audio recording and turn it into editable text.',
   },
   {
+    to: '/adapt-to-film',
+    title: 'Adapt to Film',
+    blurb: 'Turn a transcript, story, or article into a treatment, scenes, shots, and production plan.',
+  },
+  {
     to: '/character-creator',
     title: 'Character Creator',
     blurb: 'Generate character portraits and references with image models.',

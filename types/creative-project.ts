@@ -2,7 +2,7 @@ export type ProjectAspectRatio = '16:9' | '9:16' | '1:1'
 
 export type ProjectGoal = 'film' | 'social' | 'commercial' | 'other'
 /** How the project was started — drives Overview and sidebar steps. */
-export type ProjectWorkflowMode = 'import' | 'idea' | 'generate'
+export type ProjectWorkflowMode = 'import' | 'idea' | 'generate' | 'adapt'
 
 /** How long the finished piece should feel — drives AI script/treatment scale. */
 export type ProjectTargetLength = 'spot' | 'short' | 'music_video' | 'episode' | 'feature'

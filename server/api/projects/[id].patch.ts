@@ -32,10 +32,10 @@ export default defineEventHandler(async (event) => {
   if (typeof body.goal === 'string' && GOALS.has(body.goal)) {
     patch.goal = body.goal
   }
-  const WORKFLOW = new Set(['import', 'idea', 'generate'])
+  const WORKFLOW = new Set(['import', 'idea', 'generate', 'adapt'])
   if (typeof body.workflowMode === 'string' && WORKFLOW.has(body.workflowMode)) {
-    const mode = body.workflowMode as 'import' | 'idea' | 'generate'
-    patch.workflow_mode = mode
+    const mode = body.workflowMode as 'import' | 'idea' | 'generate' | 'adapt'
+    patch.workflow_mode = mode === 'adapt' ? 'adapt' : mode
     const prevNotes = String((existing as { concept_notes?: string }).concept_notes || '')
     const stripped = stripWorkflowMarker(prevNotes)
     patch.concept_notes =

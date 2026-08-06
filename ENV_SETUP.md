@@ -31,13 +31,9 @@ VITE_POCKETBASE_URL=http://127.0.0.1:8090
 POCKETBASE_ADMIN_EMAIL=your-admin-email@example.com
 POCKETBASE_ADMIN_PASSWORD=your-admin-password
 
-# OpenRouter API Key (required for querying AI models)
+# OpenRouter API Key (required for AI models and Speech to Text)
 # Get your API key from https://openrouter.ai
 OPENROUTER_API_KEY=your-openrouter-api-key
-
-# OpenAI API Key (required for Speech to Text transcription)
-# Get your API key from https://platform.openai.com/api-keys
-# OPENAI_API_KEY=your-openai-api-key
 ```
 
 ## Finding Your PocketBase Admin Credentials

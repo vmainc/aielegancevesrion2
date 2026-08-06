@@ -181,7 +181,8 @@ const sectionLabels: Record<string, string> = {
   video: 'Video',
   guide: 'Guide',
   bible: 'Production Bible',
-  review: 'Review Dashboard'
+  review: 'Review Dashboard',
+  adapt: 'Adapt to Film'
 }
 
 const toolSections: Array<{ path: string; label: string }> = [

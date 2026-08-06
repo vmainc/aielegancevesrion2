@@ -1,4 +1,5 @@
 import type { CreativeProject, ProjectWorkflowMode } from '~/types/creative-project'
+import { WORKFLOW_ADAPT_MARKER } from '~/lib/adapt-to-film'
 
 /** Embedded in `concept_notes` when PocketBase has no `workflow_mode` field yet. */
 export const WORKFLOW_IDEA_MARKER = '<!-- aielegance:workflow=idea -->'
@@ -6,12 +7,17 @@ export const WORKFLOW_GENERATE_MARKER = '<!-- aielegance:workflow=generate -->'
 /** Legacy marker — treated as `generate`. */
 export const WORKFLOW_SCRATCH_MARKER = '<!-- aielegance:workflow=scratch -->'
 
-const ALL_MARKERS = [WORKFLOW_IDEA_MARKER, WORKFLOW_GENERATE_MARKER, WORKFLOW_SCRATCH_MARKER]
+const ALL_MARKERS = [
+  WORKFLOW_IDEA_MARKER,
+  WORKFLOW_GENERATE_MARKER,
+  WORKFLOW_SCRATCH_MARKER,
+  WORKFLOW_ADAPT_MARKER
+]
 
 const SESSION_PREFIX = 'aielegance-wf:'
 
 export function normalizeWorkflowMode (raw: string | undefined | null): ProjectWorkflowMode | null {
-  if (raw === 'import' || raw === 'idea' || raw === 'generate') return raw
+  if (raw === 'import' || raw === 'idea' || raw === 'generate' || raw === 'adapt') return raw
   if (raw === 'scratch') return 'generate'
   return null
 }
@@ -21,6 +27,7 @@ export function workflowModeFromProjectRecord (r: {
   concept_notes?: string
 }): ProjectWorkflowMode {
   const notes = String(r.concept_notes || '')
+  if (notes.includes(WORKFLOW_ADAPT_MARKER)) return 'adapt'
   if (notes.includes(WORKFLOW_IDEA_MARKER)) return 'idea'
   if (notes.includes(WORKFLOW_GENERATE_MARKER) || notes.includes(WORKFLOW_SCRATCH_MARKER)) return 'generate'
   const fromField = normalizeWorkflowMode(r.workflow_mode)
@@ -39,10 +46,11 @@ export function stripWorkflowMarker (text: string): string {
 export function initialConceptNotesForWorkflow (mode: ProjectWorkflowMode): string {
   if (mode === 'idea') return `${WORKFLOW_IDEA_MARKER}\n`
   if (mode === 'generate') return `${WORKFLOW_GENERATE_MARKER}\n`
+  if (mode === 'adapt') return `${WORKFLOW_ADAPT_MARKER}\n`
   return ''
 }
 
-/** PocketBase select before `idea` / `generate` were provisioned (import | scratch only). */
+/** PocketBase select before `idea` / `generate` / `adapt` were provisioned (import | scratch only). */
 export function legacyPbWorkflowMode (mode: ProjectWorkflowMode): 'import' | 'scratch' {
   return mode === 'generate' ? 'scratch' : 'import'
 }
@@ -75,6 +83,7 @@ export function resolveProjectWorkflowMode (
   project: Pick<CreativeProject, 'id' | 'workflowMode' | 'conceptNotes'>
 ): ProjectWorkflowMode {
   const notes = String(project.conceptNotes || '')
+  if (notes.includes(WORKFLOW_ADAPT_MARKER)) return 'adapt'
   if (notes.includes(WORKFLOW_IDEA_MARKER)) return 'idea'
   if (notes.includes(WORKFLOW_GENERATE_MARKER) || notes.includes(WORKFLOW_SCRATCH_MARKER)) return 'generate'
   const session = readSessionWorkflow(project.id)

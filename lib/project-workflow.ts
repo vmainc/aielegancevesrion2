@@ -22,7 +22,18 @@ const WORKFLOW_PATHS = [
   'video'
 ] as const
 
-export type WorkflowPath = (typeof WORKFLOW_PATHS)[number]
+const ADAPT_WORKFLOW_PATHS = [
+  'adapt',
+  'home',
+  'overview',
+  'characters',
+  'director',
+  'scenes',
+  'storyboard',
+  'video'
+] as const
+
+export type WorkflowPath = (typeof WORKFLOW_PATHS)[number] | 'adapt'
 
 export type ProjectWorkflowInput =
   | Pick<CreativeProject, 'id' | 'workflowMode' | 'conceptNotes'>
@@ -57,15 +68,20 @@ export function isScratchWorkflowProject (project: ProjectWorkflowInput): boolea
   return isIdeaFirstWorkflowProject(project)
 }
 
+export function isAdaptWorkflowProject (project: ProjectWorkflowInput): boolean {
+  return projectWorkflowMode(project) === 'adapt'
+}
+
 export function workflowPathsForProject (
-  _project: Pick<CreativeProject, 'treatment' | 'workflowMode'> | null | undefined
+  project: Pick<CreativeProject, 'treatment' | 'workflowMode' | 'conceptNotes' | 'id'> | null | undefined
 ): readonly string[] {
+  if (project && isAdaptWorkflowProject(project)) return ADAPT_WORKFLOW_PATHS
   return WORKFLOW_PATHS
 }
 
 export function workflowStepOf (
   path: string,
-  project: Pick<CreativeProject, 'treatment' | 'workflowMode'> | null | undefined
+  project: Pick<CreativeProject, 'treatment' | 'workflowMode' | 'conceptNotes' | 'id'> | null | undefined
 ): { current: number; total: number } | null {
   const paths = workflowPathsForProject(project)
   const idx = paths.indexOf(path)
@@ -76,7 +92,7 @@ export function workflowStepOf (
 /** Next sidebar step after `current` (e.g. overview → characters → director …). */
 export function nextWorkflowPath (
   current: string,
-  project: Pick<CreativeProject, 'treatment' | 'workflowMode'> | null | undefined
+  project: Pick<CreativeProject, 'treatment' | 'workflowMode' | 'conceptNotes' | 'id'> | null | undefined
 ): WorkflowPath | null {
   const paths = workflowPathsForProject(project)
   const idx = paths.indexOf(current)
@@ -89,6 +105,7 @@ export function projectCreateLandingPath (
   projectId: string,
   mode: ProjectWorkflowMode
 ): string {
+  if (mode === 'adapt') return `/projects/${projectId}/adapt`
   if (mode === 'import' || mode === 'idea' || mode === 'generate') {
     return `/projects/${projectId}/overview`
   }

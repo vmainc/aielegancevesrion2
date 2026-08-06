@@ -26,7 +26,7 @@
                   to="/guide"
                   class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                 >
-                  Guide
+                  Home
                 </NuxtLink>
                 <div ref="generateMenuRef" class="relative">
                   <button
@@ -171,10 +171,17 @@
                     </NuxtLink>
                     <NuxtLink
                       to="/tools/speech-to-text"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                       @click="closeToolsDropdown"
                     >
                       Speech to Text
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/adapt-to-film"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-b-lg"
+                      @click="closeToolsDropdown"
+                    >
+                      Adapt to Film
                     </NuxtLink>
                   </div>
                 </div>
@@ -345,7 +352,7 @@
                   class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
                   @click="closeMobileMenu"
                 >
-                  Guide
+                  Home
                 </NuxtLink>
                 <div class="rounded-lg border border-gray-200 overflow-hidden">
                   <div class="block px-4 py-3.5 text-gray-900 font-medium bg-gray-50 border-b border-gray-200">
@@ -448,6 +455,13 @@
                     @click="closeMobileMenu"
                   >
                     Speech to Text
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/adapt-to-film"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
+                  >
+                    Adapt to Film
                   </NuxtLink>
                 </div>
                 <div class="pt-2 border-t border-gray-200 mt-2 space-y-1">

@@ -5,7 +5,8 @@ const NEEDS_AUTH = [
   /^\/projects(\/|$)/,
   /^\/assets(\/|$)/,
   /^\/tools(\/|$)/,
-  /^\/character-creator(\/|$)/
+  /^\/character-creator(\/|$)/,
+  /^\/adapt-to-film(\/|$)/
 ]
 
 function requiresWorkspaceAuth (path: string): boolean {

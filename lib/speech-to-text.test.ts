@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
+  SPEECH_TO_TEXT_DEFAULT_MODEL,
   SPEECH_TO_TEXT_MAX_BYTES,
+  SPEECH_TO_TEXT_PROVIDER,
   countTranscriptWords,
   formatTranscriptWithTimestamps,
   isAllowedSpeechToTextMime,
@@ -9,6 +11,13 @@ import {
   segmentsToSrt,
   validateSpeechToTextFileMeta
 } from './speech-to-text'
+
+describe('speech-to-text provider constants', () => {
+  it('routes through OpenRouter Whisper', () => {
+    expect(SPEECH_TO_TEXT_PROVIDER).toBe('openrouter')
+    expect(SPEECH_TO_TEXT_DEFAULT_MODEL).toBe('openai/whisper-1')
+  })
+})
 
 describe('speech-to-text validation', () => {
   it('accepts valid MP3 metadata', () => {

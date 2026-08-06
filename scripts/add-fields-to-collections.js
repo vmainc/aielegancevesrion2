@@ -144,13 +144,43 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
         console.log('  ✓ target_duration_seconds exists');
       }
 
+      if (!fieldExists(col, 'adapt_to_film')) {
+        fieldsToAdd.push({ name: 'adapt_to_film', type: 'json', required: false });
+        console.log('  ➕ Will add: adapt_to_film (json)');
+      } else {
+        console.log('  ✓ adapt_to_film exists');
+      }
+
+      // Ensure workflow_mode select includes adapt
+      let schemaForAdd = currentSchema
+      const workflowField = currentSchema.find((f) => f?.name === 'workflow_mode');
+      if (workflowField) {
+        const values = workflowField.values || workflowField.options?.values || [];
+        const flat = values.map((v) => (typeof v === 'object' && v && 'value' in v ? v.value : v));
+        if (!flat.includes('adapt')) {
+          const nextValues = [...new Set([...flat, 'adapt', 'import', 'idea', 'generate', 'scratch'])];
+          const updatedFields = currentSchema.map((f) => {
+            if (f?.name !== 'workflow_mode') return flattenField(f);
+            return flattenField({
+              ...f,
+              values: nextValues,
+              options: { ...(f.options || {}), maxSelect: 1, values: nextValues }
+            });
+          });
+          await pb.collections.update(col.id, { fields: updatedFields });
+          console.log('  ➕ Updated workflow_mode values to include adapt');
+          const refreshed = await pb.collections.getOne(col.id);
+          schemaForAdd = refreshed.fields || refreshed.schema || updatedFields;
+        }
+      }
+
       if (fieldsToAdd.length > 0) {
         await pb.collections.update(col.id, {
-          fields: [...currentSchema, ...fieldsToAdd.map(flattenField)]
+          fields: [...schemaForAdd, ...fieldsToAdd.map(flattenField)]
         });
         console.log('✅ creative_projects updated\n');
       } else {
-        console.log('✅ creative_projects already has director/continuity fields\n');
+        console.log('✅ creative_projects already has director/continuity/adapt fields\n');
       }
     } catch (e) {
       console.log('⚠️  creative_projects not found. Skipping...\n');

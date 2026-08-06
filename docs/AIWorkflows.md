@@ -38,6 +38,7 @@ All server AI calls route through OpenRouter unless noted. API keys are server-s
 
         Project Guide ──► bible / character updates (any stage)
         Prompt enhance ──► field-level rewrites (director, shots)
+        Adapt to Film ──► source → treatment → scenes → shots → production plan
 ```
 
 ---

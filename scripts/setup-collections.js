@@ -196,7 +196,7 @@ async function createCollections(adminEmail, adminPassword) {
             required: false,
             options: {
               maxSelect: 1,
-              values: ['import', 'idea', 'generate', 'scratch']
+              values: ['import', 'idea', 'generate', 'scratch', 'adapt']
             }
           },
           { name: 'preferred_model_id', type: 'text', required: false, options: { max: 100 } },
@@ -238,6 +238,11 @@ async function createCollections(adminEmail, adminPassword) {
             type: 'text',
             required: false,
             options: { max: 20000 }
+          },
+          {
+            name: 'adapt_to_film',
+            type: 'json',
+            required: false
           }
         ]
       };

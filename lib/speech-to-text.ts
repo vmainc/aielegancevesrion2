@@ -2,7 +2,7 @@
 
 export const SPEECH_TO_TEXT_MAX_BYTES = 100 * 1024 * 1024
 
-/** OpenAI /v1/audio/transcriptions request body limit — larger uploads are compressed first. */
+/** OpenRouter multipart / upstream Whisper body limit — larger uploads are compressed first. */
 export const SPEECH_TO_TEXT_PROVIDER_MAX_BYTES = 25 * 1024 * 1024
 
 /**
@@ -12,9 +12,9 @@ export const SPEECH_TO_TEXT_PROVIDER_MAX_BYTES = 25 * 1024 * 1024
  */
 export const SPEECH_TO_TEXT_CREDITS_PER_AUDIO_MINUTE: number | null = null
 
-export const SPEECH_TO_TEXT_PROVIDER = 'openai'
-export const SPEECH_TO_TEXT_DEFAULT_MODEL = 'whisper-1'
-export const SPEECH_TO_TEXT_DIARIZE_MODEL = 'gpt-4o-transcribe-diarize'
+export const SPEECH_TO_TEXT_PROVIDER = 'openrouter'
+export const SPEECH_TO_TEXT_DEFAULT_MODEL = 'openai/whisper-1'
+export const SPEECH_TO_TEXT_DIARIZE_MODEL = 'openai/gpt-4o-transcribe-diarize'
 
 export type SpeechToTextStyle = 'verbatim' | 'cleaned'
 export type SpeechToTextLanguage = 'auto' | 'en'
