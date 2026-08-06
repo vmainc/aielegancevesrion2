@@ -67,7 +67,7 @@
             </h2>
             <p class="text-sm text-gray-600 mt-1">
               <template v-if="panelPrefill?.sceneId && panelPrefill?.shotId">
-                Keep saves this clip to your storyboard panel on the Video step. Discard removes it so you can adjust settings and try again.
+                Keep saves this clip to your project. Discard removes it so you can adjust settings and try again.
               </template>
               <template v-else>
                 Keep saves to your project library. Discard removes generated clips from this run.
@@ -1864,7 +1864,7 @@ async function runOneModel (modelId: string) {
         remoteUrl: videoUrl,
         title: clipTitle(),
         notes: pre?.source === 'project_video_panel'
-          ? 'Generated from project Video step via Video tools.'
+          ? 'Generated from project Storyboard via Video tools.'
           : 'Generated from Video tools (standalone).',
         metadata,
         headers
@@ -1944,16 +1944,16 @@ async function keepClipAndContinue () {
     const pid = selectedProjectId.value.trim()
     const pre = panelPrefill.value
     if (pid && pre?.sceneId && pre?.shotId) {
-      toast.showToast('Clip saved to your storyboard panel.', 'success')
+      toast.showToast('Clip saved to your storyboard.', 'success')
       await navigateTo({
-        path: `/projects/${pid}/video`,
+        path: `/projects/${pid}/storyboard`,
         query: { sceneId: pre.sceneId, shotId: pre.shotId }
       })
       return
     }
     if (pid && saveToProject.value) {
       toast.showToast('Clip saved to your project.', 'success')
-      await navigateTo(`/projects/${pid}/video`)
+      await navigateTo(`/projects/${pid}/storyboard`)
       return
     }
     toast.showToast('Clip kept.', 'success')

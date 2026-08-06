@@ -12,7 +12,8 @@
         <template v-else>
           · Add boards manually per scene, or use panels from script import / project build. Use
           <span class="text-gray-700">Generate image</span>
-          on each board (or <span class="text-gray-700">Generate all images</span>) to fill the frames — cast portraits are used when available.
+          on each board (or <span class="text-gray-700">Generate all images</span>) to fill start and end frames — cast portraits are used when available. When both frames are ready,
+          <span class="text-gray-700">Generate video</span> appears on the board.
         </template>
       </p>
       <button
@@ -165,27 +166,30 @@
                     </option>
                   </select>
                   <p class="mt-2 text-xs text-gray-500">
-                    <strong>Generate image</strong> fills each board’s frame and saves to Assets → Storyboards.
-                    Cast portraits from Assets → Characters are used when available.
+                    <strong>Generate image</strong> fills each board’s start and end frames and saves to Assets → Storyboards.
+                    Cast portraits from Assets → Characters are used when available. End frames continue the clip’s action from the start frame.
                   </p>
                 </div>
               </div>
             </div>
           </div>
           <div
-            v-if="shots.length && boardsMissingFrames > 0 && !generatingAllFrames"
+            v-if="shots.length && boardsMissingFrames > 0"
             class="mt-4 flex flex-wrap items-center gap-3"
           >
             <button
               type="button"
               class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 text-sm font-semibold rounded-lg transition-colors disabled:opacity-45"
-              :disabled="!!imageGenId || !shotsPersisted"
+              :disabled="!!imageGenId || !shotsPersisted || generatingAllFrames"
               @click="generateAllFrames"
             >
-              {{ generatingAllFrames ? 'Generating images…' : `Generate all images (${boardsMissingFrames})` }}
+              {{ generatingAllFrames ? 'Generating start & end frames…' : `Generate all images (${boardsMissingFrames})` }}
             </button>
             <p v-if="!shotsPersisted" class="text-xs text-amber-800">
               Save the shot list first (fix any warning above), then generate images.
+            </p>
+            <p v-else class="text-xs text-gray-500">
+              Fills missing start and end frames so each board has a logical beginning and end for video.
             </p>
           </div>
           <p v-if="generateError" class="mt-3 text-sm text-red-600">{{ generateError }}</p>
@@ -268,6 +272,7 @@
             :frame-deleting-id="frameDeletingId"
             :deleting-board-id="deletingBoardId"
             :generating-all-frames="generatingAllFrames"
+            :opening-video-shot-id="openingVideoShotId"
             :frame-preview-box-class="framePreviewBoxClass"
             :frame-preview-loading="framePreviewLoading"
             :frame-preview-failed="framePreviewFailed"
@@ -294,6 +299,7 @@
             :on-trigger-storyboard-upload="triggerStoryboardUpload"
             :on-generate-frame="generateFrame"
             :on-clear-storyboard-frame="clearStoryboardFrame"
+            :on-generate-video="openVideoGenerationForBoard"
             :on-board-details-toggle="onBoardDetailsToggle"
             :on-save-shot="saveShot"
           />
@@ -341,10 +347,10 @@
           ← Scenes
         </NuxtLink>
         <NuxtLink
-          :to="`/projects/${projectId}/video`"
+          to="/assets/video"
           class="text-sm text-primary font-medium hover:underline"
         >
-          Next: Video →
+          Saved clips →
         </NuxtLink>
       </div>
     <input
@@ -399,6 +405,14 @@ import {
   storyboardFrameSlotKey,
   type StoryboardFrameRole
 } from '~/lib/storyboard-frame-role'
+import {
+  applyStoryboardFrameRoleToPrompt,
+  shotMissingStoryboardFrame
+} from '~/lib/storyboard-end-frame-prompt'
+import {
+  navigateToVideoGenerationFromPanel,
+  type VideoGenerationPrefill
+} from '~/lib/video-generation-prefill'
 import {
   mergeProductionBibleGenerationOptions,
   productionBibleGenerationDebugLabel
@@ -480,6 +494,7 @@ const shotStoryboardFramesMap = computed(() => {
 })
 
 const generatingAllFrames = ref(false)
+const openingVideoShotId = ref<string | null>(null)
 const generateError = ref('')
 const persistenceWarning = ref('')
 const shotsPersisted = ref(true)
@@ -540,7 +555,9 @@ const framePreviewBoxClass = computed(() => {
 })
 
 const boardsMissingFrames = computed(() =>
-  shots.value.filter(s => !shotHasFrame(s)).length
+  shots.value.filter(s =>
+    shotMissingStoryboardFrame(hasDisplayableFrame(s, 'start'), hasDisplayableFrame(s, 'end'))
+  ).length
 )
 
 function shotCharacterMatches (shot: CreativeShot) {
@@ -762,26 +779,40 @@ async function generateAllFrames () {
     toast.showToast('Shot list is not saved yet — rebuild from Director or fix the warning above.', 'error')
     return
   }
-  const pending = shots.value.filter(s => !hasDisplayableFrame(s, 'start'))
-  if (!pending.length) {
-    toast.showToast('All boards already have frames.', 'info')
+  const needsWork = shots.value.filter(s =>
+    shotMissingStoryboardFrame(hasDisplayableFrame(s, 'start'), hasDisplayableFrame(s, 'end'))
+  )
+  if (!needsWork.length) {
+    toast.showToast('All boards already have start and end frames.', 'info')
     return
   }
   generatingAllFrames.value = true
   let ok = 0
   let failed = 0
   try {
-    for (const shot of pending) {
+    // Start frames first across boards, then ends (ends use start as reference).
+    for (const shot of needsWork) {
+      if (hasDisplayableFrame(shot, 'start')) continue
       try {
-        await generateFrame(shot, 'start')
+        await generateFrame(shot, 'start', { quiet: true })
         if (hasDisplayableFrame(shot, 'start')) ok++
         else failed++
       } catch {
         failed++
       }
     }
+    for (const shot of shots.value) {
+      if (!hasDisplayableFrame(shot, 'start') || hasDisplayableFrame(shot, 'end')) continue
+      try {
+        await generateFrame(shot, 'end', { quiet: true })
+        if (hasDisplayableFrame(shot, 'end')) ok++
+        else failed++
+      } catch {
+        failed++
+      }
+    }
     if (ok && !failed) {
-      toast.showToast(`Generated ${ok} frame(s).`, 'success')
+      toast.showToast(`Generated ${ok} frame(s) (start + end).`, 'success')
     } else if (ok) {
       toast.showToast(`Generated ${ok} frame(s); ${failed} failed.`, 'info')
     } else {
@@ -793,10 +824,15 @@ async function generateAllFrames () {
   }
 }
 
-async function generateFrame (shot: CreativeShot, role: StoryboardFrameRole = 'start') {
+async function generateFrame (
+  shot: CreativeShot,
+  role: StoryboardFrameRole = 'start',
+  opts?: { quiet?: boolean }
+) {
+  const quiet = Boolean(opts?.quiet)
   const basePrompt = (shot.imagePrompt || shot.description || '').trim()
   if (!basePrompt) {
-    toast.showToast('Add a production prompt or story beat first.', 'info')
+    if (!quiet) toast.showToast('Add a production prompt or story beat first.', 'info')
     return
   }
   const slotKey = frameSlotKey(shot, role)
@@ -809,15 +845,13 @@ async function generateFrame (shot: CreativeShot, role: StoryboardFrameRole = 's
     panelIndex: panelIndex >= 0 ? panelIndex : undefined,
     productionBible: productionBibleCtx
   })
-  if (role === 'end') {
-    prompt = `${prompt}\n\nEnd frame: final still of this shot — show the concluding moment or composition after the action.`
-  }
+  prompt = applyStoryboardFrameRoleToPrompt(prompt, role, shot)
   frameGenerationProvenance[slotKey] = {
     bibleContext: productionBibleCtx,
     promptForHash: prompt
   }
   const referenceImageUrls = frameGenerationReferenceUrls(shot, role)
-  if (!referenceImageUrls.length) {
+  if (!referenceImageUrls.length && !quiet) {
     const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim())
     if (missingPortraits.length) {
       toast.showToast(
@@ -828,7 +862,7 @@ async function generateFrame (shot: CreativeShot, role: StoryboardFrameRole = 's
   }
   const token = getAuthToken()
   if (!token) {
-    toast.showToast('Sign in to generate frames.', 'warning')
+    if (!quiet) toast.showToast('Sign in to generate frames.', 'warning')
     return
   }
   imageGenId.value = slotKey
@@ -849,23 +883,73 @@ async function generateFrame (shot: CreativeShot, role: StoryboardFrameRole = 's
       framePreviewFailed[slotKey] = false
       const saveErr = await autoSaveGeneratedFrame(shot, url, matches, role)
       if (!saveErr) {
-        toast.showToast(`${role === 'end' ? 'End' : 'Start'} frame generated and saved.`, 'success')
+        if (!quiet) {
+          toast.showToast(`${role === 'end' ? 'End' : 'Start'} frame generated and saved.`, 'success')
+        }
       } else {
         framePreview[slotKey] = url
         framePreviewFailed[slotKey] = false
-        toast.showToast(`Frame generated (save failed): ${saveErr}`, 'warning')
+        if (!quiet) {
+          toast.showToast(`Frame generated (save failed): ${saveErr}`, 'warning')
+        }
       }
-    } else {
+    } else if (!quiet) {
       toast.showToast('No image returned.', 'error')
     }
   } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'data' in e
-        ? String((e as { data?: { message?: string } }).data?.message || 'Image generation failed')
-        : 'Image generation failed'
-    toast.showToast(msg, 'error')
+    if (!quiet) {
+      const msg =
+        e && typeof e === 'object' && 'data' in e
+          ? String((e as { data?: { message?: string } }).data?.message || 'Image generation failed')
+          : 'Image generation failed'
+      toast.showToast(msg, 'error')
+    } else {
+      throw e instanceof Error ? e : new Error('Image generation failed')
+    }
   } finally {
-    imageGenId.value = null
+    if (!generatingAllFrames.value) imageGenId.value = null
+  }
+}
+
+async function openVideoGenerationForBoard (shot: CreativeShot) {
+  if (!hasDisplayableFrame(shot, 'start') || !hasDisplayableFrame(shot, 'end')) {
+    toast.showToast('Add both a start and end frame before generating video.', 'info')
+    return
+  }
+  const pid = projectId.value
+  const sceneId = selectedSceneId.value
+  if (!pid || !isCloudProjectId(pid) || !sceneId) {
+    toast.showToast('Save this project to the cloud before generating video.', 'info')
+    return
+  }
+  const headers = await authHeaders()
+  if (!headers) {
+    toast.showToast('Sign in to generate video for this board.', 'info')
+    return
+  }
+
+  openingVideoShotId.value = shot.id
+  try {
+    const prefill = await $fetch<VideoGenerationPrefill>(
+      `/api/projects/${pid}/video-panel-prefill`,
+      {
+        query: { sceneId, shotId: shot.id },
+        headers
+      }
+    )
+    await navigateToVideoGenerationFromPanel({
+      projectId: pid,
+      sceneId,
+      shotId: shot.id,
+      prefill
+    })
+  } catch (e: unknown) {
+    toast.showToast(
+      formatApiFetchError(e, 'Could not open video generation for this board.'),
+      'error'
+    )
+  } finally {
+    if (openingVideoShotId.value === shot.id) openingVideoShotId.value = null
   }
 }
 
@@ -898,11 +982,6 @@ function collapseBoardDetails (shotId: string) {
     ...boardDetailsOpenByShotId.value,
     [shotId]: false
   }
-}
-
-function shotHasFrame (shot: CreativeShot): boolean {
-  const key = frameSlotKey(shot, 'start')
-  return Boolean(storyboardAssetForShot(shot, 'start')?.id) || Boolean((framePreview[key] || '').trim())
 }
 
 function storyboardAssetForShot (shot: CreativeShot, role: StoryboardFrameRole = 'start'): ProjectAsset | null {

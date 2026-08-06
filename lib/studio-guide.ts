@@ -188,14 +188,8 @@ export const STUDIO_GUIDE_PROJECT_DESTINATIONS: Array<{
   {
     id: 'project-storyboard',
     label: 'Storyboard',
-    description: 'Panels, frames, and shot prompts.',
+    description: 'Panels, start/end frames, and Generate video when both frames are ready.',
     suffix: '/storyboard'
-  },
-  {
-    id: 'project-video',
-    label: 'Project video',
-    description: 'Render and review project video.',
-    suffix: '/video'
   }
 ]
 

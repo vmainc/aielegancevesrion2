@@ -27,11 +27,11 @@
       </div>
       <NuxtLink
         v-if="g.projectId && PB_ID.test(g.projectId)"
-        :to="`/projects/${g.projectId}/video`"
+        :to="`/projects/${g.projectId}/storyboard`"
         class="text-xs font-medium text-primary hover:underline shrink-0"
         @click.stop
       >
-        Open Video step →
+        Open Storyboard →
       </NuxtLink>
     </summary>
     <div class="divide-y divide-gray-200">

@@ -33,7 +33,7 @@
       <p class="text-sm font-medium text-zinc-200">Timeline is empty</p>
       <p class="mt-2 text-xs text-zinc-500 max-w-md mx-auto">
         Add video clips from the
-        <NuxtLink :to="`/projects/${projectId}/video`" class="text-primary hover:underline">Video</NuxtLink>
+        <NuxtLink :to="`/projects/${projectId}/storyboard`" class="text-primary hover:underline">Storyboard</NuxtLink>
         page or the scene library below. Edits autosave to this browser and sync to the cloud when available.
       </p>
     </div>

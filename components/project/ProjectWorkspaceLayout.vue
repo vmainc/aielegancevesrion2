@@ -178,7 +178,6 @@ const sectionLabels: Record<string, string> = {
   characters: 'Characters',
   scenes: 'Scenes',
   storyboard: 'Storyboard',
-  video: 'Video',
   guide: 'Guide',
   bible: 'Production Bible',
   review: 'Review Dashboard',

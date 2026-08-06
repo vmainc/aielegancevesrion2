@@ -126,6 +126,23 @@
     </div>
 
     <div
+      v-if="hasDisplayableFrame(shot, 'start') && hasDisplayableFrame(shot, 'end')"
+      class="px-3 py-2.5 border-b border-gray-100 bg-white shrink-0 space-y-1.5"
+    >
+      <button
+        type="button"
+        class="w-full px-3 py-2 text-sm font-semibold rounded-lg bg-primary hover:bg-primary/90 text-gray-950 transition-colors disabled:opacity-45"
+        :disabled="openingVideoShotId === shot.id || generatingAllFrames || !!imageGenId || !!frameUploadingId"
+        @click="onGenerateVideo(shot)"
+      >
+        {{ openingVideoShotId === shot.id ? 'Opening video tool…' : 'Generate video' }}
+      </button>
+      <p class="text-[11px] text-gray-500 leading-snug">
+        Start and end frames are ready — open Video generation with this clip’s prompt and both frames prefilled.
+      </p>
+    </div>
+
+    <div
       v-if="shotCharacterMatches(shot).length"
       class="px-3 py-1.5 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-white shrink-0"
     >
@@ -316,7 +333,7 @@
             @blur="onSaveShot(shot)"
           />
           <p class="mt-1.5 text-[11px] text-gray-500 leading-snug">
-            Used for Generate image and the Video step. End frames use the start frame as a reference when available.
+            Used for Generate image and the Video step. End frames finish this clip’s beat and use the start frame as a reference when available.
           </p>
         </div>
       </div>
@@ -343,6 +360,7 @@ defineProps<{
   frameDeletingId: string | null
   deletingBoardId: string | null
   generatingAllFrames: boolean
+  openingVideoShotId: string | null
   framePreviewBoxClass: string
   framePreviewLoading: Record<string, boolean>
   framePreviewFailed: Record<string, boolean>
@@ -369,6 +387,7 @@ defineProps<{
   onTriggerStoryboardUpload: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onGenerateFrame: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onClearStoryboardFrame: (shot: CreativeShot, role: StoryboardFrameRole) => void
+  onGenerateVideo: (shot: CreativeShot) => void
   onBoardDetailsToggle: (event: Event, shot: CreativeShot) => void
   onSaveShot: (shot: CreativeShot) => void
 }>()

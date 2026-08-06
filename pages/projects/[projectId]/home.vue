@@ -136,14 +136,7 @@ const sectionCards = computed(() => {
       title: 'Storyboard',
       stat: totalShots.value ? `${totalShots.value} panels` : 'None yet',
       statTone: totalShots.value ? 'ready' : 'empty',
-      blurb: 'Panels, frames, and shot prompts per scene.'
-    },
-    {
-      path: 'video',
-      title: 'Video',
-      stat: 'Generate',
-      statTone: 'partial',
-      blurb: 'Generate clips from panels and manage renders.'
+      blurb: 'Panels, start/end frames, and Generate video when both frames are ready.'
     }
   ]
 
