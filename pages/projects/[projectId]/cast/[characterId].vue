@@ -1,6 +1,6 @@
 <template>
-  <div class="max-w-5xl">
-    <nav class="text-sm text-gray-500 mb-6 flex flex-wrap items-center gap-2">
+  <div class="max-w-6xl character-lookbook">
+    <nav class="text-sm text-gray-500 mb-4 flex flex-wrap items-center gap-2">
       <NuxtLink to="/assets/characters" class="hover:text-primary">Assets / Characters</NuxtLink>
       <span aria-hidden="true">/</span>
       <NuxtLink :to="`/projects/${projectId}/characters`" class="hover:text-primary">Characters step</NuxtLink>
@@ -15,370 +15,460 @@
         </div>
       </template>
 
-    <div v-if="loading" class="rounded-xl border border-primary/20 bg-primary/5 px-6 py-10">
-      <FilmReelLoader size="md" label="Loading character" sub-label="Fetching profile, images, and voice…" />
-    </div>
+      <div v-if="loading" class="rounded-xl border border-primary/20 bg-primary/5 px-6 py-10">
+        <FilmReelLoader size="md" label="Loading character" sub-label="Fetching profile, images, and voice…" />
+      </div>
 
-    <div
-      v-else-if="loadError"
-      class="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800"
-    >
-      {{ loadError }}
-    </div>
+      <div
+        v-else-if="loadError"
+        class="rounded-xl border border-red-200 bg-red-50 p-5 text-sm text-red-800"
+      >
+        {{ loadError }}
+      </div>
 
-    <template v-else-if="character">
-      <div class="flex flex-col lg:flex-row gap-8">
-        <!-- Left: expression references + voice -->
-        <div class="lg:w-80 shrink-0 space-y-5">
-          <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div class="flex items-start justify-between gap-2 mb-3">
-              <div>
-                <h2 class="text-sm font-semibold text-gray-900">Expression & emotion references</h2>
-                <p class="text-xs text-gray-500 mt-0.5">
-                  Add multiple photos — neutral, angry, joyful, fearful, etc. — so this character stays recognizable across moods.
-                </p>
-              </div>
-            </div>
+      <template v-else-if="character">
+        <!-- Character lookbook sheet -->
+        <section
+          class="lookbook-sheet relative overflow-hidden rounded-2xl border border-stone-800/80 shadow-2xl"
+          aria-label="Character lookbook"
+        >
+          <div class="lookbook-sheet__atmosphere" aria-hidden="true" />
 
-            <div
-              v-if="featuredImageUrl && galleryImages.length > 1"
-              class="relative bg-gray-900 aspect-[3/4] rounded-lg overflow-hidden mb-3"
-            >
-              <img
-                :src="featuredImageUrl"
-                :alt="character.name"
-                class="absolute inset-0 w-full h-full object-cover"
-              >
-              <span class="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-semibold rounded bg-primary text-white shadow">
-                Featured
-              </span>
-              <span
-                v-if="featuredImage?.expressionLabel"
-                class="absolute bottom-2 left-2 right-2 px-2 py-1 text-[11px] font-medium rounded bg-black/60 text-white truncate"
-              >
-                {{ featuredImage.expressionLabel }}
-              </span>
-            </div>
-
-            <ul v-if="galleryImages.length" class="grid grid-cols-2 gap-2 mb-3">
-              <li
-                v-for="img in galleryImages"
-                :key="img.assetId"
-                class="rounded-lg border bg-gray-900 overflow-hidden"
-                :class="img.featured ? 'border-primary ring-2 ring-primary/40' : 'border-gray-200'"
-              >
-                <div class="relative aspect-[3/4] group">
-                  <img :src="img.url" :alt="character.name" class="absolute inset-0 w-full h-full object-cover">
-                  <div class="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-colors flex flex-col items-center justify-center gap-1 opacity-0 group-hover:opacity-100">
-                    <button
-                      v-if="!img.featured"
-                      type="button"
-                      class="px-2 py-0.5 text-[10px] font-semibold rounded bg-white/90 text-gray-900 hover:bg-white disabled:opacity-50"
-                      :disabled="featuringAssetId === img.assetId"
-                      @click="setFeatured(img)"
-                    >
-                      {{ featuringAssetId === img.assetId ? '…' : 'Set featured' }}
-                    </button>
-                    <span v-else class="px-2 py-0.5 text-[10px] font-semibold rounded bg-primary text-white">Featured</span>
-                    <button
-                      type="button"
-                      class="px-2 py-0.5 text-[10px] font-semibold rounded bg-red-600/90 text-white hover:bg-red-600 disabled:opacity-50"
-                      :disabled="deletingAssetId === img.assetId"
-                      @click="deleteImage(img)"
-                    >
-                      {{ deletingAssetId === img.assetId ? '…' : 'Delete' }}
-                    </button>
-                  </div>
-                </div>
-                <div class="p-1.5 bg-white border-t border-gray-100">
-                  <input
-                    :value="expressionDraft[img.assetId] ?? img.expressionLabel"
-                    type="text"
-                    maxlength="80"
-                    placeholder="e.g. Neutral, Angry"
-                    class="w-full rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-800 placeholder:text-gray-400 focus:border-primary focus:outline-none"
-                    :disabled="savingExpressionAssetId === img.assetId"
-                    @input="onExpressionInput(img.assetId, ($event.target as HTMLInputElement).value)"
-                    @blur="saveExpressionLabel(img)"
-                    @keydown.enter="($event.target as HTMLInputElement).blur()"
-                  >
-                </div>
-              </li>
-            </ul>
-
-            <p v-else class="text-xs text-gray-500 mb-3 py-6 text-center rounded-lg border border-dashed border-gray-200 bg-gray-50">
-              No reference photos yet. Upload one or many below.
-            </p>
-
-            <label
-              class="flex items-center justify-center gap-1.5 w-full px-3 py-2 text-xs font-medium rounded-lg border border-dashed border-gray-300 bg-gray-50 text-gray-800 hover:border-primary hover:text-primary hover:bg-primary/5 cursor-pointer transition-colors"
-              :class="uploadingImage ? 'opacity-60 pointer-events-none' : ''"
-            >
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif,image/*"
-                multiple
-                class="sr-only"
-                :disabled="uploadingImage"
-                @change="onImageFilesPicked"
-              >
-              {{ uploadingImage ? uploadProgressLabel : (galleryImages.length ? 'Add more photos' : 'Add photos') }}
-            </label>
-            <p class="text-[10px] text-gray-400 mt-2 text-center">
-              Select multiple files at once. Label each mood after upload.
-            </p>
-          </div>
-
-          <!-- Voice & performance references -->
-          <div class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
-            <div class="flex items-center justify-between gap-2 mb-1">
-              <h2 class="text-sm font-semibold text-gray-900">Voice & performance references</h2>
-              <label
-                class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-800 hover:border-primary hover:text-primary cursor-pointer transition-colors"
-                :class="uploadingVoice ? 'opacity-60 pointer-events-none' : ''"
-              >
+          <!-- Header -->
+          <header class="relative z-10 px-5 sm:px-8 pt-7 pb-5 border-b border-white/10">
+            <div class="flex flex-wrap items-start justify-between gap-3">
+              <div class="min-w-0 flex-1">
                 <input
-                  type="file"
-                  accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg,video/mp4,video/webm,video/quicktime,.mp4,.mov"
-                  class="sr-only"
-                  :disabled="uploadingVoice"
-                  @change="onReferenceClipPicked"
+                  v-model="form.name"
+                  type="text"
+                  maxlength="200"
+                  class="lookbook-name w-full bg-transparent border-0 border-b border-transparent hover:border-white/20 focus:border-primary focus:outline-none px-0 py-1 text-white placeholder:text-white/30"
+                  placeholder="CHARACTER NAME"
+                  @blur="saveField"
                 >
-                {{ uploadingVoice ? 'Uploading…' : 'Add clip' }}
-              </label>
-            </div>
-            <p class="text-xs text-gray-500 mb-3">
-              Short audio (~10s) for voice, or video clips for mannerisms, gestures, and on-camera delivery. Reference only — not used for cloning.
-            </p>
-            <input
-              v-model="referenceClipLabel"
-              type="text"
-              maxlength="80"
-              placeholder="Optional label, e.g. Angry outburst, Calm dialogue"
-              class="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] text-gray-800 placeholder:text-gray-400 focus:border-primary focus:outline-none mb-3"
-              :disabled="uploadingVoice"
-            >
-            <ul v-if="referenceClips.length" class="space-y-2">
-              <li
-                v-for="s in referenceClips"
-                :key="s.assetId"
-                class="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2"
-              >
-                <video
-                  v-if="s.mediaType === 'video'"
-                  :src="s.url"
-                  controls
-                  preload="metadata"
-                  playsinline
-                  class="w-full max-h-40 rounded bg-black"
-                />
-                <audio
-                  v-else
-                  :src="s.url"
-                  controls
-                  preload="metadata"
-                  class="h-8 w-full"
-                />
-                <div class="flex items-center justify-between gap-2 mt-1">
-                  <span class="text-[11px] text-gray-500 truncate">
-                    {{ s.mannerismLabel || s.title }}
-                    <span v-if="s.mediaType === 'video'" class="text-primary"> · video</span>
-                  </span>
-                  <button
-                    type="button"
-                    class="text-[11px] font-medium text-red-700 hover:underline disabled:opacity-40 shrink-0"
-                    :disabled="deletingAssetId === s.assetId"
-                    @click="deleteReferenceClip(s.assetId)"
+                <p
+                  v-if="headerRoleLine"
+                  class="mt-2 text-[11px] sm:text-xs tracking-[0.22em] uppercase text-primary/90 font-medium"
+                >
+                  {{ headerRoleLine }}
+                </p>
+                <ul
+                  v-if="traitTags.length"
+                  class="mt-3 flex flex-wrap gap-x-3 gap-y-1"
+                >
+                  <li
+                    v-for="tag in traitTags"
+                    :key="tag"
+                    class="text-[10px] sm:text-[11px] tracking-[0.18em] uppercase text-stone-300/90"
                   >
-                    {{ deletingAssetId === s.assetId ? 'Removing…' : 'Remove' }}
-                  </button>
-                </div>
-              </li>
-            </ul>
-            <p v-else class="text-xs text-gray-500">
-              No clips yet. Upload a short MP3/WAV or a ~10s MP4/WebM of this character speaking or moving.
-            </p>
-          </div>
-        </div>
-
-        <!-- Right: consistency profile -->
-        <div class="flex-1 min-w-0 space-y-6">
-          <div>
-            <input
-              v-model="form.name"
-              type="text"
-              maxlength="200"
-              class="text-2xl sm:text-3xl font-bold text-gray-900 w-full bg-transparent border-0 border-b border-transparent hover:border-gray-200 focus:border-primary focus:outline-none px-0 py-1"
-              @blur="saveField"
-            >
-            <div class="flex items-center justify-between gap-3 mt-1.5">
-              <p class="text-xs text-gray-500">
-                Appearance, signature details, and avoid lists auto-inject into storyboard and video prompts for this character.
-              </p>
+                    {{ tag }}
+                  </li>
+                </ul>
+              </div>
               <span
-                class="inline-flex items-center gap-1.5 text-xs font-medium whitespace-nowrap shrink-0"
+                class="inline-flex items-center gap-1.5 text-[11px] font-medium whitespace-nowrap shrink-0 px-2.5 py-1 rounded-full bg-black/30 border border-white/10"
                 :class="{
-                  'text-gray-400': saveStatus === 'idle',
-                  'text-amber-600': saveStatus === 'unsaved',
-                  'text-gray-500': saveStatus === 'saving',
-                  'text-green-600': saveStatus === 'saved',
-                  'text-red-600': saveStatus === 'error'
+                  'text-stone-400': saveStatus === 'idle',
+                  'text-amber-300': saveStatus === 'unsaved',
+                  'text-stone-300': saveStatus === 'saving',
+                  'text-emerald-300': saveStatus === 'saved',
+                  'text-red-300': saveStatus === 'error'
                 }"
                 aria-live="polite"
               >
-                <svg
-                  v-if="saveStatus === 'saving'"
-                  class="w-3.5 h-3.5 animate-spin"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                >
-                  <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-                  <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.4 0 0 5.4 0 12h4z" />
-                </svg>
-                <svg
-                  v-else-if="saveStatus === 'saved'"
-                  class="w-3.5 h-3.5"
-                  viewBox="0 0 20 20"
-                  fill="currentColor"
-                >
-                  <path fill-rule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.1 3.1 6.8-6.8a1 1 0 011.4 0z" clip-rule="evenodd" />
-                </svg>
-                <span
-                  v-else-if="saveStatus === 'unsaved'"
-                  class="w-1.5 h-1.5 rounded-full bg-amber-500"
-                />
                 {{ saveStatusText }}
               </span>
             </div>
-          </div>
+          </header>
 
-          <div
-            v-if="linkedBibleEntity || castAssetCount > 0"
-            class="rounded-xl border border-violet-200 bg-violet-50/70 px-4 py-3"
-          >
-            <h3 class="text-sm font-semibold text-violet-950">Production Bible &amp; assets</h3>
-            <p
-              v-if="linkedBibleEntity"
-              class="text-sm text-violet-900 mt-1"
-            >
-              Linked Bible entity:
-              <NuxtLink
-                :to="`/projects/${projectId}/bible`"
-                class="font-medium underline hover:text-violet-950"
-              >
-                {{ linkedBibleEntity.name }}
-              </NuxtLink>
-              <span class="ml-2 text-[11px] font-medium text-violet-800">
-                {{ linkedBibleEntity.confidenceLabel }}
-              </span>
-            </p>
-            <p
-              v-else
-              class="text-sm text-violet-900/80 mt-1"
-            >
-              No linked Bible character entity yet. Use Production Bible → Link Cast to Bible to connect cast and canon.
-            </p>
-            <p class="text-xs text-violet-900/70 mt-1">
-              {{ castAssetCount }} project asset{{ castAssetCount === 1 ? '' : 's' }} linked to this cast member
-              <span v-if="assets.length !== castAssetCount"> ({{ assets.length }} on this profile)</span>.
-            </p>
-          </div>
+          <!-- Main lookbook grid -->
+          <div class="relative z-10 grid lg:grid-cols-12 gap-0 lg:gap-0">
+            <!-- Left: bio + hero portrait -->
+            <div class="lg:col-span-3 px-5 sm:px-6 py-6 border-b lg:border-b-0 lg:border-r border-white/10 space-y-5">
+              <dl class="space-y-2.5 text-sm">
+                <div>
+                  <dt class="lookbook-label">Name</dt>
+                  <dd class="text-stone-100 font-medium tracking-wide">{{ form.name || '—' }}</dd>
+                </div>
+                <div v-if="form.roleDescription.trim()">
+                  <dt class="lookbook-label">Role</dt>
+                  <dd class="text-stone-300 text-xs leading-relaxed line-clamp-4">{{ form.roleDescription }}</dd>
+                </div>
+                <div v-if="form.personality.trim()">
+                  <dt class="lookbook-label">Vibe</dt>
+                  <dd class="text-stone-300 text-xs leading-relaxed line-clamp-3">{{ form.personality }}</dd>
+                </div>
+                <div v-if="form.voiceDescription.trim()">
+                  <dt class="lookbook-label">Voice</dt>
+                  <dd class="text-stone-300 text-xs leading-relaxed line-clamp-2">{{ form.voiceDescription }}</dd>
+                </div>
+              </dl>
 
-          <ProfileField
-            label="Role in the story"
-            hint="What they want, their function in the plot, key relationships."
-            :model-value="form.roleDescription"
-            placeholder="e.g. Grizzled hunter and reluctant protector; Moose’s father."
-            :rows="3"
-            @update:model-value="(v) => { form.roleDescription = v }"
-            @commit="saveField"
-          />
-
-          <ProfileField
-            label="Appearance & wardrobe (visual anchor)"
-            hint="Locked physical look so every generated image matches: age, build, face, hair, skin, signature wardrobe, distinguishing marks."
-            :model-value="form.appearanceDescription"
-            placeholder="e.g. Late 50s, lean and weathered. Grey stubble, deep-set eyes. Faded olive work shirt, worn denim, scuffed leather boots. Scar over left brow."
-            :rows="5"
-            @update:model-value="(v) => { form.appearanceDescription = v }"
-            @commit="saveField"
-          />
-
-          <ProfileField
-            label="Personality & mannerisms"
-            hint="Attitude, speech rhythm, gestures, and behavior so performance stays in character."
-            :model-value="form.personality"
-            placeholder="e.g. Terse and watchful; speaks in short sentences. Distrusts strangers but fiercely loyal. Tends to look away before answering."
-            :rows="4"
-            @update:model-value="(v) => { form.personality = v }"
-            @commit="saveField"
-          />
-
-          <ProfileField
-            label="Voice notes (tone, pace, accent)"
-            hint="Describe how they sound — pairs with the voice clips on the left."
-            :model-value="form.voiceDescription"
-            placeholder="e.g. Low, deliberate; slight rasp; flat Midwestern."
-            :rows="2"
-            @update:model-value="(v) => { form.voiceDescription = v }"
-            @commit="saveField"
-          />
-
-          <ProfileField
-            label="Signature details"
-            hint="Recurring props, accessories, catchphrases, or tics that should always show up."
-            :model-value="form.signatureDetails"
-            placeholder="e.g. Always carries a brass compass. Says “we move at first light.” Rolls a coin across his knuckles when thinking."
-            :rows="3"
-            @update:model-value="(v) => { form.signatureDetails = v }"
-            @commit="saveField"
-          />
-
-          <ProfileField
-            label="Avoid / never show"
-            hint="Things that must never appear for this character — merged into STRICT EXCLUSIONS on every storyboard and video prompt."
-            :model-value="form.avoidDescription"
-            placeholder="e.g. No beard, no glasses, never in a suit, no modern sneakers, no smiling."
-            :rows="2"
-            :maxlength="2000"
-            @update:model-value="(v) => { form.avoidDescription = v }"
-            @commit="saveField"
-          />
-
-          <div v-if="lockedPortraitPrompt" class="rounded-xl border border-gray-200 bg-gray-50 p-4">
-            <div class="flex items-center justify-between gap-2 mb-1">
-              <h3 class="text-sm font-semibold text-gray-900">Locked portrait prompt</h3>
-              <button
-                type="button"
-                class="text-xs font-medium text-primary hover:underline"
-                @click="copyPrompt"
-              >
-                {{ copied ? 'Copied' : 'Copy' }}
-              </button>
+              <div class="lookbook-portrait relative aspect-[3/4] overflow-hidden bg-black/50 ring-1 ring-white/15">
+                <img
+                  v-if="featuredImageUrl"
+                  :src="featuredImageUrl"
+                  :alt="form.name || 'Character'"
+                  class="absolute inset-0 w-full h-full object-cover lookbook-portrait__img"
+                >
+                <div
+                  v-else
+                  class="absolute inset-0 flex items-center justify-center text-center px-4"
+                >
+                  <p class="text-xs text-stone-400 leading-relaxed">
+                    Add a featured portrait to anchor this lookbook.
+                  </p>
+                </div>
+                <span
+                  v-if="featuredImage?.expressionLabel"
+                  class="absolute bottom-0 inset-x-0 px-2 py-1.5 text-[10px] tracking-[0.2em] uppercase text-center bg-black/65 text-stone-100"
+                >
+                  {{ featuredImage.expressionLabel }}
+                </span>
+              </div>
             </div>
-            <p class="text-xs text-gray-500 mb-2">
-              The exact prompt used to generate the featured image — reuse it (with new actions) so the face/wardrobe stay identical.
-            </p>
-            <pre class="text-[12px] text-gray-700 whitespace-pre-wrap font-mono leading-relaxed max-h-40 overflow-y-auto">{{ lockedPortraitPrompt }}</pre>
+
+            <!-- Center: turnaround / expression strip -->
+            <div class="lg:col-span-6 px-4 sm:px-5 py-6 border-b lg:border-b-0 lg:border-r border-white/10">
+              <div class="flex items-center justify-between gap-2 mb-3">
+                <h2 class="lookbook-label !mb-0">Reference plates</h2>
+                <label
+                  class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase rounded border border-white/20 text-stone-100 hover:border-primary hover:text-primary cursor-pointer transition-colors"
+                  :class="uploadingImage ? 'opacity-60 pointer-events-none' : ''"
+                >
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp,image/gif,image/*"
+                    multiple
+                    class="sr-only"
+                    :disabled="uploadingImage"
+                    @change="onImageFilesPicked"
+                  >
+                  {{ uploadingImage ? uploadProgressLabel : (galleryImages.length ? 'Add plates' : 'Upload plates') }}
+                </label>
+              </div>
+
+              <div
+                v-if="galleryImages.length"
+                class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-2.5"
+              >
+                <figure
+                  v-for="img in galleryImages"
+                  :key="img.assetId"
+                  class="lookbook-plate group relative"
+                  :class="img.featured ? 'ring-2 ring-primary' : 'ring-1 ring-white/15'"
+                >
+                  <div class="relative aspect-[3/4] bg-black overflow-hidden">
+                    <img
+                      :src="img.url"
+                      :alt="form.name"
+                      class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                    >
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
+                    <div class="absolute inset-x-0 bottom-0 p-1.5 space-y-1">
+                      <input
+                        :value="expressionDraft[img.assetId] ?? img.expressionLabel"
+                        type="text"
+                        maxlength="80"
+                        placeholder="Label view"
+                        class="w-full bg-black/50 border border-white/20 rounded px-1.5 py-0.5 text-[10px] tracking-wide uppercase text-stone-100 placeholder:text-stone-500 focus:border-primary focus:outline-none"
+                        :disabled="savingExpressionAssetId === img.assetId"
+                        @input="onExpressionInput(img.assetId, ($event.target as HTMLInputElement).value)"
+                        @blur="saveExpressionLabel(img)"
+                        @keydown.enter="($event.target as HTMLInputElement).blur()"
+                      >
+                      <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          v-if="!img.featured"
+                          type="button"
+                          class="flex-1 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-white/90 text-gray-900"
+                          :disabled="featuringAssetId === img.assetId"
+                          @click="setFeatured(img)"
+                        >
+                          Feature
+                        </button>
+                        <button
+                          type="button"
+                          class="flex-1 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-red-700/90 text-white"
+                          :disabled="deletingAssetId === img.assetId"
+                          @click="deleteImage(img)"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+                    <span
+                      v-if="img.featured"
+                      class="absolute top-1.5 left-1.5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-primary text-gray-950"
+                    >
+                      Featured
+                    </span>
+                  </div>
+                </figure>
+              </div>
+
+              <p
+                v-else
+                class="text-xs text-stone-400 py-16 text-center border border-dashed border-white/15 rounded-lg"
+              >
+                Upload front / 3⁄4 / profile / expression plates — labeled views become this character’s turnaround.
+              </p>
+
+              <p class="mt-3 text-[10px] text-stone-500 tracking-wide">
+                Tip: label plates like Front, 3⁄4, Profile, Back, Angry, Calm — same idea as a studio turnaround sheet.
+              </p>
+            </div>
+
+            <!-- Right: wardrobe + signature -->
+            <div class="lg:col-span-3 px-5 sm:px-6 py-6 space-y-5">
+              <div>
+                <h2 class="lookbook-label">Wardrobe &amp; look</h2>
+                <p
+                  v-if="form.appearanceDescription.trim()"
+                  class="text-xs text-stone-300 leading-relaxed whitespace-pre-wrap"
+                >
+                  {{ form.appearanceDescription }}
+                </p>
+                <p v-else class="text-xs text-stone-500 italic">
+                  No locked appearance yet — edit below so every frame stays consistent.
+                </p>
+              </div>
+
+              <div>
+                <h2 class="lookbook-label">Key items</h2>
+                <ul
+                  v-if="signatureBullets.length"
+                  class="space-y-1.5"
+                >
+                  <li
+                    v-for="(item, i) in signatureBullets"
+                    :key="i"
+                    class="text-xs text-stone-300 leading-snug flex gap-2"
+                  >
+                    <span class="text-primary shrink-0" aria-hidden="true">▸</span>
+                    <span>{{ item }}</span>
+                  </li>
+                </ul>
+                <p v-else class="text-xs text-stone-500 italic">
+                  Props, accessories, and recurring details go here.
+                </p>
+              </div>
+
+              <div v-if="form.avoidDescription.trim()">
+                <h2 class="lookbook-label">Never show</h2>
+                <p class="text-xs text-red-200/80 leading-relaxed whitespace-pre-wrap">
+                  {{ form.avoidDescription }}
+                </p>
+              </div>
+
+              <div
+                v-if="linkedBibleEntity || castAssetCount > 0"
+                class="pt-3 border-t border-white/10"
+              >
+                <h2 class="lookbook-label">Bible &amp; assets</h2>
+                <p
+                  v-if="linkedBibleEntity"
+                  class="text-xs text-stone-300"
+                >
+                  Linked:
+                  <NuxtLink
+                    :to="`/projects/${projectId}/bible`"
+                    class="text-primary hover:underline font-medium"
+                  >
+                    {{ linkedBibleEntity.name }}
+                  </NuxtLink>
+                </p>
+                <p class="text-[11px] text-stone-500 mt-1">
+                  {{ castAssetCount }} linked asset{{ castAssetCount === 1 ? '' : 's' }}
+                </p>
+              </div>
+
+              <div class="flex flex-col gap-2 pt-1">
+                <NuxtLink
+                  :to="characterCreatorTo"
+                  class="inline-flex justify-center px-3 py-2 text-xs font-semibold tracking-wide uppercase rounded bg-primary text-gray-950 hover:bg-primary/90 transition-colors"
+                >
+                  Open Character Creator
+                </NuxtLink>
+                <NuxtLink
+                  :to="`/projects/${projectId}/characters`"
+                  class="inline-flex justify-center px-3 py-2 text-xs font-medium tracking-wide uppercase rounded border border-white/20 text-stone-200 hover:border-primary/50 hover:text-primary transition-colors"
+                >
+                  All characters
+                </NuxtLink>
+              </div>
+            </div>
           </div>
 
-          <div class="flex flex-wrap gap-3 pt-2">
-            <NuxtLink
-              :to="characterCreatorTo"
-              class="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-300 text-gray-800 hover:bg-gray-50"
+          <!-- Footer quote / tagline -->
+          <footer class="relative z-10 px-5 sm:px-8 py-4 border-t border-white/10 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p class="text-[11px] tracking-[0.2em] uppercase text-stone-400">
+              {{ form.name || 'Character' }}
+              <span v-if="form.roleDescription" class="text-stone-500"> — {{ roleShort }}</span>
+            </p>
+            <p
+              v-if="footerQuote"
+              class="text-xs italic text-stone-400/90 sm:text-right max-w-md"
             >
-              Open in Character Creator
-            </NuxtLink>
-            <NuxtLink
-              :to="`/projects/${projectId}/characters`"
-              class="px-4 py-2 text-sm font-semibold rounded-lg border border-gray-300 text-gray-800 hover:bg-gray-50"
-            >
-              All characters
-            </NuxtLink>
+              “{{ footerQuote }}”
+            </p>
+          </footer>
+        </section>
+
+        <!-- Editable dossier (functional fields) -->
+        <details class="mt-6 group rounded-xl border border-gray-200 bg-white open:shadow-sm">
+          <summary class="cursor-pointer list-none flex items-center justify-between gap-3 px-5 py-4 text-sm font-semibold text-gray-900">
+            <span>Edit dossier fields</span>
+            <span class="text-xs font-normal text-gray-500 group-open:hidden">Role, look, voice, avoid…</span>
+            <span class="text-gray-400 text-lg leading-none group-open:rotate-180 transition-transform" aria-hidden="true">▾</span>
+          </summary>
+          <div class="px-5 pb-6 space-y-5 border-t border-gray-100 pt-5">
+            <ProfileField
+              label="Role in the story"
+              hint="What they want, their function in the plot, key relationships."
+              :model-value="form.roleDescription"
+              placeholder="e.g. Field paleontologist and reluctant expedition lead."
+              :rows="3"
+              @update:model-value="(v) => { form.roleDescription = v }"
+              @commit="saveField"
+            />
+            <ProfileField
+              label="Appearance & wardrobe (visual anchor)"
+              hint="Locked physical look so every generated image matches."
+              :model-value="form.appearanceDescription"
+              placeholder="e.g. Late 20s, sun-weathered, blonde braid. Utility shirt, leather belt, scuffed boots."
+              :rows="5"
+              @update:model-value="(v) => { form.appearanceDescription = v }"
+              @commit="saveField"
+            />
+            <ProfileField
+              label="Personality & mannerisms"
+              hint="Attitude, speech rhythm, gestures — also feeds the trait tags in the lookbook header."
+              :model-value="form.personality"
+              placeholder="e.g. Fearless · Resourceful · Independent"
+              :rows="3"
+              @update:model-value="(v) => { form.personality = v }"
+              @commit="saveField"
+            />
+            <ProfileField
+              label="Voice notes (tone, pace, accent)"
+              hint="Describe how they sound — pairs with voice clips below."
+              :model-value="form.voiceDescription"
+              placeholder="e.g. Soft Southern drawl; calm under pressure."
+              :rows="2"
+              @update:model-value="(v) => { form.voiceDescription = v }"
+              @commit="saveField"
+            />
+            <ProfileField
+              label="Signature details / key items"
+              hint="Recurring props and tics — shown as Key items on the lookbook."
+              :model-value="form.signatureDetails"
+              placeholder="e.g. Leather field journal. Brass compass. Always carries a camera."
+              :rows="3"
+              @update:model-value="(v) => { form.signatureDetails = v }"
+              @commit="saveField"
+            />
+            <ProfileField
+              label="Avoid / never show"
+              hint="Merged into STRICT EXCLUSIONS on storyboard and video prompts."
+              :model-value="form.avoidDescription"
+              placeholder="e.g. No modern sneakers, no suit, never clean nails."
+              :rows="2"
+              :maxlength="2000"
+              @update:model-value="(v) => { form.avoidDescription = v }"
+              @commit="saveField"
+            />
+
+            <div v-if="lockedPortraitPrompt" class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+              <div class="flex items-center justify-between gap-2 mb-1">
+                <h3 class="text-sm font-semibold text-gray-900">Locked portrait prompt</h3>
+                <button
+                  type="button"
+                  class="text-xs font-medium text-primary hover:underline"
+                  @click="copyPrompt"
+                >
+                  {{ copied ? 'Copied' : 'Copy' }}
+                </button>
+              </div>
+              <p class="text-xs text-gray-500 mb-2">
+                Reuse this (with new actions) so face and wardrobe stay identical.
+              </p>
+              <pre class="text-[12px] text-gray-700 whitespace-pre-wrap font-mono leading-relaxed max-h-40 overflow-y-auto">{{ lockedPortraitPrompt }}</pre>
+            </div>
           </div>
-        </div>
-      </div>
-    </template>
+        </details>
+
+        <!-- Voice & performance -->
+        <section class="mt-6 rounded-xl border border-gray-200 bg-white p-5">
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <h2 class="text-sm font-semibold text-gray-900">Voice &amp; performance references</h2>
+            <label
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-800 hover:border-primary hover:text-primary cursor-pointer transition-colors"
+              :class="uploadingVoice ? 'opacity-60 pointer-events-none' : ''"
+            >
+              <input
+                type="file"
+                accept="audio/*,.mp3,.wav,.m4a,.webm,.ogg,video/mp4,video/webm,video/quicktime,.mp4,.mov"
+                class="sr-only"
+                :disabled="uploadingVoice"
+                @change="onReferenceClipPicked"
+              >
+              {{ uploadingVoice ? 'Uploading…' : 'Add clip' }}
+            </label>
+          </div>
+          <p class="text-xs text-gray-500 mb-3">
+            Short audio (~10s) for voice, or video for mannerisms. Reference only — not used for cloning.
+          </p>
+          <input
+            v-model="referenceClipLabel"
+            type="text"
+            maxlength="80"
+            placeholder="Optional label, e.g. Angry outburst, Calm dialogue"
+            class="w-full rounded-lg border border-gray-200 px-2.5 py-1.5 text-[11px] text-gray-800 placeholder:text-gray-400 focus:border-primary focus:outline-none mb-3"
+            :disabled="uploadingVoice"
+          >
+          <ul v-if="referenceClips.length" class="grid sm:grid-cols-2 gap-3">
+            <li
+              v-for="s in referenceClips"
+              :key="s.assetId"
+              class="rounded-lg border border-gray-200 bg-gray-50 px-2.5 py-2"
+            >
+              <video
+                v-if="s.mediaType === 'video'"
+                :src="s.url"
+                controls
+                preload="metadata"
+                playsinline
+                class="w-full max-h-40 rounded bg-black"
+              />
+              <audio
+                v-else
+                :src="s.url"
+                controls
+                preload="metadata"
+                class="h-8 w-full"
+              />
+              <div class="flex items-center justify-between gap-2 mt-1">
+                <span class="text-[11px] text-gray-500 truncate">
+                  {{ s.mannerismLabel || s.title }}
+                  <span v-if="s.mediaType === 'video'" class="text-primary"> · video</span>
+                </span>
+                <button
+                  type="button"
+                  class="text-[11px] font-medium text-red-700 hover:underline disabled:opacity-40 shrink-0"
+                  :disabled="deletingAssetId === s.assetId"
+                  @click="deleteReferenceClip(s.assetId)"
+                >
+                  {{ deletingAssetId === s.assetId ? 'Removing…' : 'Remove' }}
+                </button>
+              </div>
+            </li>
+          </ul>
+          <p v-else class="text-xs text-gray-500">
+            No clips yet. Upload a short MP3/WAV or a ~10s MP4/WebM.
+          </p>
+        </section>
+      </template>
     </ClientOnly>
   </div>
 </template>
@@ -413,17 +503,12 @@ const nameHint = computed(() => {
   return typeof q === 'string' ? q : Array.isArray(q) ? String(q[0] || '') : ''
 })
 
-// The route id can be stale (e.g. an image asset still pointing at a deleted
-// character). The API self-heals by name and returns the live record, so all
-// edits/uploads must target the resolved id — never the raw route param.
 const effectiveCharacterId = computed(() => character.value?.id || characterId.value)
 
 const loading = ref(true)
 const loadError = ref('')
 const character = ref<CreativeCharacter | null>(null)
 const assets = ref<ProjectAsset[]>([])
-// True when there is no backing creative_characters row yet (profile is built
-// from assets). The first save creates a real record and re-links assets to it.
 const synthetic = ref(false)
 
 const uploadingImage = ref(false)
@@ -483,10 +568,10 @@ const isDirty = computed(() => {
 const saveStatusText = computed(() => {
   switch (saveStatus.value) {
     case 'saving': return 'Saving…'
-    case 'saved': return lastSavedAt.value ? `All changes saved · ${formatSavedTime(lastSavedAt.value)}` : 'All changes saved'
-    case 'unsaved': return 'Unsaved changes — click outside the field to save'
-    case 'error': return 'Couldn’t save — try again'
-    default: return 'Changes save automatically'
+    case 'saved': return lastSavedAt.value ? `Saved · ${formatSavedTime(lastSavedAt.value)}` : 'Saved'
+    case 'unsaved': return 'Unsaved — blur a field to save'
+    case 'error': return 'Couldn’t save'
+    default: return 'Auto-saves'
   }
 })
 
@@ -497,6 +582,60 @@ function formatSavedTime (ts: number): string {
     return ''
   }
 }
+
+function splitLookbookPhrases (raw: string): string[] {
+  return raw
+    .split(/[·•|,;/;\n]+/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 1 && s.length <= 48)
+}
+
+const traitTags = computed(() => {
+  const fromPersonality = splitLookbookPhrases(form.personality)
+  const fromRole = splitLookbookPhrases(form.roleDescription).slice(0, 2)
+  const merged = [...fromRole, ...fromPersonality]
+  const seen = new Set<string>()
+  const out: string[] = []
+  for (const t of merged) {
+    const key = t.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(t)
+    if (out.length >= 5) break
+  }
+  return out
+})
+
+const headerRoleLine = computed(() => {
+  const role = form.roleDescription.trim()
+  if (!role) return ''
+  const first = role.split(/[.\n]/)[0]?.trim() || role
+  return first.slice(0, 90) + (first.length > 90 ? '…' : '')
+})
+
+const roleShort = computed(() => {
+  const role = form.roleDescription.trim()
+  if (!role) return ''
+  const first = role.split(/[.\n]/)[0]?.trim() || role
+  return first.slice(0, 48) + (first.length > 48 ? '…' : '')
+})
+
+const signatureBullets = computed(() => {
+  const raw = form.signatureDetails.trim()
+  if (!raw) return [] as string[]
+  const byLine = raw.split(/\n+/).map((s) => s.replace(/^[-•*]\s*/, '').trim()).filter(Boolean)
+  if (byLine.length > 1) return byLine.slice(0, 8)
+  return splitLookbookPhrases(raw).slice(0, 8)
+})
+
+const footerQuote = computed(() => {
+  const personality = form.personality.trim()
+  if (!personality) return ''
+  const sentence = personality.split(/[.!?]/)[0]?.trim()
+  if (!sentence || sentence.length > 120) return ''
+  if (traitTags.value.length >= 2 && sentence.length < 20) return ''
+  return sentence
+})
 
 watch(form, () => {
   if (!character.value || saveStatus.value === 'saving') return
@@ -726,8 +865,6 @@ async function saveField () {
   }
   saveStatus.value = 'saving'
   try {
-    // No backing record yet → create one, then re-link this character's assets
-    // to the freshly created id so images/voice stay attached.
     if (synthetic.value) {
       const createdId = await createBackingCharacter(token, payload.name)
       if (!createdId) {
@@ -759,7 +896,6 @@ async function createBackingCharacter (token: string, name: string): Promise<str
   if (!newId) return ''
   character.value = res.character
   synthetic.value = false
-  // Re-point any assets that referenced the old (stale/synthetic) id.
   for (const a of assets.value) {
     if (!a.id || !PB_ID.test(a.id)) continue
     const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
@@ -771,10 +907,22 @@ async function createBackingCharacter (token: string, name: string): Promise<str
         body: { metadata: { ...meta, character_id: newId, character_name: name } }
       })
     } catch {
-      /* best-effort relink; GET still matches by the old id meanwhile */
+      /* best-effort relink */
     }
   }
   return newId
+}
+
+async function copyPrompt () {
+  const t = lockedPortraitPrompt.value
+  if (!t) return
+  try {
+    await navigator.clipboard.writeText(t)
+    copied.value = true
+    setTimeout(() => { copied.value = false }, 2000)
+  } catch {
+    toast.showToast('Could not copy.', 'error')
+  }
 }
 
 async function uploadCharacterImage (token: string, file: File, opts: { featured: boolean; expressionLabel?: string }) {
@@ -858,15 +1006,14 @@ function onExpressionInput (assetId: string, value: string) {
 }
 
 async function saveExpressionLabel (img: GalleryImage) {
-  const token = getAuthToken()
-  if (!token) return
   const next = (expressionDraft[img.assetId] ?? '').trim()
   if (next === img.expressionLabel) return
-
+  const token = getAuthToken()
+  if (!token) return
   savingExpressionAssetId.value = img.assetId
   try {
-    const asset = assets.value.find(a => a.id === img.assetId)
-    const meta = (asset?.metadata && typeof asset.metadata === 'object') ? asset.metadata : {}
+    const asset = assets.value.find((a) => a.id === img.assetId)
+    const meta = (asset?.metadata && typeof asset.metadata === 'object') ? { ...asset.metadata } : {}
     await $fetch(`/api/projects/${projectId.value}/assets/${img.assetId}`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}` },
@@ -876,10 +1023,7 @@ async function saveExpressionLabel (img: GalleryImage) {
           character_id: effectiveCharacterId.value,
           character_name: form.name,
           expression_label: next
-        },
-        title: next
-          ? `${form.name || 'Character'} — ${next}`.slice(0, 500)
-          : undefined
+        }
       }
     })
     expressionDraft[img.assetId] = next
@@ -897,19 +1041,24 @@ async function setFeatured (img: GalleryImage) {
   if (!token) return
   featuringAssetId.value = img.assetId
   try {
-    for (const a of assets.value) {
-      if (!a.fileUrl || !a.id || !PB_ID.test(a.id)) continue
-      const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
-      if (!isCharacterPortraitAsset(meta as Record<string, unknown>)) continue
-      const shouldFeature = a.id === img.assetId
+    for (const g of galleryImages.value) {
+      const shouldFeature = g.assetId === img.assetId
+      const asset = assets.value.find((a) => a.id === g.assetId)
+      const meta = (asset?.metadata && typeof asset.metadata === 'object') ? { ...asset.metadata } : {}
       if ((meta.featured === true) === shouldFeature) continue
-      await $fetch(`/api/projects/${projectId.value}/assets/${a.id}`, {
+      await $fetch(`/api/projects/${projectId.value}/assets/${g.assetId}`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` },
-        body: { metadata: { ...meta, character_id: effectiveCharacterId.value, character_name: form.name, featured: shouldFeature } }
+        body: {
+          metadata: {
+            ...meta,
+            character_id: effectiveCharacterId.value,
+            character_name: form.name,
+            featured: shouldFeature
+          }
+        }
       })
     }
-    toast.showToast('Featured image updated.', 'success')
     await load()
   } catch (e: unknown) {
     toast.showToast(formatApiFetchError(e, 'Could not set featured image'), 'error')
@@ -919,28 +1068,19 @@ async function setFeatured (img: GalleryImage) {
 }
 
 async function deleteImage (img: GalleryImage) {
-  if (!globalThis.confirm('Delete this image?')) return
-  await removeAsset(img.assetId)
-}
-
-async function deleteReferenceClip (assetId: string) {
-  if (!globalThis.confirm('Remove this reference clip?')) return
-  await removeAsset(assetId)
-}
-
-async function removeAsset (assetId: string) {
+  if (!globalThis.confirm('Delete this reference photo?')) return
   const token = getAuthToken()
   if (!token) return
-  deletingAssetId.value = assetId
+  deletingAssetId.value = img.assetId
   try {
-    await $fetch(`/api/projects/${projectId.value}/assets/${assetId}`, {
+    await $fetch(`/api/projects/${projectId.value}/assets/${img.assetId}`, {
       method: 'DELETE',
       headers: { Authorization: `Bearer ${token}` }
     })
-    toast.showToast('Removed.', 'success')
+    toast.showToast('Photo removed.', 'info')
     await load()
   } catch (e: unknown) {
-    toast.showToast(formatApiFetchError(e, 'Could not remove'), 'error')
+    toast.showToast(formatApiFetchError(e, 'Could not delete'), 'error')
   } finally {
     deletingAssetId.value = ''
   }
@@ -951,13 +1091,14 @@ async function onReferenceClipPicked (ev: Event) {
   const file = input.files?.[0]
   input.value = ''
   if (!file) return
-  const err = validateCharacterReferenceClipFile(file)
-  if (err) {
-    toast.showToast(err, 'warning')
-    return
-  }
   const token = getAuthToken()
   if (!token) return
+  try {
+    validateCharacterReferenceClipFile(file)
+  } catch (e: unknown) {
+    toast.showToast(e instanceof Error ? e.message : 'Invalid file', 'error')
+    return
+  }
   uploadingVoice.value = true
   try {
     await uploadCharacterReferenceClip({
@@ -969,7 +1110,7 @@ async function onReferenceClipPicked (ev: Event) {
       mannerismLabel: referenceClipLabel.value.trim() || undefined
     })
     referenceClipLabel.value = ''
-    toast.showToast('Reference clip added.', 'success')
+    toast.showToast('Reference clip saved.', 'success')
     await load()
   } catch (e: unknown) {
     toast.showToast(formatApiFetchError(e, 'Could not upload clip'), 'error')
@@ -978,19 +1119,98 @@ async function onReferenceClipPicked (ev: Event) {
   }
 }
 
-async function copyPrompt () {
+async function deleteReferenceClip (assetId: string) {
+  if (!globalThis.confirm('Remove this reference clip?')) return
+  const token = getAuthToken()
+  if (!token) return
+  deletingAssetId.value = assetId
   try {
-    await navigator.clipboard.writeText(lockedPortraitPrompt.value)
-    copied.value = true
-    setTimeout(() => { copied.value = false }, 1500)
-  } catch {
-    /* clipboard blocked */
+    await $fetch(`/api/projects/${projectId.value}/assets/${assetId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+    toast.showToast('Clip removed.', 'info')
+    await load()
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not remove clip'), 'error')
+  } finally {
+    deletingAssetId.value = ''
   }
 }
 
-watch([isAuthenticated, projectId, characterId], () => { void load() }, { immediate: true })
+watch([projectId, characterId, nameHint], () => { void load() }, { immediate: true })
 
 useHead({
-  title: computed(() => (character.value?.name ? `${character.value.name} — Character` : 'Character'))
+  title: computed(() => (form.name ? `${form.name} · Cast` : 'Character')),
+  link: [
+    {
+      rel: 'stylesheet',
+      href: 'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=IBM+Plex+Sans:wght@400;500;600&display=swap'
+    }
+  ]
 })
 </script>
+
+<style scoped>
+.lookbook-sheet {
+  background: #141816;
+  color: #e8e6e1;
+}
+.lookbook-sheet__atmosphere {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 80% 50% at 20% 0%, rgba(65, 170, 168, 0.14), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 100%, rgba(180, 120, 60, 0.08), transparent 50%),
+    linear-gradient(180deg, #1a1f1c 0%, #101412 55%, #0c0e0d 100%);
+  pointer-events: none;
+}
+.lookbook-sheet__atmosphere::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-size: 180px 180px;
+  pointer-events: none;
+}
+.lookbook-name {
+  font-family: 'Bebas Neue', Impact, Haettenschweiler, sans-serif;
+  font-size: clamp(2rem, 5vw, 3.25rem);
+  letter-spacing: 0.04em;
+  line-height: 1.05;
+  text-transform: uppercase;
+}
+.lookbook-label {
+  font-family: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: rgba(65, 170, 168, 0.85);
+  margin-bottom: 0.35rem;
+}
+.lookbook-portrait__img {
+  animation: lookbook-fade-in 0.7s ease-out both;
+}
+.lookbook-plate {
+  animation: lookbook-fade-up 0.55s ease-out both;
+}
+.lookbook-plate:nth-child(1) { animation-delay: 0.05s; }
+.lookbook-plate:nth-child(2) { animation-delay: 0.1s; }
+.lookbook-plate:nth-child(3) { animation-delay: 0.15s; }
+.lookbook-plate:nth-child(4) { animation-delay: 0.2s; }
+.lookbook-plate:nth-child(5) { animation-delay: 0.25s; }
+.lookbook-plate:nth-child(6) { animation-delay: 0.3s; }
+@keyframes lookbook-fade-in {
+  from { opacity: 0; transform: scale(1.02); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes lookbook-fade-up {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.character-lookbook :deep(summary::-webkit-details-marker) {
+  display: none;
+}
+</style>
