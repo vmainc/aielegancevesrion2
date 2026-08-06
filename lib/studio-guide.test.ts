@@ -155,18 +155,38 @@ describe('parseStudioGuideResponse', () => {
 })
 
 describe('studio guide project brief', () => {
-  it('requires title and summary or logline', () => {
+  it('requires title, summary/logline, and duration for readiness', () => {
     expect(parseStudioGuideProjectBrief({ title: 'X' })).toBeNull()
-    expect(studioGuideBriefIsReady(parseStudioGuideProjectBrief({
+    const withoutDuration = parseStudioGuideProjectBrief({
       title: 'X',
       logline: 'A short hook.'
-    })!)).toBe(true)
+    })
+    expect(withoutDuration).not.toBeNull()
+    expect(studioGuideBriefIsReady(withoutDuration!)).toBe(false)
+
+    const withDuration = parseStudioGuideProjectBrief({
+      title: 'X',
+      logline: 'A short hook.',
+      targetDurationSeconds: 10
+    })
+    expect(studioGuideBriefIsReady(withDuration!)).toBe(true)
+    expect(withDuration?.targetDurationSeconds).toBe(10)
+  })
+
+  it('keeps 10s instead of bumping to 15', () => {
+    const brief = parseStudioGuideProjectBrief({
+      title: 'Leap',
+      summary: 'Dog leaps over cat.',
+      targetDurationSeconds: 10
+    })
+    expect(brief?.targetDurationSeconds).toBe(10)
   })
 
   it('normalizes aspect, goal, and characters', () => {
     const brief = parseStudioGuideProjectBrief({
       title: 'Test',
       summary: 'Story summary here.',
+      targetDurationSeconds: 30,
       aspectRatio: 'weird',
       goal: 'nope',
       characters: [' Ada ', '', 12, 'Ben']
@@ -195,10 +215,12 @@ describe('studio guide project brief', () => {
 })
 
 describe('buildStudioGuideSystemPrompt', () => {
-  it('instructs interview-and-build instead of route-only create', () => {
+  it('instructs interview-and-build with duration and single-clip awareness', () => {
     const prompt = buildStudioGuideSystemPrompt([{ id: PROJECT_A, name: 'Skele' }])
     expect(prompt).toContain('INTERVIEW')
     expect(prompt).toContain('buildProject')
+    expect(prompt).toContain('TARGET LENGTH')
+    expect(prompt).toContain('ONE storyboard board')
     expect(prompt).toContain('Do NOT claim you already created')
   })
 })

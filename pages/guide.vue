@@ -124,7 +124,7 @@
               What do you want to do today?
             </p>
             <p class="mb-6 text-gray-500 max-w-md">
-              Tell me what you want to make — I’ll ask a few questions, then build the project for you. Or jump straight to import, generate, or an existing project.
+              Tell me how long the finished video should be (clips are 5s or 10s) and what you want to make — I’ll size the project to that runtime, then build it. A ~10s ask becomes one board and one Generate video.
             </p>
 
             <div
@@ -199,6 +199,7 @@
                     <span>{{ msg.buildProject.brief.goal }}</span>
                     <span v-if="msg.buildProject.brief.targetDurationSeconds">
                       ~{{ msg.buildProject.brief.targetDurationSeconds }}s
+                      · {{ describeDurationClipPlan(msg.buildProject.brief.targetDurationSeconds) }}
                     </span>
                   </div>
                   <p
@@ -320,6 +321,7 @@ import {
   type StudioGuideChatMessage,
   type StudioGuideChatStore
 } from '~/lib/studio-guide'
+import { describeDurationClipPlan } from '~/lib/project-duration-budget'
 import type { CreativeProject } from '~/types/creative-project'
 
 const { getAuthToken, isAuthenticated } = useAuth()
@@ -542,11 +544,22 @@ async function buildFromBrief (build: StudioGuideBuildProject) {
       maxMs: SCRIPT_WIZARD_UPLOAD_CLIENT_MS
     })
     registerImportedProject(polled.project)
-    toast.showToast('Project built — review your cast on Characters.', 'success')
+    const secs = build.brief.targetDurationSeconds
+    const clipPlan =
+      typeof secs === 'number' && secs >= 5 ? describeDurationClipPlan(secs) : 'your storyboard clips'
+    const singleClip = typeof secs === 'number' && secs <= 10
+    toast.showToast(
+      singleClip
+        ? 'Project built — add cast looks, then generate the one clip on Storyboard.'
+        : 'Project built — review cast, then storyboard frames and Generate video.',
+      'success'
+    )
     appendMessage({
       id: newStudioGuideMessageId(),
       role: 'assistant',
-      content: 'Done — your project is ready. Opening Characters so you can review the cast.',
+      content: singleClip
+        ? `Done — this is ${clipPlan}. Next: quick cast check, then Storyboard (start + end frames) and Generate video on that one board.`
+        : `Done — planned for ${clipPlan}. Review cast, then on Storyboard fill start/end frames and Generate video per board.`,
       actions: [
         {
           id: newStudioGuideMessageId(),
@@ -556,14 +569,22 @@ async function buildFromBrief (build: StudioGuideBuildProject) {
         },
         {
           id: newStudioGuideMessageId(),
-          label: 'Open project',
-          path: projectGuidePath(polled.projectId),
-          rationale: 'Go to the project home.'
+          label: 'Open Storyboard',
+          path: `/projects/${polled.projectId}/storyboard`,
+          rationale: singleClip
+            ? 'One board → start/end frames → Generate video.'
+            : 'Fill frames and generate clips.'
         }
       ],
       createdAt: new Date().toISOString()
     })
-    await navigateTo(withProjectQuery(`/projects/${polled.projectId}/characters`))
+    await navigateTo(
+      withProjectQuery(
+        singleClip
+          ? `/projects/${polled.projectId}/storyboard`
+          : `/projects/${polled.projectId}/characters`
+      )
+    )
   } catch (e: unknown) {
     toast.showToast(
       formatApiFetchError(e, 'Could not build the project. Try again or continue from Projects.'),

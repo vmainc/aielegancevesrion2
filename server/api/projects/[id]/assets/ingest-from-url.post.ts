@@ -11,6 +11,7 @@ import {
   pocketBaseErrorStatus
 } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import type { ProjectAssetKind } from '~/types/project-asset'
 
@@ -104,6 +105,12 @@ export default defineEventHandler(async (event) => {
 
   try {
     const created = await pb.collection('project_assets').create(formData)
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['assets', 'characters']
+    })
     return {
       asset: pbRecordToProjectAsset(created as Record<string, unknown>, pb)
     }

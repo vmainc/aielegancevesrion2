@@ -5,6 +5,7 @@ import {
   completeScriptImportJob,
   failScriptImportJob
 } from '~/server/utils/script-import-job-registry'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 export async function runConceptBootstrapJob (input: {
   jobId: string
@@ -35,6 +36,13 @@ export async function runConceptBootstrapJob (input: {
       director: input.director,
       visualReference: input.visualReference,
       targetDurationSeconds: input.targetDurationSeconds
+    })
+
+    await syncProjectToBibleSafe({
+      pb,
+      userId: input.userId,
+      projectId: input.projectId,
+      scopes: 'all'
     })
 
     completeScriptImportJob(input.jobId, {

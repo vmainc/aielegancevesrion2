@@ -2,6 +2,7 @@ import { createError, getRouterParam } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { seedStoryboardFromProjectScenes } from '~/server/utils/import-script-core'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 /**
  * Import-style storyboard seed: shot lists for the first N scenes (same helper as monolithic import).
@@ -19,6 +20,12 @@ export default defineEventHandler(async (event) => {
     userId,
     pb,
     projectId
+  })
+  await syncProjectToBibleSafe({
+    pb,
+    userId,
+    projectId,
+    scopes: ['shots', 'scenes']
   })
 
   return { result }

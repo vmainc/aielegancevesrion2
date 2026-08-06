@@ -2,6 +2,7 @@ import { createError, getRouterParam, readBody } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { generateScenesFromScriptForProject } from '~/server/utils/import-script-core'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 /**
  * Replace all creative_scenes with a Claude breakdown from the saved screenplay,
@@ -20,10 +21,17 @@ export default defineEventHandler(async (event) => {
   const raw = body && typeof body.assetId === 'string' ? body.assetId.trim() : ''
   const assetId = raw || undefined
 
-  return generateScenesFromScriptForProject({
+  const result = await generateScenesFromScriptForProject({
     userId,
     pb,
     projectId,
     assetId
   })
+  await syncProjectToBibleSafe({
+    pb,
+    userId,
+    projectId,
+    scopes: ['scenes', 'characters', 'shots']
+  })
+  return result
 })

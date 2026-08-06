@@ -2,6 +2,7 @@ import { createError, getRouterParam, readBody } from 'h3'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -12,7 +13,7 @@ export default defineEventHandler(async (event) => {
   }
   const body = await readBody(event).catch(() => null) as Record<string, unknown> | null
 
-  const { pb } = await requireProjectOwner(event, projectId)
+  const { pb, access } = await requireProjectOwner(event, projectId)
 
   const existing = await pb.collection('creative_shots').getOne(shotId)
   const sp =
@@ -47,5 +48,11 @@ export default defineEventHandler(async (event) => {
   }
 
   const updated = await pb.collection('creative_shots').update(shotId, patch)
+  await syncProjectToBibleSafe({
+    pb,
+    userId: access.ownerId,
+    projectId,
+    scopes: ['shots']
+  })
   return { shot: pbRecordToCreativeShot(updated as Parameters<typeof pbRecordToCreativeShot>[0]) }
 })

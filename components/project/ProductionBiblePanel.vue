@@ -51,6 +51,7 @@ const pending = ref(false)
 const loadError = ref<string | null>(null)
 const mutating = ref(false)
 const seeding = ref(false)
+const syncing = ref(false)
 const seedModalOpen = ref(false)
 const seedPreview = ref<BibleSeedResult | null>(null)
 const legacyRemediationModalOpen = ref(false)
@@ -714,6 +715,19 @@ async function onSeedFromProject () {
   await previewSeed()
 }
 
+async function onSyncFromProject () {
+  syncing.value = true
+  try {
+    await bible.syncFromProject('all')
+    await refreshAll()
+    toast.success('Production Bible updated from project')
+  } catch (e: unknown) {
+    toast.error(bible.formatApiFetchError(e) || 'Could not sync Production Bible')
+  } finally {
+    syncing.value = false
+  }
+}
+
 async function previewLegacyRemediation () {
   legacyRemediating.value = true
   try {
@@ -843,7 +857,7 @@ function castLinkConfidenceClass (confidence?: string): string {
     <div class="flex flex-wrap items-center justify-between gap-3 mb-6">
       <p class="text-sm text-gray-500">
         <span class="text-primary font-medium">Production Bible</span>
-        · Canonical entities, facts, and relationships. Approved facts and active rows inform storyboard and video prompts; tentative and pending rows are labeled or excluded.
+        · Canonical entities, facts, and relationships. Project edits sync here automatically; use Sync from Project to refresh everything at once.
       </p>
       <div class="flex flex-wrap gap-2 shrink-0">
         <button
@@ -875,8 +889,16 @@ function castLinkConfidenceClass (confidence?: string): string {
         </button>
         <button
           type="button"
+          class="px-3 py-2 text-xs font-semibold rounded-lg border border-emerald-300 bg-emerald-50 text-emerald-950 hover:bg-emerald-100 disabled:opacity-50"
+          :disabled="syncing || seeding || mutating || pending"
+          @click="onSyncFromProject"
+        >
+          {{ syncing ? 'Syncing…' : 'Sync from Project' }}
+        </button>
+        <button
+          type="button"
           class="px-3 py-2 text-xs font-semibold rounded-lg border border-gray-300 text-gray-800 hover:bg-gray-50 disabled:opacity-50"
-          :disabled="seeding || mutating || pending"
+          :disabled="seeding || syncing || mutating || pending"
           @click="onSeedFromProject"
         >
           {{ seeding ? 'Working…' : 'Seed from Project' }}

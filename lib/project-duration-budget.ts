@@ -1,5 +1,5 @@
 import type { ProjectGoal, ProjectTargetLength } from '~/types/creative-project'
-import { STORYBOARD_CLIP_SECONDS } from '~/lib/storyboard-video-duration'
+import { STORYBOARD_CLIP_SECONDS, snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 
 export interface ProjectDurationBudget {
   /** User-facing total runtime cap. */
@@ -16,7 +16,8 @@ export interface ProjectDurationBudget {
   minShotsPerScene: number
 }
 
-const MIN_RUNTIME = 15
+/** Allow micro spots (one 5s/10s clip) through short films. */
+const MIN_RUNTIME = 5
 const MAX_RUNTIME = 60 * 60
 
 export function clampTargetDurationSeconds (n: unknown): number | undefined {
@@ -37,23 +38,67 @@ export function defaultDurationSecondsForProject (opts: {
   return undefined
 }
 
+/**
+ * Map a total runtime into storyboard/video clip budget.
+ * Short asks (≤10s) become a single 5s or 10s video — not a multi-panel film.
+ */
 export function buildDurationBudgetFromSeconds (totalSeconds: number): ProjectDurationBudget {
   const total = clampTargetDurationSeconds(totalSeconds) || 90
+
+  // One clip: ~10s (or under) → one board, one Generate video.
+  if (total <= 10) {
+    const clipSeconds = snapToStoryboardClipSeconds(total)
+    return {
+      totalSeconds: total,
+      clipSeconds,
+      maxPanelsTotal: 1,
+      maxScenesForImport: 1,
+      maxShotsPerScene: 1,
+      minShotsPerScene: 1
+    }
+  }
+
+  // Very short (11–20s): prefer 10s clips so we don't invent 4×5s boards.
+  if (total <= 20) {
+    const maxPanelsTotal = Math.max(1, Math.ceil(total / 10))
+    return {
+      totalSeconds: total,
+      clipSeconds: 10,
+      maxPanelsTotal,
+      maxScenesForImport: 1,
+      maxShotsPerScene: maxPanelsTotal,
+      minShotsPerScene: 1
+    }
+  }
+
+  // Short form (21–45s): still lean toward fewer 10s clips.
+  if (total <= 45) {
+    const maxPanelsTotal = Math.max(1, Math.ceil(total / 10))
+    return {
+      totalSeconds: total,
+      clipSeconds: 10,
+      maxPanelsTotal,
+      maxScenesForImport: Math.min(2, maxPanelsTotal),
+      maxShotsPerScene: Math.min(maxPanelsTotal, Math.max(1, Math.ceil(maxPanelsTotal / 2))),
+      minShotsPerScene: 1
+    }
+  }
+
+  // Longer pieces: 5s storyboard granularity for more beats.
   const clipSeconds: 5 | 10 = 5
   const maxPanelsTotal = Math.max(1, Math.floor(total / clipSeconds))
-  const maxScenesForImport =
-    total <= 45
-      ? Math.min(2, Math.max(1, Math.ceil(maxPanelsTotal / 3)))
-      : Math.min(14, Math.max(2, Math.ceil(maxPanelsTotal / 4)))
-  const maxShotsPerScene = Math.min(maxPanelsTotal, Math.max(1, Math.ceil(maxPanelsTotal / maxScenesForImport)))
-  const minShotsPerScene = 1
+  const maxScenesForImport = Math.min(14, Math.max(2, Math.ceil(maxPanelsTotal / 4)))
+  const maxShotsPerScene = Math.min(
+    maxPanelsTotal,
+    Math.max(1, Math.ceil(maxPanelsTotal / maxScenesForImport))
+  )
   return {
     totalSeconds: total,
     clipSeconds,
     maxPanelsTotal,
     maxScenesForImport,
     maxShotsPerScene,
-    minShotsPerScene
+    minShotsPerScene: 1
   }
 }
 
@@ -70,6 +115,15 @@ export function resolveProjectDurationBudget (project: {
   })
   if (fallback) return buildDurationBudgetFromSeconds(fallback)
   return null
+}
+
+/** Human-readable clip plan for Guide UI / replies. */
+export function describeDurationClipPlan (totalSeconds: number): string {
+  const budget = buildDurationBudgetFromSeconds(totalSeconds)
+  if (budget.maxPanelsTotal === 1) {
+    return `one ~${budget.clipSeconds}s video clip`
+  }
+  return `about ${budget.maxPanelsTotal} clips of ~${budget.clipSeconds}s (≈${budget.totalSeconds}s total)`
 }
 
 export function perSceneShotCap (
@@ -95,14 +149,21 @@ export function durationBudgetPromptBlock (
   const minS = sceneCap?.minShots ?? budget.minShotsPerScene
   const maxS = sceneCap?.maxShots ?? budget.maxShotsPerScene
   const panelWord = minS === maxS ? `exactly ${maxS}` : `${minS}–${maxS}`
+  const singleClip =
+    budget.maxPanelsTotal === 1
+      ? `This is a SINGLE-CLIP piece: exactly one storyboard board and one ${budget.clipSeconds}s Generate video — not a multi-panel film.`
+      : ''
   return [
     `RUNTIME BUDGET (strict): Finished piece must be ~${budget.totalSeconds} seconds total.`,
-    `Storyboard panels use only ${budget.clipSeconds}s clips (minimum clip length).`,
-    `Across the ENTIRE project use at most ${budget.maxPanelsTotal} panels total (≈${budget.totalSeconds}s when played in order).`,
+    `Storyboard panels use ${budget.clipSeconds}s clips.`,
+    `Across the ENTIRE project use at most ${budget.maxPanelsTotal} panel(s) total (≈${budget.totalSeconds}s when played in order).`,
+    singleClip,
     `For THIS scene return ${panelWord} panel(s) — not one more.`,
-    `Every panel MUST use duration_seconds ${budget.clipSeconds} unless one beat truly needs 10.`,
+    `Every panel MUST use duration_seconds ${budget.clipSeconds} unless the budget says otherwise.`,
     'Trim story beats to fit — no filler, no extra characters, no epilogue beyond the budget.'
-  ].join(' ')
+  ]
+    .filter(Boolean)
+    .join(' ')
 }
 
 /** Trim model output and assign clip lengths so this scene fits its panel cap. */
@@ -122,10 +183,21 @@ export function conceptDurationGuidance (
 ): string {
   const { totalSeconds: secs, maxPanelsTotal: panels, maxScenesForImport: scenes, clipSeconds } = budget
 
+  if (secs <= 10) {
+    return [
+      `RUNTIME LAW (non-negotiable): ${secs} seconds total — ONE ${clipSeconds}s video clip / ONE storyboard board.`,
+      'FORBIDDEN: multi-scene scripts, three-act structure, B-plots, montage sequences, “later”, second locations.',
+      'summary: 1–3 short sentences for the single on-screen moment only.',
+      'logline: one sentence for that moment.',
+      'characters: 1–2 ALL CAPS names maximum.',
+      'hook: what we see in the first second.'
+    ].join(' ')
+  }
+
   if (secs <= 25) {
     return [
       `RUNTIME LAW (non-negotiable): ${secs} seconds total on screen — a MICRO spot, NOT a short film or series.`,
-      `Storyboard math: at most ${panels} beats × ${clipSeconds}s panels (${secs}s total). Max ${scenes} scene(s).`,
+      `Storyboard math: at most ${panels} beat(s) × ${clipSeconds}s panels (${secs}s total). Max ${scenes} scene(s).`,
       'FORBIDDEN: three-act structure, B-plots, “years later”, ensemble casts, episodic hooks, feature-length arcs.',
       'summary: 2–4 short sentences describing ONLY what we see/hear in order (single moment, gag, or micro-arc).',
       'logline: one brief sentence for that moment — not a franchise pitch.',
@@ -176,10 +248,14 @@ export function screenplayDurationGuidance (budget: ProjectDurationBudget, goal?
         : 'short-form piece'
   const lines = [
     `Write a ${kind} screenplay that cuts to exactly ~${budget.totalSeconds} seconds on screen.`,
-    `Plan ~${budget.maxPanelsTotal} storyboard beats at ${budget.clipSeconds}s each.`,
-    `Use only ${budget.maxScenesForImport} scenes or fewer; keep action simple and locations minimal.`
+    `Plan ~${budget.maxPanelsTotal} storyboard beat(s) at ${budget.clipSeconds}s each.`,
+    `Use only ${budget.maxScenesForImport} scene(s) or fewer; keep action simple and locations minimal.`
   ]
-  if (budget.totalSeconds <= 25) {
+  if (budget.maxPanelsTotal === 1) {
+    lines.push(
+      'SINGLE CLIP ONLY: one scene, one continuous beat, minimal or no dialogue — sized for one Generate video.'
+    )
+  } else if (budget.totalSeconds <= 25) {
     lines.push(
       'This is a MICRO spot: one scene slug line block, 1–2 characters, minimal dialogue (or none).',
       'No montage, no “later”, no second location, no act headings — just the single beat.'

@@ -42,7 +42,7 @@ export default defineEventHandler(async (event) => {
     throwApiError(
       400,
       ApiErrorCode.VALIDATION_ERROR,
-      'Need a project brief with title and summary (or logline) before building.'
+      'Need a project brief with title, summary (or logline), and target duration in seconds before building.'
     )
   }
 

@@ -10,7 +10,7 @@ const DIRECTOR_BIBLE_JSON_KEYS = `
 - visual_reference: 2–4 sentences on how the reference image (if any) informs look, palette, wardrobe, and mood`
 
 function resolveConceptBudget (targetDurationSeconds?: number): ProjectDurationBudget | null {
-  if (typeof targetDurationSeconds !== 'number' || targetDurationSeconds < 15) return null
+  if (typeof targetDurationSeconds !== 'number' || targetDurationSeconds < 5) return null
   return buildDurationBudgetFromSeconds(targetDurationSeconds)
 }
 

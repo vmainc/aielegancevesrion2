@@ -2,6 +2,7 @@ import { createError, getRouterParam } from 'h3'
 import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { projectIdOnSceneRow } from '~/server/utils/creative-scene-map'
 import { isPocketBaseMissingCollectionError } from '~/server/utils/pb-missing-collection-error'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -10,7 +11,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing project or scene id' })
   }
 
-  const { pb } = await requireProjectOwner(event, projectId)
+  const { pb, access } = await requireProjectOwner(event, projectId)
 
   const existing = await pb.collection('creative_scenes').getOne(sceneId)
   if (projectIdOnSceneRow(existing as Record<string, unknown>) !== projectId) {
@@ -34,6 +35,12 @@ export default defineEventHandler(async (event) => {
   }
 
   await pb.collection('creative_scenes').delete(sceneId)
+  await syncProjectToBibleSafe({
+    pb,
+    userId: access.ownerId,
+    projectId,
+    scopes: ['scenes', 'shots', 'characters', 'assets']
+  })
 
   return { ok: true, shotsDeleted }
 })

@@ -18,6 +18,7 @@ import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { loadAdaptState, saveAdaptState } from '~/server/utils/adapt-to-film-state'
 import { syncAdaptScenesAndShotsToCreative } from '~/server/utils/adapt-to-film-sync'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 import {
   createJob,
   releaseAdaptSubmitLock,
@@ -301,6 +302,12 @@ export default defineEventHandler(async (event) => {
       }
 
       const saved = await saveAdaptState(pb, id, next)
+      await syncProjectToBibleSafe({
+        pb,
+        userId: access.ownerId || userId,
+        projectId: id,
+        scopes: ['concept', 'characters', 'director', 'scenes', 'shots', 'assets']
+      })
       updateJob(job.jobId, {
         status: 'completed',
         message: 'Done',

@@ -3,6 +3,7 @@ import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { createSceneShot } from '~/server/utils/persist-scene-shots'
 import { projectIdOnSceneRow } from '~/server/utils/creative-scene-map'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -33,6 +34,12 @@ export default defineEventHandler(async (event) => {
       image_prompt: typeof body?.imagePrompt === 'string' ? body.imagePrompt : undefined,
       video_prompt: typeof body?.videoPrompt === 'string' ? body.videoPrompt : undefined,
       negative_prompt: typeof body?.negativePrompt === 'string' ? body.negativePrompt : undefined
+    })
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['shots']
     })
     return { shot }
   } catch (e: unknown) {

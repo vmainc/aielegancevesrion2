@@ -2,6 +2,7 @@ import { createError, getRouterParam, readBody } from 'h3'
 import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { pbRecordToCreativeCharacter } from '~/server/utils/creative-character-map'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 function clampPct (v: unknown): number | null {
   if (v === null || v === undefined || v === '') return null
@@ -45,7 +46,15 @@ export default defineEventHandler(async (event) => {
 
   try {
     const created = await pb.collection('creative_characters').create(payload)
-    return { character: pbRecordToCreativeCharacter(created as Record<string, unknown>) }
+    const character = pbRecordToCreativeCharacter(created as Record<string, unknown>)
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['characters'],
+      characterIds: [character.id]
+    })
+    return { character }
   } catch (e: unknown) {
     throw createError({
       statusCode: 400,

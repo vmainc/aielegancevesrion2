@@ -1,6 +1,7 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 import type { ProjectAssetKind } from '~/types/project-asset'
 
 const KINDS: ProjectAssetKind[] = ['script', 'character', 'storyboard', 'video', 'other']
@@ -51,6 +52,12 @@ export default defineEventHandler(async (event) => {
       notes: notes.slice(0, 20000),
       metadata: metadata ?? null,
       sort_order: sortOrder
+    })
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['assets', 'characters']
     })
     return {
       asset: pbRecordToProjectAsset(created as Record<string, unknown>, pb)

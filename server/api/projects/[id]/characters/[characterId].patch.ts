@@ -5,6 +5,7 @@ import {
   projectIdOnCharacterRow
 } from '~/server/utils/creative-character-map'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 function clampPct (v: unknown): number | null | undefined {
   if (v === undefined) return undefined
@@ -21,7 +22,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing project or character id' })
   }
 
-  const { pb } = await requireProjectOwner(event, projectId)
+  const { pb, access } = await requireProjectOwner(event, projectId)
 
   const existing = await pb.collection('creative_characters').getOne(characterId)
   const row = existing as Record<string, unknown>
@@ -89,7 +90,15 @@ export default defineEventHandler(async (event) => {
 
   try {
     const updated = await pb.collection('creative_characters').update(characterId, patch)
-    return { character: pbRecordToCreativeCharacter(updated as Record<string, unknown>) }
+    const character = pbRecordToCreativeCharacter(updated as Record<string, unknown>)
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['characters'],
+      characterIds: [character.id]
+    })
+    return { character }
   } catch (e: unknown) {
     throw createError({
       statusCode: 400,

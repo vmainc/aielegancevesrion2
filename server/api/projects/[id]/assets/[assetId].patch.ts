@@ -1,6 +1,7 @@
 import { createError, getRouterParam, readBody } from 'h3'
 import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 import type { ProjectAssetKind } from '~/types/project-asset'
 
 const KINDS: ProjectAssetKind[] = ['script', 'character', 'storyboard', 'video', 'other']
@@ -11,7 +12,7 @@ export default defineEventHandler(async (event) => {
   if (!projectId || !assetId) {
     throw createError({ statusCode: 400, message: 'Missing project or asset id' })
   }
-  const { pb } = await requireProjectOwner(event, projectId)
+  const { pb, access } = await requireProjectOwner(event, projectId)
 
   const existing = await pb.collection('project_assets').getOne(assetId)
   const p = typeof existing.project === 'string' ? existing.project : (existing.project as { id?: string })?.id
@@ -62,7 +63,12 @@ export default defineEventHandler(async (event) => {
   }
 
   const updated = await pb.collection('project_assets').update(assetId, patch)
-  return {
-    asset: pbRecordToProjectAsset(updated as Record<string, unknown>, pb)
-  }
+  const asset = pbRecordToProjectAsset(updated as Record<string, unknown>, pb)
+  await syncProjectToBibleSafe({
+    pb,
+    userId: access.ownerId,
+    projectId,
+    scopes: ['assets', 'characters']
+  })
+  return { asset }
 })

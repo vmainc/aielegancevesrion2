@@ -289,6 +289,15 @@ export function useProductionBible (projectId: Ref<string>) {
     return res.seed
   }
 
+  async function syncFromProject (scopes: 'all' | string[] = 'all') {
+    const res = await $fetch<{ sync: Record<string, unknown> }>(`${apiBase()}/sync`, {
+      method: 'POST',
+      headers: headers(),
+      body: { scopes }
+    })
+    return res.sync
+  }
+
   async function loadCastCharacters (): Promise<CreativeCharacter[]> {
     const res = await $fetch<{ characters: CreativeCharacter[] }>(
       `/api/projects/${projectId.value}/characters`,
@@ -419,6 +428,7 @@ export function useProductionBible (projectId: Ref<string>) {
     retireRelationship,
     deleteRelationship,
     seedFromProject,
+    syncFromProject,
     loadCastCharacters,
     linkCastToBible,
     loadProjectAssets,

@@ -1,6 +1,7 @@
 import { createError, getRouterParam } from 'h3'
 import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { deleteSceneShot } from '~/server/utils/persist-scene-shots'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -9,7 +10,7 @@ export default defineEventHandler(async (event) => {
   if (!projectId || !sceneId || !shotId) {
     throw createError({ statusCode: 400, message: 'Missing ids' })
   }
-  const { userId, pb } = await requireProjectOwner(event, projectId)
+  const { userId, pb, access } = await requireProjectOwner(event, projectId)
 
   const remaining = await pb.collection('creative_shots').getFullList({
     filter: `scene="${sceneId}"`,
@@ -21,6 +22,12 @@ export default defineEventHandler(async (event) => {
 
   try {
     await deleteSceneShot(pb, userId, projectId, sceneId, shotId)
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['shots']
+    })
     return { ok: true }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : String(e)

@@ -2,7 +2,7 @@
   <div class="max-w-4xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Cast list: name and AI-written look/feel prompt. Click a character’s name to open their profile — upload expression photos, voice clips, and short performance videos there.
+      · Cast list: name and AI-written look/feel prompt. Saving a character (or featuring a portrait) adds them to the Production Bible as approved canon. Click a name to open their profile.
     </p>
 
     <div

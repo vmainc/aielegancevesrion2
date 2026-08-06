@@ -9,6 +9,7 @@ import {
   projectIdOnSceneRow
 } from '~/server/utils/creative-scene-map'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -17,7 +18,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing project or scene id' })
   }
 
-  const { pb } = await requireProjectOwner(event, projectId)
+  const { pb, access } = await requireProjectOwner(event, projectId)
 
   const existing = await pb.collection('creative_scenes').getOne(sceneId)
   const sid = projectIdOnSceneRow(existing as Record<string, unknown>)
@@ -56,6 +57,12 @@ export default defineEventHandler(async (event) => {
   try {
     const updated = await pb.collection('creative_scenes').update(sceneId, patch)
     const scene = pbRecordToCreativeScene(updated as Parameters<typeof pbRecordToCreativeScene>[0])
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['scenes', 'characters']
+    })
     return {
       scene: {
         ...creativeSceneToListItem(scene),

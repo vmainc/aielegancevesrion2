@@ -5,6 +5,7 @@ import { CONCEPT_GENERATOR_MODELS } from '~/lib/concept-generator-models'
 import { initialConceptNotesForWorkflow, legacyPbWorkflowMode, stripWorkflowMarker } from '~/lib/project-workflow-mode'
 import { upsertDurationMarkerInConceptNotes } from '~/lib/format-stored-concept'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')
@@ -80,6 +81,18 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'No valid fields to update' })
   }
 
+  const syncConcept =
+    typeof body.synopsis === 'string' ||
+    typeof body.treatment === 'string' ||
+    typeof body.conceptNotes === 'string' ||
+    typeof body.genre === 'string' ||
+    typeof body.tone === 'string' ||
+    typeof body.name === 'string'
+  const syncDirector = body.director !== undefined || typeof body.continuityMemory === 'string'
+  const scopes: Array<'concept' | 'director'> = []
+  if (syncConcept) scopes.push('concept')
+  if (syncDirector) scopes.push('director')
+
   let updated: Record<string, unknown> | null = null
   let lastErr: unknown = null
   const workflowModePatch = typeof patch.workflow_mode === 'string' ? patch.workflow_mode : null
@@ -107,6 +120,15 @@ export default defineEventHandler(async (event) => {
     throw createError({
       statusCode: 500,
       message: detail && detail !== 'Failed to create record.' ? detail : 'Could not update project.'
+    })
+  }
+
+  if (scopes.length) {
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId: id,
+      scopes
     })
   }
 

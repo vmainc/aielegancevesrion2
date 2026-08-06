@@ -7,6 +7,7 @@ import {
   pbRecordToCreativeScene
 } from '~/server/utils/creative-scene-map'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')
@@ -40,6 +41,12 @@ export default defineEventHandler(async (event) => {
       body: normalized.body
     })
     const scene = pbRecordToCreativeScene(created as Parameters<typeof pbRecordToCreativeScene>[0])
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['scenes', 'characters']
+    })
     return {
       scene: creativeSceneToListItem(scene)
     }

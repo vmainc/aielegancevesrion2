@@ -2,6 +2,7 @@ import { readMultipartFormData, createError, getRouterParam } from 'h3'
 import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { formatPocketBaseRecordError, isPocketBaseMissingCollectionError, pocketBaseErrorStatus } from '~/server/utils/pb-missing-collection-error'
 import { pbRecordToProjectAsset } from '~/server/utils/project-asset-map'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 import type { ProjectAssetKind } from '~/types/project-asset'
 
 const KINDS: ProjectAssetKind[] = ['script', 'character', 'storyboard', 'video', 'other']
@@ -103,6 +104,12 @@ export default defineEventHandler(async (event) => {
 
   try {
     const created = await pb.collection('project_assets').create(formData)
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['assets', 'characters']
+    })
     return {
       asset: pbRecordToProjectAsset(created as Record<string, unknown>, pb)
     }

@@ -16,6 +16,7 @@ import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
 import { replaceSceneShots } from '~/server/utils/persist-scene-shots'
 import { persistContinuityCheckOnProject } from '~/server/utils/persist-continuity-results'
 import { persistContinuityFindingsToBible } from '~/server/utils/persist-continuity-bible-facts'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 import { pbRecordOwnerId } from '~/server/utils/pb-record-owner'
 import { resolveProjectPreferredOpenRouterModel } from '~/server/utils/project-model-preference'
 import { ApiErrorCode, isAbortLikeError, throwApiError } from '~/server/utils/api-error-envelope'
@@ -325,6 +326,15 @@ export async function executeGenerateShots (opts: {
       videoPrompt: s.video_prompt,
       negativePrompt: s.negative_prompt || ''
     }))
+  }
+
+  if (persisted) {
+    await syncProjectToBibleSafe({
+      pb,
+      userId,
+      projectId,
+      scopes: memoryUpdated ? ['shots', 'director'] : ['shots']
+    })
   }
 
   return {

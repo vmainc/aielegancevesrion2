@@ -13,6 +13,7 @@ import {
   completeScriptImportJob,
   failScriptImportJob
 } from '~/server/utils/script-import-job-registry'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 function parseThemes (raw: unknown): string[] {
   if (!Array.isArray(raw)) return []
@@ -82,6 +83,13 @@ export async function runOpenAsProjectImportJob (input: {
       newProjectName: title.slice(0, 500),
       reuseAssetId: null,
       prefillEnrichment
+    })
+
+    await syncProjectToBibleSafe({
+      pb,
+      userId,
+      projectId: project.id,
+      scopes: 'all'
     })
 
     completeScriptImportJob(jobId, {

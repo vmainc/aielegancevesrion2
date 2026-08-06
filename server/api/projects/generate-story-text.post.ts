@@ -5,6 +5,7 @@ import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
 import { SCREENPLAY_AI_FORMAT_RULES } from '~/lib/screenplay-format'
 import { targetLengthModelGuidance } from '~/lib/target-length'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 import type { ProjectTargetLength } from '~/types/creative-project'
 
 const PB_ID = /^[a-z0-9]{15}$/
@@ -75,7 +76,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const { pb } = await requireProjectOwner(event, projectId)
+  const { pb, access } = await requireProjectOwner(event, projectId)
   let projectRow: Record<string, unknown>
   try {
     projectRow = await pb.collection('creative_projects').getOne(projectId) as Record<string, unknown>
@@ -180,6 +181,12 @@ Do not use markdown headings unless minimal. No code fences. Start with the trea
 
   const updated = await pb.collection('creative_projects').update(projectId, patch)
   const updatedProject = pbRecordToCreativeProject(updated as Parameters<typeof pbRecordToCreativeProject>[0])
+  await syncProjectToBibleSafe({
+    pb,
+    userId: access.ownerId,
+    projectId,
+    scopes: ['concept']
+  })
 
   return {
     kind,

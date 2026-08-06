@@ -2,7 +2,7 @@
   <div class="max-w-3xl">
     <p class="text-sm text-gray-500 mb-6">
       <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
-      · Creative bible and continuity — separate from story drafting.
+      · Creative bible and continuity — saved here as approved Production Bible style rules.
     </p>
 
     <h2 class="text-lg font-semibold text-gray-900 mb-3">Director bible</h2>
@@ -260,7 +260,7 @@ async function saveDirectorBlock () {
       director: { ...directorForm },
       continuityMemory: continuityMemLocal.value
     })
-    toast.showToast('Director & continuity saved.', 'success')
+    toast.showToast('Director & continuity saved to Production Bible.', 'success')
   } catch {
     toast.showToast('Save failed.', 'error')
   } finally {

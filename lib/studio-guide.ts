@@ -323,7 +323,7 @@ export function parseStudioGuideProjectBrief (raw: unknown): StudioGuideProjectB
     if (Number.isFinite(n)) targetDurationSeconds = n
   }
   if (targetDurationSeconds != null) {
-    if (targetDurationSeconds < 15) targetDurationSeconds = 15
+    if (targetDurationSeconds < 5) targetDurationSeconds = 5
     if (targetDurationSeconds > 3600) targetDurationSeconds = 3600
   }
 
@@ -356,7 +356,12 @@ export function parseStudioGuideBuildProject (raw: unknown): StudioGuideBuildPro
 }
 
 export function studioGuideBriefIsReady (brief: StudioGuideProjectBrief): boolean {
-  return Boolean(brief.title.trim() && (brief.summary.trim() || brief.logline.trim()))
+  return Boolean(
+    brief.title.trim() &&
+      (brief.summary.trim() || brief.logline.trim()) &&
+      typeof brief.targetDurationSeconds === 'number' &&
+      brief.targetDurationSeconds >= 5
+  )
 }
 
 /** Seed concept_notes so bootstrap / story UI can read title, logline, and cast. */
@@ -584,12 +589,17 @@ export const STUDIO_GUIDE_STARTERS: Array<{ label: string; prompt: string }> = [
   {
     label: 'Help me invent a project',
     prompt:
-      'I want to create a new film project. Ask me a few questions about the story, then build it for me.'
+      'I want to create a new film project. First ask how many seconds long it should be (clips are 5s or 10s), then a few story questions, then build it for me.'
   },
   {
     label: 'I already have an idea',
     prompt:
-      'I have a story idea. Interview me about it, then create the project and generate the starting materials.'
+      'I have a story idea. Ask how long the finished video should be in seconds, interview me about it, then create the project sized to that runtime.'
+  },
+  {
+    label: 'Make a 10-second clip',
+    prompt:
+      'I want a single ~10 second video — one board, one Generate video. Ask me the story details and build it.'
   },
   {
     label: 'Import a screenplay',

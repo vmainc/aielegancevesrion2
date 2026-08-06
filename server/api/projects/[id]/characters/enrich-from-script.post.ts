@@ -20,6 +20,7 @@ import { enrichFixedCharacterRosterWithAi } from '~/server/utils/script-import-a
 import { ApiErrorCode, throwApiError } from '~/server/utils/api-error-envelope'
 import { resolveProjectPreferredOpenRouterModel } from '~/server/utils/project-model-preference'
 import { OPENROUTER_TEXT_MODEL_MAP } from '~/server/utils/openrouter-text-models'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 async function listProjectCharacterRows (
   pb: PocketBase,
@@ -234,6 +235,12 @@ export default defineEventHandler(async (event) => {
       return String(ra.name || '').localeCompare(String(rb.name || ''))
     })
     const characters = refreshed.map((r) => pbRecordToCreativeCharacter(r as Record<string, unknown>))
+    await syncProjectToBibleSafe({
+      pb,
+      userId: access.ownerId,
+      projectId,
+      scopes: ['characters', 'scenes']
+    })
     return {
       updated: 0,
       seeded,
@@ -260,6 +267,13 @@ export default defineEventHandler(async (event) => {
   })
 
   const characters = refreshed.map((r) => pbRecordToCreativeCharacter(r as Record<string, unknown>))
+
+  await syncProjectToBibleSafe({
+    pb,
+    userId: access.ownerId,
+    projectId,
+    scopes: ['characters', 'scenes']
+  })
 
   return { updated, seeded, characters }
 })

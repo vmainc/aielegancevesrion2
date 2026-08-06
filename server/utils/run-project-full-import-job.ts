@@ -11,6 +11,7 @@ import {
   type ProjectGoal
 } from '~/server/utils/import-script-core'
 import { getConceptGeneratorModelById } from '~/lib/concept-generator-models'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 export async function runProjectFullImportJob (input: {
   jobId: string
@@ -59,6 +60,13 @@ export async function runProjectFullImportJob (input: {
       reuseAssetId: resolvedAssetId,
       preferredModelId: chosenModel?.id || 'gpt-4o',
       openrouterModelId: chosenModel?.openrouterModelId || 'openai/gpt-4o'
+    })
+
+    await syncProjectToBibleSafe({
+      pb,
+      userId,
+      projectId: project.id,
+      scopes: 'all'
     })
 
     completeScriptImportJob(jobId, {

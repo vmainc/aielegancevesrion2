@@ -17,6 +17,7 @@ import {
   failScriptAnalyzeJob,
   type ScriptAnalyzeCandidate
 } from '~/server/utils/script-analyze-job-registry'
+import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 function sceneOutlineForPreview (scenes: Array<{ heading: string; body: string }>): string {
   const perSceneLimit = scenes.length <= 1 ? 20000 : 2500
@@ -130,6 +131,12 @@ export async function runScriptAnalyzeApplyJob (input: {
         preferredModelId: cfg.id
       })
       completeScriptAnalyzeApplyJob(jobId, result)
+      await syncProjectToBibleSafe({
+        pb,
+        userId,
+        projectId,
+        scopes: 'all'
+      })
       return
     }
 
@@ -140,6 +147,12 @@ export async function runScriptAnalyzeApplyJob (input: {
       assetId
     })
     completeScriptAnalyzeApplyJob(jobId, result)
+    await syncProjectToBibleSafe({
+      pb,
+      userId,
+      projectId,
+      scopes: 'all'
+    })
   } catch (e: unknown) {
     failScriptAnalyzeJob(jobId, e instanceof Error ? e.message : String(e) || 'Director analysis failed')
   }
