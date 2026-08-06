@@ -83,7 +83,7 @@ export function resolveCharacterVisualDescription (input: CharacterVisualPromptI
   if (appearance) {
     let base = appearance
     if (hasPortrait && !/reference portrait|attached reference/i.test(base)) {
-      base = `${base} Match the attached featured portrait exactly for face, proportions, and wardrobe.`
+      base = `${base} Match the attached reference plate(s) exactly for face, proportions, and wardrobe.`
     }
     return withSignature(base)
   }
@@ -102,7 +102,7 @@ export function resolveCharacterVisualDescription (input: CharacterVisualPromptI
       ? ` Story context (do not redraw as a generic animal): ${role.slice(0, 400)}`
       : ''
     const base = [
-      `VISUAL LOCK: Match the attached reference portrait for ${formatCastNameForPrompt(input.name)} exactly.`,
+      `VISUAL LOCK: Match the attached reference plate(s) for ${formatCastNameForPrompt(input.name)} exactly.`,
       'Reproduce species, face shape, fur/feather/skin materials, markings, colors, proportions, and wardrobe from the reference image — not a stock or generic animal.',
       storyHint
     ]

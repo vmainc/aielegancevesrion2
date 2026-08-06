@@ -3,6 +3,7 @@ import type PocketBase from 'pocketbase'
 import { buildFullVideoGenerationPrompt } from '~/lib/shot-character-continuity'
 import type { ProjectCharacterRef } from '~/lib/shot-character-continuity'
 import { projectCharacterRefToCastMember } from '~/lib/shot-character-continuity'
+import { buildCharacterPlateMap } from '~/lib/character-plate-refs'
 import {
   resolveVideoNegativePromptForShot,
   stripStrictExclusionsFromPrompt
@@ -19,10 +20,6 @@ import { resolveProductionBibleForGeneration } from '~/server/utils/resolve-prod
 import { mergeProductionBibleGenerationOptions } from '~/lib/production-bible-generation-context'
 import type { VideoGenerationPrefill } from '~/lib/video-generation-prefill'
 import type { ProjectAspectRatio } from '~/types/creative-project'
-
-function normalizeName (v: string): string {
-  return v.trim().toLowerCase().replace(/\s+/g, ' ')
-}
 
 async function loadProjectCharacterRefs (
   pb: PocketBase,
@@ -42,46 +39,21 @@ async function loadProjectCharacterRefs (
       roleDescription: String(row.role_description || ''),
       appearanceDescription: String(row.appearance_description || ''),
       signatureDetails: String(row.signature_details || ''),
-      avoidDescription: String(row.avoid_description || '')
+      avoidDescription: String(row.avoid_description || ''),
+      voiceDescription: String(row.voice_description || '')
     }
   })
 
   const assetRows = await listProjectAssetsForProject(pb, projectId, userId, { kind: 'character' })
   const assets = assetRows.map(r => pbRecordToProjectAsset(r as Record<string, unknown>, pb))
-
-  type Pick = { url: string; notes: string; promptUsed: string; ts: string; featured: boolean }
-  const byId: Record<string, Pick> = {}
-  const byName: Record<string, Pick> = {}
-
-  for (const a of assets) {
-    const meta = a.metadata || {}
-    const cid = typeof meta.character_id === 'string' ? meta.character_id.trim() : ''
-    const cname = typeof meta.character_name === 'string' ? normalizeName(meta.character_name) : ''
-    const featured = meta.featured === true
-    const ts = a.updated || a.created || ''
-    const notes = (a.notes || '').trim()
-    const promptUsed =
-      typeof meta.prompt_used === 'string'
-        ? meta.prompt_used.trim()
-        : typeof (meta as { promptUsed?: string }).promptUsed === 'string'
-          ? String((meta as { promptUsed?: string }).promptUsed).trim()
-          : ''
-    const url = a.id ? projectAssetMediaPath(projectId, a.id) : (a.fileUrl || '').trim()
-    if (!url && !notes && !promptUsed) continue
-
-    const pick: Pick = { url, notes, promptUsed, ts, featured }
-    const merge = (bucket: Record<string, Pick>, key: string) => {
-      const prev = bucket[key]
-      if (!prev || (featured && !prev.featured) || (featured === prev.featured && ts > prev.ts)) {
-        bucket[key] = pick
-      }
-    }
-    if (cid) merge(byId, cid)
-    if (cname) merge(byName, cname)
-  }
+  const plates = buildCharacterPlateMap(
+    characters,
+    assets,
+    (a) => (a.id ? projectAssetMediaPath(projectId, a.id) : (a.fileUrl || '').trim())
+  )
 
   return characters.map(c => {
-    const hit = byId[c.id] || byName[normalizeName(c.name)]
+    const hit = plates.get(c.id)
     return {
       id: c.id,
       name: c.name,
@@ -89,7 +61,9 @@ async function loadProjectCharacterRefs (
       appearanceDescription: c.appearanceDescription || undefined,
       signatureDetails: c.signatureDetails || undefined,
       avoidDescription: c.avoidDescription || undefined,
+      voiceDescription: c.voiceDescription || undefined,
       portraitUrl: hit?.url || null,
+      plateUrls: hit?.plateUrls || [],
       portraitNotes: hit?.notes,
       portraitPromptUsed: hit?.promptUsed
     }

@@ -29,6 +29,11 @@ export interface ProjectCharacterRef {
   roleDescription: string
   /** Featured portrait URL when set in Assets / Character Creator. */
   portraitUrl: string | null
+  /**
+   * Isolation / turnaround plates for this character (featured first, then Front / 3⁄4 / Profile).
+   * Attached as vision references when generating storyboard or video seed frames.
+   */
+  plateUrls?: string[]
   /** Visual notes from the featured portrait asset. */
   portraitNotes?: string
   /** Image prompt used to generate the featured portrait. */
@@ -112,21 +117,46 @@ export function pickPrimaryCharacterPortrait (matches: ProjectCharacterRef[]): s
   return collectCharacterPortraitUrls(matches, 1)[0] ?? null
 }
 
-/** Portrait URLs for vision models (in-shot cast first, then remaining cast with portraits). */
+function platesForCharacter (c: ProjectCharacterRef): string[] {
+  const plates = (c.plateUrls || [])
+    .map(u => (u || '').trim())
+    .filter(Boolean)
+  const featured = (c.portraitUrl || '').trim()
+  if (!featured) return [...new Set(plates)]
+  return [featured, ...plates.filter(u => u !== featured)]
+}
+
+/**
+ * Cast plate URLs for vision models (featured first per character, then turnarounds).
+ * Round-robins so multi-character shots still get one plate each before extras.
+ */
 export function collectCharacterPortraitUrls (
   characters: ProjectCharacterRef[],
   max = 4
 ): string[] {
   const urls: string[] = []
   const seen = new Set<string>()
-  const add = (c: ProjectCharacterRef) => {
-    const u = (c.portraitUrl || '').trim()
-    if (!u || seen.has(u)) return
-    seen.add(u)
-    urls.push(u)
+  const add = (u: string) => {
+    const t = (u || '').trim()
+    if (!t || seen.has(t)) return false
+    seen.add(t)
+    urls.push(t)
+    return true
   }
-  for (const c of characters) add(c)
-  return urls.slice(0, max)
+
+  const perChar = characters.map(platesForCharacter)
+  let round = 0
+  while (urls.length < max) {
+    let added = false
+    for (const plates of perChar) {
+      if (urls.length >= max) break
+      const next = plates[round]
+      if (next && add(next)) added = true
+    }
+    if (!added) break
+    round++
+  }
+  return urls
 }
 
 export function buildContinuityPromptBlock (matches: ProjectCharacterRef[]): string {

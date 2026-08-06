@@ -101,6 +101,12 @@
         >
           {{ generatingFrame ? 'Generating…' : compact ? 'Generate frame' : generateButtonLabel }}
         </button>
+        <p
+          v-if="referenceImageUrls.length"
+          class="text-[11px] text-gray-600"
+        >
+          Matching {{ referenceImageUrls.length }} cast plate{{ referenceImageUrls.length === 1 ? '' : 's' }} as character reference{{ referenceImageUrls.length === 1 ? '' : 's' }}.
+        </p>
         <p v-if="!prompt.trim()" class="text-[11px] text-gray-500">
           Add a video prompt above first.
         </p>
@@ -155,13 +161,19 @@ const props = withDefaults(
     bibleSceneId?: string
     bibleShotId?: string
     bibleCharacterIds?: string[]
+    /**
+     * Cast isolation plates to attach when generating a seed frame
+     * (featured + turnarounds from Assets → Characters / cast lookbook).
+     */
+    referenceImageUrls?: string[]
   }>(),
   {
     compact: false,
     aspectRatio: '16:9',
     frameImageUrl: null,
     role: 'start',
-    bibleCharacterIds: () => []
+    bibleCharacterIds: () => [],
+    referenceImageUrls: () => []
   }
 )
 
@@ -299,7 +311,13 @@ async function generateFrame () {
         prompt: promptForApi,
         model: imageModelId.value,
         aspectRatio: props.aspectRatio || '16:9',
-        purpose: 'video_start_frame'
+        purpose: 'video_start_frame',
+        ...(props.referenceImageUrls?.length
+          ? {
+              referenceImageUrls: props.referenceImageUrls.slice(0, 4),
+              referenceImageUrl: props.referenceImageUrls[0]
+            }
+          : {})
       }
     })
     const url = firstImageUrlFromGenerateResponse(res.urls || [])

@@ -75,7 +75,7 @@ export async function openRouterGenerateImage (options: {
       const refNote =
         imageParts.length === 1
           ? 'Use the attached reference image as the exact character design (face, proportions, materials, colors). Match it closely; do not redesign the character.'
-          : `Use ALL ${imageParts.length} attached reference image(s) as the locked character designs. Each image is an approved cast portrait or continuity frame — match face, species, body, materials, colors, and style exactly. Do not invent new looks.`
+          : `Use ALL ${imageParts.length} attached reference image(s) as the locked character designs. Each image is an approved cast plate (featured and/or turnaround) or continuity frame — match face, species, body, materials, colors, and style exactly. Do not invent new looks.`
       userContent = [{ type: 'text', text: `${prompt}\n\n${refNote}` }, ...imageParts]
     } else {
       userContent = `${prompt}\n\n(Match the established character design from the project cast bible and any saved cast portraits.)`

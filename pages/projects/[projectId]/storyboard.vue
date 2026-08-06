@@ -602,16 +602,18 @@ function frameGenerationReferenceUrls (shot: CreativeShot, role: StoryboardFrame
     characterRefs.value,
     activeScene.value?.summary
   )
-  const urls = collectCharacterPortraitUrls(castInScope, 4)
+  const startSrc = role === 'end' ? panelImageSrc(shot, 'start') : null
   const prior = priorStoryboardFrameInScene(shot)
+  const reserved =
+    (startSrc ? 1 : 0) +
+    (prior && prior !== startSrc ? 1 : 0)
+  const plateBudget = Math.max(1, 4 - reserved)
+  const urls = collectCharacterPortraitUrls(castInScope, plateBudget)
   if (prior && !urls.includes(prior) && urls.length < 4) {
     urls.push(prior)
   }
-  if (role === 'end') {
-    const startSrc = panelImageSrc(shot, 'start')
-    if (startSrc && !urls.includes(startSrc) && urls.length < 4) {
-      urls.unshift(startSrc)
-    }
+  if (startSrc && !urls.includes(startSrc) && urls.length < 4) {
+    urls.unshift(startSrc)
   }
   return urls.slice(0, 4)
 }
@@ -852,10 +854,10 @@ async function generateFrame (
   }
   const referenceImageUrls = frameGenerationReferenceUrls(shot, role)
   if (!referenceImageUrls.length && !quiet) {
-    const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim())
+    const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim() && !(c.plateUrls || []).length)
     if (missingPortraits.length) {
       toast.showToast(
-        'No cast portraits attached — add featured portraits under Assets → Characters for consistent looks.',
+        'No cast plates attached — add reference plates on the character lookbook (or Assets → Characters) for consistent looks.',
         'info'
       )
     }

@@ -332,10 +332,10 @@
               </label>
               <p class="text-xs text-gray-500 mt-0.5">
                 <template v-if="panelPrefill?.sceneId && panelSceneLabel">
-                  Scene: {{ panelSceneLabel }}. Selected cast is woven into the prompt and frame generation.
+                  Scene: {{ panelSceneLabel }}. Type a name to add cast — only selected plates lock frames and prompts.
                 </template>
                 <template v-else>
-                  Select cast to include in frame generation and saved clip metadata.
+                  Type a name to add cast for frame generation and clip metadata. Big casts stay out of the way until you search.
                 </template>
               </p>
             </div>
@@ -344,33 +344,17 @@
             <p v-else-if="!projectCharacterOptions.length" class="text-xs text-gray-500">
               No characters on this project yet — add them on the Characters step.
             </p>
-            <template v-else>
-              <select
-                id="vg-characters"
-                v-model="selectedCharacterIds"
-                multiple
-                class="w-full min-h-[6.5rem] px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-              >
-                <option
-                  v-for="c in projectCharacterOptions"
-                  :key="c.id"
-                  :value="c.id"
-                >
-                  {{ c.name }}{{ c.inScene ? '' : ' (not in scene text)' }}
-                </option>
-              </select>
-              <p class="text-xs text-gray-500">
-                Hold <kbd class="px-1 rounded bg-gray-100 border border-gray-200 text-[10px]">⌘</kbd> or
-                <kbd class="px-1 rounded bg-gray-100 border border-gray-200 text-[10px]">Ctrl</kbd>
-                to select multiple.
-                <span v-if="selectedCharacterIds.length" class="text-gray-700">
-                  — {{ selectedCharacterSummary }}
-                </span>
-              </p>
-              <p v-if="refreshingPromptForCast" class="text-xs text-primary animate-pulse">
-                Updating prompt for selected cast…
-              </p>
-            </template>
+            <CharacterTypeahead
+              v-else
+              v-model="selectedCharacterIds"
+              input-id="vg-characters"
+              :options="characterTypeaheadOptions"
+              :hint="characterTypeaheadHint"
+              placeholder="Type a character name…"
+            />
+            <p v-if="refreshingPromptForCast" class="text-xs text-primary animate-pulse">
+              Updating prompt for selected cast…
+            </p>
           </div>
 
           <div>
@@ -421,6 +405,7 @@
             :bible-scene-id="panelPrefill?.sceneId"
             :bible-shot-id="panelPrefill?.shotId"
             :bible-character-ids="effectiveCharacterIds"
+            :reference-image-urls="castPlateReferenceUrls"
           />
           <VideoStartFramePicker
             v-if="anySelectedSupportsEndFrame"
@@ -432,6 +417,7 @@
             :bible-scene-id="panelPrefill?.sceneId"
             :bible-shot-id="panelPrefill?.shotId"
             :bible-character-ids="effectiveCharacterIds"
+            :reference-image-urls="castPlateReferenceUrls"
           />
           <p
             v-if="anySelectedSupportsEndFrame && endFrameCompatibilityHint"
@@ -785,6 +771,7 @@ import {
   writeVideoGenerationPrefs
 } from '~/lib/video-generation-prefs'
 import {
+  collectCharacterPortraitUrls,
   findCharactersInShot,
   type ProjectCharacterRef
 } from '~/lib/shot-character-continuity'
@@ -792,6 +779,7 @@ import type { CreativeProject, ProjectAspectRatio } from '~/types/creative-proje
 import type { CreativeShot } from '~/types/creative-shot'
 import type { CreativeSceneListItem } from '~/types/creative-scene'
 import { useProjectCharacterRefs } from '~/composables/useProjectCharacterRefs'
+import type { CharacterTypeaheadOption } from '~/components/project/CharacterTypeahead.vue'
 
 const PB_ID = /^[a-z0-9]{15}$/
 
@@ -1013,13 +1001,25 @@ const sceneCharacterIds = computed(() => {
 
 type CharacterOption = ProjectCharacterRef & { inScene: boolean }
 
+/** Characters named in the current prompt — light suggestions when not from a storyboard panel. */
+const promptMentionedCharacterIds = computed(() => {
+  const text = prompt.value.trim()
+  if (!text || !projectCharacterRefs.value.length) return new Set<string>()
+  const hits = findCharactersInShot(
+    { title: '', description: text, imagePrompt: '', videoPrompt: text, shotType: '' },
+    projectCharacterRefs.value
+  )
+  return new Set(hits.map(c => c.id))
+})
+
 const projectCharacterOptions = computed<CharacterOption[]>(() => {
   const inScene = sceneCharacterIds.value
   const hasSceneContext = Boolean(panelPrefill.value?.sceneId && panelShot.value)
+  const promptHits = promptMentionedCharacterIds.value
   return projectCharacterRefs.value
     .map(c => ({
       ...c,
-      inScene: hasSceneContext ? inScene.has(c.id) : true
+      inScene: hasSceneContext ? inScene.has(c.id) : promptHits.has(c.id)
     }))
     .sort((a, b) => {
       if (a.inScene !== b.inScene) return a.inScene ? -1 : 1
@@ -1027,9 +1027,40 @@ const projectCharacterOptions = computed<CharacterOption[]>(() => {
     })
 })
 
+const characterTypeaheadOptions = computed<CharacterTypeaheadOption[]>(() =>
+  projectCharacterOptions.value.map(c => ({
+    id: c.id,
+    name: c.name,
+    suggested: c.inScene,
+    badge: c.inScene
+      ? (panelPrefill.value?.sceneId ? 'In scene' : 'In prompt')
+      : undefined
+  }))
+)
+
+const characterTypeaheadHint = computed(() => {
+  if (selectedCharacterIds.value.length) {
+    return `${selectedCharacterSummary.value}. Type to add more — full cast stays hidden until you search.`
+  }
+  if (panelPrefill.value?.sceneId) {
+    return 'Focus the field to see scene cast, or type any name from the project.'
+  }
+  return 'Type a name to add cast. Nothing is pre-selected from large casts.'
+})
+
 const effectiveCharacterIds = computed(() =>
   selectedCharacterIds.value.filter(id => projectCharacterRefs.value.some(c => c.id === id))
 )
+
+/** Cast isolation plates for seed-frame generation (featured + turnarounds). */
+const castPlateReferenceUrls = computed(() => {
+  const ids = new Set(effectiveCharacterIds.value)
+  if (!ids.size) return []
+  return collectCharacterPortraitUrls(
+    projectCharacterRefs.value.filter(c => ids.has(c.id)),
+    4
+  )
+})
 
 const selectedCharacterSummary = computed(() => {
   const names = projectCharacterRefs.value
@@ -1051,8 +1082,7 @@ const dialogueSpeakerOptions = computed(() => {
   if (selected.size) {
     return projectCharacterRefs.value.filter(c => selected.has(c.id))
   }
-  const inScene = projectCharacterOptions.value.filter(c => c.inScene)
-  return inScene.length ? inScene : projectCharacterOptions.value
+  return projectCharacterOptions.value.filter(c => c.inScene)
 })
 
 const dialogueSpeakerName = computed(() => {
@@ -1124,12 +1154,6 @@ function applySceneDefaultCharacterSelection () {
   initialSceneSelectionApplied.value = true
 }
 
-function applyProjectDefaultCharacterSelection () {
-  if (panelPrefill.value?.sceneId || !projectCharacterRefs.value.length) return
-  if (selectedCharacterIds.value.length) return
-  selectedCharacterIds.value = projectCharacterRefs.value.map(c => c.id)
-}
-
 async function refreshPromptForSelectedCharacters () {
   const pre = panelPrefill.value
   const pid = startFrameBibleProjectId.value
@@ -1175,7 +1199,6 @@ watch(selectedCharacterIds, () => {
 
 watch(projectCharacterRefs, () => {
   applySceneDefaultCharacterSelection()
-  applyProjectDefaultCharacterSelection()
 })
 
 watch(startFrameBibleProjectId, (pid, prev) => {
@@ -1520,8 +1543,6 @@ onMounted(async () => {
   }
   if (panelPrefill.value?.sceneId && panelPrefill.value?.shotId) {
     void loadPanelSceneContext()
-  } else {
-    applyProjectDefaultCharacterSelection()
   }
   if (isAuthenticated.value && clientReady.value) {
     void loadServerProjects().then(() => {
