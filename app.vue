@@ -4,6 +4,7 @@
       <NuxtPage :key="$route.fullPath" />
     </NuxtLayout>
     <ToastContainer />
+    <GuideCompanion />
   </div>
 </template>
 
