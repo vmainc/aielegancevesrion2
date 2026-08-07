@@ -1,11 +1,11 @@
 <template>
   <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
-    <header class="mb-10">
+    <header class="mb-8">
       <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
         Music generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Compose score beds and themes with Google Lyria via OpenRouter. Save tracks to your project library for playback and download.
+        Compose score beds and themes with Google Lyria via OpenRouter. Start with a short guide, or fill the form yourself.
       </p>
     </header>
 
@@ -34,8 +34,8 @@
       >
         <FilmReelLoader
           size="lg"
-          label="Composing music"
-          sub-label="Lyria is generating your track — this can take a few minutes."
+          :label="generatingLabel"
+          :sub-label="generatingSubLabel"
         />
         <p class="mt-6 text-center text-sm text-gray-600 max-w-md mx-auto">
           Keep this tab open while the model renders your score.
@@ -73,6 +73,9 @@
             <p v-if="transcript" class="mt-3 text-xs text-gray-600 whitespace-pre-wrap">
               {{ transcript }}
             </p>
+            <p v-if="lyrics.trim() && !instrumental" class="mt-3 text-xs text-gray-500 whitespace-pre-wrap border-t border-gray-200 pt-3">
+              {{ lyrics }}
+            </p>
           </div>
 
           <p v-if="formError" class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -108,150 +111,201 @@
         </section>
       </div>
 
-      <form v-else class="space-y-8 mb-10" @submit.prevent="onSubmit">
-        <section class="rounded-xl border border-gray-200 bg-gray-50/80 p-5 sm:p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-            Score
-          </h2>
+      <template v-else>
+        <div
+          class="mb-6 inline-flex rounded-lg border border-gray-200 bg-gray-50 p-1"
+          role="tablist"
+          aria-label="Music generation mode"
+        >
+          <button
+            type="button"
+            role="tab"
+            class="px-4 py-2 text-sm font-medium rounded-md transition-colors"
+            :class="inputMode === 'guide'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'"
+            :aria-selected="inputMode === 'guide'"
+            @click="inputMode = 'guide'"
+          >
+            Guide
+          </button>
+          <button
+            type="button"
+            role="tab"
+            class="px-4 py-2 text-sm font-medium rounded-md transition-colors"
+            :class="inputMode === 'manual'
+              ? 'bg-white text-gray-900 shadow-sm'
+              : 'text-gray-600 hover:text-gray-900'"
+            :aria-selected="inputMode === 'manual'"
+            @click="inputMode = 'manual'"
+          >
+            Manual
+          </button>
+        </div>
 
-          <div>
-            <div class="flex justify-between items-center gap-2 mb-1.5">
-              <label for="mg-prompt" class="text-sm font-medium text-gray-700">Prompt</label>
-              <PromptEnhanceButton v-model="prompt" context="general" />
-            </div>
-            <textarea
-              id="mg-prompt"
-              v-model="prompt"
-              rows="4"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-              placeholder="Mood, instrumentation, tempo feel — e.g. tense orchestral underscore with low strings"
-            />
-          </div>
-
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-for="preset in stylePresets"
-              :key="preset.label"
-              type="button"
-              class="px-3 py-1.5 text-xs rounded-full border border-gray-300 bg-white text-gray-700 hover:border-primary/50 hover:text-primary transition-colors"
-              @click="applyPreset(preset)"
-            >
-              {{ preset.label }}
-            </button>
-          </div>
-
-          <div>
-            <label for="mg-model" class="block text-sm font-medium text-gray-700 mb-1.5">Model</label>
-            <select
-              id="mg-model"
-              v-model="selectedModelId"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-            >
-              <option v-for="m in models" :key="m.id" :value="m.id">
-                {{ m.name }} — {{ m.durationHint }} ({{ m.priceHint }})
-              </option>
-            </select>
-            <p v-if="selectedModel?.description" class="mt-1.5 text-xs text-gray-500">
-              {{ selectedModel.description }}
-            </p>
-          </div>
-
-          <div class="grid sm:grid-cols-2 gap-4">
-            <label class="inline-flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
-              <input
-                v-model="instrumental"
-                type="checkbox"
-                class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
-              >
-              <span>
-                <span class="font-medium text-gray-900">Instrumental</span>
-                <span class="block text-xs text-gray-500 mt-0.5">Recommended for film score beds</span>
-              </span>
-            </label>
-            <div>
-              <label for="mg-bpm" class="block text-sm font-medium text-gray-700 mb-1.5">BPM (optional)</label>
-              <input
-                id="mg-bpm"
-                v-model.number="bpm"
-                type="number"
-                min="40"
-                max="220"
-                placeholder="e.g. 90"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-              >
-            </div>
-          </div>
-
-          <div v-if="!instrumental">
-            <label for="mg-lyrics" class="block text-sm font-medium text-gray-700 mb-1.5">Lyrics</label>
-            <textarea
-              id="mg-lyrics"
-              v-model="lyrics"
-              rows="3"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-              placeholder="Lyrics for vocal tracks (Pro model works best for full songs)"
-            />
-          </div>
-        </section>
-
-        <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-4">
-          <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-            Save to project
-          </h2>
-
-          <label class="inline-flex items-center gap-2 text-sm text-gray-800 cursor-pointer">
-            <input
-              v-model="saveToProject"
-              type="checkbox"
-              class="rounded border-gray-300 text-primary focus:ring-primary"
-            >
-            Save to project library when generation finishes
-          </label>
-          <p v-if="saveToProject" class="text-xs text-gray-500">
-            Saved tracks appear under
-            <NuxtLink to="/assets/music" class="text-primary font-medium hover:underline">Assets → My Music</NuxtLink>,
-            grouped by project.
+        <div
+          v-if="inputMode === 'guide'"
+          class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-10 space-y-4"
+        >
+          <MusicGenerationGuide
+            ref="guideRef"
+            :projects="pbProjects"
+            :busy="generating"
+            :initial-project-id="selectedProjectId"
+            @generate="onGuideGenerate"
+            @edit-manual="onGuideEditManual"
+            @create-project="openCreateProjectModal"
+            @update:project-id="onGuideProjectId"
+          />
+          <p v-if="formError" class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {{ formError }}
           </p>
+        </div>
 
-          <div v-if="saveToProject" class="space-y-3">
-            <div class="flex flex-wrap gap-2 items-end">
-              <div class="flex-1 min-w-[12rem]">
-                <label for="mg-project" class="block text-sm font-medium text-gray-700 mb-1.5">Project</label>
-                <select
-                  id="mg-project"
-                  v-model="selectedProjectId"
-                  class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-                >
-                  <option value="">Select a project…</option>
-                  <option v-for="p in pbProjects" :key="p.id" :value="p.id">
-                    {{ p.name }}
-                  </option>
-                </select>
+        <form v-else class="space-y-8 mb-10" @submit.prevent="onSubmit">
+          <section class="rounded-xl border border-gray-200 bg-gray-50/80 p-5 sm:p-6 space-y-4">
+            <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+              Score
+            </h2>
+
+            <div>
+              <div class="flex justify-between items-center gap-2 mb-1.5">
+                <label for="mg-prompt" class="text-sm font-medium text-gray-700">Prompt</label>
+                <PromptEnhanceButton v-model="prompt" context="general" />
               </div>
+              <textarea
+                id="mg-prompt"
+                v-model="prompt"
+                rows="4"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                placeholder="Mood, instrumentation, tempo feel — e.g. tense orchestral underscore with low strings"
+              />
+            </div>
+
+            <div class="flex flex-wrap gap-2">
               <button
+                v-for="preset in stylePresets"
+                :key="preset.label"
                 type="button"
-                class="px-4 py-2 text-sm font-medium text-primary hover:text-primary/80 border border-primary/30 rounded-lg hover:bg-primary/5"
-                @click="openCreateProjectModal"
+                class="px-3 py-1.5 text-xs rounded-full border border-gray-300 bg-white text-gray-700 hover:border-primary/50 hover:text-primary transition-colors"
+                @click="applyPreset(preset)"
               >
-                + New project
+                {{ preset.label }}
               </button>
             </div>
 
-          </div>
-        </section>
+            <div>
+              <label for="mg-model" class="block text-sm font-medium text-gray-700 mb-1.5">Model</label>
+              <select
+                id="mg-model"
+                v-model="selectedModelId"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              >
+                <option v-for="m in models" :key="m.id" :value="m.id">
+                  {{ m.name }} — {{ m.durationHint }} ({{ m.priceHint }})
+                </option>
+              </select>
+              <p v-if="selectedModel?.description" class="mt-1.5 text-xs text-gray-500">
+                {{ selectedModel.description }}
+              </p>
+            </div>
 
-        <p v-if="formError" class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {{ formError }}
-        </p>
+            <div class="grid sm:grid-cols-2 gap-4">
+              <label class="inline-flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
+                <input
+                  v-model="instrumental"
+                  type="checkbox"
+                  class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
+                >
+                <span>
+                  <span class="font-medium text-gray-900">Instrumental</span>
+                  <span class="block text-xs text-gray-500 mt-0.5">Recommended for film score beds</span>
+                </span>
+              </label>
+              <div>
+                <label for="mg-bpm" class="block text-sm font-medium text-gray-700 mb-1.5">BPM (optional)</label>
+                <input
+                  id="mg-bpm"
+                  v-model.number="bpm"
+                  type="number"
+                  min="40"
+                  max="220"
+                  placeholder="e.g. 90"
+                  class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                >
+              </div>
+            </div>
 
-        <button
-          type="submit"
-          class="px-6 py-3 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50"
-          :disabled="generating || !prompt.trim()"
-        >
-          Generate music
-        </button>
-      </form>
+            <div v-if="!instrumental">
+              <label for="mg-lyrics" class="block text-sm font-medium text-gray-700 mb-1.5">Lyrics</label>
+              <textarea
+                id="mg-lyrics"
+                v-model="lyrics"
+                rows="3"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                placeholder="Lyrics for vocal tracks (Pro model works best for full songs)"
+              />
+            </div>
+          </section>
+
+          <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-4">
+            <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+              Save to project
+            </h2>
+
+            <label class="inline-flex items-center gap-2 text-sm text-gray-800 cursor-pointer">
+              <input
+                v-model="saveToProject"
+                type="checkbox"
+                class="rounded border-gray-300 text-primary focus:ring-primary"
+              >
+              Save to project library when generation finishes
+            </label>
+            <p v-if="saveToProject" class="text-xs text-gray-500">
+              Saved tracks appear under
+              <NuxtLink to="/assets/music" class="text-primary font-medium hover:underline">Assets → My Music</NuxtLink>,
+              grouped by project.
+            </p>
+
+            <div v-if="saveToProject" class="space-y-3">
+              <div class="flex flex-wrap gap-2 items-end">
+                <div class="flex-1 min-w-[12rem]">
+                  <label for="mg-project" class="block text-sm font-medium text-gray-700 mb-1.5">Project</label>
+                  <select
+                    id="mg-project"
+                    v-model="selectedProjectId"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                  >
+                    <option value="">Select a project…</option>
+                    <option v-for="p in pbProjects" :key="p.id" :value="p.id">
+                      {{ p.name }}
+                    </option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  class="px-4 py-2 text-sm font-medium text-primary hover:text-primary/80 border border-primary/30 rounded-lg hover:bg-primary/5"
+                  @click="openCreateProjectModal"
+                >
+                  + New project
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <p v-if="formError" class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {{ formError }}
+          </p>
+
+          <button
+            type="submit"
+            class="px-6 py-3 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50"
+            :disabled="generating || !prompt.trim()"
+          >
+            Generate music
+          </button>
+        </form>
+      </template>
     </template>
 
     <Teleport to="body">
@@ -314,7 +368,13 @@
 <script setup lang="ts">
 definePageMeta({ ssr: false })
 
+import MusicGenerationGuide from '~/components/music/MusicGenerationGuide.vue'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
+import {
+  musicGuideBriefToFormState,
+  musicGuideLyricsSeed,
+  type MusicGuideBrief
+} from '~/lib/music-generation-guide'
 import { MUSIC_STYLE_PRESETS } from '~/lib/music-generation-prompt'
 import { DEFAULT_MUSIC_MODEL_ID } from '~/lib/music-generation-models'
 import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
@@ -343,6 +403,7 @@ type ApiPayload = {
 }
 
 type UiPhase = 'form' | 'generating' | 'complete'
+type InputMode = 'guide' | 'manual'
 
 const toast = useToast()
 const { getAuthToken, initAuth } = useAuth()
@@ -360,8 +421,10 @@ const lyrics = ref('')
 const bpm = ref<number | null>(null)
 const stylePresets = MUSIC_STYLE_PRESETS
 
+const inputMode = ref<InputMode>('guide')
 const uiPhase = ref<UiPhase>('form')
 const generating = ref(false)
+const generatingLyrics = ref(false)
 const saving = ref(false)
 const discarding = ref(false)
 const formError = ref('')
@@ -380,6 +443,11 @@ const creatingProject = ref(false)
 const createProjectError = ref('')
 const createProjectForm = reactive({ name: '' })
 
+const guideRef = ref<{
+  applyProjectId: (id: string) => void
+  reset: () => void
+} | null>(null)
+
 const pbProjects = computed(() =>
   projects.value.filter((p: CreativeProject) => PB_ID.test(p.id))
 )
@@ -391,6 +459,16 @@ const saveButtonLabel = computed(() => {
 
 const savedProjectName = computed(() =>
   pbProjects.value.find(p => p.id === savedProjectId.value)?.name || ''
+)
+
+const generatingLabel = computed(() =>
+  generatingLyrics.value ? 'Writing lyrics' : 'Composing music'
+)
+
+const generatingSubLabel = computed(() =>
+  generatingLyrics.value
+    ? 'Drafting vocals from your brief, then sending to Lyria…'
+    : 'Lyria is generating your track — this can take a few minutes.'
 )
 
 watch([pbProjects, clientReady], () => {
@@ -410,6 +488,42 @@ function applyPreset (preset: (typeof stylePresets)[number]) {
 
 function playbackSrc (url: string): string {
   return appendPlaybackAccessToken(url.trim(), getAuthToken())
+}
+
+function applyGuideBriefToForm (brief: MusicGuideBrief) {
+  const state = musicGuideBriefToFormState(brief)
+  prompt.value = state.prompt
+  selectedModelId.value = state.modelId
+  instrumental.value = state.instrumental
+  lyrics.value = state.lyrics
+  bpm.value = state.bpm
+  saveToProject.value = state.saveToProject
+  if (state.projectId) selectedProjectId.value = state.projectId
+}
+
+function onGuideProjectId (id: string) {
+  if (id) selectedProjectId.value = id
+}
+
+function onGuideEditManual (brief: MusicGuideBrief) {
+  applyGuideBriefToForm(brief)
+  inputMode.value = 'manual'
+  toast.showToast('Brief copied to Manual — tweak anything, then generate.', 'success')
+}
+
+async function generateLyricsFromBrief (brief: MusicGuideBrief): Promise<string> {
+  const seed = musicGuideLyricsSeed(brief)
+  const res = await $fetch<{ enhanced: string }>('/api/prompt/enhance', {
+    method: 'POST',
+    body: {
+      prompt: seed,
+      context: 'lyrics',
+      fieldHint: 'song lyrics'
+    }
+  })
+  const text = (res.enhanced || '').trim()
+  if (!text) throw new Error('Lyrics generation returned empty text.')
+  return text
 }
 
 function openCreateProjectModal () {
@@ -446,6 +560,7 @@ async function submitCreateProject () {
     registerImportedProject(res.project)
     selectedProjectId.value = res.project.id
     saveToProject.value = true
+    guideRef.value?.applyProjectId(res.project.id)
     showCreateProject.value = false
     toast.showToast(`“${res.project.name}” created and selected.`, 'success')
   } catch (e: unknown) {
@@ -488,7 +603,7 @@ async function persistGeneratedTrackToProject (): Promise<void> {
   toast.showToast(`Track saved to “${savedProjectName.value || 'project'}”. Open Assets → My Music to play it.`, 'success')
 }
 
-async function onSubmit () {
+async function runGenerate (opts?: { needsGeneratedLyrics?: boolean; brief?: MusicGuideBrief }) {
   formError.value = ''
   if (!prompt.value.trim()) {
     formError.value = 'Enter a prompt describing the music you want.'
@@ -507,6 +622,16 @@ async function onSubmit () {
   trackSaved.value = false
 
   try {
+    if (opts?.needsGeneratedLyrics && opts.brief) {
+      generatingLyrics.value = true
+      try {
+        lyrics.value = await generateLyricsFromBrief(opts.brief)
+        instrumental.value = false
+      } finally {
+        generatingLyrics.value = false
+      }
+    }
+
     const out = await generateOpenRouterMusic({
       prompt: prompt.value,
       model: selectedModelId.value,
@@ -537,7 +662,21 @@ async function onSubmit () {
     uiPhase.value = 'form'
   } finally {
     generating.value = false
+    generatingLyrics.value = false
   }
+}
+
+async function onGuideGenerate (brief: MusicGuideBrief) {
+  applyGuideBriefToForm(brief)
+  const state = musicGuideBriefToFormState(brief)
+  await runGenerate({
+    needsGeneratedLyrics: state.needsGeneratedLyrics,
+    brief
+  })
+}
+
+async function onSubmit () {
+  await runGenerate()
 }
 
 async function saveTrack () {

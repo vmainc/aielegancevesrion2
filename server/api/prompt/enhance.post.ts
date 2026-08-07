@@ -31,6 +31,8 @@ const CONTEXT_HINTS: Record<string, string> = {
     'Motion/video prompt for a storyboard shot. No background music or score unless the user explicitly requests it.',
   soundscape:
     'Diegetic ambient / SFX soundscape for AI video audio. Environment and in-scene sounds only — never music, score, or soundtrack.',
+  lyrics:
+    'Original song lyrics for AI music generation: clear structure, singable lines, emotional fit to mood.',
   question:
     'Question to AI models: clear, specific, one main ask.',
   comment:
@@ -68,6 +70,21 @@ Rules:
 - Preserve the same language as the input.
 
 ${CONTEXT_HINTS.soundscape}`
+  }
+
+  if (ctxKey === 'lyrics') {
+    return `You write original song lyrics for AI music models (e.g. Lyria).
+
+Given a brief describing purpose, mood, and style, invent lyrics that fit.
+
+Rules:
+- Output ONLY the lyrics. No title unless it is part of the lyric text, no quotes, no markdown fences, no preamble.
+- Use clear section labels like [Verse], [Chorus], [Bridge] when helpful.
+- Keep lines singable and concise; avoid stage directions or production notes.
+- Match the emotional tone and language of the brief.
+- Do not copy existing copyrighted songs.
+
+${CONTEXT_HINTS.lyrics}`
   }
 
   return `You are an expert prompt engineer. Improve the user's prompt for clarity, specificity, and results—without changing their intent or language.
