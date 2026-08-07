@@ -1,5 +1,5 @@
 <template>
-  <div ref="rootEl" class="space-y-2">
+  <div ref="rootEl" class="relative space-y-2">
     <div
       class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white focus-within:border-primary"
       @click="focusInput"
@@ -35,15 +35,15 @@
         :placeholder="selectedCharacters.length ? 'Add another…' : placeholder"
         @focus="onFocus"
         @keydown="onKeydown"
-        @input="menuOpen = true"
+        @input="onInput"
       >
     </div>
 
     <div
-      v-if="menuOpen && (filteredSuggestions.length || query.trim())"
+      v-if="menuOpen"
       :id="listboxId"
       role="listbox"
-      class="rounded-lg border border-gray-200 bg-white shadow-sm max-h-56 overflow-y-auto"
+      class="absolute left-0 right-0 z-50 rounded-lg border border-gray-200 bg-white shadow-lg max-h-56 overflow-y-auto"
     >
       <button
         v-for="(c, i) in filteredSuggestions"
@@ -52,7 +52,7 @@
         role="option"
         class="w-full text-left px-3 py-2 text-sm hover:bg-gray-50 flex items-center justify-between gap-2"
         :class="i === highlightIndex ? 'bg-primary/5 text-gray-900' : 'text-gray-800'"
-        @mousedown.prevent="add(c.id)"
+        @pointerdown.prevent.stop="add(c.id)"
         @mouseenter="highlightIndex = i"
       >
         <span class="truncate font-medium">{{ c.name }}</span>
@@ -62,9 +62,17 @@
       </button>
       <p
         v-if="!filteredSuggestions.length"
-        class="px-3 py-2 text-xs text-gray-500"
+        class="px-3 py-2.5 text-xs text-gray-500"
       >
-        No cast match for “{{ query.trim() }}”.
+        <template v-if="query.trim()">
+          No cast match for “{{ query.trim() }}”.
+        </template>
+        <template v-else-if="availableCount">
+          Type a name to search {{ availableCount }} cast member{{ availableCount === 1 ? '' : 's' }}.
+        </template>
+        <template v-else>
+          No more cast to add.
+        </template>
       </p>
     </div>
 
@@ -122,6 +130,8 @@ const available = computed(() =>
   props.options.filter(o => !selectedSet.value.has(o.id))
 )
 
+const availableCount = computed(() => available.value.length)
+
 const filteredSuggestions = computed(() => {
   const q = query.value.trim().toLowerCase()
   let list = available.value
@@ -147,6 +157,10 @@ function onFocus () {
   menuOpen.value = true
 }
 
+function onInput () {
+  menuOpen.value = true
+}
+
 function add (id: string) {
   if (selectedSet.value.has(id)) return
   emit('update:modelValue', [...props.modelValue, id])
@@ -165,6 +179,16 @@ function remove (id: string) {
 
 function onKeydown (e: KeyboardEvent) {
   const list = filteredSuggestions.value
+
+  // Always stop Enter from submitting the parent video generate form.
+  if (e.key === 'Enter') {
+    e.preventDefault()
+    e.stopPropagation()
+    const pick = list[highlightIndex.value]
+    if (pick) add(pick.id)
+    return
+  }
+
   if (e.key === 'ArrowDown') {
     e.preventDefault()
     menuOpen.value = true
@@ -179,14 +203,6 @@ function onKeydown (e: KeyboardEvent) {
     highlightIndex.value = (highlightIndex.value - 1 + list.length) % list.length
     return
   }
-  if (e.key === 'Enter') {
-    const pick = list[highlightIndex.value]
-    if (pick) {
-      e.preventDefault()
-      add(pick.id)
-    }
-    return
-  }
   if (e.key === 'Escape') {
     menuOpen.value = false
     query.value = ''
@@ -197,17 +213,17 @@ function onKeydown (e: KeyboardEvent) {
   }
 }
 
-function onDocumentPointerDown (e: MouseEvent) {
+function onDocumentPointerDown (e: PointerEvent) {
   const t = e.target as Node | null
   if (!t || !rootEl.value) return
   if (!rootEl.value.contains(t)) menuOpen.value = false
 }
 
 onMounted(() => {
-  document.addEventListener('mousedown', onDocumentPointerDown)
+  document.addEventListener('pointerdown', onDocumentPointerDown)
 })
 
 onUnmounted(() => {
-  document.removeEventListener('mousedown', onDocumentPointerDown)
+  document.removeEventListener('pointerdown', onDocumentPointerDown)
 })
 </script>

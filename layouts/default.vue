@@ -7,7 +7,7 @@
         >
           <!-- Logo (left) -->
           <NuxtLink
-            :to="showAuthenticatedUi ? '/guide' : '/'"
+            to="/"
             class="flex items-center h-full shrink-0"
           >
             <img
