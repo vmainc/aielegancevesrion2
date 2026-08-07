@@ -1,5 +1,5 @@
 <template>
-  <aside class="lg:w-80 shrink-0 space-y-4">
+  <aside class="lg:w-64 shrink-0 space-y-4">
     <div class="flex items-center justify-between gap-2">
       <h2 class="text-sm font-semibold text-gray-900">Entities</h2>
       <button
@@ -103,24 +103,6 @@
                 :class="statusClass(e.status)"
               >{{ statusLabel(e.status) }}</span>
             </button>
-            <div
-              v-if="selectedId === e.id && type === 'character' && castIdForEntity(e.id)"
-              class="mx-1 mb-2 mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2"
-            >
-              <CharacterLookbook
-                :project-id="projectId"
-                :character-id="castIdForEntity(e.id)"
-                :name-hint="e.name"
-                plates-only
-                embedded
-              />
-            </div>
-            <p
-              v-else-if="selectedId === e.id && type === 'character' && !castIdForEntity(e.id)"
-              class="mx-1 mb-2 mt-1 px-2 py-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg"
-            >
-              No linked cast record — run Link Cast to Bible to manage plates here.
-            </p>
           </li>
         </ul>
       </div>
@@ -130,18 +112,14 @@
 
 <script setup lang="ts">
 import { BIBLE_ENTITY_TYPES, type BibleEntity, type BibleEntityType } from '~/types/bible-entity'
-import CharacterLookbook from '~/components/project/CharacterLookbook.vue'
 
 const props = defineProps<{
-  projectId: string
   entities: BibleEntity[]
   entitiesByType: [BibleEntityType, BibleEntity[]][]
   entityTypeLabels: Record<BibleEntityType, string>
   selectedId: string | null
   showNewEntity: boolean
   mutating: boolean
-  /** Bible entity id → creative character id (for plate lookbook). */
-  castIdByEntityId?: Record<string, string>
   newEntityForm: {
     type: BibleEntityType
     name: string
@@ -160,19 +138,13 @@ const emit = defineEmits<{
   'update:new-entity-form': [form: typeof props.newEntityForm]
 }>()
 
-/** Types the user has manually collapsed (so we don't fight auto-open). */
 const manuallyClosed = ref(new Set<BibleEntityType>())
-/** Types the user has manually expanded beyond the default. */
 const manuallyOpened = ref(new Set<BibleEntityType>())
 
 const selectedType = computed(() => {
   if (!props.selectedId) return null
   return props.entities.find((e) => e.id === props.selectedId)?.type ?? null
 })
-
-function castIdForEntity (entityId: string): string {
-  return (props.castIdByEntityId?.[entityId] || '').trim()
-}
 
 function isOpen (type: BibleEntityType): boolean {
   if (manuallyClosed.value.has(type)) return false

@@ -20,7 +20,7 @@
     >
       {{ hidePlates
         ? 'Dossier and voice — reference plates live under this character in Entities.'
-        : 'Character lookbook — plates, dossier, and voice live here in the Production Bible.' }}
+        : 'Character lookbook — plates, dossier, and voice for this Bible character.' }}
     </p>
 
     <ClientOnly>

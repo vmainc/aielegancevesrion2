@@ -175,14 +175,6 @@ const castBridgeMaps = computed(() =>
   )
 )
 
-const castIdByEntityId = computed(() => {
-  const out: Record<string, string> = {}
-  for (const [entityId, link] of castBridgeMaps.value.entityToCharacter) {
-    if (link.characterId) out[entityId] = link.characterId
-  }
-  return out
-})
-
 const entityRelatedAssets = computed(() => {
   const e = selectedEntity.value
   if (!e) return []
@@ -1086,83 +1078,78 @@ function castLinkConfidenceClass (confidence?: string): string {
           :start-edit-fact="startEditFact"
         />
 
-        <div
-          v-if="lookbookCharacterId"
-          class="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm"
-        >
-          <CharacterLookbook
-            :project-id="projectId"
-            :character-id="lookbookCharacterId"
-            :name-hint="lookbookNameHint"
-            embedded
-            hide-plates
+        <div class="flex flex-col lg:flex-row gap-6 min-h-[24rem] items-start">
+          <BibleEntityList
+            :entities="entities"
+            :entities-by-type="entitiesByType"
+            :entity-type-labels="entityTypeLabels"
+            :selected-id="selectedId"
+            :show-new-entity="showNewEntity"
+            :mutating="mutating"
+            :new-entity-form="newEntityForm"
+            :status-label="statusLabel"
+            :status-class="statusClass"
+            @toggle-new-entity="showNewEntity = !showNewEntity"
+            @create-entity="onCreateEntity"
+            @select-entity="selectEntity"
+            @update:new-entity-form="newEntityForm = $event"
           />
+
+          <div class="flex-1 min-w-0 space-y-6">
+            <CharacterLookbook
+              v-if="lookbookCharacterId"
+              :project-id="projectId"
+              :character-id="lookbookCharacterId"
+              :name-hint="lookbookNameHint"
+              embedded
+            />
+
+            <BibleEntityDetail
+              v-model:entity-form="entityForm"
+              v-model:new-fact-form="newFactForm"
+              v-model:fact-edit-form="factEditForm"
+              v-model:new-rel-form="newRelForm"
+              v-model:rel-edit-form="relEditForm"
+              v-model:asset-link-pick-id="assetLinkPickId"
+              v-model:editing-fact-id="editingFactId"
+              v-model:editing-rel-id="editingRelId"
+              :project-id="projectId"
+              :entities="entities"
+              :selected-entity="selectedEntity"
+              :selected-id="selectedId"
+              :mutating="mutating"
+              :entity-type-labels="entityTypeLabels"
+              :linked-cast="linkedCast"
+              :entity-related-assets="entityRelatedAssets"
+              :linkable-assets-for-entity="linkableAssetsForEntity"
+              :facts="facts"
+              :entity-relationships="entityRelationships"
+              :status-label="statusLabel"
+              :status-class="statusClass"
+              :cast-link-confidence-class="castLinkConfidenceClass"
+              :fact-status-label="factStatusLabel"
+              :fact-status-class="factStatusClass"
+              :on-approve-entity="onApproveEntity"
+              :on-retire-entity="onRetireEntity"
+              :on-save-entity="onSaveEntity"
+              :on-delete-entity="onDeleteEntity"
+              :on-link-asset-to-bible-entity="onLinkAssetToBibleEntity"
+              :on-create-fact="onCreateFact"
+              :on-save-fact="onSaveFact"
+              :on-save-and-approve-fact="onSaveAndApproveFact"
+              :on-delete-fact="onDeleteFact"
+              :on-approve-fact="reviewQueues.onApproveFact"
+              :on-reject-fact="reviewQueues.onRejectFact"
+              :start-edit-fact="startEditFact"
+              :on-create-relationship="onCreateRelationship"
+              :on-save-rel="onSaveRel"
+              :on-approve-rel="onApproveRel"
+              :on-retire-rel="onRetireRel"
+              :on-delete-rel="onDeleteRel"
+              :start-edit-rel="startEditRel"
+            />
+          </div>
         </div>
-
-        <div class="flex flex-col lg:flex-row gap-6 min-h-[24rem]">
-        <BibleEntityList
-          :project-id="projectId"
-          :entities="entities"
-          :entities-by-type="entitiesByType"
-          :entity-type-labels="entityTypeLabels"
-          :selected-id="selectedId"
-          :show-new-entity="showNewEntity"
-          :mutating="mutating"
-          :new-entity-form="newEntityForm"
-          :cast-id-by-entity-id="castIdByEntityId"
-          :status-label="statusLabel"
-          :status-class="statusClass"
-          @toggle-new-entity="showNewEntity = !showNewEntity"
-          @create-entity="onCreateEntity"
-          @select-entity="selectEntity"
-          @update:new-entity-form="newEntityForm = $event"
-        />
-
-        <BibleEntityDetail
-          v-model:entity-form="entityForm"
-          v-model:new-fact-form="newFactForm"
-          v-model:fact-edit-form="factEditForm"
-          v-model:new-rel-form="newRelForm"
-          v-model:rel-edit-form="relEditForm"
-          v-model:asset-link-pick-id="assetLinkPickId"
-          v-model:editing-fact-id="editingFactId"
-          v-model:editing-rel-id="editingRelId"
-          :project-id="projectId"
-          :entities="entities"
-          :selected-entity="selectedEntity"
-          :selected-id="selectedId"
-          :mutating="mutating"
-          :entity-type-labels="entityTypeLabels"
-          :linked-cast="linkedCast"
-          :entity-related-assets="entityRelatedAssets"
-          :linkable-assets-for-entity="linkableAssetsForEntity"
-          :facts="facts"
-          :entity-relationships="entityRelationships"
-          :status-label="statusLabel"
-          :status-class="statusClass"
-          :cast-link-confidence-class="castLinkConfidenceClass"
-          :fact-status-label="factStatusLabel"
-          :fact-status-class="factStatusClass"
-          :on-approve-entity="onApproveEntity"
-          :on-retire-entity="onRetireEntity"
-          :on-save-entity="onSaveEntity"
-          :on-delete-entity="onDeleteEntity"
-          :on-link-asset-to-bible-entity="onLinkAssetToBibleEntity"
-          :on-create-fact="onCreateFact"
-          :on-save-fact="onSaveFact"
-          :on-save-and-approve-fact="onSaveAndApproveFact"
-          :on-delete-fact="onDeleteFact"
-          :on-approve-fact="reviewQueues.onApproveFact"
-          :on-reject-fact="reviewQueues.onRejectFact"
-          :start-edit-fact="startEditFact"
-          :on-create-relationship="onCreateRelationship"
-          :on-save-rel="onSaveRel"
-          :on-approve-rel="onApproveRel"
-          :on-retire-rel="onRetireRel"
-          :on-delete-rel="onDeleteRel"
-          :start-edit-rel="startEditRel"
-        />
-      </div>
       </div>
     </template>
 
