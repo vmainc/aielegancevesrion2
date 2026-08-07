@@ -32,9 +32,16 @@ export function resolveOpenRouterImageSlug (modelId: string): string {
   return OPENROUTER_IMAGE_MODEL_SLUGS[modelId] ?? OPENROUTER_IMAGE_MODEL_SLUGS[DEFAULT_IMAGE_MODEL_ID]
 }
 
-/** Gemini image models on OpenRouter require text + image output modalities. */
+/** Models that emit both text and images need both modalities on OpenRouter. */
 export function openRouterImageModalities (openRouterSlug: string): Array<'image' | 'text'> {
-  if (openRouterSlug.startsWith('google/gemini')) {
+  // Gemini + OpenAI GPT Image (gpt-5-image / mini) require image+text.
+  // Flux and similar image-only models accept ["image"].
+  if (
+    openRouterSlug.startsWith('google/gemini') ||
+    openRouterSlug.startsWith('openai/gpt-') ||
+    openRouterSlug.includes('gpt-5-image') ||
+    openRouterSlug.includes('gpt-image')
+  ) {
     return ['image', 'text']
   }
   return ['image']

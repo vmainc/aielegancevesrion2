@@ -53,6 +53,8 @@ export async function openRouterGenerateImage (options: {
   const openRouterModel = resolveOpenRouterImageSlug(options.modelId)
   const modalities = openRouterImageModalities(openRouterModel)
   const apiKey = options.apiKey.trim()
+  // OpenAI GPT Image via chat completions is slower than Flux/Gemini Flash.
+  const requestTimeoutMs = openRouterModel.startsWith('openai/') ? 90_000 : 45_000
 
   let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }> = prompt
   const refList = [
@@ -91,8 +93,7 @@ export async function openRouterGenerateImage (options: {
     }>
   }>('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
-    // Keep below common proxy/gateway limits so clients get a clear API error instead of 504.
-    timeout: 45000,
+    timeout: requestTimeoutMs,
     headers: {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${apiKey}`
