@@ -30,6 +30,7 @@ import BibleReviewQueues from '~/components/project/bible/BibleReviewQueues.vue'
 import BibleEntityList from '~/components/project/bible/BibleEntityList.vue'
 import BibleEntityDetail from '~/components/project/bible/BibleEntityDetail.vue'
 import BibleAdminModals from '~/components/project/bible/BibleAdminModals.vue'
+import CharacterLookbook from '~/components/project/CharacterLookbook.vue'
 
 const props = defineProps<{
   projectId: string
@@ -38,6 +39,8 @@ const props = defineProps<{
 const { isAuthenticated } = useAuth()
 const { activeProject } = useCreativeProject()
 const toast = useToast()
+const route = useRoute()
+const router = useRouter()
 
 const PB_ID = /^[a-z0-9]{15}$/
 
@@ -123,6 +126,41 @@ const linkedCast = computed(() => {
     confidence: link.confidence,
     confidenceLabel: castBibleConfidenceLabel(link.confidence)
   }
+})
+
+function queryStringParam (key: string): string {
+  const q = route.query[key]
+  if (typeof q === 'string') return q.trim()
+  if (Array.isArray(q) && typeof q[0] === 'string') return q[0].trim()
+  return ''
+}
+
+const queryEntityId = computed(() => {
+  const id = queryStringParam('entity')
+  return PB_ID.test(id) ? id : ''
+})
+
+const queryCastId = computed(() => {
+  const id = queryStringParam('cast')
+  return PB_ID.test(id) ? id : ''
+})
+
+const queryCastName = computed(() => queryStringParam('name'))
+
+/** Cast character to show lookbook for (selected entity link, or deep-link query). */
+const lookbookCharacterId = computed(() => {
+  if (linkedCast.value?.characterId) return linkedCast.value.characterId
+  if (queryCastId.value && (!selectedEntity.value || selectedEntity.value.type === 'character')) {
+    return queryCastId.value
+  }
+  return ''
+})
+
+const lookbookNameHint = computed(() => {
+  if (linkedCast.value?.characterName) return linkedCast.value.characterName
+  if (queryCastName.value) return queryCastName.value
+  const fromList = castCharacters.value.find((c) => c.id === lookbookCharacterId.value)
+  return fromList?.name || ''
 })
 
 const showCastLinkAction = computed(
@@ -350,11 +388,58 @@ async function refreshAll () {
       selectedId.value = ents[0]?.id ?? null
     }
     applyEntityFactsFilter()
+    applyRouteDeepLink()
   } catch (e: unknown) {
     loadError.value = bible.formatApiFetchError(e) || 'Could not load Production Bible'
   } finally {
     pending.value = false
   }
+}
+
+function applyRouteDeepLink () {
+  const entityQ = queryEntityId.value
+  if (entityQ && entities.value.some((e) => e.id === entityQ)) {
+    selectedId.value = entityQ
+    showNewEntity.value = false
+    return
+  }
+  const castQ = queryCastId.value
+  if (!castQ) return
+  const link = castBridgeMaps.value.characterToEntity.get(castQ)
+  if (link?.entityId && entities.value.some((e) => e.id === link.entityId)) {
+    selectedId.value = link.entityId
+    showNewEntity.value = false
+  }
+}
+
+function syncBibleRouteQuery (entityId: string | null) {
+  if (!import.meta.client) return
+  const next: Record<string, string> = {}
+  if (entityId && PB_ID.test(entityId)) {
+    next.entity = entityId
+    const e = entities.value.find((x) => x.id === entityId)
+    if (e?.type === 'character') {
+      const link = resolveBibleEntityToCastCharacter(
+        e,
+        castCharacters.value.map((c) => ({ id: c.id, name: c.name })),
+        relationships.value
+      )
+      if (link?.characterId) {
+        next.cast = link.characterId
+        const name = castCharacters.value.find((c) => c.id === link.characterId)?.name
+        if (name) next.name = name
+      }
+    }
+  } else if (queryCastId.value) {
+    next.cast = queryCastId.value
+    if (queryCastName.value) next.name = queryCastName.value
+  }
+  const same =
+    String(route.query.entity || '') === (next.entity || '') &&
+    String(route.query.cast || '') === (next.cast || '') &&
+    String(route.query.name || '') === (next.name || '')
+  if (same) return
+  void router.replace({ query: next })
 }
 
 async function refreshFacts () {
@@ -381,9 +466,15 @@ watch(selectedId, () => {
   void refreshFacts()
 })
 
+watch([queryEntityId, queryCastId], () => {
+  if (pending.value || !entities.value.length) return
+  applyRouteDeepLink()
+})
+
 function selectEntity (id: string) {
   selectedId.value = id
   showNewEntity.value = false
+  syncBibleRouteQuery(id)
 }
 
 async function onCreateEntity () {
@@ -986,6 +1077,18 @@ function castLinkConfidenceClass (confidence?: string): string {
           :open-continuity-finding="reviewQueues.openContinuityFinding"
           :start-edit-fact="startEditFact"
         />
+
+        <div
+          v-if="lookbookCharacterId"
+          class="rounded-xl border border-gray-200 bg-white p-4 sm:p-5 shadow-sm"
+        >
+          <CharacterLookbook
+            :project-id="projectId"
+            :character-id="lookbookCharacterId"
+            :name-hint="lookbookNameHint"
+            embedded
+          />
+        </div>
 
         <div class="flex flex-col lg:flex-row gap-6 min-h-[24rem]">
         <BibleEntityList

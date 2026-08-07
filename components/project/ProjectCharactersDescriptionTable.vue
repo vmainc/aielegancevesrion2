@@ -332,6 +332,7 @@
 
 <script setup lang="ts">
 import { visualBriefForCharacterCreator } from '~/lib/character-visual-description'
+import { projectBibleCastPath } from '~/lib/project-bible-paths'
 import type { CreativeCharacter } from '~/types/creative-project'
 
 const props = withDefaults(
@@ -425,8 +426,7 @@ function characterProfileTo (c: CreativeCharacter): string {
   const pid = (props.projectIdForCreatorLink || '').trim()
   const cid = (c.id || '').trim()
   if (!pid || !cid) return ''
-  const q = c.name ? `?name=${encodeURIComponent(c.name)}` : ''
-  return `/projects/${pid}/cast/${cid}${q}`
+  return projectBibleCastPath(pid, cid, c.name)
 }
 
 function onRowClick (c: CreativeCharacter, ev: MouseEvent) {

@@ -272,6 +272,7 @@
 import { buildVideoSceneGroups } from '~/lib/project-scene-groups'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { visualBriefForCharacterCreator } from '~/lib/character-visual-description'
+import { projectBibleCastPath } from '~/lib/project-bible-paths'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
 import { groupProjectAssetsByProject, sortProjectAssetsWithinProjectByKind } from '~/lib/project-asset-sort'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
@@ -476,9 +477,7 @@ function characterProfileTo (a: ProjectAsset): string {
   if (!PB_ID.test(pid)) return ''
   const m = characterMetaFromAsset(a)
   if (!m.id || !PB_ID.test(m.id)) return ''
-  // Pass the name so the profile can self-heal if the id is stale (deleted/recreated character).
-  const q = m.name ? `?name=${encodeURIComponent(m.name)}` : ''
-  return `/projects/${pid}/cast/${m.id}${q}`
+  return projectBibleCastPath(pid, m.id, m.name)
 }
 
 function characterCreatorTo (a: ProjectAsset) {

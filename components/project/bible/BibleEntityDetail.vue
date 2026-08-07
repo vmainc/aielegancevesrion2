@@ -63,14 +63,11 @@
           v-if="linkedCast"
           class="mb-4 rounded-lg border border-sky-200 bg-sky-50/80 px-3 py-2.5 text-sm"
         >
-          <p class="text-xs font-semibold text-sky-900 uppercase tracking-wide mb-1">Linked cast record</p>
+          <p class="text-xs font-semibold text-sky-900 uppercase tracking-wide mb-1">
+            Character lookbook
+          </p>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <NuxtLink
-              :to="`/projects/${projectId}/cast/${linkedCast.characterId}`"
-              class="font-medium text-sky-900 hover:underline"
-            >
-              {{ linkedCast.characterName }}
-            </NuxtLink>
+            <span class="font-medium text-sky-900">{{ linkedCast.characterName }}</span>
             <span
               class="text-[10px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded"
               :class="castLinkConfidenceClass(linkedCast.confidence)"
@@ -78,6 +75,9 @@
               {{ linkedCast.confidenceLabel }}
             </span>
           </div>
+          <p class="text-[11px] text-sky-800/80 mt-1">
+            Plates, dossier, and voice clips are edited in the lookbook above.
+          </p>
         </div>
         <section
           v-if="selectedEntity"

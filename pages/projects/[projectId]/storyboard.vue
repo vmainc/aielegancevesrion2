@@ -379,6 +379,7 @@ import {
 } from '~/lib/character-creator-models'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { canonicalizeShotCastNames } from '~/lib/cast-name-convention'
+import { projectBibleCastPath } from '~/lib/project-bible-paths'
 import {
   collectCharacterPortraitUrls,
   findCharactersInShot,
@@ -567,8 +568,7 @@ function shotCharacterMatches (shot: CreativeShot) {
 function characterProfileTo (c: ProjectCharacterRef): string {
   const pid = projectId.value
   if (!pid || !c.id) return '#'
-  const q = c.name ? `?name=${encodeURIComponent(c.name)}` : ''
-  return `/projects/${pid}/cast/${c.id}${q}`
+  return projectBibleCastPath(pid, c.id, c.name)
 }
 
 function applyCastNameConventionToShots (list: CreativeShot[]): CreativeShot[] {
@@ -857,7 +857,7 @@ async function generateFrame (
     const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim() && !(c.plateUrls || []).length)
     if (missingPortraits.length) {
       toast.showToast(
-        'No cast plates attached — add reference plates on the character lookbook (or Assets → Characters) for consistent looks.',
+        'No cast plates attached — add reference plates in the Production Bible character lookbook (or Assets → Characters) for consistent looks.',
         'info'
       )
     }
