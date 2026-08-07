@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-5xl">
     <p class="text-sm text-gray-500 mb-6">
-      Jump to any workflow step.
+      Your project dashboard — jump to any workflow step.
     </p>
 
     <div

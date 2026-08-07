@@ -202,7 +202,7 @@
             </button>
             <NuxtLink
               v-if="slotByModel[m.id]?.savedProjectId"
-              :to="`/projects/${slotByModel[m.id]!.savedProjectId}/guide`"
+              :to="`/projects/${slotByModel[m.id]!.savedProjectId}/home`"
               class="px-3 py-2 text-sm font-medium border border-gray-300 text-gray-800 hover:bg-gray-50 rounded-lg transition-colors text-center"
             >
               Use in Project

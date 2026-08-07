@@ -47,33 +47,15 @@
       <div class="p-4 border-b border-gray-200">
         <NuxtLink
           to="/projects"
-          class="text-xs text-gray-500 hover:text-primary transition-colors mb-3 inline-flex items-center gap-1"
+          class="text-xs text-gray-500 hover:text-primary transition-colors inline-flex items-center gap-1"
         >
           <span aria-hidden="true">←</span> All projects
         </NuxtLink>
-        <nav class="space-y-0.5 mb-4">
-          <NuxtLink
-            v-for="item in primarySections"
-            :key="item.path"
-            :to="`/projects/${projectId}/${item.path}`"
-            class="block px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors"
-            :class="isActive(item.path)
-              ? 'bg-primary/15 text-primary border border-primary/30'
-              : 'text-gray-900 hover:bg-gray-100'"
-          >
-            {{ item.label }}
-          </NuxtLink>
-        </nav>
-        <p class="text-[11px] uppercase tracking-wide text-gray-500 mb-1">Workflow</p>
-        <ol class="space-y-1 text-xs text-gray-500">
-          <li v-for="(item, i) in sections" :key="item.path">
-            {{ i + 1 }}. {{ item.label }}
-          </li>
-        </ol>
       </div>
       <nav class="flex-1 p-3 space-y-0.5">
+        <div class="px-3 pb-1 text-[11px] uppercase tracking-wide text-gray-500">Workflow</div>
         <NuxtLink
-          v-for="item in workflowSections"
+          v-for="(item, i) in sections"
           :key="item.path"
           :to="`/projects/${projectId}/${item.path}`"
           class="block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
@@ -81,7 +63,7 @@
             ? 'bg-primary/15 text-primary border border-primary/30'
             : 'text-gray-700 hover:bg-gray-100 hover:text-gray-900'"
         >
-          {{ item.label }}
+          {{ i + 1 }}. {{ item.label }}
         </NuxtLink>
         <template v-if="toolSections.length">
           <div class="mt-4 px-3 text-[11px] uppercase tracking-wide text-gray-500">Tools</div>
@@ -172,13 +154,12 @@ watch(
 )
 
 const sectionLabels: Record<string, string> = {
-  home: 'Steps',
+  home: 'Dashboard',
   overview: 'Story',
   director: 'Director',
   characters: 'Characters',
   scenes: 'Scenes',
   storyboard: 'Storyboard',
-  guide: 'Guide',
   bible: 'Production Bible',
   review: 'Review Dashboard',
   adapt: 'Adapt to Film'
@@ -189,10 +170,6 @@ const toolSections: Array<{ path: string; label: string }> = [
   { path: 'bible', label: 'Production Bible' }
 ]
 
-const primarySections: Array<{ path: string; label: string }> = [
-  { path: 'guide', label: 'Guide' }
-]
-
 const sections = computed(() => {
   const paths = workflowPathsForProject(props.project)
   return paths.map(path => ({
@@ -201,9 +178,7 @@ const sections = computed(() => {
   }))
 })
 
-const workflowSections = sections
 const allSections = computed(() => [
-  ...primarySections,
   ...sections.value,
   ...toolSections
 ])
@@ -213,7 +188,11 @@ const isActive = (path: string) => activeSectionPath.value === path
 const activeSectionPath = computed(() => {
   const tail = route.path.split('/').pop() || ''
   if (allSections.value.some(s => s.path === tail)) return tail
-  return 'guide'
+  // Character detail and other nested routes still highlight Characters
+  if (route.path.includes('/characters')) return 'characters'
+  // Project Guide page remains reachable (floating companion) but is not in the sidebar
+  if (tail === 'guide') return ''
+  return 'home'
 })
 
 function onMobileSectionChange (ev: Event) {
@@ -223,13 +202,11 @@ function onMobileSectionChange (ev: Event) {
 }
 
 const sectionSubtitle = computed(() => {
-  if (activeSectionPath.value === 'guide') return 'Chat with your project'
   const found = allSections.value.find(s => s.path === activeSectionPath.value)
   return found ? `${found.label} · project workspace` : 'Project workspace'
 })
 
 function mobileOptionLabel (item: { path: string; label: string }, index: number): string {
-  if (primarySections.some(p => p.path === item.path)) return item.label
   if (toolSections.some(t => t.path === item.path)) return item.label
   const workflowIndex = sections.value.findIndex(s => s.path === item.path)
   if (workflowIndex >= 0) return `${workflowIndex + 1}. ${item.label}`

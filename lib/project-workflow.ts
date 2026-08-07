@@ -104,13 +104,10 @@ export function projectCreateLandingPath (
   mode: ProjectWorkflowMode
 ): string {
   if (mode === 'adapt') return `/projects/${projectId}/adapt`
-  if (mode === 'import' || mode === 'idea' || mode === 'generate') {
-    return `/projects/${projectId}/overview`
-  }
-  return `/projects/${projectId}/guide`
+  return `/projects/${projectId}/home`
 }
 
 /** Where to send the user when opening an existing project. */
 export function projectOpenLandingPath (projectId: string): string {
-  return `/projects/${projectId}/guide`
+  return `/projects/${projectId}/home`
 }

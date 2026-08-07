@@ -163,8 +163,8 @@ export const STUDIO_GUIDE_PROJECT_DESTINATIONS: Array<{
   },
   {
     id: 'project-steps',
-    label: 'Steps',
-    description: 'Project overview of workflow steps.',
+    label: 'Dashboard',
+    description: 'Project dashboard — jump to any workflow step.',
     suffix: '/home'
   },
   {

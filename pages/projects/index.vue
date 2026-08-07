@@ -35,7 +35,7 @@
     <ul v-else class="grid gap-4 sm:grid-cols-2">
       <li v-for="p in projects" :key="p.id">
         <NuxtLink
-          :to="`/projects/${p.id}/guide`"
+          :to="`/projects/${p.id}/home`"
           class="block rounded-xl border border-gray-200 bg-white shadow-sm hover:border-primary/50 hover:bg-gray-50 transition-all p-5 h-full"
         >
           <div class="flex items-start justify-between gap-3 mb-3">

@@ -456,7 +456,7 @@ function projectOverviewPath (a: ProjectAsset): string {
   if (props.kind === 'script') {
     return `/projects/${a.projectId}/overview`
   }
-  return `/projects/${a.projectId}/guide`
+  return `/projects/${a.projectId}/home`
 }
 
 function scriptSourceLine (a: ProjectAsset): string {
@@ -584,7 +584,7 @@ const libraryKindProjectGroups = computed(() => {
 function projectHubStepTo (projectId: string): string {
   if (props.kind === 'storyboard') return `/projects/${projectId}/storyboard`
   if (props.kind === 'script') return `/projects/${projectId}/overview`
-  return `/projects/${projectId}/guide`
+  return `/projects/${projectId}/home`
 }
 
 async function fetchItems () {
