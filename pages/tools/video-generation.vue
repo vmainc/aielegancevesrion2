@@ -265,9 +265,20 @@
                 v-model.number="durationSeconds"
                 class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
               >
-                <option :value="5">5 seconds</option>
-                <option :value="10">10 seconds</option>
+                <option
+                  v-for="sec in durationOptions"
+                  :key="sec"
+                  :value="sec"
+                >
+                  {{ sec }} seconds
+                </option>
               </select>
+              <p
+                v-if="durationHint"
+                class="mt-1.5 text-xs text-gray-500"
+              >
+                {{ durationHint }}
+              </p>
             </div>
           </div>
 
@@ -768,7 +779,9 @@ import {
   parseVideoGenerationAspectRatio,
   parseVideoGenerationDurationSeconds,
   readVideoGenerationPrefs,
-  writeVideoGenerationPrefs
+  videoToolDurationOptions,
+  writeVideoGenerationPrefs,
+  type VideoToolClipSeconds
 } from '~/lib/video-generation-prefs'
 import {
   collectCharacterPortraitUrls,
@@ -865,7 +878,7 @@ const endFrameUrl = ref<string | null>(
 const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(
   defaultAspectRatioFromPrefs(boot?.aspectRatio)
 )
-const durationSeconds = ref<5 | 10>(
+const durationSeconds = ref<VideoToolClipSeconds>(
   defaultDurationFromPrefs(boot?.durationSeconds)
 )
 const includeSpokenDialogue = ref(false)
@@ -1246,6 +1259,32 @@ const selectedModelIdsList = computed(() => {
   return [...new Set(ids)]
 })
 
+const durationOptions = computed(() => {
+  const selected = models.value.filter(m => selectedModelIdsList.value.includes(m.id))
+  return videoToolDurationOptions(selected.length ? selected : models.value)
+})
+
+const durationHint = computed(() => {
+  if (!durationOptions.value.includes(15)) {
+    return '15s needs Seedance 2.0 or 2.0 Fast (or another model that lists 15s).'
+  }
+  if (durationSeconds.value === 15) {
+    return '15s is supported by Seedance 2.0 / 2.0 Fast. Other selected models snap to their closest length.'
+  }
+  return ''
+})
+
+watch(
+  durationOptions,
+  (opts) => {
+    if (!opts.includes(durationSeconds.value as VideoToolClipSeconds)) {
+      const next = opts.includes(10) ? 10 : opts[0] || 5
+      durationSeconds.value = next
+    }
+  },
+  { immediate: true }
+)
+
 const primaryModel = computed(() =>
   models.value.find(m => m.id === primaryModelId.value)
 )
@@ -1442,8 +1481,9 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
     endFrameUrl.value = null
   }
   if (p.aspectRatio) aspectRatio.value = p.aspectRatio
-  if (typeof p.durationSeconds === 'number' && (p.durationSeconds === 5 || p.durationSeconds === 10)) {
-    durationSeconds.value = p.durationSeconds
+  if (typeof p.durationSeconds === 'number') {
+    const dur = parseVideoGenerationDurationSeconds(p.durationSeconds)
+    if (dur) durationSeconds.value = dur
   }
   if (p.saveToProject !== undefined) saveToProject.value = p.saveToProject
   if (p.projectId && PB_ID.test(p.projectId)) {

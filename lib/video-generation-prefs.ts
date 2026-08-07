@@ -2,6 +2,10 @@ const STORAGE_KEY = 'video_generation_prefs_v1'
 
 export type VideoGenerationAspectRatio = '16:9' | '9:16' | '1:1'
 
+/** Common clip lengths offered in Video tools (per-model snap still applies). */
+export const VIDEO_TOOL_CLIP_SECONDS = [5, 10, 15] as const
+export type VideoToolClipSeconds = (typeof VIDEO_TOOL_CLIP_SECONDS)[number]
+
 export type VideoGenerationPrefs = {
   primaryModelId?: string
   compareModelIds?: string[]
@@ -17,9 +21,9 @@ export function parseVideoGenerationAspectRatio (raw: unknown): VideoGenerationA
   return undefined
 }
 
-export function parseVideoGenerationDurationSeconds (raw: unknown): 5 | 10 | undefined {
+export function parseVideoGenerationDurationSeconds (raw: unknown): VideoToolClipSeconds | undefined {
   const n = typeof raw === 'number' ? raw : Number(raw)
-  if (n === 5 || n === 10) return n
+  if (n === 5 || n === 10 || n === 15) return n
   return undefined
 }
 
@@ -74,7 +78,7 @@ export function defaultAspectRatioFromPrefs (
   return '16:9'
 }
 
-export function defaultDurationFromPrefs (bootDuration?: number): 5 | 10 {
+export function defaultDurationFromPrefs (bootDuration?: number): VideoToolClipSeconds {
   const fromBoot = parseVideoGenerationDurationSeconds(bootDuration)
   if (fromBoot) return fromBoot
   if (typeof localStorage !== 'undefined') {
@@ -82,4 +86,20 @@ export function defaultDurationFromPrefs (bootDuration?: number): 5 | 10 {
     if (fromPrefs) return fromPrefs
   }
   return 5
+}
+
+/**
+ * Clip-length choices for the Video tools picker.
+ * When models report `supported_durations`, only show 5 / 10 / 15 that appear in the union.
+ */
+export function videoToolDurationOptions (
+  selectedModels: Array<{ supportedDurations?: number[] }>
+): VideoToolClipSeconds[] {
+  const sets = selectedModels
+    .map(m => m.supportedDurations)
+    .filter((d): d is number[] => Array.isArray(d) && d.length > 0)
+  if (!sets.length) return [...VIDEO_TOOL_CLIP_SECONDS]
+  const union = new Set(sets.flatMap(s => s.map(n => Math.floor(Number(n)))))
+  const opts = VIDEO_TOOL_CLIP_SECONDS.filter(s => union.has(s))
+  return opts.length ? opts : [5, 10]
 }

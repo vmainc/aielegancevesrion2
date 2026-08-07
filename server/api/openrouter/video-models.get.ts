@@ -14,11 +14,30 @@ function isExcludedOpenRouterVideoModel (id: string): boolean {
 /** Matches OpenRouter’s directory when the API is unavailable or key is missing. */
 const FALLBACK_VIDEO_MODELS = [
   {
-    id: 'bytedance/seedance-1.5-pro',
-    name: 'ByteDance: Seedance 1.5 Pro',
-    description: 'Experimental video generation (API-only, alpha).',
+    id: 'bytedance/seedance-2.0',
+    name: 'ByteDance: Seedance 2.0',
+    description: 'Text/image-to-video with start/end frames; clips up to 15s.',
     provider: 'ByteDance',
     generateAudio: true,
+    supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    supportedFrameImages: ['first_frame', 'last_frame'] as const,
+  },
+  {
+    id: 'bytedance/seedance-2.0-fast',
+    name: 'ByteDance: Seedance 2.0 Fast',
+    description: 'Faster Seedance 2.0; clips up to 15s.',
+    provider: 'ByteDance',
+    generateAudio: true,
+    supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    supportedFrameImages: ['first_frame', 'last_frame'] as const,
+  },
+  {
+    id: 'bytedance/seedance-1-5-pro',
+    name: 'ByteDance: Seedance 1.5 Pro',
+    description: 'Experimental video generation (API-only, alpha). Clips up to 12s.',
+    provider: 'ByteDance',
+    generateAudio: true,
+    supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12],
     supportedFrameImages: ['first_frame', 'last_frame'] as const,
   },
   {
