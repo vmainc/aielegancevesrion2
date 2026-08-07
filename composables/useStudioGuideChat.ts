@@ -296,7 +296,11 @@ export function useStudioGuideChat () {
     }
   }
 
+  const projectsWatchAttached = useState('studio-guide-projects-watch', () => false)
+
   function ensureProjectsLoaded () {
+    if (projectsWatchAttached.value) return
+    projectsWatchAttached.value = true
     watch(
       clientReady,
       (ready) => {

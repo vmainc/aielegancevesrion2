@@ -20,6 +20,8 @@
 </template>
 
 <script setup lang="ts">
+import ProjectGuideChatPane from '~/components/guide/ProjectGuideChatPane.vue'
+
 const { activeProjectId } = useCreativeProject()
 const projectId = activeProjectId
 

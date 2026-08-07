@@ -16,5 +16,7 @@
 </template>
 
 <script setup lang="ts">
+import StudioGuideChatPane from '~/components/guide/StudioGuideChatPane.vue'
+
 useHead({ title: 'Home' })
 </script>

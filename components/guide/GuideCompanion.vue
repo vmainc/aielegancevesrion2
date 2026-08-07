@@ -4,6 +4,8 @@ import {
   resolveGuideCompanionMode,
   type GuideCompanionMode
 } from '~/lib/guide-companion'
+import StudioGuideChatPane from '~/components/guide/StudioGuideChatPane.vue'
+import ProjectGuideChatPane from '~/components/guide/ProjectGuideChatPane.vue'
 
 const { showAuthenticatedUi } = useAuth()
 const { projects } = useCreativeProject()
