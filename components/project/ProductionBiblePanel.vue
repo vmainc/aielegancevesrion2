@@ -175,6 +175,14 @@ const castBridgeMaps = computed(() =>
   )
 )
 
+const castIdByEntityId = computed(() => {
+  const out: Record<string, string> = {}
+  for (const [entityId, link] of castBridgeMaps.value.entityToCharacter) {
+    if (link.characterId) out[entityId] = link.characterId
+  }
+  return out
+})
+
 const entityRelatedAssets = computed(() => {
   const e = selectedEntity.value
   if (!e) return []
@@ -1087,11 +1095,13 @@ function castLinkConfidenceClass (confidence?: string): string {
             :character-id="lookbookCharacterId"
             :name-hint="lookbookNameHint"
             embedded
+            hide-plates
           />
         </div>
 
         <div class="flex flex-col lg:flex-row gap-6 min-h-[24rem]">
         <BibleEntityList
+          :project-id="projectId"
           :entities="entities"
           :entities-by-type="entitiesByType"
           :entity-type-labels="entityTypeLabels"
@@ -1099,6 +1109,7 @@ function castLinkConfidenceClass (confidence?: string): string {
           :show-new-entity="showNewEntity"
           :mutating="mutating"
           :new-entity-form="newEntityForm"
+          :cast-id-by-entity-id="castIdByEntityId"
           :status-label="statusLabel"
           :status-class="statusClass"
           @toggle-new-entity="showNewEntity = !showNewEntity"

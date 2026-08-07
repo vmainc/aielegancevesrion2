@@ -1,6 +1,12 @@
 <template>
-  <div class="max-w-6xl character-lookbook" :class="{ 'character-lookbook--embedded': embedded }">
-    <nav v-if="!embedded" class="text-sm text-gray-500 mb-4 flex flex-wrap items-center gap-2">
+  <div
+    class="character-lookbook"
+    :class="{
+      'max-w-6xl character-lookbook--embedded': embedded && !platesOnly,
+      'character-lookbook--plates-only': platesOnly
+    }"
+  >
+    <nav v-if="!embedded && !platesOnly" class="text-sm text-gray-500 mb-4 flex flex-wrap items-center gap-2">
       <NuxtLink to="/assets/characters" class="hover:text-primary">Assets / Characters</NuxtLink>
       <span aria-hidden="true">/</span>
       <NuxtLink :to="`/projects/${projectId}/characters`" class="hover:text-primary">Characters step</NuxtLink>
@@ -9,21 +15,38 @@
     </nav>
 
     <p
-      v-if="embedded"
+      v-if="embedded && !platesOnly"
       class="text-xs text-gray-500 mb-3"
     >
-      Character lookbook — plates, dossier, and voice live here in the Production Bible.
+      {{ hidePlates
+        ? 'Dossier and voice — reference plates live under this character in Entities.'
+        : 'Character lookbook — plates, dossier, and voice live here in the Production Bible.' }}
     </p>
 
     <ClientOnly>
       <template #fallback>
-        <div class="rounded-xl border border-primary/20 bg-primary/5 px-6 py-10">
-          <FilmReelLoader size="md" label="Loading character" sub-label="Fetching profile, images, and voice…" />
+        <div
+          class="rounded-xl border border-primary/20 bg-primary/5"
+          :class="platesOnly ? 'px-2 py-4' : 'px-6 py-10'"
+        >
+          <FilmReelLoader
+            :size="platesOnly ? 'sm' : 'md'"
+            label="Loading"
+            :sub-label="platesOnly ? 'Plates…' : 'Fetching profile, images, and voice…'"
+          />
         </div>
       </template>
 
-      <div v-if="loading" class="rounded-xl border border-primary/20 bg-primary/5 px-6 py-10">
-        <FilmReelLoader size="md" label="Loading character" sub-label="Fetching profile, images, and voice…" />
+      <div
+        v-if="loading"
+        class="rounded-xl border border-primary/20 bg-primary/5"
+        :class="platesOnly ? 'px-2 py-4' : 'px-6 py-10'"
+      >
+        <FilmReelLoader
+          :size="platesOnly ? 'sm' : 'md'"
+          label="Loading"
+          :sub-label="platesOnly ? 'Plates…' : 'Fetching profile, images, and voice…'"
+        />
       </div>
 
       <div
@@ -34,7 +57,99 @@
       </div>
 
       <template v-else-if="character">
-        <!-- Character lookbook sheet -->
+        <!-- Compact plates for Entities accordion -->
+        <section
+          v-if="platesOnly"
+          class="space-y-2"
+          aria-label="Reference plates"
+        >
+          <div class="flex items-center justify-between gap-2">
+            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+              Plates
+            </p>
+            <label
+              class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded border border-gray-300 text-gray-700 hover:border-primary hover:text-primary cursor-pointer transition-colors"
+              :class="uploadingImage ? 'opacity-60 pointer-events-none' : ''"
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif,image/*"
+                multiple
+                class="sr-only"
+                :disabled="uploadingImage"
+                @change="onImageFilesPicked"
+              >
+              {{ uploadingImage ? uploadProgressLabel : (galleryImages.length ? 'Add' : 'Upload') }}
+            </label>
+          </div>
+
+          <div
+            v-if="galleryImages.length"
+            class="grid grid-cols-2 gap-1.5"
+          >
+            <figure
+              v-for="img in galleryImages"
+              :key="img.assetId"
+              class="group relative rounded-md overflow-hidden"
+              :class="img.featured ? 'ring-2 ring-primary' : 'ring-1 ring-gray-200'"
+            >
+              <div class="relative aspect-[3/4] bg-gray-100">
+                <img
+                  :src="img.url"
+                  :alt="form.name"
+                  class="absolute inset-0 w-full h-full object-cover"
+                >
+                <div class="absolute inset-x-0 bottom-0 p-1 bg-gradient-to-t from-black/75 to-transparent">
+                  <input
+                    :value="expressionDraft[img.assetId] ?? img.expressionLabel"
+                    type="text"
+                    maxlength="80"
+                    placeholder="Label"
+                    class="w-full bg-black/40 border border-white/20 rounded px-1 py-0.5 text-[9px] tracking-wide uppercase text-white placeholder:text-white/50 focus:border-primary focus:outline-none"
+                    :disabled="savingExpressionAssetId === img.assetId"
+                    @input="onExpressionInput(img.assetId, ($event.target as HTMLInputElement).value)"
+                    @blur="saveExpressionLabel(img)"
+                    @keydown.enter="($event.target as HTMLInputElement).blur()"
+                  >
+                  <div class="flex gap-0.5 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button
+                      v-if="!img.featured"
+                      type="button"
+                      class="flex-1 px-0.5 py-0.5 text-[8px] font-semibold uppercase rounded bg-white/95 text-gray-900"
+                      :disabled="featuringAssetId === img.assetId"
+                      @click="setFeatured(img)"
+                    >
+                      Feature
+                    </button>
+                    <button
+                      type="button"
+                      class="flex-1 px-0.5 py-0.5 text-[8px] font-semibold uppercase rounded bg-red-700/90 text-white"
+                      :disabled="deletingAssetId === img.assetId"
+                      @click="deleteImage(img)"
+                    >
+                      Del
+                    </button>
+                  </div>
+                </div>
+                <span
+                  v-if="img.featured"
+                  class="absolute top-1 left-1 px-1 py-0.5 text-[8px] font-bold uppercase rounded bg-primary text-gray-950"
+                >
+                  Feat
+                </span>
+              </div>
+            </figure>
+          </div>
+          <p
+            v-else
+            class="text-[11px] text-gray-500 py-4 text-center border border-dashed border-gray-200 rounded-lg"
+          >
+            Upload front / 3⁄4 / profile plates for this character.
+          </p>
+        </section>
+
+        <!-- Full character lookbook sheet -->
+        <template v-else>
         <section
           class="lookbook-sheet relative overflow-hidden rounded-2xl border border-stone-800/80 shadow-2xl"
           aria-label="Character lookbook"
@@ -91,7 +206,10 @@
           <!-- Main lookbook grid -->
           <div class="relative z-10 grid lg:grid-cols-12 gap-0 lg:gap-0">
             <!-- Left: bio + hero portrait -->
-            <div class="lg:col-span-3 px-5 sm:px-6 py-6 border-b lg:border-b-0 lg:border-r border-white/10 space-y-5">
+            <div
+              class="px-5 sm:px-6 py-6 border-b lg:border-b-0 lg:border-r border-white/10 space-y-5"
+              :class="hidePlates ? 'lg:col-span-5' : 'lg:col-span-3'"
+            >
               <dl class="space-y-2.5 text-sm">
                 <div>
                   <dt class="lookbook-label">Name</dt>
@@ -136,7 +254,10 @@
             </div>
 
             <!-- Center: turnaround / expression strip -->
-            <div class="lg:col-span-6 px-4 sm:px-5 py-6 border-b lg:border-b-0 lg:border-r border-white/10">
+            <div
+              v-if="!hidePlates"
+              class="lg:col-span-6 px-4 sm:px-5 py-6 border-b lg:border-b-0 lg:border-r border-white/10"
+            >
               <div class="flex items-center justify-between gap-2 mb-3">
                 <h2 class="lookbook-label !mb-0">Reference plates</h2>
                 <label
@@ -227,7 +348,10 @@
             </div>
 
             <!-- Right: wardrobe + signature -->
-            <div class="lg:col-span-3 px-5 sm:px-6 py-6 space-y-5">
+            <div
+              class="px-5 sm:px-6 py-6 space-y-5"
+              :class="hidePlates ? 'lg:col-span-7' : 'lg:col-span-3'"
+            >
               <div>
                 <h2 class="lookbook-label">Wardrobe &amp; look</h2>
                 <p
@@ -475,6 +599,7 @@
             No clips yet. Upload a short MP3/WAV or a ~10s MP4/WebM.
           </p>
         </section>
+        </template>
       </template>
     </ClientOnly>
   </div>
@@ -506,10 +631,16 @@ const props = withDefaults(
     nameHint?: string
     /** When true, omit breadcrumbs and bible deep-link chrome (shown inside Production Bible). */
     embedded?: boolean
+    /** Compact plate gallery only (for Entities accordion). */
+    platesOnly?: boolean
+    /** Hide the reference-plates column (plates live in the accordion). */
+    hidePlates?: boolean
   }>(),
   {
     nameHint: '',
-    embedded: false
+    embedded: false,
+    platesOnly: false,
+    hidePlates: false
   }
 )
 

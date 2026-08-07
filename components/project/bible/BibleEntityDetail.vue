@@ -76,7 +76,7 @@
             </span>
           </div>
           <p class="text-[11px] text-sky-800/80 mt-1">
-            Plates, dossier, and voice clips are edited in the lookbook above.
+            Reference plates are under this character in Entities. Dossier and voice are in the lookbook above.
           </p>
         </div>
         <section

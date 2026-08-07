@@ -1,5 +1,5 @@
 <template>
-  <aside class="lg:w-64 shrink-0 space-y-4">
+  <aside class="lg:w-80 shrink-0 space-y-4">
     <div class="flex items-center justify-between gap-2">
       <h2 class="text-sm font-semibold text-gray-900">Entities</h2>
       <button
@@ -56,12 +56,37 @@
       <p>Add characters, locations, props, and other universe objects. They stay separate from the cast table until a future migration.</p>
     </div>
 
-    <div v-else class="space-y-4">
-      <div v-for="[type, list] in entitiesByType" :key="type">
-        <p class="text-[11px] uppercase tracking-wide text-gray-500 mb-1">
-          {{ entityTypeLabels[type] }}
-        </p>
-        <ul class="space-y-0.5">
+    <div v-else class="rounded-lg border border-gray-200 bg-white overflow-hidden divide-y divide-gray-100">
+      <div
+        v-for="[type, list] in entitiesByType"
+        :key="type"
+      >
+        <button
+          type="button"
+          class="w-full flex items-center justify-between gap-2 px-3 py-2.5 text-left hover:bg-gray-50 transition-colors"
+          :aria-expanded="isOpen(type)"
+          @click="toggleType(type)"
+        >
+          <span class="min-w-0 flex items-center gap-2">
+            <span class="text-xs font-semibold text-gray-900 truncate">
+              {{ entityTypeLabels[type] }}
+            </span>
+            <span class="shrink-0 text-[10px] font-medium tabular-nums text-gray-500 bg-gray-100 px-1.5 py-0.5 rounded-full">
+              {{ list.length }}
+            </span>
+          </span>
+          <span
+            class="shrink-0 text-gray-400 text-xs leading-none transition-transform duration-200"
+            :class="isOpen(type) ? 'rotate-180' : ''"
+            aria-hidden="true"
+          >
+            ▾
+          </span>
+        </button>
+        <ul
+          v-show="isOpen(type)"
+          class="pb-1.5 px-1 space-y-0.5"
+        >
           <li v-for="e in list" :key="e.id">
             <button
               type="button"
@@ -78,6 +103,24 @@
                 :class="statusClass(e.status)"
               >{{ statusLabel(e.status) }}</span>
             </button>
+            <div
+              v-if="selectedId === e.id && type === 'character' && castIdForEntity(e.id)"
+              class="mx-1 mb-2 mt-1 rounded-lg border border-gray-200 bg-gray-50 p-2"
+            >
+              <CharacterLookbook
+                :project-id="projectId"
+                :character-id="castIdForEntity(e.id)"
+                :name-hint="e.name"
+                plates-only
+                embedded
+              />
+            </div>
+            <p
+              v-else-if="selectedId === e.id && type === 'character' && !castIdForEntity(e.id)"
+              class="mx-1 mb-2 mt-1 px-2 py-2 text-[11px] text-amber-800 bg-amber-50 border border-amber-100 rounded-lg"
+            >
+              No linked cast record — run Link Cast to Bible to manage plates here.
+            </p>
           </li>
         </ul>
       </div>
@@ -87,14 +130,18 @@
 
 <script setup lang="ts">
 import { BIBLE_ENTITY_TYPES, type BibleEntity, type BibleEntityType } from '~/types/bible-entity'
+import CharacterLookbook from '~/components/project/CharacterLookbook.vue'
 
 const props = defineProps<{
+  projectId: string
   entities: BibleEntity[]
   entitiesByType: [BibleEntityType, BibleEntity[]][]
   entityTypeLabels: Record<BibleEntityType, string>
   selectedId: string | null
   showNewEntity: boolean
   mutating: boolean
+  /** Bible entity id → creative character id (for plate lookbook). */
+  castIdByEntityId?: Record<string, string>
   newEntityForm: {
     type: BibleEntityType
     name: string
@@ -112,6 +159,46 @@ const emit = defineEmits<{
   'select-entity': [id: string]
   'update:new-entity-form': [form: typeof props.newEntityForm]
 }>()
+
+/** Types the user has manually collapsed (so we don't fight auto-open). */
+const manuallyClosed = ref(new Set<BibleEntityType>())
+/** Types the user has manually expanded beyond the default. */
+const manuallyOpened = ref(new Set<BibleEntityType>())
+
+const selectedType = computed(() => {
+  if (!props.selectedId) return null
+  return props.entities.find((e) => e.id === props.selectedId)?.type ?? null
+})
+
+function castIdForEntity (entityId: string): string {
+  return (props.castIdByEntityId?.[entityId] || '').trim()
+}
+
+function isOpen (type: BibleEntityType): boolean {
+  if (manuallyClosed.value.has(type)) return false
+  if (manuallyOpened.value.has(type)) return true
+  if (selectedType.value === type) return true
+  const first = props.entitiesByType[0]?.[0]
+  return first === type
+}
+
+function toggleType (type: BibleEntityType) {
+  if (isOpen(type)) {
+    manuallyOpened.value.delete(type)
+    manuallyClosed.value.add(type)
+  } else {
+    manuallyClosed.value.delete(type)
+    manuallyOpened.value.add(type)
+  }
+  manuallyOpened.value = new Set(manuallyOpened.value)
+  manuallyClosed.value = new Set(manuallyClosed.value)
+}
+
+watch(selectedType, (type) => {
+  if (!type) return
+  manuallyClosed.value.delete(type)
+  manuallyClosed.value = new Set(manuallyClosed.value)
+})
 
 function patchNewEntityForm (key: keyof typeof props.newEntityForm, value: string) {
   emit('update:new-entity-form', { ...props.newEntityForm, [key]: value })
