@@ -36,6 +36,8 @@ const {
   buildFromBrief
 } = useStudioGuideChat()
 
+const { authReady } = useAuth()
+
 const scrollEl = ref<HTMLElement | null>(null)
 const inputEl = ref<HTMLTextAreaElement | null>(null)
 const mobileHistoryOpen = ref(false)
@@ -80,7 +82,18 @@ async function onSend () {
 
 <template>
   <div
-    v-if="!isAuthenticated"
+    v-if="!authReady"
+    class="rounded-xl border border-primary/20 bg-primary/5 px-4 py-10"
+  >
+    <FilmReelLoader
+      size="sm"
+      label="Loading Home"
+      sub-label="Starting Studio Guide…"
+    />
+  </div>
+
+  <div
+    v-else-if="!isAuthenticated"
     class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
   >
     <NuxtLink to="/login?redirect=/guide" class="font-semibold text-primary hover:underline">
