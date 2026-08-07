@@ -52,18 +52,10 @@
             class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 bg-white"
           >
             <div class="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-start gap-3">
-              <div
+              <LazyAssetVideo
                 v-if="a.fileUrl"
-                class="w-full max-w-[min(100%,20rem)] sm:max-w-xs rounded-lg border border-gray-200 overflow-hidden bg-black shrink-0"
-              >
-                <video
-                  :src="videoSrc(a)"
-                  class="w-full aspect-video object-contain"
-                  controls
-                  playsinline
-                  preload="metadata"
-                />
-              </div>
+                :src="videoSrc(a)"
+              />
               <div class="min-w-0 flex-1">
                 <p class="font-medium text-gray-900">{{ a.title }}</p>
                 <p v-if="a.notes" class="text-sm text-gray-600 mt-2 line-clamp-3 whitespace-pre-wrap">{{ a.notes }}</p>
@@ -78,6 +70,7 @@
 </template>
 
 <script setup lang="ts">
+import LazyAssetVideo from '~/components/assets/LazyAssetVideo.vue'
 import { buildVideoSceneGroups } from '~/lib/project-scene-groups'
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'

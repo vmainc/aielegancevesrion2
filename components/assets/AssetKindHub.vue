@@ -128,18 +128,10 @@
               >
                 {{ uploadingCharacterAssetId === a.id ? '…' : 'Add image' }}
               </button>
-              <div
+              <LazyAssetVideo
                 v-else-if="props.kind === 'video' && a.fileUrl"
-                class="w-full max-w-[min(100%,20rem)] sm:max-w-xs rounded-lg border border-gray-200 overflow-hidden bg-black shrink-0"
-              >
-                <video
-                  :src="videoAssetPlaybackSrc(a)"
-                  class="w-full aspect-video object-contain"
-                  controls
-                  playsinline
-                  preload="metadata"
-                />
-              </div>
+                :src="videoAssetPlaybackSrc(a)"
+              />
               <div class="min-w-0 flex-1">
                 <p class="font-medium text-gray-900">{{ a.title }}</p>
                 <p
@@ -301,6 +293,7 @@ import AssetKindVideoGroups from '~/components/assets/AssetKindVideoGroups.vue'
 import AssetKindCharacterGroups from '~/components/assets/AssetKindCharacterGroups.vue'
 import AssetKindLibraryGroups from '~/components/assets/AssetKindLibraryGroups.vue'
 import AssetKindModals from '~/components/assets/AssetKindModals.vue'
+import LazyAssetVideo from '~/components/assets/LazyAssetVideo.vue'
 import type { ProjectAsset, ProjectAssetKind } from '~/types/project-asset'
 import type { CreativeProject } from '~/types/creative-project'
 
