@@ -5,10 +5,10 @@
         Step {{ stepIndex + 1 }} of {{ steps.length }}
       </p>
       <button
-        v-if="step !== 'purpose'"
+        v-if="step !== 'intent'"
         type="button"
         class="text-sm text-gray-500 hover:text-gray-800"
-        :disabled="busy"
+        :disabled="busy || analyzing"
         @click="goBack"
       >
         Back
@@ -22,146 +22,27 @@
       />
     </div>
 
-    <!-- Purpose -->
-    <section v-if="step === 'purpose'" class="space-y-4">
+    <!-- Intent -->
+    <section v-if="step === 'intent'" class="space-y-4">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900">What are you making?</h2>
-        <p class="mt-1 text-sm text-gray-500">We’ll tailor the score prompt from your answer.</p>
+        <h2 class="text-lg font-semibold text-gray-900">What do you want to create today?</h2>
+        <p class="mt-1 text-sm text-gray-500">
+          Describe it in plain language — we’ll figure out length, vocals, and style for you.
+        </p>
       </div>
-      <div class="grid gap-2 sm:grid-cols-2">
-        <button
-          v-for="opt in purposeOptions"
-          :key="opt.id"
-          type="button"
-          class="text-left rounded-xl border px-4 py-3 transition-colors"
-          :class="brief.purpose === opt.id
-            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-            : 'border-gray-200 bg-white hover:border-gray-300'"
-          @click="brief.purpose = opt.id"
-        >
-          <span class="block text-sm font-medium text-gray-900">{{ opt.label }}</span>
-          <span class="block text-xs text-gray-500 mt-0.5">{{ opt.hint }}</span>
-        </button>
-      </div>
-      <div v-if="brief.purpose === 'other'">
-        <label for="mg-guide-purpose-other" class="block text-sm font-medium text-gray-700 mb-1.5">
-          Describe it
-        </label>
-        <input
-          id="mg-guide-purpose-other"
-          v-model="brief.purposeOther"
-          type="text"
-          maxlength="200"
-          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-          placeholder="e.g. podcast intro sting"
-        >
-      </div>
-    </section>
-
-    <!-- Length -->
-    <section v-else-if="step === 'length'" class="space-y-4">
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900">How long should it be?</h2>
-        <p class="mt-1 text-sm text-gray-500">This picks Lyria Clip vs Pro.</p>
-      </div>
-      <div class="grid gap-2 sm:grid-cols-2">
-        <button
-          v-for="opt in lengthOptions"
-          :key="opt.id"
-          type="button"
-          class="text-left rounded-xl border px-4 py-3 transition-colors"
-          :class="brief.length === opt.id
-            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-            : 'border-gray-200 bg-white hover:border-gray-300'"
-          @click="brief.length = opt.id"
-        >
-          <span class="block text-sm font-medium text-gray-900">{{ opt.label }}</span>
-          <span class="block text-xs text-gray-500 mt-0.5">{{ opt.hint }}</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- Vocals -->
-    <section v-else-if="step === 'vocals'" class="space-y-4">
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900">Vocals?</h2>
-        <p class="mt-1 text-sm text-gray-500">Instrumental beds are usually best under picture.</p>
-      </div>
-      <div class="grid gap-2">
-        <button
-          v-for="opt in vocalOptions"
-          :key="opt.id"
-          type="button"
-          class="text-left rounded-xl border px-4 py-3 transition-colors"
-          :class="brief.vocals === opt.id
-            ? 'border-primary bg-primary/5 ring-1 ring-primary/30'
-            : 'border-gray-200 bg-white hover:border-gray-300'"
-          @click="brief.vocals = opt.id"
-        >
-          <span class="block text-sm font-medium text-gray-900">{{ opt.label }}</span>
-          <span class="block text-xs text-gray-500 mt-0.5">{{ opt.hint }}</span>
-        </button>
-      </div>
-      <div v-if="brief.vocals === 'own_lyrics'">
-        <label for="mg-guide-own-lyrics" class="block text-sm font-medium text-gray-700 mb-1.5">
-          Your lyrics
-        </label>
-        <textarea
-          id="mg-guide-own-lyrics"
-          v-model="brief.ownLyrics"
-          rows="5"
-          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-          placeholder="Paste or write lyrics here…"
-        />
-      </div>
-    </section>
-
-    <!-- Mood -->
-    <section v-else-if="step === 'mood'" class="space-y-4">
-      <div>
-        <h2 class="text-lg font-semibold text-gray-900">Mood & style</h2>
-        <p class="mt-1 text-sm text-gray-500">Pick a chip or write your own description.</p>
-      </div>
-      <div class="flex flex-wrap gap-2">
-        <button
-          v-for="chip in moodChips"
-          :key="chip"
-          type="button"
-          class="px-3 py-1.5 text-xs rounded-full border transition-colors"
-          :class="brief.mood === chip
-            ? 'border-primary bg-primary/10 text-gray-900'
-            : 'border-gray-300 bg-white text-gray-700 hover:border-primary/50'"
-          @click="brief.mood = chip"
-        >
-          {{ chip }}
-        </button>
-      </div>
-      <div>
-        <label for="mg-guide-mood" class="block text-sm font-medium text-gray-700 mb-1.5">
-          Describe the sound
-        </label>
-        <textarea
-          id="mg-guide-mood"
-          v-model="brief.mood"
-          rows="3"
-          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-          placeholder="e.g. low strings, sparse piano, building dread"
-        />
-      </div>
-      <div>
-        <label for="mg-guide-bpm" class="block text-sm font-medium text-gray-700 mb-1.5">
-          BPM <span class="font-normal text-gray-400">(optional)</span>
-        </label>
-        <input
-          id="mg-guide-bpm"
-          v-model.number="brief.bpm"
-          type="number"
-          min="40"
-          max="220"
-          placeholder="e.g. 90"
-          class="w-full max-w-[10rem] px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
-        >
-      </div>
+      <textarea
+        id="mg-guide-intent"
+        v-model="brief.intent"
+        rows="5"
+        class="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 text-base focus:outline-none focus:border-primary resize-y leading-relaxed"
+        placeholder="e.g. I need a rock song about salamanders"
+        :disabled="analyzing || busy"
+        @keydown.meta.enter.prevent="goNext"
+        @keydown.ctrl.enter.prevent="goNext"
+      />
+      <p class="text-xs text-gray-400">
+        Tip: ⌘/Ctrl + Enter to continue
+      </p>
     </section>
 
     <!-- Save -->
@@ -211,36 +92,80 @@
     <section v-else class="space-y-4">
       <div>
         <h2 class="text-lg font-semibold text-gray-900">Ready to generate</h2>
-        <p class="mt-1 text-sm text-gray-500">Here’s what we’ll send to Lyria. You can edit in Manual anytime.</p>
+        <p class="mt-1 text-sm text-gray-500">
+          We interpreted your request. Tweak anything below, or open Manual for full control.
+        </p>
       </div>
-      <dl class="rounded-xl border border-gray-200 bg-gray-50/80 divide-y divide-gray-200 text-sm">
-        <div class="px-4 py-3 flex justify-between gap-4">
-          <dt class="text-gray-500 shrink-0">Purpose</dt>
-          <dd class="text-gray-900 text-right">{{ purposeSummary }}</dd>
+
+      <div class="rounded-xl border border-gray-200 bg-gray-50/80 px-4 py-3">
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Your request</p>
+        <p class="text-sm text-gray-900 whitespace-pre-wrap">{{ brief.intent }}</p>
+      </div>
+
+      <div class="grid gap-4 sm:grid-cols-2">
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Length</label>
+          <select
+            v-model="brief.length"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+          >
+            <option v-for="opt in lengthOptions" :key="opt.id" :value="opt.id">
+              {{ opt.label }}
+            </option>
+          </select>
         </div>
-        <div class="px-4 py-3 flex justify-between gap-4">
-          <dt class="text-gray-500 shrink-0">Length</dt>
-          <dd class="text-gray-900 text-right">{{ lengthSummary }}</dd>
+        <div>
+          <label class="block text-sm font-medium text-gray-700 mb-1.5">Vocals</label>
+          <select
+            v-model="brief.vocals"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+          >
+            <option v-for="opt in vocalOptions" :key="opt.id" :value="opt.id">
+              {{ opt.label }}
+            </option>
+          </select>
         </div>
-        <div class="px-4 py-3 flex justify-between gap-4">
-          <dt class="text-gray-500 shrink-0">Vocals</dt>
-          <dd class="text-gray-900 text-right">{{ vocalsSummary }}</dd>
-        </div>
-        <div class="px-4 py-3 flex justify-between gap-4">
-          <dt class="text-gray-500 shrink-0">Mood</dt>
-          <dd class="text-gray-900 text-right">{{ brief.mood || '—' }}</dd>
-        </div>
-        <div v-if="brief.bpm" class="px-4 py-3 flex justify-between gap-4">
-          <dt class="text-gray-500 shrink-0">BPM</dt>
-          <dd class="text-gray-900 text-right">{{ brief.bpm }}</dd>
-        </div>
-        <div class="px-4 py-3 flex justify-between gap-4">
-          <dt class="text-gray-500 shrink-0">Save</dt>
-          <dd class="text-gray-900 text-right">{{ saveSummary }}</dd>
-        </div>
-      </dl>
-      <p class="text-xs text-gray-500 leading-relaxed">
-        Prompt preview: {{ formPreview.prompt }}
+      </div>
+
+      <div v-if="brief.vocals === 'own_lyrics'">
+        <label for="mg-guide-own-lyrics" class="block text-sm font-medium text-gray-700 mb-1.5">
+          Lyrics
+        </label>
+        <textarea
+          id="mg-guide-own-lyrics"
+          v-model="brief.ownLyrics"
+          rows="4"
+          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          placeholder="Paste lyrics…"
+        />
+      </div>
+
+      <div>
+        <label for="mg-guide-mood" class="block text-sm font-medium text-gray-700 mb-1.5">
+          Mood & style
+        </label>
+        <textarea
+          id="mg-guide-mood"
+          v-model="brief.mood"
+          rows="2"
+          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+        />
+      </div>
+
+      <div>
+        <label for="mg-guide-prompt" class="block text-sm font-medium text-gray-700 mb-1.5">
+          Composition prompt
+        </label>
+        <textarea
+          id="mg-guide-prompt"
+          v-model="brief.compositionPrompt"
+          rows="4"
+          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+        />
+      </div>
+
+      <p class="text-xs text-gray-500">
+        {{ saveSummary }} · {{ purposeSummary }}
       </p>
     </section>
 
@@ -253,10 +178,11 @@
         v-if="step !== 'review'"
         type="button"
         class="px-6 py-3 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50"
-        :disabled="!canAdvance || busy"
+        :disabled="!canAdvance || busy || analyzing"
         @click="goNext"
       >
-        Continue
+        <span v-if="analyzing">Understanding your request…</span>
+        <span v-else>Continue</span>
       </button>
       <template v-else>
         <button
@@ -281,16 +207,18 @@
 </template>
 
 <script setup lang="ts">
+import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import {
   MUSIC_GUIDE_LENGTH_OPTIONS,
-  MUSIC_GUIDE_MOOD_CHIPS,
   MUSIC_GUIDE_PURPOSE_OPTIONS,
   MUSIC_GUIDE_STEPS,
   MUSIC_GUIDE_VOCAL_OPTIONS,
+  applyMusicGuideAnalyzeResult,
   canAdvanceMusicGuideStep,
   emptyMusicGuideBrief,
-  musicGuideBriefToFormState,
+  heuristicMusicGuideAnalyze,
   musicGuideStepIndex,
+  type MusicGuideAnalyzeResult,
   type MusicGuideBrief,
   type MusicGuideStep
 } from '~/lib/music-generation-guide'
@@ -310,19 +238,19 @@ const emit = defineEmits<{
 }>()
 
 const brief = reactive<MusicGuideBrief>(emptyMusicGuideBrief())
-const step = ref<MusicGuideStep>('purpose')
+const step = ref<MusicGuideStep>('intent')
 const localError = ref('')
+const analyzing = ref(false)
+const analyzedIntent = ref('')
 
-const purposeOptions = MUSIC_GUIDE_PURPOSE_OPTIONS
 const lengthOptions = MUSIC_GUIDE_LENGTH_OPTIONS
 const vocalOptions = MUSIC_GUIDE_VOCAL_OPTIONS
-const moodChips = MUSIC_GUIDE_MOOD_CHIPS
+const purposeOptions = MUSIC_GUIDE_PURPOSE_OPTIONS
 const steps = MUSIC_GUIDE_STEPS
 
 const stepIndex = computed(() => musicGuideStepIndex(step.value))
 const progressPct = computed(() => ((stepIndex.value + 1) / steps.length) * 100)
 const canAdvance = computed(() => canAdvanceMusicGuideStep(step.value, brief))
-const formPreview = computed(() => musicGuideBriefToFormState(brief))
 
 watch(
   () => props.initialProjectId,
@@ -338,26 +266,48 @@ watch(
 )
 
 const purposeSummary = computed(() => {
-  if (brief.purpose === 'other') return brief.purposeOther.trim() || 'Something else'
-  return purposeOptions.find(o => o.id === brief.purpose)?.label || '—'
-})
-
-const lengthSummary = computed(() =>
-  lengthOptions.find(o => o.id === brief.length)?.label || '—'
-)
-
-const vocalsSummary = computed(() => {
-  if (brief.vocals === 'own_lyrics') return 'Own lyrics'
-  if (brief.vocals === 'generate_lyrics') return 'Generate lyrics'
-  if (brief.vocals === 'instrumental') return 'Instrumental'
-  return '—'
+  if (brief.purpose === 'other') return brief.purposeOther.trim() || 'Custom'
+  return purposeOptions.find(o => o.id === brief.purpose)?.label || 'Custom'
 })
 
 const saveSummary = computed(() => {
-  if (!brief.saveToProject) return 'Don’t save'
+  if (!brief.saveToProject) return 'Won’t save to a project'
   const name = props.projects.find(p => p.id === brief.projectId)?.name
   return name ? `Save to “${name}”` : 'Save (pick a project)'
 })
+
+async function analyzeIntentIfNeeded (): Promise<boolean> {
+  const intent = brief.intent.trim()
+  if (!intent) return false
+  if (analyzedIntent.value === intent && brief.length && brief.vocals) {
+    return true
+  }
+
+  analyzing.value = true
+  localError.value = ''
+  try {
+    const res = await $fetch<MusicGuideAnalyzeResult & { source?: string }>(
+      '/api/music/analyze-intent',
+      {
+        method: 'POST',
+        body: { intent }
+      }
+    )
+    applyMusicGuideAnalyzeResult(brief, res)
+    analyzedIntent.value = intent
+    return true
+  } catch (e: unknown) {
+    applyMusicGuideAnalyzeResult(brief, heuristicMusicGuideAnalyze(intent))
+    analyzedIntent.value = intent
+    localError.value = formatApiFetchError(
+      e,
+      'Couldn’t reach AI analysis — used a local guess. Review the next screens.'
+    )
+    return true
+  } finally {
+    analyzing.value = false
+  }
+}
 
 function goBack () {
   localError.value = ''
@@ -366,12 +316,22 @@ function goBack () {
   step.value = steps[i - 1]
 }
 
-function goNext () {
+async function goNext () {
   localError.value = ''
   if (!canAdvance.value) {
-    localError.value = 'Complete this step to continue.'
+    localError.value = step.value === 'intent'
+      ? 'Tell us what you want to create — a sentence or two is enough.'
+      : 'Complete this step to continue.'
     return
   }
+
+  if (step.value === 'intent') {
+    const ok = await analyzeIntentIfNeeded()
+    if (!ok) return
+    step.value = 'save'
+    return
+  }
+
   const i = stepIndex.value
   if (i >= steps.length - 1) return
   step.value = steps[i + 1]
@@ -394,8 +354,9 @@ function applyProjectId (id: string) {
 function reset () {
   Object.assign(brief, emptyMusicGuideBrief())
   if (props.initialProjectId) brief.projectId = props.initialProjectId
-  step.value = 'purpose'
+  step.value = 'intent'
   localError.value = ''
+  analyzedIntent.value = ''
 }
 
 defineExpose({ applyProjectId, reset, brief })

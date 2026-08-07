@@ -5,7 +5,7 @@
         Music generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Compose score beds and themes with Google Lyria via OpenRouter. Start with a short guide, or fill the form yourself.
+        Compose score beds and themes with Google Lyria via OpenRouter. Tell us what you want in plain language, or use Manual for full control.
       </p>
     </header>
 
