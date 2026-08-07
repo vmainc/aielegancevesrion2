@@ -344,7 +344,7 @@
             <p v-else-if="!projectCharacterOptions.length" class="text-xs text-gray-500">
               No characters on this project yet — add them on the Characters step.
             </p>
-            <CharacterTypeahead
+            <ProjectCharacterTypeahead
               v-else
               v-model="selectedCharacterIds"
               input-id="vg-characters"
