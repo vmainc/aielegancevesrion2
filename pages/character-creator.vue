@@ -119,22 +119,69 @@
         <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">
           Models
         </h2>
-        <p class="text-xs text-gray-500 mb-4">Select one or more; generations run in parallel.</p>
-        <div class="flex flex-wrap gap-3">
-          <label
-            v-for="m in CHARACTER_CREATOR_IMAGE_MODELS"
-            :key="m.id"
-            class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-gray-50 cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
-          >
-            <input
-              v-model="selectedModelIds"
-              type="checkbox"
-              :value="m.id"
-              class="rounded border-gray-300 text-primary focus:ring-primary"
-            >
-            <span class="text-sm text-gray-800">{{ m.label }}</span>
-          </label>
+        <p class="text-xs text-gray-500 mb-4">
+          Add one or more OpenRouter image models; generations run in parallel.
+          <a
+            href="https://openrouter.ai/models?output_modalities=image"
+            target="_blank"
+            rel="noopener noreferrer"
+            class="text-primary font-medium hover:underline"
+          >Browse catalog</a>
+        </p>
+
+        <div v-if="modelsPending" class="text-sm text-gray-500 animate-pulse mb-3">
+          Loading image models…
         </div>
+        <p
+          v-else-if="modelsNotice"
+          class="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-3"
+        >
+          {{ modelsNotice }}
+        </p>
+
+        <div class="flex flex-wrap gap-2 items-end mb-3">
+          <div class="flex-1 min-w-[14rem]">
+            <label for="cc-model-add" class="block text-xs font-medium text-gray-600 mb-1">Add model</label>
+            <select
+              id="cc-model-add"
+              v-model="modelToAdd"
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              :disabled="!imageModels.length || loading"
+              @change="addSelectedModel"
+            >
+              <option value="">Choose a model…</option>
+              <option
+                v-for="m in addableModels"
+                :key="m.id"
+                :value="m.id"
+              >
+                {{ m.name }}
+              </option>
+            </select>
+          </div>
+        </div>
+
+        <div v-if="selectedModelIds.length" class="flex flex-wrap gap-2">
+          <span
+            v-for="id in selectedModelIds"
+            :key="id"
+            class="inline-flex items-center gap-1.5 pl-2.5 pr-1 py-1 rounded-full border border-primary/30 bg-primary/10 text-sm text-gray-900"
+          >
+            <span class="max-w-[16rem] truncate" :title="modelLabel(id)">{{ modelLabel(id) }}</span>
+            <button
+              type="button"
+              class="p-1 rounded-full text-gray-600 hover:text-red-700 hover:bg-white/80"
+              :aria-label="`Remove ${modelLabel(id)}`"
+              :disabled="loading"
+              @click="removeModel(id)"
+            >
+              <span aria-hidden="true">×</span>
+            </button>
+          </span>
+        </div>
+        <p v-else class="text-xs text-gray-500">
+          No models selected yet — pick at least one from the dropdown.
+        </p>
       </section>
 
       <div v-if="formError" class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -158,16 +205,16 @@
       <h2 class="text-lg font-semibold text-gray-900">Results</h2>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         <article
-          v-for="m in CHARACTER_CREATOR_IMAGE_MODELS"
-          v-show="selectedModelIds.includes(m.id) && slotByModel[m.id]"
-          :key="m.id"
+          v-for="id in selectedModelIds"
+          v-show="slotByModel[id]"
+          :key="id"
           class="rounded-xl overflow-hidden border border-gray-200 bg-white flex flex-col shadow-sm"
         >
           <div class="px-3 py-2.5 border-b border-gray-200 bg-gray-50">
-            <span class="text-sm font-semibold text-gray-900">{{ m.label }}</span>
+            <span class="text-sm font-semibold text-gray-900">{{ modelLabel(id) }}</span>
           </div>
           <div class="flex-1 min-h-[220px] flex items-center justify-center bg-gray-100">
-            <template v-if="slotByModel[m.id]?.status === 'loading'">
+            <template v-if="slotByModel[id]?.status === 'loading'">
               <div class="flex flex-col items-center gap-2 py-10 text-gray-600">
                 <svg class="w-8 h-8 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden="true">
                   <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
@@ -176,33 +223,33 @@
                 <span class="text-xs">Generating…</span>
               </div>
             </template>
-            <template v-else-if="slotByModel[m.id]?.status === 'done' && imageSrc(slotByModel[m.id]!.url)">
+            <template v-else-if="slotByModel[id]?.status === 'done' && imageSrc(slotByModel[id]!.url)">
               <img
-                :src="imageSrc(slotByModel[m.id]!.url)"
-                :alt="m.label"
+                :src="imageSrc(slotByModel[id]!.url)"
+                :alt="modelLabel(id)"
                 class="w-full h-auto object-cover max-h-[480px]"
               >
             </template>
-            <template v-else-if="slotByModel[m.id]?.status === 'error'">
+            <template v-else-if="slotByModel[id]?.status === 'error'">
               <p class="text-red-700 text-sm px-4 py-6 text-center">
-                {{ slotByModel[m.id]?.error || 'Failed' }}
+                {{ slotByModel[id]?.error || 'Failed' }}
               </p>
             </template>
           </div>
           <div
-            v-if="slotByModel[m.id]?.status === 'done' && imageSrc(slotByModel[m.id]!.url)"
+            v-if="slotByModel[id]?.status === 'done' && imageSrc(slotByModel[id]!.url)"
             class="p-3 border-t border-gray-200 flex flex-col gap-2 sm:flex-row sm:flex-wrap"
           >
             <button
               type="button"
               class="px-3 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-gray-950 rounded-lg transition-colors"
-              @click="openSaveModal(m.id, m.label, imageSrc(slotByModel[m.id]!.url)!)"
+              @click="openSaveModal(id, modelLabel(id), imageSrc(slotByModel[id]!.url)!)"
             >
               Save to Library
             </button>
             <NuxtLink
-              v-if="slotByModel[m.id]?.savedProjectId"
-              :to="`/projects/${slotByModel[m.id]!.savedProjectId}/home`"
+              v-if="slotByModel[id]?.savedProjectId"
+              :to="`/projects/${slotByModel[id]!.savedProjectId}/home`"
               class="px-3 py-2 text-sm font-medium border border-gray-300 text-gray-800 hover:bg-gray-50 rounded-lg transition-colors text-center"
             >
               Use in Project
@@ -328,10 +375,6 @@
 </template>
 
 <script setup lang="ts">
-import {
-  CHARACTER_CREATOR_IMAGE_MODELS,
-  DEFAULT_IMAGE_MODEL_ID
-} from '~/lib/character-creator-models'
 import { buildCharacterImagePrompt, CHARACTER_STYLE_PRESETS, finalizeCharacterCreatorPrompt } from '~/lib/character-image-prompt'
 import {
   appendProductionBibleToPrompt,
@@ -353,6 +396,23 @@ import type { ProjectAsset } from '~/types/project-asset'
 const LIBRARY_STORAGE_KEY = 'aielegance-character-library'
 const PB_ID = /^[a-z0-9]{15}$/
 
+/** Matches server default when catalog is unavailable (Nano Banana). */
+const FALLBACK_DEFAULT_IMAGE_MODEL_ID = 'google/gemini-2.5-flash-image'
+
+type ImageModelRow = {
+  id: string
+  name: string
+  description?: string
+  provider?: string
+}
+
+type ImageModelsPayload = {
+  source?: string
+  models?: ImageModelRow[]
+  defaultModelId?: string
+  notice?: string
+}
+
 useHead({
   title: 'Character Creator — AI Elegance',
   meta: [{ name: 'description', content: 'Generate character portraits with multiple AI image models.' }]
@@ -363,10 +423,58 @@ const route = useRoute()
 const { isAuthenticated, initAuth, getAuthToken } = useAuth()
 const { projects, loadServerProjects, clientReady } = useCreativeProject()
 
+const {
+  data: imageModelsData,
+  pending: modelsPending
+} = await useFetch<ImageModelsPayload>('/api/openrouter/image-models')
+
+const imageModels = computed(() => imageModelsData.value?.models ?? [])
+const modelsNotice = computed(() => imageModelsData.value?.notice || '')
+const modelToAdd = ref('')
+const selectedModelIds = ref<string[]>([
+  imageModelsData.value?.defaultModelId || FALLBACK_DEFAULT_IMAGE_MODEL_ID
+])
+
+const addableModels = computed(() =>
+  imageModels.value.filter(m => !selectedModelIds.value.includes(m.id))
+)
+
+function modelLabel (id: string): string {
+  return imageModels.value.find(m => m.id === id)?.name || id
+}
+
+function addSelectedModel () {
+  const id = modelToAdd.value.trim()
+  if (!id) return
+  if (!selectedModelIds.value.includes(id)) {
+    selectedModelIds.value = [...selectedModelIds.value, id]
+  }
+  modelToAdd.value = ''
+}
+
+function removeModel (id: string) {
+  selectedModelIds.value = selectedModelIds.value.filter(x => x !== id)
+}
+
+watch(
+  () => imageModelsData.value?.defaultModelId,
+  (id) => {
+    if (!id || !imageModels.value.some(m => m.id === id)) return
+    // Only seed default if nothing selected or only the fallback slug remains.
+    if (
+      !selectedModelIds.value.length ||
+      (selectedModelIds.value.length === 1 &&
+        selectedModelIds.value[0] === FALLBACK_DEFAULT_IMAGE_MODEL_ID &&
+        id !== FALLBACK_DEFAULT_IMAGE_MODEL_ID)
+    ) {
+      selectedModelIds.value = [id]
+    }
+  }
+)
+
 const name = ref('')
 const description = ref('')
 const stylePreset = ref<string>(CHARACTER_STYLE_PRESETS[0]!.value)
-const selectedModelIds = ref<string[]>([DEFAULT_IMAGE_MODEL_ID])
 const loading = ref(false)
 const formError = ref('')
 const lastPromptUsed = ref('')
@@ -541,9 +649,7 @@ async function loadPortraitFromProject () {
 }
 
 const hasAnySlot = computed(() =>
-  CHARACTER_CREATOR_IMAGE_MODELS.some(
-    m => selectedModelIds.value.includes(m.id) && slotByModel.value[m.id] != null
-  )
+  selectedModelIds.value.some(id => slotByModel.value[id] != null)
 )
 
 const doneCount = computed(() =>

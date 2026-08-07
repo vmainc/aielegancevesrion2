@@ -56,7 +56,9 @@ export default defineEventHandler(async (event): Promise<CharacterCreatorImageRe
     throw createError({ statusCode: 400, message: 'Select at least one model' })
   }
   for (const id of models) {
-    if (!CHARACTER_CREATOR_MODEL_IDS.has(id)) {
+    const t = id.trim()
+    // Legacy Character Creator keys or OpenRouter slugs (provider/model).
+    if (!t || (!CHARACTER_CREATOR_MODEL_IDS.has(t) && !t.includes('/'))) {
       throw createError({ statusCode: 400, message: `Unknown model: ${id}` })
     }
   }

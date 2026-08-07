@@ -3,6 +3,7 @@ import { DEFAULT_IMAGE_MODEL_ID } from '~/lib/character-creator-models'
 /**
  * Internal image route keys → OpenRouter model IDs (chat/completions + modalities: image).
  * @see https://openrouter.ai/collections/image-models
+ * @see https://openrouter.ai/models?output_modalities=image
  */
 export const OPENROUTER_IMAGE_MODEL_SLUGS: Record<string, string> = {
   'flux-klein': 'black-forest-labs/flux.2-klein-4b',
@@ -28,8 +29,12 @@ export const OPENROUTER_IMAGE_MODEL_SLUGS: Record<string, string> = {
   bluewillow: 'openai/gpt-5-image-mini'
 }
 
+/** Resolve UI/legacy keys or pass through OpenRouter slugs (`provider/model`). */
 export function resolveOpenRouterImageSlug (modelId: string): string {
-  return OPENROUTER_IMAGE_MODEL_SLUGS[modelId] ?? OPENROUTER_IMAGE_MODEL_SLUGS[DEFAULT_IMAGE_MODEL_ID]
+  const t = modelId.trim()
+  if (!t) return OPENROUTER_IMAGE_MODEL_SLUGS[DEFAULT_IMAGE_MODEL_ID]
+  if (t.includes('/')) return t
+  return OPENROUTER_IMAGE_MODEL_SLUGS[t] ?? OPENROUTER_IMAGE_MODEL_SLUGS[DEFAULT_IMAGE_MODEL_ID]
 }
 
 /** Models that emit both text and images need both modalities on OpenRouter. */

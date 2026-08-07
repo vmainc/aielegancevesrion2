@@ -1,13 +1,20 @@
 import { isCharacterPortraitAsset } from '~/lib/character-voice-assets'
+import {
+  CHARACTER_TURNAROUND_VIEWS,
+  characterPlateRank,
+  expressionLabelFromPlateMeta,
+  parseCharacterTurnaroundView,
+  type CharacterTurnaroundViewId
+} from '~/lib/character-turnaround-views'
 import type { CreativeCharacter } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
 
 export type CharacterPlateBundle = {
-  /** Featured (or best) plate — primary identity lock. */
+  /** Front (or best) plate — primary identity lock. */
   url: string
   notes: string
   promptUsed: string
-  /** Featured + turnaround plates (Front / 3⁄4 / Profile / etc.), featured first. */
+  /** Turnaround plates in front → back → left → right order when labeled. */
   plateUrls: string[]
 }
 
@@ -18,26 +25,11 @@ type RankedPlate = {
   featured: boolean
   ts: string
   rank: number
+  view: CharacterTurnaroundViewId | null
 }
 
 function normalizeName (v: string): string {
   return v.trim().toLowerCase().replace(/\s+/g, ' ')
-}
-
-function expressionLabelFromMeta (meta: Record<string, unknown>): string {
-  const v = meta.expression_label ?? meta.emotion
-  return typeof v === 'string' ? v.trim() : ''
-}
-
-/** Lower is better — featured first, then standard turnaround labels. */
-export function characterPlateRank (meta: Record<string, unknown>): number {
-  if (meta.featured === true) return 0
-  const label = expressionLabelFromMeta(meta).toLowerCase()
-  if (!label) return 5
-  if (/^front\b/.test(label) || label === 'facing camera') return 1
-  if (/3\s*[\/⁄-]\s*4|three[\s-]?quarter/.test(label)) return 2
-  if (/profile|side/.test(label)) return 3
-  return 4
 }
 
 function promptUsedFromMeta (meta: Record<string, unknown>): string {
@@ -51,22 +43,48 @@ function sortPlates (a: RankedPlate, b: RankedPlate): number {
   return (b.ts || '').localeCompare(a.ts || '')
 }
 
+/**
+ * Prefer one plate per turnaround view (front/back/left/right), front as primary.
+ * Falls back to ranked freeform plates when views are missing.
+ */
 function bundleFromPlates (plates: RankedPlate[], maxPlates: number): CharacterPlateBundle | null {
   if (!plates.length) return null
   const sorted = [...plates].sort(sortPlates)
+
+  const byView = new Map<CharacterTurnaroundViewId, RankedPlate>()
+  for (const p of sorted) {
+    if (!p.view || byView.has(p.view)) continue
+    byView.set(p.view, p)
+  }
+
   const urls: string[] = []
   const seen = new Set<string>()
-  for (const p of sorted) {
-    const u = (p.url || '').trim()
-    if (!u || seen.has(u)) continue
-    seen.add(u)
-    urls.push(u)
+  const pushUrl = (u: string) => {
+    const url = (u || '').trim()
+    if (!url || seen.has(url)) return
+    seen.add(url)
+    urls.push(url)
+  }
+
+  for (const v of CHARACTER_TURNAROUND_VIEWS) {
+    const plate = byView.get(v.id)
+    if (plate) pushUrl(plate.url)
     if (urls.length >= maxPlates) break
   }
+
+  if (urls.length < maxPlates) {
+    for (const p of sorted) {
+      pushUrl(p.url)
+      if (urls.length >= maxPlates) break
+    }
+  }
+
   if (!urls.length && !sorted[0]!.notes && !sorted[0]!.promptUsed) return null
-  const primary = sorted[0]!
+
+  const front = byView.get('front')
+  const primary = front || sorted[0]!
   return {
-    url: urls[0] || primary.url || '',
+    url: (front?.url || urls[0] || primary.url || '').trim(),
     notes: primary.notes,
     promptUsed: primary.promptUsed,
     plateUrls: urls
@@ -97,13 +115,15 @@ export function buildCharacterPlateMap (
     const promptUsed = promptUsedFromMeta(meta)
     if (!url && !notes && !promptUsed) continue
 
+    const label = expressionLabelFromPlateMeta(meta)
     const plate: RankedPlate = {
       url,
       notes,
       promptUsed,
       featured: meta.featured === true,
       ts: a.updated || a.created || '',
-      rank: characterPlateRank(meta)
+      rank: characterPlateRank(meta),
+      view: parseCharacterTurnaroundView(label)
     }
 
     if (cid) {
@@ -122,3 +142,6 @@ export function buildCharacterPlateMap (
   }
   return out
 }
+
+/** Re-export rank helper for callers that imported it from this module. */
+export { characterPlateRank } from '~/lib/character-turnaround-views'

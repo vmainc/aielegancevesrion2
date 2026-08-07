@@ -143,6 +143,7 @@ import {
   pieModelToSwatchRecord
 } from '~/lib/character-screen-share-chart'
 import { isCharacterPortraitAsset } from '~/lib/character-voice-assets'
+import { parseCharacterTurnaroundView } from '~/lib/character-turnaround-views'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { projectAssetPlaybackSrc } from '~/lib/project-asset-playback-url'
 import { SCRIPT_WIZARD_UPLOAD_CLIENT_MS } from '~/lib/script-wizard-timeouts'
@@ -206,6 +207,7 @@ type PortraitPick = {
   promptUsed: string
   ts: string
   featured: boolean
+  isFront: boolean
 }
 
 function promptUsedFromAssetMeta (metadata: Record<string, unknown> | null): string {
@@ -216,12 +218,13 @@ function promptUsedFromAssetMeta (metadata: Record<string, unknown> | null): str
 
 function pickPortrait (prev: PortraitPick | undefined, next: PortraitPick): PortraitPick {
   if (!prev) return next
-  if (next.featured && !prev.featured) return next
-  if (next.featured === prev.featured && next.ts > prev.ts) return next
+  if (next.isFront && !prev.isFront) return next
+  if (next.isFront === prev.isFront && next.featured && !prev.featured) return next
+  if (next.isFront === prev.isFront && next.featured === prev.featured && next.ts > prev.ts) return next
   return prev
 }
 
-/** Featured portrait file + Character Creator fields per character row (same winner as former URL-only map). */
+/** Front (or featured) portrait file + Character Creator fields per character row. */
 const characterPortraitFieldsById = computed<Record<string, { url: string; notes: string; promptUsed: string }>>(() => {
   const byCharacterId: Record<string, PortraitPick> = {}
   const byCharacterName: Record<string, PortraitPick> = {}
@@ -235,6 +238,13 @@ const characterPortraitFieldsById = computed<Record<string, { url: string; notes
     const cname = typeof meta.character_name === 'string' ? normalize(meta.character_name) : ''
     const ts = a.updated || a.created || ''
     const featured = meta && typeof meta === 'object' && meta.featured === true
+    const label =
+      typeof (meta as { expression_label?: unknown }).expression_label === 'string'
+        ? String((meta as { expression_label?: string }).expression_label)
+        : typeof (meta as { emotion?: unknown }).emotion === 'string'
+          ? String((meta as { emotion?: string }).emotion)
+          : ''
+    const isFront = parseCharacterTurnaroundView(label) === 'front' || featured === true
     const pick: PortraitPick = {
       url: a.fileUrl,
       assetId: a.id,
@@ -242,7 +252,8 @@ const characterPortraitFieldsById = computed<Record<string, { url: string; notes
       notes: (a.notes || '').trim(),
       promptUsed: promptUsedFromAssetMeta(meta as Record<string, unknown> | null),
       ts,
-      featured
+      featured,
+      isFront
     }
     if (cid) {
       byCharacterId[cid] = pickPortrait(byCharacterId[cid], pick)

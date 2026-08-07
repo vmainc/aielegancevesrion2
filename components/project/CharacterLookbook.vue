@@ -57,95 +57,68 @@
       </div>
 
       <template v-else-if="character">
-        <!-- Compact plates for Entities accordion -->
+        <!-- Compact four-view plates -->
         <section
           v-if="platesOnly"
           class="space-y-2"
-          aria-label="Reference plates"
+          aria-label="Turnaround plates"
         >
-          <div class="flex items-center justify-between gap-2">
-            <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
-              Plates
-            </p>
-            <label
-              class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide rounded border border-gray-300 text-gray-700 hover:border-primary hover:text-primary cursor-pointer transition-colors"
-              :class="uploadingImage ? 'opacity-60 pointer-events-none' : ''"
-            >
-              <input
-                type="file"
-                accept="image/jpeg,image/png,image/webp,image/gif,image/*"
-                multiple
-                class="sr-only"
-                :disabled="uploadingImage"
-                @change="onImageFilesPicked"
-              >
-              {{ uploadingImage ? uploadProgressLabel : (galleryImages.length ? 'Add' : 'Upload') }}
-            </label>
-          </div>
-
-          <div
-            v-if="galleryImages.length"
-            class="grid grid-cols-2 gap-1.5"
-          >
+          <p class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+            Four views
+          </p>
+          <div class="grid grid-cols-2 gap-1.5">
             <figure
-              v-for="img in galleryImages"
-              :key="img.assetId"
-              class="group relative rounded-md overflow-hidden"
-              :class="img.featured ? 'ring-2 ring-primary' : 'ring-1 ring-gray-200'"
+              v-for="slot in turnaroundSlots"
+              :key="slot.view.id"
+              class="relative rounded-md overflow-hidden ring-1"
+              :class="slot.view.id === 'front' ? 'ring-primary' : 'ring-gray-200'"
             >
               <div class="relative aspect-[3/4] bg-gray-100">
                 <img
-                  :src="img.url"
-                  :alt="form.name"
+                  v-if="slot.image"
+                  :src="slot.image.url"
+                  :alt="`${form.name} ${slot.view.label}`"
                   class="absolute inset-0 w-full h-full object-cover"
                 >
-                <div class="absolute inset-x-0 bottom-0 p-1 bg-gradient-to-t from-black/75 to-transparent">
-                  <input
-                    :value="expressionDraft[img.assetId] ?? img.expressionLabel"
-                    type="text"
-                    maxlength="80"
-                    placeholder="Label"
-                    class="w-full bg-black/40 border border-white/20 rounded px-1 py-0.5 text-[9px] tracking-wide uppercase text-white placeholder:text-white/50 focus:border-primary focus:outline-none"
-                    :disabled="savingExpressionAssetId === img.assetId"
-                    @input="onExpressionInput(img.assetId, ($event.target as HTMLInputElement).value)"
-                    @blur="saveExpressionLabel(img)"
-                    @keydown.enter="($event.target as HTMLInputElement).blur()"
-                  >
-                  <div class="flex gap-0.5 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button
-                      v-if="!img.featured"
-                      type="button"
-                      class="flex-1 px-0.5 py-0.5 text-[8px] font-semibold uppercase rounded bg-white/95 text-gray-900"
-                      :disabled="featuringAssetId === img.assetId"
-                      @click="setFeatured(img)"
+                <div
+                  v-else
+                  class="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 uppercase tracking-wide"
+                >
+                  {{ slot.view.label }}
+                </div>
+                <div class="absolute inset-x-0 bottom-0 p-1 bg-gradient-to-t from-black/80 to-transparent space-y-0.5">
+                  <p class="text-[9px] font-semibold uppercase tracking-wide text-white text-center">
+                    {{ slot.view.label }}
+                    <span v-if="slot.view.id === 'front'" class="text-primary"> · main</span>
+                  </p>
+                  <div class="flex gap-0.5">
+                    <label
+                      class="flex-1 text-center px-0.5 py-0.5 text-[8px] font-semibold uppercase rounded bg-white/95 text-gray-900 cursor-pointer"
+                      :class="uploadingViewId === slot.view.id ? 'opacity-60 pointer-events-none' : ''"
                     >
-                      Feature
-                    </button>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp,image/gif,image/*"
+                        class="sr-only"
+                        :disabled="!!uploadingViewId"
+                        @change="onViewFilePicked(slot.view.id, $event)"
+                      >
+                      {{ uploadingViewId === slot.view.id ? '…' : (slot.image ? 'Replace' : 'Upload') }}
+                    </label>
                     <button
+                      v-if="slot.image"
                       type="button"
-                      class="flex-1 px-0.5 py-0.5 text-[8px] font-semibold uppercase rounded bg-red-700/90 text-white"
-                      :disabled="deletingAssetId === img.assetId"
-                      @click="deleteImage(img)"
+                      class="flex-1 px-0.5 py-0.5 text-[8px] font-semibold uppercase rounded bg-red-700/90 text-white disabled:opacity-40"
+                      :disabled="deletingAssetId === slot.image.assetId"
+                      @click="deleteImage(slot.image)"
                     >
                       Del
                     </button>
                   </div>
                 </div>
-                <span
-                  v-if="img.featured"
-                  class="absolute top-1 left-1 px-1 py-0.5 text-[8px] font-bold uppercase rounded bg-primary text-gray-950"
-                >
-                  Feat
-                </span>
               </div>
             </figure>
           </div>
-          <p
-            v-else
-            class="text-[11px] text-gray-500 py-4 text-center border border-dashed border-gray-200 rounded-lg"
-          >
-            Upload front / 3⁄4 / profile plates for this character.
-          </p>
         </section>
 
         <!-- Full character lookbook sheet -->
@@ -241,109 +214,92 @@
                   class="absolute inset-0 flex items-center justify-center text-center px-4"
                 >
                   <p class="text-xs text-stone-400 leading-relaxed">
-                    Add a featured portrait to anchor this lookbook.
+                    Upload a Front view to anchor this lookbook.
                   </p>
                 </div>
                 <span
-                  v-if="featuredImage?.expressionLabel"
+                  v-if="featuredImage"
                   class="absolute bottom-0 inset-x-0 px-2 py-1.5 text-[10px] tracking-[0.2em] uppercase text-center bg-black/65 text-stone-100"
                 >
-                  {{ featuredImage.expressionLabel }}
+                  Front · Main
                 </span>
               </div>
             </div>
 
-            <!-- Center: turnaround / expression strip -->
+            <!-- Center: four turnaround views -->
             <div
               v-if="!hidePlates"
               class="lg:col-span-6 px-4 sm:px-5 py-6 border-b lg:border-b-0 lg:border-r border-white/10"
             >
-              <div class="flex items-center justify-between gap-2 mb-3">
-                <h2 class="lookbook-label !mb-0">Reference plates</h2>
-                <label
-                  class="inline-flex items-center gap-1.5 px-2.5 py-1 text-[11px] font-semibold tracking-wide uppercase rounded border border-white/20 text-stone-100 hover:border-primary hover:text-primary cursor-pointer transition-colors"
-                  :class="uploadingImage ? 'opacity-60 pointer-events-none' : ''"
-                >
-                  <input
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp,image/gif,image/*"
-                    multiple
-                    class="sr-only"
-                    :disabled="uploadingImage"
-                    @change="onImageFilesPicked"
-                  >
-                  {{ uploadingImage ? uploadProgressLabel : (galleryImages.length ? 'Add plates' : 'Upload plates') }}
-                </label>
+              <div class="mb-3">
+                <h2 class="lookbook-label !mb-1">Turnaround plates</h2>
+                <p class="text-[10px] text-stone-500 tracking-wide">
+                  Upload Front, Back, Left, and Right. Front is the main character image for generation.
+                </p>
               </div>
 
-              <div
-                v-if="galleryImages.length"
-                class="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2 sm:gap-2.5"
-              >
+              <div class="grid grid-cols-2 gap-2 sm:gap-2.5">
                 <figure
-                  v-for="img in galleryImages"
-                  :key="img.assetId"
+                  v-for="slot in turnaroundSlots"
+                  :key="slot.view.id"
                   class="lookbook-plate group relative"
-                  :class="img.featured ? 'ring-2 ring-primary' : 'ring-1 ring-white/15'"
+                  :class="slot.view.id === 'front' ? 'ring-2 ring-primary' : 'ring-1 ring-white/15'"
                 >
                   <div class="relative aspect-[3/4] bg-black overflow-hidden">
                     <img
-                      :src="img.url"
-                      :alt="form.name"
+                      v-if="slot.image"
+                      :src="slot.image.url"
+                      :alt="`${form.name} ${slot.view.label}`"
                       class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
                     >
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-90" />
+                    <div
+                      v-else
+                      class="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3 text-center"
+                    >
+                      <span class="text-[11px] tracking-[0.2em] uppercase text-stone-400">{{ slot.view.label }}</span>
+                      <span class="text-[10px] text-stone-500">{{ slot.view.hint }}</span>
+                    </div>
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-95" />
                     <div class="absolute inset-x-0 bottom-0 p-1.5 space-y-1">
-                      <input
-                        :value="expressionDraft[img.assetId] ?? img.expressionLabel"
-                        type="text"
-                        maxlength="80"
-                        placeholder="Label view"
-                        class="w-full bg-black/50 border border-white/20 rounded px-1.5 py-0.5 text-[10px] tracking-wide uppercase text-stone-100 placeholder:text-stone-500 focus:border-primary focus:outline-none"
-                        :disabled="savingExpressionAssetId === img.assetId"
-                        @input="onExpressionInput(img.assetId, ($event.target as HTMLInputElement).value)"
-                        @blur="saveExpressionLabel(img)"
-                        @keydown.enter="($event.target as HTMLInputElement).blur()"
-                      >
-                      <div class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          v-if="!img.featured"
-                          type="button"
-                          class="flex-1 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-white/90 text-gray-900"
-                          :disabled="featuringAssetId === img.assetId"
-                          @click="setFeatured(img)"
+                      <p class="text-[10px] font-semibold tracking-[0.18em] uppercase text-stone-100 text-center">
+                        {{ slot.view.label }}
+                        <span v-if="slot.view.id === 'front'" class="text-primary"> · Main</span>
+                      </p>
+                      <div class="flex gap-1">
+                        <label
+                          class="flex-1 inline-flex justify-center px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-white/90 text-gray-900 cursor-pointer"
+                          :class="uploadingViewId === slot.view.id ? 'opacity-60 pointer-events-none' : ''"
                         >
-                          Feature
-                        </button>
+                          <input
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif,image/*"
+                            class="sr-only"
+                            :disabled="!!uploadingViewId"
+                            @change="onViewFilePicked(slot.view.id, $event)"
+                          >
+                          {{ uploadingViewId === slot.view.id ? 'Uploading…' : (slot.image ? 'Replace' : 'Upload') }}
+                        </label>
                         <button
+                          v-if="slot.image"
                           type="button"
-                          class="flex-1 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-red-700/90 text-white"
-                          :disabled="deletingAssetId === img.assetId"
-                          @click="deleteImage(img)"
+                          class="flex-1 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-red-700/90 text-white disabled:opacity-40"
+                          :disabled="deletingAssetId === slot.image.assetId"
+                          @click="deleteImage(slot.image)"
                         >
                           Delete
                         </button>
                       </div>
                     </div>
-                    <span
-                      v-if="img.featured"
-                      class="absolute top-1.5 left-1.5 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider rounded bg-primary text-gray-950"
-                    >
-                      Featured
-                    </span>
                   </div>
                 </figure>
               </div>
 
               <p
-                v-else
-                class="text-xs text-stone-400 py-16 text-center border border-dashed border-white/15 rounded-lg"
+                v-if="extraPlates.length"
+                class="mt-3 text-[10px] text-stone-500"
               >
-                Upload front / 3⁄4 / profile / expression plates — labeled views become this character’s turnaround.
-              </p>
-
-              <p class="mt-3 text-[10px] text-stone-500 tracking-wide">
-                Tip: label plates like Front, 3⁄4, Profile, Back, Angry, Calm — same idea as a studio turnaround sheet.
+                {{ extraPlates.length }} older unlabeled plate{{ extraPlates.length === 1 ? '' : 's' }} still on file
+                (not used as turnaround slots).
               </p>
             </div>
 
@@ -608,6 +564,12 @@
 <script setup lang="ts">
 import { appendPlaybackAccessToken, projectAssetMediaPath, projectAssetPlaybackSrc } from '~/lib/project-asset-playback-url'
 import { isCharacterPortraitAsset, isCharacterReferenceClipAsset } from '~/lib/character-voice-assets'
+import {
+  CHARACTER_TURNAROUND_VIEWS,
+  characterTurnaroundLabel,
+  parseCharacterTurnaroundView,
+  type CharacterTurnaroundViewId
+} from '~/lib/character-turnaround-views'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
 import {
   uploadCharacterReferenceClip,
@@ -665,14 +627,12 @@ const assets = ref<ProjectAsset[]>([])
 const synthetic = ref(false)
 
 const uploadingImage = ref(false)
-const uploadProgress = ref({ current: 0, total: 0 })
+const uploadingViewId = ref<CharacterTurnaroundViewId | ''>('')
 const uploadingVoice = ref(false)
 const referenceClipLabel = ref('')
 const deletingAssetId = ref('')
 const featuringAssetId = ref('')
-const savingExpressionAssetId = ref('')
 const copied = ref(false)
-const expressionDraft = reactive<Record<string, string>>({})
 const linkedBibleEntity = ref<{
   id: string
   name: string
@@ -683,12 +643,6 @@ const projectAssets = ref<ProjectAsset[]>([])
 const castAssetCount = computed(() =>
   countAssetsForCastCharacter(projectAssets.value, effectiveCharacterId.value)
 )
-
-const uploadProgressLabel = computed(() => {
-  const { current, total } = uploadProgress.value
-  if (total <= 1) return 'Uploading…'
-  return `Uploading ${current} of ${total}…`
-})
 
 const form = reactive({
   name: '',
@@ -830,17 +784,6 @@ function expressionLabelFromMeta (meta: Record<string, unknown>): string {
   return typeof v === 'string' ? v.trim() : ''
 }
 
-function syncExpressionDrafts (images: GalleryImage[]) {
-  for (const key of Object.keys(expressionDraft)) {
-    if (!images.some(img => img.assetId === key)) delete expressionDraft[key]
-  }
-  for (const img of images) {
-    if (expressionDraft[img.assetId] === undefined) {
-      expressionDraft[img.assetId] = img.expressionLabel
-    }
-  }
-}
-
 const galleryImages = computed<GalleryImage[]>(() => {
   const out: GalleryImage[] = []
   for (const a of assets.value) {
@@ -862,9 +805,36 @@ const galleryImages = computed<GalleryImage[]>(() => {
   })
 })
 
-watch(galleryImages, (images) => { syncExpressionDrafts(images) }, { immediate: true })
+const turnaroundSlots = computed(() =>
+  CHARACTER_TURNAROUND_VIEWS.map((view) => {
+    const matches = galleryImages.value.filter(
+      (img) => parseCharacterTurnaroundView(img.expressionLabel) === view.id
+    )
+    const image =
+      view.id === 'front'
+        ? matches.find((m) => m.featured) || matches[0] || null
+        : matches.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))[0] || null
+    return { view, image }
+  })
+)
 
-const featuredImage = computed(() => galleryImages.value[0] || null)
+const turnaroundAssetIds = computed(() => {
+  const ids = new Set<string>()
+  for (const slot of turnaroundSlots.value) {
+    if (slot.image) ids.add(slot.image.assetId)
+  }
+  return ids
+})
+
+const extraPlates = computed(() =>
+  galleryImages.value.filter((img) => !turnaroundAssetIds.value.has(img.assetId))
+)
+
+const featuredImage = computed(() => {
+  const front = turnaroundSlots.value.find((s) => s.view.id === 'front')?.image
+  if (front) return front
+  return galleryImages.value.find((g) => g.featured) || galleryImages.value[0] || null
+})
 const featuredImageUrl = computed(() => featuredImage.value?.url || '')
 const lockedPortraitPrompt = computed(() => featuredImage.value?.promptUsed || '')
 
@@ -1112,70 +1082,12 @@ async function uploadCharacterImage (token: string, file: File, opts: { featured
   })
 }
 
-async function onImageFilesPicked (ev: Event) {
-  const input = ev.target as HTMLInputElement
-  const files = input.files ? [...input.files] : []
-  input.value = ''
-  if (!files.length) return
-
-  const token = getAuthToken()
-  if (!token) return
-
-  const imageFiles = files.filter(f => f.type.startsWith('image/'))
-  if (!imageFiles.length) {
-    toast.showToast('Choose image files (JPEG, PNG, WebP, or GIF).', 'warning')
-    return
-  }
-  if (imageFiles.length < files.length) {
-    toast.showToast('Skipped non-image files.', 'warning')
-  }
-
-  uploadingImage.value = true
-  uploadProgress.value = { current: 0, total: imageFiles.length }
-  let uploaded = 0
-  const hadImages = galleryImages.value.length > 0
-
-  try {
-    for (let i = 0; i < imageFiles.length; i++) {
-      uploadProgress.value = { current: i + 1, total: imageFiles.length }
-      await uploadCharacterImage(token, imageFiles[i], {
-        featured: !hadImages && i === 0
-      })
-      uploaded++
-    }
-    toast.showToast(
-      uploaded === 1 ? 'Photo added.' : `${uploaded} photos added.`,
-      'success'
-    )
-    await load()
-  } catch (e: unknown) {
-    const msg = formatApiFetchError(e, 'Could not upload image')
-    if (uploaded > 0) {
-      toast.showToast(`${uploaded} uploaded; then failed: ${msg}`, 'warning')
-      await load()
-    } else {
-      toast.showToast(msg, 'error')
-    }
-  } finally {
-    uploadingImage.value = false
-    uploadProgress.value = { current: 0, total: 0 }
-  }
-}
-
-function onExpressionInput (assetId: string, value: string) {
-  expressionDraft[assetId] = value
-}
-
-async function saveExpressionLabel (img: GalleryImage) {
-  const next = (expressionDraft[img.assetId] ?? '').trim()
-  if (next === img.expressionLabel) return
-  const token = getAuthToken()
-  if (!token) return
-  savingExpressionAssetId.value = img.assetId
-  try {
-    const asset = assets.value.find((a) => a.id === img.assetId)
+async function clearFeaturedFlags (token: string) {
+  for (const g of galleryImages.value) {
+    if (!g.featured) continue
+    const asset = assets.value.find((a) => a.id === g.assetId)
     const meta = (asset?.metadata && typeof asset.metadata === 'object') ? { ...asset.metadata } : {}
-    await $fetch(`/api/projects/${projectId.value}/assets/${img.assetId}`, {
+    await $fetch(`/api/projects/${projectId.value}/assets/${g.assetId}`, {
       method: 'PATCH',
       headers: { Authorization: `Bearer ${token}` },
       body: {
@@ -1183,17 +1095,56 @@ async function saveExpressionLabel (img: GalleryImage) {
           ...meta,
           character_id: effectiveCharacterId.value,
           character_name: form.name,
-          expression_label: next
+          featured: false
         }
       }
     })
-    expressionDraft[img.assetId] = next
+  }
+}
+
+async function deleteAssetsForView (token: string, view: CharacterTurnaroundViewId) {
+  const toDelete = galleryImages.value.filter(
+    (img) => parseCharacterTurnaroundView(img.expressionLabel) === view
+  )
+  for (const img of toDelete) {
+    await $fetch(`/api/projects/${projectId.value}/assets/${img.assetId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${token}` }
+    })
+  }
+}
+
+async function onViewFilePicked (view: CharacterTurnaroundViewId, ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+
+  const token = getAuthToken()
+  if (!token) return
+  if (!file.type.startsWith('image/')) {
+    toast.showToast('Choose an image file (JPEG, PNG, WebP, or GIF).', 'warning')
+    return
+  }
+
+  uploadingViewId.value = view
+  uploadingImage.value = true
+  try {
+    await deleteAssetsForView(token, view)
+    if (view === 'front') {
+      await clearFeaturedFlags(token)
+    }
+    await uploadCharacterImage(token, file, {
+      featured: view === 'front',
+      expressionLabel: characterTurnaroundLabel(view)
+    })
+    toast.showToast(`${characterTurnaroundLabel(view)} view saved.`, 'success')
     await load()
   } catch (e: unknown) {
-    expressionDraft[img.assetId] = img.expressionLabel
-    toast.showToast(formatApiFetchError(e, 'Could not save label'), 'error')
+    toast.showToast(formatApiFetchError(e, 'Could not upload image'), 'error')
   } finally {
-    savingExpressionAssetId.value = ''
+    uploadingViewId.value = ''
+    uploadingImage.value = false
   }
 }
 
@@ -1206,7 +1157,13 @@ async function setFeatured (img: GalleryImage) {
       const shouldFeature = g.assetId === img.assetId
       const asset = assets.value.find((a) => a.id === g.assetId)
       const meta = (asset?.metadata && typeof asset.metadata === 'object') ? { ...asset.metadata } : {}
-      if ((meta.featured === true) === shouldFeature) continue
+      const nextLabel =
+        shouldFeature
+          ? (parseCharacterTurnaroundView(g.expressionLabel) === 'front'
+            ? g.expressionLabel || 'Front'
+            : 'Front')
+          : g.expressionLabel
+      if ((meta.featured === true) === shouldFeature && g.expressionLabel === nextLabel) continue
       await $fetch(`/api/projects/${projectId.value}/assets/${g.assetId}`, {
         method: 'PATCH',
         headers: { Authorization: `Bearer ${token}` },
@@ -1215,7 +1172,8 @@ async function setFeatured (img: GalleryImage) {
             ...meta,
             character_id: effectiveCharacterId.value,
             character_name: form.name,
-            featured: shouldFeature
+            featured: shouldFeature,
+            ...(shouldFeature ? { expression_label: nextLabel || 'Front' } : {})
           }
         }
       })

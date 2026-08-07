@@ -857,7 +857,7 @@ async function generateFrame (
     const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim() && !(c.plateUrls || []).length)
     if (missingPortraits.length) {
       toast.showToast(
-        'No cast plates attached — add reference plates in the Production Bible character lookbook (or Assets → Characters) for consistent looks.',
+        'No cast plates attached — add Front/Back/Left/Right turnaround plates in the Production Bible lookbook (or Assets → Characters) for consistent looks.',
         'info'
       )
     }
