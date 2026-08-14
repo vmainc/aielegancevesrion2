@@ -1,5 +1,9 @@
 import { getBlendAtTime } from '~/lib/timeline-editor/blend'
 import { findClipAtTime, clipsOnTrack } from '~/lib/timeline-editor/clip-ops'
+import {
+  type TimelineExportQualityId,
+  timelineExportQualityPreset
+} from '~/lib/timeline-editor/export-quality'
 import { clipTimelineEnd } from '~/lib/timeline-editor/geometry'
 import { applyCrossOriginForMediaSrc } from '~/lib/timeline-editor/media-cross-origin'
 import type { TimelineEditorClip } from '~/types/timeline-editor'
@@ -28,13 +32,15 @@ export type TimelineExportOptions = {
   stopPlayback: () => void
   getPlayhead: () => number
   getIsPlaying: () => boolean
+  /** 720p / 1080p — sets canvas size and bitrate unless width/height/bitrate override. */
+  quality?: TimelineExportQualityId
   exportWidth?: number
   exportHeight?: number
+  videoBitsPerSecond?: number
+  frameRate?: number
   onProgress?: (p: TimelineExportProgress) => void
 }
 
-const DEFAULT_WIDTH = 1280
-const DEFAULT_HEIGHT = 720
 /** Preload the incoming clip on videoB before a cut so handoff does not flash black. */
 const CUT_PRELOAD_SEC = 0.4
 
@@ -316,8 +322,11 @@ function recordWhilePlaying (
   exportVideoAudio: HTMLVideoElement
 ): Promise<Blob> {
   const { preview } = opts
-  const w = opts.exportWidth ?? DEFAULT_WIDTH
-  const h = opts.exportHeight ?? DEFAULT_HEIGHT
+  const preset = timelineExportQualityPreset(opts.quality)
+  const w = opts.exportWidth ?? preset.width
+  const h = opts.exportHeight ?? preset.height
+  const fps = opts.frameRate ?? preset.frameRate
+  const videoBitsPerSecond = opts.videoBitsPerSecond ?? preset.videoBitsPerSecond
   const mime = pickRecorderMime()
 
   const canvas = document.createElement('canvas')
@@ -337,12 +346,12 @@ function recordWhilePlaying (
   exportVideoAudioGain.connect(dest)
 
   const combined = new MediaStream([
-    ...canvas.captureStream(30).getVideoTracks(),
+    ...canvas.captureStream(fps).getVideoTracks(),
     ...dest.stream.getAudioTracks()
   ])
 
   const chunks: Blob[] = []
-  const recorder = new MediaRecorder(combined, { mimeType: mime, videoBitsPerSecond: 8_000_000 })
+  const recorder = new MediaRecorder(combined, { mimeType: mime, videoBitsPerSecond })
   const audioKey = { value: '' }
 
   const holdCanvas = document.createElement('canvas')

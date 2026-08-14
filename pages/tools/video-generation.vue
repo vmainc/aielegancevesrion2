@@ -40,6 +40,18 @@
         {{ data.notice }}
       </p>
 
+      <div
+        class="mb-6 flex flex-wrap items-center gap-2"
+        role="status"
+      >
+        <span
+          class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold tracking-wide bg-gray-900 text-white"
+        >{{ resolution }}</span>
+        <p class="text-sm text-gray-600">
+          {{ qualityStatusLine }}
+        </p>
+      </div>
+
       <!-- Generating: hide all options -->
       <div
         v-if="uiPhase === 'generating'"
@@ -47,7 +59,7 @@
       >
         <FilmReelLoader
           size="lg"
-          label="Generating video"
+          :label="`Generating ${resolution} video`"
           :sub-label="generatingSubLabel"
         />
         <p class="mt-6 text-center text-sm text-gray-600 max-w-md mx-auto">
@@ -63,7 +75,7 @@
         <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-5">
           <div>
             <h2 class="text-lg font-semibold text-gray-900">
-              {{ successfulResults.length === 1 ? 'Your clip is ready' : 'Pick a clip to keep' }}
+              {{ successfulResults.length === 1 ? `Your ${resolution} clip is ready` : `Pick a ${resolution} clip to keep` }}
             </h2>
             <p class="text-sm text-gray-600 mt-1">
               <template v-if="panelPrefill?.sceneId && panelPrefill?.shotId">
@@ -97,6 +109,7 @@
                   class="text-primary focus:ring-primary"
                 >
                 <span class="text-sm font-semibold text-gray-900">{{ r.modelName }}</span>
+                <span class="ml-auto text-[10px] font-semibold uppercase tracking-wide text-gray-500">{{ resolution }}</span>
               </div>
               <div class="aspect-video bg-black">
                 <video
@@ -245,7 +258,7 @@
             </div>
           </details>
 
-          <div class="grid sm:grid-cols-2 gap-4">
+          <div class="grid sm:grid-cols-3 gap-4">
             <div>
               <label for="vg-aspect" class="block text-sm font-medium text-gray-700 mb-1.5">Aspect ratio</label>
               <select
@@ -257,6 +270,28 @@
                 <option value="9:16">9:16 (vertical)</option>
                 <option value="1:1">1:1 (square)</option>
               </select>
+            </div>
+            <div>
+              <label for="vg-resolution" class="block text-sm font-medium text-gray-700 mb-1.5">Quality</label>
+              <select
+                id="vg-resolution"
+                v-model="resolution"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              >
+                <option
+                  v-for="q in resolutionOptions"
+                  :key="q"
+                  :value="q"
+                >
+                  {{ q === '1080p' ? '1080p (high)' : '720p (standard)' }}
+                </option>
+              </select>
+              <p
+                v-if="resolutionHint"
+                class="mt-1.5 text-xs text-gray-500"
+              >
+                {{ resolutionHint }}
+              </p>
             </div>
             <div>
               <label for="vg-duration" class="block text-sm font-medium text-gray-700 mb-1.5">Clip length</label>
@@ -611,7 +646,9 @@
             class="px-6 py-3 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="!canSubmit"
           >
-            {{ generating ? `Generating… ${doneCount}/${selectedModelIdsList.length}` : 'Generate Video' }}
+            {{ generating
+              ? `Generating ${resolution}… ${doneCount}/${selectedModelIdsList.length}`
+              : `Generate ${resolution} video` }}
           </button>
         </div>
       </form>
@@ -625,8 +662,9 @@
             :key="m.id"
             class="rounded-xl overflow-hidden border border-gray-200 bg-white flex flex-col shadow-sm"
           >
-            <div class="px-3 py-2.5 border-b border-gray-200 bg-gray-50">
+            <div class="px-3 py-2.5 border-b border-gray-200 bg-gray-50 flex items-center gap-2">
               <span class="text-sm font-semibold text-gray-900">{{ m.name }}</span>
+              <span class="ml-auto text-[10px] font-semibold uppercase tracking-wide text-gray-500">{{ resolution }}</span>
             </div>
             <div class="aspect-video bg-black flex items-center justify-center">
               <template v-if="slotByModel[m.id]?.status === 'loading'">
@@ -776,12 +814,16 @@ import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import {
   defaultAspectRatioFromPrefs,
   defaultDurationFromPrefs,
+  defaultResolutionFromPrefs,
   parseVideoGenerationAspectRatio,
   parseVideoGenerationDurationSeconds,
+  parseVideoGenerationResolution,
   readVideoGenerationPrefs,
   videoToolDurationOptions,
+  videoToolResolutionOptions,
   writeVideoGenerationPrefs,
-  type VideoToolClipSeconds
+  type VideoToolClipSeconds,
+  type VideoToolResolution
 } from '~/lib/video-generation-prefs'
 import {
   collectCharacterPortraitUrls,
@@ -801,6 +843,7 @@ type VideoModel = {
   name: string
   description?: string
   supportedDurations?: number[]
+  supportedResolutions?: string[]
   generateAudio?: boolean
   supportsNegativePrompt?: boolean
   supportedFrameImages?: Array<'first_frame' | 'last_frame'>
@@ -881,6 +924,7 @@ const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(
 const durationSeconds = ref<VideoToolClipSeconds>(
   defaultDurationFromPrefs(boot?.durationSeconds)
 )
+const resolution = ref<VideoToolResolution>(defaultResolutionFromPrefs())
 const includeSpokenDialogue = ref(false)
 const dialogueLine = ref('')
 const dialogueSpeakerId = ref('')
@@ -1274,12 +1318,45 @@ const durationHint = computed(() => {
   return ''
 })
 
+const resolutionOptions = computed(() => {
+  const selected = models.value.filter(m => selectedModelIdsList.value.includes(m.id))
+  return videoToolResolutionOptions(selected.length ? selected : models.value)
+})
+
+const resolutionHint = computed(() => {
+  if (!resolutionOptions.value.includes('1080p')) {
+    return '1080p is not listed for the selected model(s).'
+  }
+  if (resolution.value === '1080p') {
+    const selected = models.value.filter(m => selectedModelIdsList.value.includes(m.id))
+    const snaps = selected.filter((m) => {
+      const list = m.supportedResolutions
+      return Array.isArray(list) && list.length > 0 && !list.includes('1080p')
+    })
+    if (snaps.length) {
+      return `${snaps.map(m => m.name).join(', ')} will generate at 720p.`
+    }
+    return '1080p takes longer and costs more than 720p.'
+  }
+  return ''
+})
+
 watch(
   durationOptions,
   (opts) => {
     if (!opts.includes(durationSeconds.value as VideoToolClipSeconds)) {
       const next = opts.includes(10) ? 10 : opts[0] || 5
       durationSeconds.value = next
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  resolutionOptions,
+  (opts) => {
+    if (!opts.includes(resolution.value)) {
+      resolution.value = opts.includes('720p') ? '720p' : opts[0] || '720p'
     }
   },
   { immediate: true }
@@ -1299,6 +1376,7 @@ const setupAccordionSummary = computed(() => {
   const parts: string[] = []
   parts.push(primaryModel.value?.name || 'No model selected')
   parts.push(aspectRatio.value)
+  parts.push(resolution.value)
   parts.push(`${durationSeconds.value}s`)
   if (isAuthenticated.value && selectedProjectId.value) {
     const project = pbProjects.value.find(p => p.id === selectedProjectId.value)
@@ -1378,6 +1456,10 @@ function hydrateVideoGenerationPrefs () {
     const dur = parseVideoGenerationDurationSeconds(prefs.durationSeconds)
     if (dur) durationSeconds.value = dur
   }
+  if (!prefillApplied.value) {
+    const res = parseVideoGenerationResolution(prefs.resolution)
+    if (res) resolution.value = res
+  }
 
   if (modelsPrefsHydrated.value && (primaryModelId.value || !models.value.length)) {
     prefsHydrated.value = true
@@ -1398,12 +1480,13 @@ function persistVideoGenerationPrefs () {
         ? selectedProjectId.value
         : undefined,
     aspectRatio: aspectRatio.value,
-    durationSeconds: durationSeconds.value
+    durationSeconds: durationSeconds.value,
+    resolution: resolution.value
   })
 }
 
 watch(
-  [primaryModelId, compareModelIds, selectedProjectId, aspectRatio, durationSeconds],
+  [primaryModelId, compareModelIds, selectedProjectId, aspectRatio, durationSeconds, resolution],
   persistVideoGenerationPrefs,
   { deep: true }
 )
@@ -1638,8 +1721,15 @@ const failedResults = computed(() =>
 
 const generatingSubLabel = computed(() => {
   const total = selectedModelIdsList.value.length
-  if (!total) return 'Starting…'
-  return `Finished ${doneCount.value} of ${total} model${total === 1 ? '' : 's'}…`
+  if (!total) return `${resolution.value} · starting…`
+  return `${resolution.value} · finished ${doneCount.value} of ${total} model${total === 1 ? '' : 's'}…`
+})
+
+const qualityStatusLine = computed(() => {
+  const format = `${resolution.value} · ${aspectRatio.value} · ${durationSeconds.value}s`
+  if (uiPhase.value === 'generating') return `Generating at ${format}`
+  if (uiPhase.value === 'complete') return `Generated at ${format}`
+  return `This run will generate at ${format}`
 })
 
 const keepButtonLabel = computed(() => {
@@ -1853,6 +1943,7 @@ async function runOneModel (modelId: string) {
       prompt: resolvedGenerationPrompt(),
       model: modelId,
       aspectRatio: aspectRatio.value,
+      resolution: resolution.value,
       durationSeconds: durationSeconds.value,
       frameImageUrl: startFrameUrl.value || undefined,
       lastFrameImageUrl:
@@ -1860,6 +1951,7 @@ async function runOneModel (modelId: string) {
           ? endFrameUrl.value
           : undefined,
       supportedDurations: model?.supportedDurations,
+      supportedResolutions: model?.supportedResolutions,
       generateAudio: wantsGeneratedAudio.value,
       includeSpokenDialogue: includeSpokenDialogue.value,
       includeAmbientSound: includeAmbientSound.value,
@@ -1875,6 +1967,7 @@ async function runOneModel (modelId: string) {
         model_id: modelId,
         source: pre?.source || 'standalone_video_tool',
         aspect_ratio: aspectRatio.value,
+        resolution: resolution.value,
         duration_seconds: durationSeconds.value,
         generate_audio: wantsGeneratedAudio.value,
         include_spoken_dialogue: includeSpokenDialogue.value,

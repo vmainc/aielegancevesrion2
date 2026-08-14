@@ -21,6 +21,7 @@ const FALLBACK_VIDEO_MODELS = [
     generateAudio: true,
     supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     supportedFrameImages: ['first_frame', 'last_frame'] as const,
+    supportedResolutions: ['720p', '1080p'] as const,
   },
   {
     id: 'bytedance/seedance-2.0-fast',
@@ -30,6 +31,7 @@ const FALLBACK_VIDEO_MODELS = [
     generateAudio: true,
     supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     supportedFrameImages: ['first_frame', 'last_frame'] as const,
+    supportedResolutions: ['720p', '1080p'] as const,
   },
   {
     id: 'bytedance/seedance-1-5-pro',
@@ -39,6 +41,7 @@ const FALLBACK_VIDEO_MODELS = [
     generateAudio: true,
     supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12],
     supportedFrameImages: ['first_frame', 'last_frame'] as const,
+    supportedResolutions: ['720p', '1080p'] as const,
   },
   {
     id: 'openai/sora-2-pro',
@@ -54,6 +57,7 @@ const FALLBACK_VIDEO_MODELS = [
     generateAudio: true,
     supportsNegativePrompt: true,
     supportedFrameImages: ['first_frame', 'last_frame'] as const,
+    supportedResolutions: ['720p', '1080p'] as const,
   },
 ]
 
@@ -71,6 +75,8 @@ type VideoModelRow = {
   supportsNegativePrompt?: boolean
   /** OpenRouter `supported_frame_images` — e.g. first_frame, last_frame. */
   supportedFrameImages?: Array<'first_frame' | 'last_frame'>
+  /** OpenRouter `supported_resolutions` — e.g. 720p, 1080p. */
+  supportedResolutions?: string[]
 }
 
 type VideosModelsPayload = {
@@ -80,6 +86,7 @@ type VideosModelsPayload = {
     generate_audio?: unknown
     allowed_passthrough_parameters?: unknown
     supported_frame_images?: unknown
+    supported_resolutions?: unknown
   }>
 }
 
@@ -88,6 +95,7 @@ type VideoCatalogEntry = {
   generateAudio: boolean | undefined
   allowedPassthroughParameters: string[]
   supportedFrameImages: Array<'first_frame' | 'last_frame'>
+  supportedResolutions: string[]
 }
 
 function parseSupportedDurations (raw: unknown): number[] {
@@ -120,6 +128,15 @@ function parseSupportedFrameImages (raw: unknown): Array<'first_frame' | 'last_f
   return [...new Set(out)]
 }
 
+function parseSupportedResolutions (raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  for (const x of raw) {
+    if (typeof x === 'string' && x.trim()) out.push(x.trim())
+  }
+  return [...new Set(out)]
+}
+
 /** OpenRouter public catalog: durations + native audio capability per model id. */
 async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> {
   const map = new Map<string, VideoCatalogEntry>()
@@ -136,7 +153,8 @@ async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> 
         supportedDurations: parseSupportedDurations(row.supported_durations),
         generateAudio: parseGenerateAudio(row.generate_audio),
         allowedPassthroughParameters: parseAllowedPassthrough(row.allowed_passthrough_parameters),
-        supportedFrameImages: parseSupportedFrameImages(row.supported_frame_images)
+        supportedFrameImages: parseSupportedFrameImages(row.supported_frame_images),
+        supportedResolutions: parseSupportedResolutions(row.supported_resolutions)
       })
     }
   } catch {
@@ -232,6 +250,7 @@ export default defineEventHandler(async () => {
     if (meta.supportedDurations.length) row.supportedDurations = meta.supportedDurations
     if (meta.generateAudio !== undefined) row.generateAudio = meta.generateAudio
     if (meta.supportedFrameImages.length) row.supportedFrameImages = meta.supportedFrameImages
+    if (meta.supportedResolutions.length) row.supportedResolutions = meta.supportedResolutions
     if (modelSupportsNativeNegativePrompt(meta.allowedPassthroughParameters)) {
       row.supportsNegativePrompt = true
     } else if (row.id.toLowerCase().startsWith('google/veo')) {

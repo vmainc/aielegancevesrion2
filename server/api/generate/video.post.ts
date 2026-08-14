@@ -52,7 +52,7 @@ export default defineEventHandler(async (event) => {
   const model = typeof body?.model === 'string' ? body.model : ''
 
   const aspectRatio = normalizeAspect(body?.aspectRatio ?? body?.aspect_ratio)
-  const resolution = normalizeResolution(body?.resolution)
+  const resolution = normalizeResolution(body?.resolution) ?? '720p'
   const durationRaw = clampInt(body?.durationSeconds ?? body?.duration, 5, 1, 60)
 
   const frameImageUrl =

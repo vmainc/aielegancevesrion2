@@ -4,6 +4,7 @@ import { ensureVideoStartFrameUrl } from '~/lib/video-start-frame-upload'
 import { normalizeVideoNegativePromptForApi } from '~/lib/video-negative-prompt'
 import { projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { snapDurationToModelSupported } from '~/lib/storyboard-video-duration'
+import { snapVideoResolutionToModel, type VideoToolResolution } from '~/lib/video-generation-prefs'
 import type { ProjectAsset } from '~/types/project-asset'
 
 export type VideoJobPostResponse = {
@@ -18,12 +19,13 @@ export type OpenRouterVideoGenerateInput = {
   prompt: string
   model: string
   aspectRatio?: '16:9' | '9:16' | '1:1'
-  resolution?: '480p' | '720p' | '1080p'
+  resolution?: VideoToolResolution
   durationSeconds?: number
   frameImageUrl?: string
   /** Ending still — OpenRouter `last_frame` (Veo, Kling, Seedance, Wan 2.7, etc.). */
   lastFrameImageUrl?: string
   supportedDurations?: number[]
+  supportedResolutions?: string[]
   /** Rare opt-in: OpenRouter model-synthesized audio. Default false. */
   generateAudio?: boolean
   includeSpokenDialogue?: boolean
@@ -80,7 +82,7 @@ export async function generateOpenRouterVideo (
       prompt: input.prompt.trim(),
       model: input.model,
       aspectRatio: input.aspectRatio || '16:9',
-      resolution: input.resolution || '720p',
+      resolution: snapVideoResolutionToModel(input.resolution, input.supportedResolutions),
       durationSeconds,
       frameImageUrl,
       lastFrameImageUrl,

@@ -50,6 +50,7 @@
       :can-export="videoClips.length > 0"
       :exporting="exporting"
       :export-label="exportLabel"
+      :export-quality="exportQuality"
       :zoom="zoom"
       @set-tool="activeTool = $event"
       @undo="onUndo"
@@ -60,6 +61,7 @@
       @detach-audio="detachAudio()"
       @set-transition="applyTransition"
       @set-zoom="setZoom"
+      @set-export-quality="onExportQuality"
       @export="onExportVideo"
     />
 
@@ -110,7 +112,7 @@
       >
         <p class="font-medium">{{ exportLabel }}</p>
         <p class="text-xs text-emerald-200/80 mt-1">
-          Export records your edit in real time — keep this tab open until it finishes.
+          Recording at {{ exportQualityPreset.label }} ({{ exportQualityPreset.width }}×{{ exportQualityPreset.height }}) in real time — keep this tab open until it finishes.
         </p>
         <div class="mt-2 h-1.5 rounded-full bg-emerald-950 overflow-hidden">
           <div
@@ -215,6 +217,14 @@ import {
   clampCutTimeForClip
 } from '~/lib/timeline-editor/clip-ops'
 import { TIMELINE_RAZOR_CURSOR } from '~/lib/timeline-editor/razor-cursor'
+import {
+  DEFAULT_TIMELINE_EXPORT_QUALITY,
+  parseTimelineExportQuality,
+  readTimelineExportQuality,
+  timelineExportQualityPreset,
+  writeTimelineExportQuality,
+  type TimelineExportQualityId
+} from '~/lib/timeline-editor/export-quality'
 import {
   defaultTimelineExportFilename,
   downloadTimelineExport,
@@ -392,6 +402,8 @@ const draggingClipId = ref<string | null>(null)
 const exporting = ref(false)
 const exportProgress = ref(0)
 const exportLabel = ref('Export video')
+const exportQuality = ref<TimelineExportQualityId>(DEFAULT_TIMELINE_EXPORT_QUALITY)
+const exportQualityPreset = computed(() => timelineExportQualityPreset(exportQuality.value))
 
 const laneWidthPx = computed(() => Math.max(640, duration.value * zoom.value + 80))
 const isScrubbing = playback.isScrubbing
@@ -499,6 +511,7 @@ function onEditorKeydown (e: KeyboardEvent) {
 }
 
 onMounted(() => {
+  exportQuality.value = readTimelineExportQuality()
   nextTick(bindPreviewVideo)
   if (import.meta.client) {
     window.addEventListener('keydown', onEditorKeydown)
@@ -670,6 +683,13 @@ function onStop () {
   playback.seekPreviewToPlayhead()
 }
 
+function onExportQuality (id: TimelineExportQualityId) {
+  const parsed = parseTimelineExportQuality(id)
+  if (!parsed) return
+  exportQuality.value = parsed
+  writeTimelineExportQuality(parsed)
+}
+
 async function onExportVideo () {
   if (exporting.value || !videoClips.value.length) return
   bindPreviewVideo()
@@ -701,6 +721,7 @@ async function onExportVideo () {
       stopPlayback: () => playback.stop(),
       getPlayhead: () => playhead.value,
       getIsPlaying: () => isPlaying.value,
+      quality: exportQuality.value,
       onProgress: (prog) => {
         exportProgress.value = prog.progress
         exportLabel.value = prog.message

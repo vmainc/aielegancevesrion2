@@ -113,17 +113,38 @@
       Cut at playhead
     </button>
 
+    <span class="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
+
+    <label class="inline-flex items-center gap-1.5">
+      <span class="text-[10px] uppercase tracking-wide text-zinc-500">Quality</span>
+      <select
+        class="px-2 py-1.5 rounded-lg text-xs font-medium text-zinc-200 bg-zinc-800 border border-white/10 hover:bg-white/10 focus:outline-none focus:border-emerald-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
+        :value="exportQuality"
+        :disabled="exporting"
+        :title="qualityTitle"
+        @change="onQuality"
+      >
+        <option
+          v-for="q in TIMELINE_EXPORT_QUALITIES"
+          :key="q.id"
+          :value="q.id"
+        >
+          {{ q.label }} · {{ q.hint }}
+        </option>
+      </select>
+    </label>
+
     <button
       type="button"
       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-gray-950 bg-emerald-400/90 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed"
       :disabled="!canExport || exporting"
-      :title="exporting ? exportLabel : 'Download finished edit as WebM (records in real time)'"
+      :title="exporting ? exportLabel : `Download finished edit as ${exportQuality} WebM (records in real time)`"
       @click="$emit('export')"
     >
       {{ exporting ? exportLabel : 'Export WebM' }}
     </button>
 
-    <div class="ml-auto flex items-center gap-2">
+    <div class="ml-auto flex items-center gap-2 max-sm:w-full max-sm:justify-end">
       <label class="text-[10px] uppercase tracking-wide text-zinc-500">Zoom</label>
       <input
         type="range"
@@ -138,9 +159,14 @@
 </template>
 
 <script setup lang="ts">
+import {
+  TIMELINE_EXPORT_QUALITIES,
+  timelineExportQualityPreset,
+  type TimelineExportQualityId
+} from '~/lib/timeline-editor/export-quality'
 import type { TimelineEditorTool, TimelineTransitionType } from '~/types/timeline-editor'
 
-defineProps<{
+const props = defineProps<{
   activeTool: TimelineEditorTool
   hasSelection: boolean
   canSplit: boolean
@@ -151,6 +177,7 @@ defineProps<{
   canExport: boolean
   exporting?: boolean
   exportLabel?: string
+  exportQuality: TimelineExportQualityId
   zoom: number
 }>()
 
@@ -164,6 +191,7 @@ const emit = defineEmits<{
   'detach-audio': []
   'set-transition': [which: 'in' | 'out', type: TimelineTransitionType]
   'set-zoom': [number]
+  'set-export-quality': [TimelineExportQualityId]
   export: []
 }>()
 
@@ -175,9 +203,18 @@ const fadeOptions = [
   { id: 'out-x', which: 'out' as const, type: 'crossfade' as TimelineTransitionType, label: 'Crossfade out' }
 ]
 
+const qualityTitle = computed(() => {
+  const q = timelineExportQualityPreset(props.exportQuality)
+  return `Export at ${q.width}×${q.height}, ${Math.round(q.videoBitsPerSecond / 1_000_000)} Mbps`
+})
+
 function pickFade (t: (typeof fadeOptions)[0]) {
   emit('set-transition', t.which, t.type)
   showFade.value = false
+}
+
+function onQuality (e: Event) {
+  emit('set-export-quality', (e.target as HTMLSelectElement).value as TimelineExportQualityId)
 }
 
 function onZoom (e: Event) {

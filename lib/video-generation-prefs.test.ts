@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   parseVideoGenerationDurationSeconds,
-  videoToolDurationOptions
+  parseVideoGenerationResolution,
+  snapVideoResolutionToModel,
+  videoToolDurationOptions,
+  videoToolResolutionOptions
 } from '~/lib/video-generation-prefs'
 
 describe('videoToolDurationOptions', () => {
@@ -30,5 +33,50 @@ describe('parseVideoGenerationDurationSeconds', () => {
     expect(parseVideoGenerationDurationSeconds(15)).toBe(15)
     expect(parseVideoGenerationDurationSeconds('15')).toBe(15)
     expect(parseVideoGenerationDurationSeconds(12)).toBeUndefined()
+  })
+})
+
+describe('parseVideoGenerationResolution', () => {
+  it('accepts 720p and 1080p', () => {
+    expect(parseVideoGenerationResolution('720p')).toBe('720p')
+    expect(parseVideoGenerationResolution('1080p')).toBe('1080p')
+    expect(parseVideoGenerationResolution('480p')).toBeUndefined()
+  })
+})
+
+describe('videoToolResolutionOptions', () => {
+  it('defaults to 720p and 1080p when models lack resolution metadata', () => {
+    expect(videoToolResolutionOptions([])).toEqual(['720p', '1080p'])
+    expect(videoToolResolutionOptions([{ supportedResolutions: undefined }])).toEqual(['720p', '1080p'])
+  })
+
+  it('hides 1080p when no selected model lists it', () => {
+    expect(
+      videoToolResolutionOptions([{ supportedResolutions: ['720p', '480p'] }])
+    ).toEqual(['720p'])
+  })
+
+  it('shows 1080p when any selected model lists it', () => {
+    expect(
+      videoToolResolutionOptions([
+        { supportedResolutions: ['720p'] },
+        { supportedResolutions: ['720p', '1080p'] }
+      ])
+    ).toEqual(['720p', '1080p'])
+  })
+})
+
+describe('snapVideoResolutionToModel', () => {
+  it('keeps 1080p when the model lists it', () => {
+    expect(snapVideoResolutionToModel('1080p', ['720p', '1080p'])).toBe('1080p')
+  })
+
+  it('snaps 1080p down to 720p when the model does not list it', () => {
+    expect(snapVideoResolutionToModel('1080p', ['720p'])).toBe('720p')
+  })
+
+  it('keeps the request when catalog is unknown', () => {
+    expect(snapVideoResolutionToModel('1080p', undefined)).toBe('1080p')
+    expect(snapVideoResolutionToModel('1080p', [])).toBe('1080p')
   })
 })
