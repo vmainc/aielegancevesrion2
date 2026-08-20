@@ -51,6 +51,14 @@ export default defineEventHandler(async (event) => {
         .map(u => u.trim())
         .filter(Boolean)
     : []
+  const readUrlList = (raw: unknown): string[] =>
+    Array.isArray(raw)
+      ? raw.filter((u): u is string => typeof u === 'string').map(u => u.trim()).filter(Boolean)
+      : []
+  const setReferenceImageUrls = readUrlList(body?.setReferenceImageUrls ?? body?.set_reference_image_urls)
+  const continuityReferenceImageUrls = readUrlList(
+    body?.continuityReferenceImageUrls ?? body?.continuity_reference_image_urls
+  )
   const aspectRatio =
     typeof body?.aspectRatio === 'string'
       ? body.aspectRatio.trim()
@@ -92,20 +100,25 @@ export default defineEventHandler(async (event) => {
       pocketbaseInternalUrl: internalPb,
       publicPocketbaseUrl: publicPb || undefined
     }
-    const refCandidates = [
-      ...referenceImageUrls,
-      ...(referenceImageUrl ? [referenceImageUrl] : [])
-    ].filter((u, i, arr) => arr.indexOf(u) === i).slice(0, 4)
-
-    const resolvedRefs: string[] = []
-    for (const raw of refCandidates) {
-      try {
-        const resolved = await resolveReferenceImageUrlForServerFetch(raw, fetchOpts)
-        if (resolved) resolvedRefs.push(resolved)
-      } catch {
-        /* skip */
+    const resolveList = async (raws: string[]): Promise<string[]> => {
+      const out: string[] = []
+      for (const raw of raws) {
+        try {
+          const resolved = await resolveReferenceImageUrlForServerFetch(raw, fetchOpts)
+          if (resolved) out.push(resolved)
+        } catch {
+          /* skip */
+        }
       }
+      return out
     }
+    const resolvedCharacterRefs = await resolveList(
+      [...referenceImageUrls, ...(referenceImageUrl ? [referenceImageUrl] : [])]
+        .filter((u, i, arr) => arr.indexOf(u) === i)
+        .slice(0, 4)
+    )
+    const resolvedSetRefs = await resolveList(setReferenceImageUrls.slice(0, 2))
+    const resolvedContinuityRefs = await resolveList(continuityReferenceImageUrls.slice(0, 2))
 
     let lastErr: unknown = null
     for (let i = 0; i < candidates.length; i++) {
@@ -115,8 +128,10 @@ export default defineEventHandler(async (event) => {
           prompt,
           modelId: candidate,
           apiKey,
-          referenceImageUrl: resolvedRefs[0],
-          referenceImageUrls: resolvedRefs.length ? resolvedRefs : undefined,
+          referenceImageUrl: resolvedCharacterRefs[0],
+          referenceImageUrls: resolvedCharacterRefs.length ? resolvedCharacterRefs : undefined,
+          setReferenceImageUrls: resolvedSetRefs.length ? resolvedSetRefs : undefined,
+          continuityReferenceImageUrls: resolvedContinuityRefs.length ? resolvedContinuityRefs : undefined,
           aspectRatio,
           purpose
         })

@@ -178,6 +178,43 @@
             </div>
           </div>
         </section>
+        <section
+          v-if="selectedEntity.type === 'location'"
+          class="mb-4 rounded-lg border border-primary/25 bg-primary/5 px-3 py-3"
+        >
+          <h3 class="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
+            Set lock
+          </h3>
+          <p class="text-[12px] text-gray-600 leading-relaxed mb-3">
+            Lock the <span class="font-medium text-gray-800">place</span> — architecture, materials, layout.
+            Camera, lens, and blocking should still change so it photographs like a real location, not a copied still.
+          </p>
+          <div class="flex flex-wrap gap-2 mb-3">
+            <img
+              v-for="plate in setPlates"
+              :key="plate.id"
+              :src="assetPlaybackUrl(plate)"
+              :alt="plate.title || 'Set plate'"
+              class="h-20 w-28 rounded-md object-cover border border-gray-300 bg-gray-100"
+            >
+            <label
+              class="h-20 w-28 rounded-md border border-dashed border-primary/50 bg-studio-slate flex flex-col items-center justify-center text-[11px] text-primary font-medium cursor-pointer hover:bg-primary/10"
+              :class="setPlateUploading ? 'opacity-50 pointer-events-none' : ''"
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                class="sr-only"
+                :disabled="setPlateUploading || mutating"
+                @change="onSetPlateFile"
+              >
+              {{ setPlateUploading ? 'Uploading…' : 'Add plate' }}
+            </label>
+          </div>
+          <p class="text-[11px] text-gray-500">
+            Save the architecture notes below, then generate storyboard frames. The plate is a map of the room — not a camera to copy.
+          </p>
+        </section>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="block text-sm">
             <span class="text-gray-600 text-xs">Type</span>
@@ -210,18 +247,20 @@
             >
           </label>
           <label class="block text-sm sm:col-span-2">
-            <span class="text-gray-600 text-xs">Summary</span>
+            <span class="text-gray-600 text-xs">{{ selectedEntity.type === 'location' ? 'Look (one-line)' : 'Summary' }}</span>
             <textarea
               v-model="entityForm.summary"
               rows="2"
+              :placeholder="selectedEntity.type === 'location' ? 'e.g. 1950s diner, always the same room' : ''"
               class="mt-0.5 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y"
             />
           </label>
           <label class="block text-sm sm:col-span-2">
-            <span class="text-gray-600 text-xs">Description</span>
+            <span class="text-gray-600 text-xs">{{ selectedEntity.type === 'location' ? 'Locked architecture (materials, layout, landmarks)' : 'Description' }}</span>
             <textarea
               v-model="entityForm.description"
               rows="4"
+              :placeholder="selectedEntity.type === 'location' ? 'Checkerboard tile, chrome stool line, cracked red vinyl booths, neon OPEN in the window. Same walls and furniture every shot.' : ''"
               class="mt-0.5 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y"
             />
           </label>
@@ -568,6 +607,8 @@ import {
 } from '~/lib/bible-cast-asset-bridge'
 import { formatAssetProvenanceLine } from '~/lib/generation-observability'
 import { projectAssetPlaybackSrc } from '~/lib/project-asset-playback-url'
+import { isSetPlateAsset } from '~/lib/set-lock'
+import { uploadSetPlate } from '~/lib/upload-set-plate'
 import {
   BIBLE_ENDPOINT_TYPES,
   BIBLE_RELATIONSHIP_STATUSES,
@@ -654,9 +695,48 @@ const props = defineProps<{
   onRetireRel: (rel: BibleRelationship) => void
   onDeleteRel: (rel: BibleRelationship) => void
   startEditRel: (rel: BibleRelationship) => void
+  onRefreshAssets?: () => void | Promise<void>
 }>()
 
 const { getAuthToken } = useAuth()
+const toast = useToast()
+const setPlateUploading = ref(false)
+
+const setPlates = computed(() =>
+  props.entityRelatedAssets
+    .map((row) => row.asset)
+    .filter((a) => isSetPlateAsset(a) && a.fileUrl)
+)
+
+async function onSetPlateFile (ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  const entity = props.selectedEntity
+  if (!file || !entity) return
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Sign in to upload a set plate.', 'warning')
+    return
+  }
+  setPlateUploading.value = true
+  try {
+    await uploadSetPlate({
+      projectId: props.projectId,
+      entityId: entity.id,
+      locationName: entityForm.value.name || entity.name,
+      file,
+      token
+    })
+    toast.showToast('Set plate saved. Storyboard frames will match this place, not this camera.', 'success')
+    await props.onRefreshAssets?.()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Could not upload set plate'
+    toast.showToast(msg, 'error')
+  } finally {
+    setPlateUploading.value = false
+  }
+}
 
 function factNeedsReview (fact: BibleFact): boolean {
   return isBibleFactPendingReview(fact.status)

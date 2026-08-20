@@ -396,6 +396,10 @@ async function refreshAll () {
   }
 }
 
+async function refreshProjectAssets () {
+  projectAssets.value = await bible.loadProjectAssets().catch(() => projectAssets.value)
+}
+
 function applyRouteDeepLink () {
   const entityQ = queryEntityId.value
   if (entityQ && entities.value.some((e) => e.id === entityQ)) {
@@ -1147,6 +1151,7 @@ function castLinkConfidenceClass (confidence?: string): string {
               :on-retire-rel="onRetireRel"
               :on-delete-rel="onDeleteRel"
               :start-edit-rel="startEditRel"
+              :on-refresh-assets="refreshProjectAssets"
             />
           </div>
         </div>

@@ -1,4 +1,5 @@
 import type { ProjectDirector } from '~/types/creative-project'
+import type { SetLock } from '~/lib/set-lock'
 import {
   durationBudgetPromptBlock,
   fitShotsToSceneCap,
@@ -42,6 +43,9 @@ export interface GenerateShotsContext {
   durationBudget?: ProjectDurationBudget | null
   /** When set, overrides budget min/max for this scene (project-wide allocation). */
   sceneShotCap?: { minShots: number; maxShots: number } | null
+  /** Optional locked set bible for this scene (architecture, not camera). */
+  setLockBlock?: string
+  setLock?: SetLock | null
 }
 
 function extractJsonWithShots (text: string): { shots?: unknown[] } | null {
@@ -262,15 +266,16 @@ Output ONLY valid JSON (no markdown), exactly this shape:
 Rules:
 - Produce ${shotMin === shotMax ? `exactly ${shotMax}` : `between ${shotMin} and ${shotMax}`} shots for THIS scene only; order 1..N; duration_seconds MUST be exactly 5 or 10 (integer).
 - characters: array of exact character names from CHARACTERS who appear on-screen in THIS panel only. Empty [] for establishing/environment inserts with no people. Never list the whole cast.
-- image_prompt: MINIMUM ~120 words. Production-ready STILL frame. START with the UNIQUE action, pose, and composition for THIS panel only (order N) — each panel must look like a different moment. Then include: (1) which cast members appear (must match the characters array) and their COMPLETE visual design copied from CHARACTERS (materials, colors, proportions, wardrobe, expression); (2) locked environment/props/lighting for this scene; (3) lens/framing for shot_type; (4) same art direction as director bible. Repeat the same character DESIGN wording across shots for consistency — never repeat the same pose, blocking, or framing.
+- image_prompt: MINIMUM ~120 words. Production-ready STILL frame. START with the UNIQUE action, pose, and composition for THIS panel only (order N) — each panel must look like a different moment. Then include: (1) which cast members appear (must match the characters array) and their COMPLETE visual design copied from CHARACTERS (materials, colors, proportions, wardrobe, expression); (2) the SAME locked set (architecture, materials, layout) with a NEW camera setup — photoreal practical location, not CGI or soundstage; (3) lens/framing for shot_type; (4) same art direction as director bible. Repeat the same character DESIGN and SET architecture wording across shots — never repeat the same pose, blocking, or framing.
 - video_prompt: MINIMUM ~80 words. Motion-only delta on the still: camera_move, subject action, lighting shifts — do NOT introduce new characters or redesign anyone.
 - negative_prompt: comma-separated forbidden elements (watermark, text, blurry, wrong species, extra characters, style drift).${animalRules}
 - Same character = SAME design in every panel; close-ups must match wide shots.
 - CAST NAMES IN ALL CAPS: In every image_prompt and video_prompt, refer to cast members only with their ALL CAPS token from CHARACTERS (e.g. DOG, CAT). These are proper character names — not generic animals. Never write lowercase "dog" or "cat" when you mean the cast character.
-- Vary shot scale on purpose (establish, medium, close-up, insert) but keep location palette and set dressing consistent unless the script changes location.
+- Vary shot scale on purpose (establish, medium, close-up, insert) but keep location architecture and set dressing identical unless the slugline changes location. Photoreal lived-in space; new coverage every panel.
 - Interpret summary and script; imperfect formatting is OK.`
 
-  const user = `${directorBlock}${continuityBlock}PROJECT
+  const setLockBlock = (ctx.setLockBlock || '').trim()
+  const user = `${directorBlock}${continuityBlock}${setLockBlock ? `${setLockBlock}\n\n` : ''}PROJECT
 Name: ${ctx.projectName}
 Aspect ratio: ${ctx.aspectRatio}
 Goal (format): ${goalLabel}

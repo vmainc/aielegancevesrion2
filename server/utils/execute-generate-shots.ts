@@ -10,6 +10,8 @@ import { enrichGeneratedShotsForContinuity } from '~/server/utils/enrich-generat
 import { loadCastMembersForContinuity } from '~/server/utils/project-character-prompt-refs'
 import { summaryFromContinuityCheck, type ContinuityCheckSummary } from '~/lib/continuity-check-result'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
+import { pbRecordToBibleEntity } from '~/server/utils/bible-entity-map'
+import { buildSetLockPromptBlock, resolveSetLock } from '~/lib/set-lock'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
 import { pbRecordToCreativeScene } from '~/server/utils/creative-scene-map'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
@@ -163,6 +165,7 @@ export async function executeGenerateShots (opts: {
     }
   }
 
+  const setLock = await loadSetLockForScene(opts.pb, projectId, sceneRec.heading || '')
   const shotsCtx = {
     projectName: String(projectRec.name || 'Project'),
     aspectRatio: String(projectRec.aspect_ratio || '16:9'),
@@ -176,7 +179,9 @@ export async function executeGenerateShots (opts: {
     continuityMemory,
     openrouterModelId: pref.openrouterModelId,
     durationBudget,
-    sceneShotCap
+    sceneShotCap,
+    setLock,
+    setLockBlock: buildSetLockPromptBlock(setLock, sceneRec.heading || '')
   }
 
   let generated
@@ -344,3 +349,21 @@ export async function executeGenerateShots (opts: {
     continuity: continuitySummary
   }
 }
+
+async function loadSetLockForScene (
+  pb: PocketBase,
+  projectId: string,
+  heading: string
+) {
+  try {
+    const rows = await pb.collection('bible_entities').getFullList({
+      filter: `project="${projectId}"`,
+      batch: 200
+    })
+    const entities = rows.map((r) => pbRecordToBibleEntity(r as Parameters<typeof pbRecordToBibleEntity>[0]))
+    return resolveSetLock({ sceneHeading: heading, entities })
+  } catch {
+    return resolveSetLock({ sceneHeading: heading })
+  }
+}
+

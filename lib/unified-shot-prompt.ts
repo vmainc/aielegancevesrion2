@@ -31,6 +31,7 @@ import type { ProjectDirector } from '~/types/creative-project'
 import type { CreativeShot } from '~/types/creative-shot'
 import type { ProductionBibleResolvedContext } from '~/types/production-bible-context'
 import { formatProductionBiblePromptBlock } from '~/lib/format-production-bible-prompt-block'
+import { buildSetLockPromptBlock, SET_LOCK_NEGATIVES, type SetLock } from '~/lib/set-lock'
 
 export interface UnifiedShotPromptContext {
   director?: ProjectDirector | null
@@ -52,6 +53,8 @@ export interface UnifiedShotPromptContext {
   }>
   /** Read-only Production Bible slice (PASS 9). Appended when present; never persisted. */
   productionBible?: ProductionBibleResolvedContext | null
+  /** Locked location / set for this scene (architecture identity, not camera). */
+  setLock?: SetLock | null
 }
 
 const UNIFIED_MARKERS =
@@ -131,7 +134,7 @@ export function buildPanelActionEmphasis (
     seq,
     `"${title}" · ${shotType}${camera ? ` · camera: ${camera}` : ''}`,
     beat || title,
-    'Visually distinct COMPOSITION from every other panel: unique action, pose, eyeline, and framing only — never change character face, species, body proportions, fur/materials, or wardrobe. Reuse identical character designs from the cast bible and reference images; never clone the same camera layout as another panel.'
+    'Visually distinct COMPOSITION from every other panel: unique action, pose, eyeline, and framing only — never change character face, species, body proportions, fur/materials, or wardrobe. Same set architecture every panel; never clone the same camera layout. Photoreal practical location, not a virtual set.'
   ]
     .filter(Boolean)
     .join('\n')
@@ -168,12 +171,12 @@ export function buildUnifiedProductionPrompt (
   const { w, h } = parseProjectAspectRatio(ctx.aspectRatio || '16:9')
   const aspectLine = `Frame aspect ratio: ${w}:${h}.`
 
+  const setLockBlock = buildSetLockPromptBlock(ctx.setLock, ctx.sceneTitle)
   const sceneLines: string[] = []
-  if (ctx.sceneTitle?.trim()) sceneLines.push(`Slug: ${ctx.sceneTitle.trim()}`)
+  if (ctx.sceneTitle?.trim() && !setLockBlock) sceneLines.push(`Slug: ${ctx.sceneTitle.trim()}`)
   if (ctx.sceneSummary?.trim()) sceneLines.push(`Scene: ${ctx.sceneSummary.trim()}`)
-  const sceneBlock = sceneLines.length
-    ? ['SETTING (locked across this scene):', ...sceneLines].join('\n')
-    : ''
+  const sceneBlock = setLockBlock
+    || (sceneLines.length ? ['SETTING (locked across this scene):', ...sceneLines].join('\n') : '')
 
   const panelEmphasis = buildPanelActionEmphasis(shotCanon, ctx.panelIndex)
   const castInPanelLine = inShot.length
@@ -183,7 +186,11 @@ export function buildUnifiedProductionPrompt (
 
   const negative = mergeNegativePromptParts(
     shotCanon.negativePrompt,
-    buildProjectNegativePrompt({ cast, inShot })
+    buildProjectNegativePrompt({
+      cast,
+      inShot,
+      extra: SET_LOCK_NEGATIVES
+    })
   )
   const negBlock = formatNegativePromptForImageModel(negative)
 
@@ -260,7 +267,8 @@ function mergedShotNegativePrompt (
           image_prompt: shotCanon.imagePrompt
         },
         cast
-      )
+      ),
+      extra: SET_LOCK_NEGATIVES
     })
   )
 }

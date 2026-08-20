@@ -424,6 +424,7 @@ import {
   mergeGenerationObservabilityIntoMetadata
 } from '~/lib/generation-observability'
 import type { ProductionBibleResolvedContext } from '~/types/production-bible-context'
+import { resolveSetLock, type SetLock } from '~/lib/set-lock'
 import {
   fetchImageAsDataUrl,
   isDirectStoryboardFrameSrc
@@ -457,6 +458,8 @@ const isCloudProject = computed(() => isCloudProjectId(projectId.value || ''))
 
 const { refs: characterRefs, reload: reloadCharacterRefs } = useProjectCharacterRefs(projectId)
 const productionBible = useProductionBible(projectId)
+const sceneSetLock = ref<SetLock | null>(null)
+const sceneSetLockKey = ref('')
 const frameBibleDebug = reactive<Record<string, string>>({})
 const frameGenerationProvenance = reactive<Record<string, {
   bibleContext: ProductionBibleResolvedContext | null
@@ -596,7 +599,11 @@ function priorStoryboardFrameInScene (shot: CreativeShot): string | null {
   return null
 }
 
-function frameGenerationReferenceUrls (shot: CreativeShot, role: StoryboardFrameRole): string[] {
+function frameGenerationRefs (shot: CreativeShot, role: StoryboardFrameRole): {
+  characterUrls: string[]
+  setUrls: string[]
+  continuityUrls: string[]
+} {
   const castInScope = resolveCharactersForFrameGeneration(
     shot,
     characterRefs.value,
@@ -604,18 +611,21 @@ function frameGenerationReferenceUrls (shot: CreativeShot, role: StoryboardFrame
   )
   const startSrc = role === 'end' ? panelImageSrc(shot, 'start') : null
   const prior = priorStoryboardFrameInScene(shot)
-  const reserved =
-    (startSrc ? 1 : 0) +
-    (prior && prior !== startSrc ? 1 : 0)
+  const continuityUrls = [startSrc, prior].filter((u): u is string => Boolean(u && u.trim()))
+    .filter((u, i, arr) => arr.indexOf(u) === i)
+  const setUrls = (sceneSetLock.value?.plateUrls || []).filter(
+    (u) => u && !continuityUrls.includes(u)
+  )
+  const reserved = Math.min(3, continuityUrls.length + Math.min(1, setUrls.length))
   const plateBudget = Math.max(1, 4 - reserved)
-  const urls = collectCharacterPortraitUrls(castInScope, plateBudget)
-  if (prior && !urls.includes(prior) && urls.length < 4) {
-    urls.push(prior)
+  const characterUrls = collectCharacterPortraitUrls(castInScope, plateBudget).filter(
+    (u) => !continuityUrls.includes(u) && !setUrls.includes(u)
+  )
+  return {
+    characterUrls: characterUrls.slice(0, 4),
+    setUrls: setUrls.slice(0, 1),
+    continuityUrls: continuityUrls.slice(0, 2)
   }
-  if (startSrc && !urls.includes(startSrc) && urls.length < 4) {
-    urls.unshift(startSrc)
-  }
-  return urls.slice(0, 4)
 }
 
 function frameSlotKey (shot: CreativeShot, role: StoryboardFrameRole): string {
@@ -758,8 +768,26 @@ function unifiedPromptContext () {
     aspectRatio: project.value?.aspectRatio,
     sceneTitle: activeScene.value?.heading,
     sceneSummary: activeScene.value?.summary,
-    cast: characterRefs.value.map(c => projectCharacterRefToCastMember(c))
+    cast: characterRefs.value.map(c => projectCharacterRefToCastMember(c)),
+    setLock: sceneSetLock.value
   }
+}
+
+async function ensureSceneSetLock () {
+  const key = `${selectedSceneId.value || ''}|${activeScene.value?.heading || ''}`
+  if (sceneSetLockKey.value === key) return sceneSetLock.value
+  const [ents, assets] = await Promise.all([
+    productionBible.loadEntities().catch(() => []),
+    productionBible.loadProjectAssets().catch(() => [])
+  ])
+  sceneSetLock.value = resolveSetLock({
+    sceneHeading: activeScene.value?.heading,
+    entities: ents,
+    assets,
+    playbackUrl: (a) => assetPlaybackUrl(a)
+  })
+  sceneSetLockKey.value = key
+  return sceneSetLock.value
 }
 
 async function loadBibleContextForFrame (shot: CreativeShot) {
@@ -840,6 +868,7 @@ async function generateFrame (
   const slotKey = frameSlotKey(shot, role)
   const matches = shotCharacterMatches(shot)
   const panelIndex = shots.value.findIndex(s => s.id === shot.id)
+  await ensureSceneSetLock()
   const productionBibleCtx = await loadBibleContextForFrame(shot)
   frameBibleDebug[shot.id] = productionBibleGenerationDebugLabel(productionBibleCtx)
   let prompt = resolveFrameGenerationPrompt(shot, {
@@ -852,8 +881,9 @@ async function generateFrame (
     bibleContext: productionBibleCtx,
     promptForHash: prompt
   }
-  const referenceImageUrls = frameGenerationReferenceUrls(shot, role)
-  if (!referenceImageUrls.length && !quiet) {
+  const refs = frameGenerationRefs(shot, role)
+  const referenceImageUrls = refs.characterUrls
+  if (!referenceImageUrls.length && !refs.setUrls.length && !quiet) {
     const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim() && !(c.plateUrls || []).length)
     if (missingPortraits.length) {
       toast.showToast(
@@ -877,6 +907,8 @@ async function generateFrame (
         model: selectedImageModelId.value,
         referenceImageUrls,
         referenceImageUrl: referenceImageUrls[0],
+        setReferenceImageUrls: refs.setUrls,
+        continuityReferenceImageUrls: refs.continuityUrls,
         aspectRatio: project.value?.aspectRatio || '16:9'
       }
     })
@@ -1554,6 +1586,8 @@ watch(
 watch(selectedSceneId, () => {
   showImageSettings.value = false
   boardDetailsOpenByShotId.value = {}
+  sceneSetLock.value = null
+  sceneSetLockKey.value = ''
   void loadShots()
 })
 

@@ -8,6 +8,7 @@ import {
   resolveOpenRouterImageSlug
 } from '~/server/utils/openrouter-image-models'
 import { fetchReferenceImageAsDataUrl } from '~/server/utils/reference-image-data-url'
+import { buildSetLockReferenceNote } from '~/lib/set-lock'
 
 export interface OpenRouterGenerateImageResult {
   urls: string[]
@@ -25,6 +26,10 @@ export async function openRouterGenerateImage (options: {
   referenceImageUrl?: string
   /** Multiple cast portraits / prior frames (preferred over single referenceImageUrl). */
   referenceImageUrls?: string[]
+  /** Establishing set plates — match place, not camera. */
+  setReferenceImageUrls?: string[]
+  /** Prior storyboard stills — same place + cast, new coverage. */
+  continuityReferenceImageUrls?: string[]
   aspectRatio?: string
   /** When set, prompt and downstream staging target video image-to-video seed limits. */
   purpose?: 'video_start_frame'
@@ -57,10 +62,15 @@ export async function openRouterGenerateImage (options: {
   const requestTimeoutMs = openRouterModel.startsWith('openai/') ? 90_000 : 45_000
 
   let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }> = prompt
-  const refList = [
+  const characterRefs = [
     ...(options.referenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean),
     (options.referenceImageUrl || '').trim()
-  ].filter((u, i, arr) => arr.indexOf(u) === i).slice(0, 4)
+  ].filter((u, i, arr) => arr.indexOf(u) === i)
+  const setRefs = (options.setReferenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean)
+  const continuityRefs = (options.continuityReferenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean)
+  const refList = [...characterRefs, ...setRefs, ...continuityRefs]
+    .filter((u, i, arr) => arr.indexOf(u) === i)
+    .slice(0, 4)
 
   if (refList.length) {
     const perImageBudget = refList.length > 1 ? 2_200_000 : 4_000_000
@@ -74,13 +84,20 @@ export async function openRouterGenerateImage (options: {
       }
     }
     if (imageParts.length) {
-      const refNote =
-        imageParts.length === 1
-          ? 'Use the attached reference image as the exact character design (face, proportions, materials, colors). Match it closely; do not redesign the character.'
-          : `Use ALL ${imageParts.length} attached reference image(s) as the locked character designs. Each image is an approved cast plate (featured and/or turnaround) or continuity frame — match face, species, body, materials, colors, and style exactly. Do not invent new looks.`
+      const notes: string[] = []
+      if (characterRefs.length) {
+        notes.push(
+          characterRefs.length === 1
+            ? 'CHARACTER PLATE: use the attached portrait as the exact character design (face, proportions, materials, colors). Match it closely; do not redesign the character.'
+            : `CHARACTER PLATES: use the attached ${characterRefs.length} portraits as locked character designs. Match face, species, body, materials, colors, and style exactly. Do not invent new looks.`
+        )
+      }
+      const setNote = buildSetLockReferenceNote(setRefs.length > 0, continuityRefs.length > 0)
+      if (setNote) notes.push(setNote)
+      const refNote = notes.join(' ')
       userContent = [{ type: 'text', text: `${prompt}\n\n${refNote}` }, ...imageParts]
     } else {
-      userContent = `${prompt}\n\n(Match the established character design from the project cast bible and any saved cast portraits.)`
+      userContent = `${prompt}\n\n(Match the established character design from the project cast bible and the locked set architecture — photoreal practical location, new camera each panel.)`
     }
   }
 

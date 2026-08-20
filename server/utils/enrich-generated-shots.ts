@@ -1,6 +1,7 @@
 import type { GeneratedShot, GenerateShotsContext } from '~/server/utils/generate-shots-ai'
 import { formatCastNameForPrompt, normalizeCharacterNameKey } from '~/lib/cast-name-convention'
 import { applyUnifiedPromptsToShot } from '~/lib/unified-shot-prompt'
+import { resolveSetLock } from '~/lib/set-lock'
 
 function resolveShotCastNames (
   requested: string[] | undefined,
@@ -66,7 +67,8 @@ export function enrichGeneratedShotsForContinuity (
     aspectRatio: ctx.aspectRatio,
     sceneTitle: ctx.sceneTitle,
     sceneSummary: ctx.sceneSummary,
-    cast
+    cast,
+    setLock: ctx.setLock ?? resolveSetLock({ sceneHeading: ctx.sceneTitle })
   }
 
   return shots.map((shot, index) => {
