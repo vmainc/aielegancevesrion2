@@ -24,7 +24,7 @@
         </p>
         <div
           v-if="storySynopsisDisplay"
-          class="text-sm text-gray-800 whitespace-pre-wrap max-h-[min(50vh,24rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 leading-relaxed"
+          class="text-sm text-gray-800 whitespace-pre-wrap max-h-[min(50vh,24rem)] overflow-y-auto rounded-lg border border-gray-200 bg-studio-slate p-4 leading-relaxed"
         >
           {{ storySynopsisDisplay }}
         </div>
@@ -83,7 +83,7 @@
               <span class="hidden group-open:inline">Hide full treatment</span>
             </summary>
             <div
-              class="mt-3 text-sm text-gray-800 whitespace-pre-wrap max-h-[min(75vh,36rem)] overflow-y-auto rounded-lg border border-gray-200 bg-white p-4 leading-relaxed"
+              class="mt-3 text-sm text-gray-800 whitespace-pre-wrap max-h-[min(75vh,36rem)] overflow-y-auto rounded-lg border border-gray-200 bg-studio-slate p-4 leading-relaxed"
             >
               {{ activeProject.treatment }}
             </div>

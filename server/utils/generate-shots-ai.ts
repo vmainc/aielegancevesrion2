@@ -309,8 +309,8 @@ ${budget ? `${durationBudgetPromptBlock(budget, ctx.sceneShotCap ?? undefined)}\
       headers: {
         Authorization: `Bearer ${apiKey.trim()}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://aielegance.com',
-        'X-Title': 'AI Elegance Storyboard'
+        'HTTP-Referer': 'https://aifilmstud.io',
+        'X-Title': 'AI Film Studio Storyboard'
       },
       body: JSON.stringify(body),
       signal: controller.signal

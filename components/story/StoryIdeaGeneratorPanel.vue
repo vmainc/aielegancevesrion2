@@ -12,7 +12,7 @@
       <button
         v-if="showCancel"
         type="button"
-        class="shrink-0 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-white transition-colors"
+        class="shrink-0 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-studio-slate transition-colors"
         @click="$emit('cancel')"
       >
         Cancel
@@ -40,7 +40,7 @@
         <select
           id="idea-goal"
           v-model="goalModel"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
           :disabled="generating"
         >
           <option value="film">Film / series</option>
@@ -54,7 +54,7 @@
         <select
           id="idea-aspect"
           v-model="aspectModel"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
           :disabled="generating"
         >
           <option value="16:9">16:9</option>
@@ -66,7 +66,7 @@
 
     <div
       v-if="showTargetRuntime"
-      class="mb-5 rounded-lg border border-gray-200 bg-white px-3 py-3"
+      class="mb-5 rounded-lg border border-gray-200 bg-studio-slate px-3 py-3"
     >
       <label for="idea-target-runtime" class="block text-sm font-medium text-gray-700 mb-1">
         Target runtime (seconds)
@@ -101,7 +101,7 @@
     <textarea
       v-model="conceptPrompt"
       rows="4"
-      class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-3"
+      class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-3"
       :placeholder="promptPlaceholder"
       :disabled="generating || savingOwnPrompt || !projectId"
     />
@@ -116,7 +116,7 @@
         v-model="storyTitle"
         type="text"
         maxlength="500"
-        class="w-full max-w-md px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary mb-3"
+        class="w-full max-w-md px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary mb-3"
         :placeholder="deriveTitleFromPrompt(conceptPrompt, 'Untitled project')"
         :disabled="generating || savingOwnPrompt || !projectId"
       >
@@ -161,7 +161,7 @@
         <label
           v-for="m in modelOptions"
           :key="`idea-${m.id}`"
-          class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+          class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-studio-slate cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
         >
           <input
             v-model="selectedModelIds"
@@ -196,7 +196,7 @@
         <article
           v-for="(r, idx) in conceptResults"
           :key="`idea-result-${r.model}-${idx}`"
-          class="rounded-xl border p-4 sm:p-5 bg-white shadow-sm"
+          class="rounded-xl border p-4 sm:p-5 bg-studio-slate shadow-sm"
           :class="r.error ? 'border-red-200 bg-red-50/50' : 'border-gray-200'"
         >
           <span class="text-xs font-semibold uppercase tracking-wide text-primary">

@@ -15,7 +15,7 @@
         <select
           id="dir-preset"
           v-model="selectedPresetId"
-          class="w-full max-w-md px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+          class="w-full max-w-md px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
           @change="onPresetChange"
         >
           <option
@@ -33,7 +33,7 @@
           id="dir-name"
           v-model="directorForm.name"
           type="text"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
           placeholder="e.g. Documentary vérité"
         >
       </div>
@@ -46,7 +46,7 @@
           id="dir-style"
           v-model="directorForm.style"
           rows="2"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
         />
       </div>
       <div>
@@ -58,7 +58,7 @@
           id="dir-tone"
           v-model="directorForm.tone"
           rows="2"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
         />
       </div>
       <div>
@@ -70,7 +70,7 @@
           id="dir-cam"
           v-model="directorForm.camera_preferences"
           rows="2"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
         />
       </div>
       <div>
@@ -82,7 +82,7 @@
           id="dir-light"
           v-model="directorForm.lighting_style"
           rows="2"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
         />
       </div>
       <div>
@@ -94,7 +94,7 @@
           id="dir-pace"
           v-model="directorForm.pacing"
           rows="2"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
         />
       </div>
       <div>
@@ -107,7 +107,7 @@
           id="continuity-mem"
           v-model="continuityMemLocal"
           rows="5"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
           placeholder="e.g. Leo has a scar over left brow. The diner is always at night in rain."
         />
       </div>
@@ -141,7 +141,7 @@
       </p>
       <div
         v-if="conceptBootstrapRunning"
-        class="mb-4 rounded-xl border border-primary/20 bg-white p-5"
+        class="mb-4 rounded-xl border border-primary/20 bg-studio-slate p-5"
       >
         <FilmReelLoader
           size="sm"

@@ -65,7 +65,7 @@ const getToastClasses = (type: ToastType) => {
     case 'info':
       return 'bg-blue-500/90 border-blue-400/50 text-white'
     default:
-      return 'bg-white border-gray-200 text-gray-900 shadow-md'
+      return 'bg-studio-slate border-gray-200 text-gray-900 shadow-md'
   }
 }
 

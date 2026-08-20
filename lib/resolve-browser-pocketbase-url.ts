@@ -27,7 +27,7 @@ export function resolveBrowserPocketBaseUrl(configUrl: string): string {
 
   const pathNorm = (u.pathname.replace(/\/+$/, '') || '/').replace(/\/+/g, '/')
   const configIsPbPath = pathNorm === '/pb'
-  // Build used a different host than this page (e.g. VPS IP in env vs https://aielegance.com).
+  // Build used a different host than this page (e.g. VPS IP in env vs https://aifilmstud.io).
   // PocketBase auth is keyed by base URL — must use same origin as the app or you get 401/404.
   if (configIsPbPath && u.hostname !== pageHost) {
     return `${window.location.origin}/pb`.replace(/\/+$/, '')

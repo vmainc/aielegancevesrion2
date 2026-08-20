@@ -56,7 +56,7 @@
       <p>Add characters, locations, props, and other universe objects. They stay separate from the cast table until a future migration.</p>
     </div>
 
-    <div v-else class="rounded-lg border border-gray-200 bg-white overflow-hidden divide-y divide-gray-100">
+    <div v-else class="rounded-lg border border-gray-200 bg-studio-slate overflow-hidden divide-y divide-gray-100">
       <div
         v-for="[type, list] in entitiesByType"
         :key="type"

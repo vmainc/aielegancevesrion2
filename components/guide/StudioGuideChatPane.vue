@@ -105,7 +105,7 @@ async function onSend () {
   <div
     v-else
     class="flex flex-col min-h-0 h-full overflow-hidden"
-    :class="compact ? '' : 'sm:rounded-xl sm:border sm:border-gray-200 sm:bg-white sm:shadow-sm'"
+    :class="compact ? '' : 'sm:rounded-xl sm:border sm:border-gray-200 sm:bg-studio-slate sm:shadow-sm'"
   >
     <div class="flex flex-1 min-h-0 overflow-hidden">
       <aside
@@ -135,8 +135,8 @@ async function onSend () {
             type="button"
             class="group w-full text-left rounded-lg px-2.5 py-2 transition-colors"
             :class="chat.id === activeChatId
-              ? 'bg-white border border-gray-200 shadow-sm'
-              : 'hover:bg-white/80 border border-transparent'"
+              ? 'bg-studio-slate border border-gray-200 shadow-sm'
+              : 'hover:bg-studio-slate/80 border border-transparent'"
             @click="onSelectChat(chat.id)"
           >
             <div class="flex items-start justify-between gap-1">
@@ -162,14 +162,14 @@ async function onSend () {
         </div>
       </aside>
 
-      <div class="flex-1 flex flex-col min-w-0 bg-white min-h-0">
+      <div class="flex-1 flex flex-col min-w-0 bg-studio-slate min-h-0">
         <div
           v-if="showHistory && !compact"
           class="sm:hidden flex items-center gap-2 border-b border-gray-200 px-3 py-2.5 bg-gray-50"
         >
           <button
             type="button"
-            class="rounded-lg border border-gray-300 bg-white px-2.5 py-1.5 text-xs font-medium text-gray-800"
+            class="rounded-lg border border-gray-300 bg-studio-slate px-2.5 py-1.5 text-xs font-medium text-gray-800"
             @click="mobileHistoryOpen = !mobileHistoryOpen"
           >
             {{ mobileHistoryOpen ? 'Close' : 'Chats' }}
@@ -195,7 +195,7 @@ async function onSend () {
             :key="`m-${chat.id}`"
             type="button"
             class="w-full text-left rounded-lg px-2.5 py-2 text-sm"
-            :class="chat.id === activeChatId ? 'bg-white border border-gray-200' : 'hover:bg-white/80'"
+            :class="chat.id === activeChatId ? 'bg-studio-slate border border-gray-200' : 'hover:bg-studio-slate/80'"
             @click="onSelectChat(chat.id)"
           >
             <span class="font-medium text-gray-900 line-clamp-1">{{ chat.title || 'New chat' }}</span>
@@ -212,7 +212,7 @@ async function onSend () {
         >
           <div
             v-if="!messages.length"
-            class="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-8 text-sm text-gray-600"
+            class="rounded-lg border border-dashed border-gray-300 bg-studio-slate px-4 py-8 text-sm text-gray-600"
             :class="compact ? 'py-6' : 'py-10'"
           >
             <p
@@ -274,7 +274,7 @@ async function onSend () {
               class="max-w-[92%] rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm"
               :class="msg.role === 'user'
                 ? 'bg-primary text-gray-950'
-                : 'bg-white border border-gray-200 text-gray-800'"
+                : 'bg-studio-slate border border-gray-200 text-gray-800'"
             >
               <p class="whitespace-pre-wrap">{{ msg.content }}</p>
 
@@ -343,13 +343,13 @@ async function onSend () {
           </div>
 
           <div v-if="sending" class="flex justify-start">
-            <div class="rounded-xl px-4 py-3 bg-white border border-gray-200 shadow-sm">
+            <div class="rounded-xl px-4 py-3 bg-studio-slate border border-gray-200 shadow-sm">
               <FilmReelLoader size="sm" label="Thinking" sub-label="Finding the best next step…" />
             </div>
           </div>
 
           <div v-if="building" class="flex justify-start">
-            <div class="rounded-xl px-4 py-3 bg-white border border-gray-200 shadow-sm">
+            <div class="rounded-xl px-4 py-3 bg-studio-slate border border-gray-200 shadow-sm">
               <FilmReelLoader
                 size="sm"
                 label="Building your project"
@@ -360,7 +360,7 @@ async function onSend () {
         </div>
 
         <form
-          class="border-t border-gray-200 bg-white p-3 flex flex-col gap-2 shrink-0"
+          class="border-t border-gray-200 bg-studio-slate p-3 flex flex-col gap-2 shrink-0"
           @submit.prevent="onSend"
         >
           <textarea

@@ -1,5 +1,5 @@
 <template>
-  <div class="border border-gray-200 rounded-lg p-6 bg-white flex flex-col h-full hover:border-primary/50 transition-all hover:shadow-lg hover:shadow-primary/10">
+  <div class="border border-gray-200 rounded-lg p-6 bg-studio-slate flex flex-col h-full hover:border-primary/50 transition-all hover:shadow-lg hover:shadow-primary/10">
     <div class="flex items-start gap-4 mb-4">
       <div class="w-16 h-16 flex items-center justify-center flex-shrink-0 bg-gray-100 rounded-lg p-2">
         <img

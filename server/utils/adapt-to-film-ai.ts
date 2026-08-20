@@ -170,8 +170,8 @@ export async function openRouterJsonCompletion (opts: {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
-    'HTTP-Referer': 'https://aielegance.com',
-    'X-Title': 'AI Elegance Adapt to Film'
+    'HTTP-Referer': 'https://aifilmstud.io',
+    'X-Title': 'AI Film Studio Adapt to Film'
   }
 
   const runOnce = async (system: string, user: string): Promise<{ ok: boolean; status: number; text: string }> => {

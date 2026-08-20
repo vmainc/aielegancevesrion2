@@ -13,7 +13,7 @@
     >
       <button
         type="button"
-        class="absolute top-4 right-4 z-[120] inline-flex items-center gap-2 rounded-full bg-white pl-3 pr-4 py-2.5 text-sm font-semibold text-gray-900 shadow-lg ring-2 ring-white/40 hover:bg-gray-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary"
+        class="absolute top-4 right-4 z-[120] inline-flex items-center gap-2 rounded-full bg-studio-slate pl-3 pr-4 py-2.5 text-sm font-semibold text-gray-900 shadow-lg ring-2 ring-white/40 hover:bg-gray-100 focus:outline-none focus-visible:ring-4 focus-visible:ring-primary"
         aria-label="Close image preview"
         @click="emit('close')"
       >
@@ -38,7 +38,7 @@
         <div class="mt-4 flex flex-wrap items-center justify-center gap-3 shrink-0">
           <p class="text-xs sm:text-sm text-white/75 text-center">
             Press
-            <kbd class="mx-1 rounded border border-white/30 bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-white">Esc</kbd>
+            <kbd class="mx-1 rounded border border-white/30 bg-studio-slate/10 px-1.5 py-0.5 font-mono text-[11px] text-white">Esc</kbd>
             or click the dark area outside the image
           </p>
           <a
@@ -46,7 +46,7 @@
             :href="frame.downloadUrl"
             target="_blank"
             rel="noopener noreferrer"
-            class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/15 hover:bg-white/25 border border-white/25 text-white"
+            class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-studio-slate/15 hover:bg-studio-slate/25 border border-white/25 text-white"
           >
             Download
           </a>

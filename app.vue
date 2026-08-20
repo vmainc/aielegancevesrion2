@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-white text-gray-900 antialiased">
+  <div class="min-h-screen bg-studio-charcoal text-ivory antialiased">
     <NuxtLayout>
       <NuxtPage :key="$route.fullPath" />
     </NuxtLayout>

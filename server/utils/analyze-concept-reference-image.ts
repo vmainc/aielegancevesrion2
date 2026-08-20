@@ -35,8 +35,8 @@ export async function analyzeConceptReferenceImageBrief (dataUrl: string): Promi
     headers: {
       Authorization: `Bearer ${apiKey.trim()}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://aielegance.com',
-      'X-Title': 'AI Elegance Concept Reference'
+      'HTTP-Referer': 'https://aifilmstud.io',
+      'X-Title': 'AI Film Studio Concept Reference'
     },
     body: JSON.stringify(body)
   })

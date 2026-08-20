@@ -32,7 +32,7 @@
 
       <template v-else-if="counts">
         <div class="grid gap-4 sm:grid-cols-2 mb-6">
-          <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <section class="rounded-xl border border-gray-200 bg-studio-slate p-4 shadow-sm">
             <h2 class="text-sm font-semibold text-gray-900 mb-3">Production Bible</h2>
             <ul class="space-y-2 text-sm">
               <li class="flex items-center justify-between gap-3">
@@ -73,7 +73,7 @@
             </div>
           </section>
 
-          <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <section class="rounded-xl border border-gray-200 bg-studio-slate p-4 shadow-sm">
             <h2 class="text-sm font-semibold text-gray-900 mb-3">Assets</h2>
             <ul class="space-y-2 text-sm">
               <li class="flex items-center justify-between gap-3">
@@ -107,7 +107,7 @@
             </div>
           </section>
 
-          <section class="rounded-xl border border-gray-200 bg-white p-4 shadow-sm">
+          <section class="rounded-xl border border-gray-200 bg-studio-slate p-4 shadow-sm">
             <h2 class="text-sm font-semibold text-gray-900 mb-3">Generation</h2>
             <ul class="space-y-2 text-sm">
               <li class="flex items-center justify-between gap-3">

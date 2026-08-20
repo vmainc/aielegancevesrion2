@@ -17,12 +17,12 @@
     <!-- Trim handles (select tool) -->
     <div
       v-if="activeTool === 'select'"
-      class="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/0 hover:bg-white/20 z-30"
+      class="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-studio-slate/0 hover:bg-studio-slate/20 z-30"
       @pointerdown.stop="onTrimStart('left', $event)"
     />
     <div
       v-if="activeTool === 'select'"
-      class="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/0 hover:bg-white/20 z-30"
+      class="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-studio-slate/0 hover:bg-studio-slate/20 z-30"
       @pointerdown.stop="onTrimStart('right', $event)"
     />
 

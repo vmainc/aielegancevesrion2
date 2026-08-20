@@ -1,7 +1,7 @@
 <template>
   <div ref="rootEl" class="relative space-y-2">
     <div
-      class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-gray-300 bg-white focus-within:border-primary"
+      class="flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2.5 py-1.5 rounded-lg border border-gray-300 bg-studio-slate focus-within:border-primary"
       @click="focusInput"
     >
       <span
@@ -43,7 +43,7 @@
       v-if="menuOpen"
       :id="listboxId"
       role="listbox"
-      class="absolute left-0 right-0 z-50 rounded-lg border border-gray-200 bg-white shadow-lg max-h-56 overflow-y-auto"
+      class="absolute left-0 right-0 z-50 rounded-lg border border-gray-200 bg-studio-slate shadow-lg max-h-56 overflow-y-auto"
     >
       <button
         v-for="(c, i) in filteredSuggestions"

@@ -35,9 +35,24 @@ export default defineNuxtConfig({
   app: {
     head: {
       htmlAttrs: { lang: 'en' },
+      title: 'AI Film Studio',
+      titleTemplate: '%s',
+      meta: [
+        {
+          name: 'description',
+          content: 'AI Film Studio is a virtual movie studio for creators, by creators. Everything you need to take a story from idea to screen.'
+        },
+        { name: 'theme-color', content: '#0D0D0F' }
+      ],
       link: [
-        { rel: 'icon', type: 'image/png', href: '/favicon.png?v=2' },
-        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png?v=2' },
+        { rel: 'icon', type: 'image/png', href: '/favicon.png?v=3' },
+        { rel: 'apple-touch-icon', href: '/apple-touch-icon.png?v=3' },
+        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
+        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
+        {
+          rel: 'stylesheet',
+          href: 'https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;500;600;700&display=swap'
+        },
       ],
     }
   },

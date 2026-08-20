@@ -1,5 +1,5 @@
 <template>
-  <section class="rounded-2xl border border-gray-200 bg-white p-4 sm:p-5">
+  <section class="rounded-2xl border border-gray-200 bg-studio-slate p-4 sm:p-5">
     <div class="flex items-start justify-between gap-3 mb-4">
       <div>
         <h2 class="text-base font-semibold text-gray-900">Project video library</h2>
@@ -9,7 +9,7 @@
       </div>
       <button
         type="button"
-        class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 disabled:opacity-50"
+        class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-studio-slate hover:bg-gray-50 text-gray-800 disabled:opacity-50"
         :disabled="loading"
         @click="fetchData"
       >
@@ -49,7 +49,7 @@
           <li
             v-for="a in scene.items"
             :key="a.id"
-            class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 bg-white"
+            class="px-4 py-4 flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 bg-studio-slate"
           >
             <div class="min-w-0 flex-1 flex flex-col sm:flex-row sm:items-start gap-3">
               <LazyAssetVideo

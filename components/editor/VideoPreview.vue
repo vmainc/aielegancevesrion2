@@ -56,7 +56,7 @@
       </button>
       <button
         type="button"
-        class="h-8 px-2 rounded-lg text-xs text-zinc-400 hover:text-white hover:bg-white/10"
+        class="h-8 px-2 rounded-lg text-xs text-zinc-400 hover:text-white hover:bg-studio-slate/10"
         @click="$emit('stop')"
       >
         Stop

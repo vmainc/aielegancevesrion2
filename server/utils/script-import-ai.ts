@@ -262,8 +262,8 @@ ${input.sceneOutline.slice(0, 48_000)}`
       headers: {
         Authorization: `Bearer ${apiKey.trim()}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://aielegance.com',
-        'X-Title': 'AI Elegance Script Import'
+        'HTTP-Referer': 'https://aifilmstud.io',
+        'X-Title': 'AI Film Studio Script Import'
       },
       body: JSON.stringify(body)
     },
@@ -553,8 +553,8 @@ ${input.sceneOutline.slice(0, 48_000)}`
         headers: {
           Authorization: `Bearer ${apiKey.trim()}`,
           'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://aielegance.com',
-          'X-Title': 'AI Elegance Script Wizard Acts'
+          'HTTP-Referer': 'https://aifilmstud.io',
+          'X-Title': 'AI Film Studio Script Wizard Acts'
         },
         body: JSON.stringify(body)
       },
@@ -686,8 +686,8 @@ ${synopsisBlock || '(none)'}`
       headers: {
         Authorization: `Bearer ${apiKey.trim()}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://aielegance.com',
-        'X-Title': 'AI Elegance Script Import Director'
+        'HTTP-Referer': 'https://aifilmstud.io',
+        'X-Title': 'AI Film Studio Script Import Director'
       },
       body: JSON.stringify(body)
     },
@@ -930,8 +930,8 @@ ${input.sceneOutline.slice(0, 48_000)}`
     headers: {
       Authorization: `Bearer ${apiKey.trim()}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://aielegance.com',
-      'X-Title': 'AI Elegance Script Import Characters'
+      'HTTP-Referer': 'https://aifilmstud.io',
+      'X-Title': 'AI Film Studio Script Import Characters'
     },
     body: JSON.stringify(body)
   })
@@ -1072,8 +1072,8 @@ ${input.sceneOutline.slice(0, 48_000)}`
       headers: {
         Authorization: `Bearer ${apiKey.trim()}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://aielegance.com',
-        'X-Title': 'AI Elegance Cast Table Enrich'
+        'HTTP-Referer': 'https://aifilmstud.io',
+        'X-Title': 'AI Film Studio Cast Table Enrich'
       },
       body: JSON.stringify(body)
     },
@@ -1308,8 +1308,8 @@ ${script}`
     headers: {
       Authorization: `Bearer ${apiKey.trim()}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://aielegance.com',
-      'X-Title': 'AI Elegance Scene Breakdown'
+      'HTTP-Referer': 'https://aifilmstud.io',
+      'X-Title': 'AI Film Studio Scene Breakdown'
     },
     body: JSON.stringify(chatBody)
   })

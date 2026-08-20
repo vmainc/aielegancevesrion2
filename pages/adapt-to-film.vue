@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
     <div class="mb-8">
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Adapt to Film</h1>
+      <h1 class="font-display text-3xl sm:text-4xl text-ivory tracking-wide mb-2">Adapt to Film</h1>
       <p class="text-gray-600 text-sm sm:text-base max-w-2xl">
         Turn a transcript, story, or article into a film treatment → scenes → shots → production plan.
       </p>
@@ -14,7 +14,7 @@
     </div>
 
     <form class="space-y-6" @submit.prevent="onSubmit">
-      <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-4">
+      <section class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4">
         <div>
           <label for="adapt-project-title" class="block text-sm font-medium text-gray-700 mb-1.5">
             Project title
@@ -23,7 +23,7 @@
             id="adapt-project-title"
             v-model="projectTitle"
             type="text"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
             placeholder="Working title for the film project"
             autocomplete="off"
           >
@@ -37,7 +37,7 @@
             id="adapt-source-title"
             v-model="sourceTitle"
             type="text"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
             placeholder="Title of the source material"
             autocomplete="off"
           >
@@ -50,7 +50,7 @@
           <select
             id="adapt-source-type"
             v-model="sourceType"
-            class="w-full sm:w-72 px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+            class="w-full sm:w-72 px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
           >
             <option
               v-for="opt in ADAPT_SOURCE_TYPES"
@@ -75,7 +75,7 @@
             id="adapt-source-text"
             v-model="sourceText"
             rows="14"
-            class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y min-h-[14rem] leading-relaxed"
+            class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y min-h-[14rem] leading-relaxed"
             placeholder="Paste transcript, story, article, or concept notes…"
           />
           <div class="mt-2 flex flex-wrap items-center gap-3">
@@ -103,7 +103,7 @@
               id="adapt-author"
               v-model="sourceAuthor"
               type="text"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
               autocomplete="off"
             >
           </div>
@@ -115,7 +115,7 @@
               id="adapt-date"
               v-model="sourceDate"
               type="text"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
               placeholder="e.g. 1943 or March 2024"
               autocomplete="off"
             >
@@ -130,7 +130,7 @@
             id="adapt-notes"
             v-model="sourceNotes"
             rows="3"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
             placeholder="Rights notes, context, or adaptation goals…"
           />
         </div>

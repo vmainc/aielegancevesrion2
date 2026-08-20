@@ -97,7 +97,7 @@
 
         <ul
           v-else-if="visibleItems.length"
-          class="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white"
+          class="divide-y divide-gray-200 rounded-xl border border-gray-200 bg-studio-slate"
         >
           <li
             v-for="a in visibleItems"

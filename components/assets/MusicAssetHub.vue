@@ -47,7 +47,7 @@
           <details
             v-for="g in projectGroups"
             :key="g.key"
-            class="mb-4 rounded-xl border border-gray-200 bg-white group overflow-visible"
+            class="mb-4 rounded-xl border border-gray-200 bg-studio-slate group overflow-visible"
           >
             <summary
               class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-gray-50/90 flex flex-wrap items-center justify-between gap-2 hover:bg-gray-100/80 border-b border-transparent group-open:border-gray-200"
@@ -98,7 +98,7 @@
                     >
                       Actions
                     </summary>
-                    <div class="absolute right-0 bottom-full mb-2 z-50 min-w-[13rem] rounded-lg border border-gray-200 bg-white shadow-lg p-1">
+                    <div class="absolute right-0 bottom-full mb-2 z-50 min-w-[13rem] rounded-lg border border-gray-200 bg-studio-slate shadow-lg p-1">
                       <a
                         v-if="playbackSrc(a)"
                         :href="playbackSrc(a)"
@@ -159,7 +159,7 @@
         @click.self="closeUpload"
       >
         <div
-          class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
+          class="w-full max-w-md rounded-xl border border-gray-200 bg-studio-slate shadow-xl p-6 max-h-[90vh] overflow-y-auto"
           @click.stop
         >
           <h2 id="music-upload-title" class="text-lg font-semibold text-gray-900 mb-4">

@@ -21,7 +21,7 @@
     <template v-else>
       <div
         v-if="!scenes.length"
-        class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-6 shadow-sm"
+        class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 mb-6 shadow-sm"
       >
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4 mb-4">
           <div class="min-w-0">
@@ -76,7 +76,7 @@
           <li
             v-for="(s, idx) in scenes"
             :key="s.id"
-            class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+            class="rounded-xl border border-gray-200 bg-studio-slate shadow-sm overflow-hidden"
           >
             <div class="flex items-start gap-1">
             <button
@@ -142,7 +142,7 @@
                   v-model="detailBody"
                   rows="14"
                   maxlength="150000"
-                  class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 leading-relaxed font-sans resize-y max-h-[min(70vh,32rem)] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+                  class="w-full rounded-lg border border-gray-300 bg-studio-slate px-3 py-2 text-sm text-gray-800 leading-relaxed font-sans resize-y max-h-[min(70vh,32rem)] focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
                   :disabled="savingScript"
                   placeholder="Dialogue and action for this scene…"
                 />
@@ -157,7 +157,7 @@
                   </button>
                   <button
                     type="button"
-                    class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-800 hover:bg-white disabled:opacity-50"
+                    class="px-3 py-1.5 text-xs rounded-lg border border-gray-300 text-gray-800 hover:bg-studio-slate disabled:opacity-50"
                     :disabled="!scriptDirty || savingScript"
                     @click="revertSceneScript"
                   >
@@ -214,7 +214,7 @@
                   </p>
                   <div
                     v-if="analyzeResultBySceneId[s.id]"
-                    class="mt-3 rounded-lg border border-gray-200 bg-white p-3 space-y-3"
+                    class="mt-3 rounded-lg border border-gray-200 bg-studio-slate p-3 space-y-3"
                   >
                     <p class="text-sm text-gray-800">
                       Built
@@ -322,7 +322,7 @@
       </div>
 
       <div
-        class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mt-6 shadow-sm"
+        class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 mt-6 shadow-sm"
       >
         <h2 class="text-base font-semibold text-gray-900 mb-1">Add a scene</h2>
         <p class="text-sm text-gray-600 mb-4">

@@ -1,7 +1,7 @@
 <template>
   <div
     v-if="characters.length"
-    class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-8 shadow-sm"
+    class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 mb-8 shadow-sm"
   >
     <h2 class="text-lg font-semibold text-gray-900 mb-1">
       Cast voice & performance references
@@ -23,7 +23,7 @@
           </h3>
           <label
             v-if="editable"
-            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-800 hover:border-primary hover:text-primary cursor-pointer transition-colors"
+            class="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-studio-slate text-gray-800 hover:border-primary hover:text-primary cursor-pointer transition-colors"
             :class="uploadingCharacterId === c.id ? 'opacity-60 pointer-events-none' : ''"
           >
             <input
@@ -47,7 +47,7 @@
             :value="voiceNotesDraft[c.id] ?? c.voiceDescription ?? ''"
             rows="2"
             maxlength="2000"
-            class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 resize-y"
+            class="w-full rounded-lg border border-gray-300 bg-studio-slate px-3 py-2 text-sm text-gray-800 resize-y"
             placeholder="e.g. Low, deliberate; slight rasp; Midwestern flat."
             :disabled="busy || savingNotesCharacterId === c.id"
             @input="onNotesInput(c.id, ($event.target as HTMLTextAreaElement).value)"
@@ -72,7 +72,7 @@
             </button>
             <button
               type="button"
-              class="px-2.5 py-1 text-xs rounded-lg border border-gray-300 text-gray-700 hover:bg-white disabled:opacity-50"
+              class="px-2.5 py-1 text-xs rounded-lg border border-gray-300 text-gray-700 hover:bg-studio-slate disabled:opacity-50"
               :disabled="busy || savingNotesCharacterId === c.id"
               @click="revertNotes(c)"
             >
@@ -89,7 +89,7 @@
             <li
               v-for="sample in samplesFor(c.id)"
               :key="sample.assetId"
-              class="flex flex-col gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2"
+              class="flex flex-col gap-2 rounded-lg border border-gray-200 bg-studio-slate px-3 py-2"
             >
               <video
                 v-if="sample.mediaType === 'video'"

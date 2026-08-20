@@ -9,7 +9,7 @@
       @click.self="close"
     >
       <div
-        class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl max-h-[90vh] overflow-y-auto"
+        class="w-full max-w-md rounded-xl border border-gray-200 bg-studio-slate shadow-xl max-h-[90vh] overflow-y-auto"
         @click.stop
       >
         <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-200">
@@ -32,23 +32,23 @@
           <div>
             <h3 class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Stats</h3>
             <dl class="grid grid-cols-2 gap-3 text-sm">
-              <div class="rounded-lg bg-white border border-gray-300 px-3 py-2">
+              <div class="rounded-lg bg-studio-slate border border-gray-300 px-3 py-2">
                 <dt class="text-gray-500">Scenes</dt>
                 <dd class="text-lg font-semibold text-gray-900">{{ stats.sceneCount }}</dd>
               </div>
-              <div class="rounded-lg bg-white border border-gray-300 px-3 py-2">
+              <div class="rounded-lg bg-studio-slate border border-gray-300 px-3 py-2">
                 <dt class="text-gray-500">Characters</dt>
                 <dd class="text-lg font-semibold text-gray-900">{{ stats.characterCount }}</dd>
               </div>
-              <div class="rounded-lg bg-white border border-gray-300 px-3 py-2 col-span-2">
+              <div class="rounded-lg bg-studio-slate border border-gray-300 px-3 py-2 col-span-2">
                 <dt class="text-gray-500">Storage</dt>
                 <dd class="text-gray-800">{{ isCloud ? 'Cloud (account)' : 'This device only' }}</dd>
               </div>
-              <div class="rounded-lg bg-white border border-gray-300 px-3 py-2 col-span-2">
+              <div class="rounded-lg bg-studio-slate border border-gray-300 px-3 py-2 col-span-2">
                 <dt class="text-gray-500">Created</dt>
                 <dd class="text-gray-800">{{ formatDate(project.createdAt) }}</dd>
               </div>
-              <div v-if="project.updatedAt !== project.createdAt" class="rounded-lg bg-white border border-gray-300 px-3 py-2 col-span-2">
+              <div v-if="project.updatedAt !== project.createdAt" class="rounded-lg bg-studio-slate border border-gray-300 px-3 py-2 col-span-2">
                 <dt class="text-gray-500">Updated</dt>
                 <dd class="text-gray-800">{{ formatDate(project.updatedAt) }}</dd>
               </div>
@@ -69,7 +69,7 @@
                   v-model="inviteEmail"
                   type="email"
                   placeholder="colleague@example.com"
-                  class="flex-1 px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary text-sm"
+                  class="flex-1 px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 focus:outline-none focus:border-primary text-sm"
                   :disabled="inviting"
                 >
                 <button
@@ -112,7 +112,7 @@
                 id="set-name"
                 v-model="draft.name"
                 type="text"
-                class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
+                class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
               >
             </div>
             <div>
@@ -120,7 +120,7 @@
               <select
                 id="set-aspect"
                 v-model="draft.aspectRatio"
-                class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
+                class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
               >
                 <option value="16:9">16:9</option>
                 <option value="9:16">9:16</option>
@@ -132,7 +132,7 @@
               <select
                 id="set-goal"
                 v-model="draft.goal"
-                class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
+                class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
               >
                 <option value="film">Film</option>
                 <option value="social">Social</option>
@@ -145,7 +145,7 @@
               <select
                 id="set-workflow"
                 v-model="draft.workflowMode"
-                class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
+                class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 focus:outline-none focus:border-primary"
               >
                 <option value="idea">I have an idea</option>
                 <option value="generate">Generate idea with AI</option>

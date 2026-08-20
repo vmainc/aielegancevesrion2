@@ -1,5 +1,5 @@
 <template>
-  <div :class="isFullscreen ? 'fixed inset-0 z-40 bg-white overflow-y-auto p-4 sm:p-6' : 'max-w-6xl'">
+  <div :class="isFullscreen ? 'fixed inset-0 z-40 bg-studio-slate overflow-y-auto p-4 sm:p-6' : 'max-w-6xl'">
     <div class="flex items-start justify-between gap-3 mb-6">
       <p class="text-sm text-gray-500">
         <span class="text-primary font-medium">Storyboard</span>
@@ -18,7 +18,7 @@
       </p>
       <button
         type="button"
-        class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-800"
+        class="shrink-0 px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-studio-slate hover:bg-gray-50 text-gray-800"
         @click="isFullscreen = !isFullscreen"
       >
         {{ isFullscreen ? 'Exit fullscreen' : 'Fullscreen' }}
@@ -97,7 +97,7 @@
               <select
                 id="scene-pick"
                 v-model="selectedSceneId"
-                class="w-full max-w-md px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 focus:outline-none focus:border-primary text-sm"
+                class="w-full max-w-md px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 focus:outline-none focus:border-primary text-sm"
               >
                 <option
                   v-for="(s, idx) in scenes"
@@ -142,7 +142,7 @@
               <div class="relative">
                 <button
                   type="button"
-                  class="h-10 w-10 rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-700"
+                  class="h-10 w-10 rounded-lg border border-gray-300 bg-studio-slate hover:bg-gray-50 text-gray-700"
                   :aria-expanded="showImageSettings ? 'true' : 'false'"
                   aria-label="Image settings"
                   @click="showImageSettings = !showImageSettings"
@@ -151,7 +151,7 @@
                 </button>
                 <div
                   v-if="showImageSettings"
-                  class="absolute right-0 mt-2 w-72 rounded-xl border border-gray-200 bg-white p-3 shadow-lg z-20"
+                  class="absolute right-0 mt-2 w-72 rounded-xl border border-gray-200 bg-studio-slate p-3 shadow-lg z-20"
                 >
                   <label for="image-model-pick" class="block text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1.5">
                     Image model
@@ -159,7 +159,7 @@
                   <select
                     id="image-model-pick"
                     v-model="selectedImageModelId"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
                   >
                     <option v-for="m in imageModelOptions" :key="m.id" :value="m.id">
                       {{ m.label }}
@@ -241,14 +241,14 @@
           <div class="flex flex-wrap items-center gap-2">
             <button
               type="button"
-              class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-studio-slate text-gray-700 hover:bg-gray-50"
               @click="setAllBoardDetailsOpen(false)"
             >
               Collapse all details
             </button>
             <button
               type="button"
-              class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+              class="px-3 py-1.5 text-xs font-medium rounded-lg border border-gray-300 bg-studio-slate text-gray-700 hover:bg-gray-50"
               @click="setAllBoardDetailsOpen(true)"
             >
               Expand all details
@@ -322,7 +322,7 @@
         >
           <button
             type="button"
-            class="px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-800 text-sm font-semibold rounded-lg disabled:opacity-50"
+            class="px-4 py-2 bg-studio-slate border border-gray-300 hover:bg-gray-50 text-gray-800 text-sm font-semibold rounded-lg disabled:opacity-50"
             :disabled="addingBoard || reordering"
             @click="addBoard()"
           >

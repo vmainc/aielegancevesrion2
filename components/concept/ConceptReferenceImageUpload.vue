@@ -1,5 +1,5 @@
 <template>
-  <div class="mb-5 rounded-lg border border-gray-200 bg-white px-3 py-3">
+  <div class="mb-5 rounded-lg border border-gray-200 bg-studio-slate px-3 py-3">
     <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
       <div>
         <label class="block text-sm font-medium text-gray-700">
@@ -65,7 +65,7 @@
         <div class="flex justify-end mb-3 shrink-0">
           <button
             type="button"
-            class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20 text-white"
+            class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-studio-slate/10 hover:bg-studio-slate/20 border border-white/20 text-white"
             @click="expanded = false"
           >
             Close

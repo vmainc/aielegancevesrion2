@@ -7,7 +7,7 @@
       :rows="rows"
       :placeholder="placeholder"
       :maxlength="maxlength"
-      class="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-800 resize-y focus:outline-none focus:border-primary"
+      class="w-full rounded-lg border border-gray-300 bg-studio-slate px-3 py-2 text-sm text-gray-800 resize-y focus:outline-none focus:border-primary"
       @input="$emit('update:modelValue', ($event.target as HTMLTextAreaElement).value)"
       @blur="$emit('commit')"
     />

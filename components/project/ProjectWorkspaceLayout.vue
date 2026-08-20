@@ -18,7 +18,7 @@
 
   <div v-else class="min-h-[calc(100vh-5rem)] flex flex-col lg:flex-row bg-gray-50">
     <!-- Mobile: project section picker -->
-    <div class="lg:hidden border-b border-gray-200 bg-white px-4 py-3 shadow-sm space-y-2">
+    <div class="lg:hidden border-b border-gray-200 bg-studio-slate px-4 py-3 shadow-sm space-y-2">
       <NuxtLink
         to="/projects"
         class="text-xs text-gray-500 hover:text-primary transition-colors inline-flex items-center gap-1"
@@ -29,7 +29,7 @@
       <select
         id="project-section-mobile"
         :value="activeSectionPath"
-        class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
+        class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm font-medium focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary/30"
         @change="onMobileSectionChange"
       >
         <option
@@ -43,7 +43,7 @@
     </div>
 
     <!-- Desktop sidebar -->
-    <aside class="hidden lg:flex w-56 flex-shrink-0 border-r border-gray-200 bg-white flex-col">
+    <aside class="hidden lg:flex w-56 flex-shrink-0 border-r border-gray-200 bg-studio-slate flex-col">
       <div class="p-4 border-b border-gray-200">
         <NuxtLink
           to="/projects"
@@ -82,8 +82,8 @@
       </nav>
     </aside>
 
-    <div class="flex-1 flex flex-col min-w-0 bg-white">
-      <header class="border-b border-gray-200 bg-white px-4 sm:px-6 py-4 sm:py-5">
+    <div class="flex-1 flex flex-col min-w-0 bg-studio-slate">
+      <header class="border-b border-gray-200 bg-studio-slate px-4 sm:px-6 py-4 sm:py-5">
         <div class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
           <div>
             <h1 class="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">

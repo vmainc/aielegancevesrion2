@@ -80,7 +80,7 @@ onBeforeUnmount(() => {
       <button
         v-if="open"
         type="button"
-        class="pointer-events-auto absolute inset-0 bg-gray-950/25 border-0 cursor-default"
+        class="pointer-events-auto absolute inset-0 bg-black/60 border-0 cursor-default"
         aria-label="Close Guide"
         @click="close"
       />
@@ -88,7 +88,7 @@ onBeforeUnmount(() => {
       <!-- Panel -->
       <div
         v-if="open"
-        class="pointer-events-auto absolute bottom-0 right-0 sm:bottom-6 sm:right-6 flex flex-col w-full sm:w-[min(420px,calc(100vw-1.5rem))] h-[min(85vh,40rem)] sm:h-[min(70vh,36rem)] sm:rounded-xl border border-gray-200 bg-white shadow-xl overflow-hidden"
+        class="pointer-events-auto absolute bottom-0 right-0 sm:bottom-6 sm:right-6 flex flex-col w-full sm:w-[min(420px,calc(100vw-1.5rem))] h-[min(85vh,40rem)] sm:h-[min(70vh,36rem)] sm:rounded-xl border border-gray-200 bg-studio-slate shadow-xl overflow-hidden"
         role="dialog"
         aria-modal="true"
         aria-label="Guide companion"
@@ -120,7 +120,7 @@ onBeforeUnmount(() => {
           </NuxtLink>
           <button
             type="button"
-            class="shrink-0 rounded-lg border border-gray-300 bg-white px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
+            class="shrink-0 rounded-lg border border-gray-300 bg-studio-slate px-2 py-1 text-xs font-medium text-gray-700 hover:bg-gray-50"
             @click="close"
           >
             Close
@@ -148,7 +148,7 @@ onBeforeUnmount(() => {
       <button
         v-show="!open"
         type="button"
-        class="pointer-events-auto absolute bottom-5 right-5 sm:bottom-6 sm:right-6 inline-flex items-center gap-2 rounded-full bg-primary text-gray-950 pl-3.5 pr-4 py-3 text-sm font-semibold shadow-lg hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+        class="pointer-events-auto absolute bottom-5 right-5 sm:bottom-6 sm:right-6 inline-flex items-center gap-2 rounded-full bg-primary text-charcoal pl-3.5 pr-4 py-3 text-sm font-semibold shadow-lg shadow-primary/20 hover:bg-primary/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-studio-charcoal"
         aria-label="Open Guide"
         @click="toggle"
       >

@@ -90,7 +90,7 @@
 
         <div
           v-if="displayCharacters.length"
-          class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-8 shadow-sm"
+          class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 mb-8 shadow-sm"
         >
           <h2 class="text-lg font-semibold text-gray-900 mb-1">
             Dialogue share in the script

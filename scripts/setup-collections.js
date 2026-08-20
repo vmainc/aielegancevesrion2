@@ -1,7 +1,7 @@
 /**
  * PocketBase Collection Setup Script
  * 
- * This script creates the required collections for the AI Elegance application.
+ * This script creates the required collections for the AI Film Studio application.
  * 
  * Usage:
  *   node scripts/setup-collections.js [adminEmail] [adminPassword] [pocketbaseUrl]

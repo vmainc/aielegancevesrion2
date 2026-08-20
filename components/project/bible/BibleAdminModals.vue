@@ -51,7 +51,7 @@ function castLinkConfidenceClass (confidence?: string): string {
     aria-labelledby="seed-modal-title"
     @click.self="emit('update:seedModalOpen', false)"
   >
-    <div class="w-full max-w-lg rounded-xl border border-gray-200 bg-white shadow-xl p-5 sm:p-6 max-h-[85vh] overflow-y-auto">
+    <div class="w-full max-w-lg rounded-xl border border-gray-200 bg-studio-slate shadow-xl p-5 sm:p-6 max-h-[85vh] overflow-y-auto">
       <h2 id="seed-modal-title" class="text-lg font-semibold text-gray-900 mb-1">
         {{ seedPreview.dryRun ? 'Seed preview' : 'Seed complete' }}
       </h2>
@@ -154,7 +154,7 @@ function castLinkConfidenceClass (confidence?: string): string {
     aria-labelledby="legacy-remediation-title"
     @click.self="emit('update:legacyRemediationModalOpen', false)"
   >
-    <div class="w-full max-w-lg rounded-xl border border-amber-200 bg-white shadow-xl p-5 sm:p-6 max-h-[85vh] overflow-y-auto">
+    <div class="w-full max-w-lg rounded-xl border border-amber-200 bg-studio-slate shadow-xl p-5 sm:p-6 max-h-[85vh] overflow-y-auto">
       <h2 id="legacy-remediation-title" class="text-lg font-semibold text-gray-900 mb-1">
         {{ legacyRemediationPreview.dryRun ? 'Legacy seeded facts preview' : 'Legacy remediation complete' }}
       </h2>
@@ -221,7 +221,7 @@ function castLinkConfidenceClass (confidence?: string): string {
     aria-labelledby="legacy-prompt-redaction-title"
     @click.self="emit('update:legacyPromptRedactionModalOpen', false)"
   >
-    <div class="w-full max-w-lg rounded-xl border border-rose-200 bg-white shadow-xl p-5 sm:p-6 max-h-[85vh] overflow-y-auto">
+    <div class="w-full max-w-lg rounded-xl border border-rose-200 bg-studio-slate shadow-xl p-5 sm:p-6 max-h-[85vh] overflow-y-auto">
       <h2 id="legacy-prompt-redaction-title" class="text-lg font-semibold text-gray-900 mb-1">
         {{ legacyPromptRedactionPreview.dryRun ? 'Legacy prompt metadata preview' : 'Legacy prompt redaction complete' }}
       </h2>
@@ -301,7 +301,7 @@ function castLinkConfidenceClass (confidence?: string): string {
     aria-labelledby="cast-link-title"
     @click.self="emit('update:castLinkModalOpen', false)"
   >
-    <div class="w-full max-w-lg rounded-xl border border-sky-200 bg-white shadow-xl p-5 sm:p-6 max-h-[85vh] overflow-y-auto">
+    <div class="w-full max-w-lg rounded-xl border border-sky-200 bg-studio-slate shadow-xl p-5 sm:p-6 max-h-[85vh] overflow-y-auto">
       <h2 id="cast-link-title" class="text-lg font-semibold text-gray-900 mb-1">
         {{ castLinkPreview.dryRun ? 'Link cast preview' : 'Cast link complete' }}
       </h2>

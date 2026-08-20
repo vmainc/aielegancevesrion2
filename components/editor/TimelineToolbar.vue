@@ -5,7 +5,7 @@
       class="px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
       :class="activeTool === 'select'
         ? 'bg-primary text-gray-950 shadow-md'
-        : 'text-zinc-300 hover:bg-white/10 hover:text-white'"
+        : 'text-zinc-300 hover:bg-studio-slate/10 hover:text-white'"
       title="Move and trim clips (V)"
       @click="$emit('set-tool', 'select')"
     >
@@ -16,7 +16,7 @@
       class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all"
       :class="activeTool === 'split'
         ? 'bg-primary text-gray-950 shadow-md'
-        : 'text-zinc-300 hover:bg-white/10 hover:text-white'"
+        : 'text-zinc-300 hover:bg-studio-slate/10 hover:text-white'"
       title="Razor tool: click a clip to cut at the playhead (C)"
       @click="$emit('set-tool', 'split')"
     >
@@ -24,11 +24,11 @@
       Razor (C)
     </button>
 
-    <span class="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
+    <span class="w-px h-6 bg-studio-slate/10 mx-1" aria-hidden="true" />
 
     <button
       type="button"
-      class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed"
+      class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-studio-slate/10 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed"
       :disabled="!canUndo"
       title="Undo (⌘Z)"
       @click="$emit('undo')"
@@ -37,7 +37,7 @@
     </button>
     <button
       type="button"
-      class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed"
+      class="px-2.5 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-studio-slate/10 hover:text-white disabled:opacity-35 disabled:cursor-not-allowed"
       :disabled="!canRedo"
       title="Redo (⌘⇧Z)"
       @click="$emit('redo')"
@@ -45,7 +45,7 @@
       Redo
     </button>
 
-    <span class="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
+    <span class="w-px h-6 bg-studio-slate/10 mx-1" aria-hidden="true" />
 
     <button
       type="button"
@@ -60,7 +60,7 @@
     <div class="relative">
       <button
         type="button"
-        class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
+        class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-studio-slate/10 hover:text-white disabled:opacity-40"
         :disabled="!hasSelection"
         @click="showFade = !showFade"
       >
@@ -74,7 +74,7 @@
           v-for="t in fadeOptions"
           :key="t.id"
           type="button"
-          class="block w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-white/10"
+          class="block w-full text-left px-3 py-1.5 text-xs text-zinc-200 hover:bg-studio-slate/10"
           @click="pickFade(t)"
         >
           {{ t.label }}
@@ -84,7 +84,7 @@
 
     <button
       type="button"
-      class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
+      class="px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-studio-slate/10 hover:text-white disabled:opacity-40"
       :disabled="!canDetach"
       title="Move audio to the audio track"
       @click="$emit('detach-audio')"
@@ -104,7 +104,7 @@
 
     <button
       type="button"
-      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-white/10 hover:text-white disabled:opacity-40"
+      class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-zinc-300 hover:bg-studio-slate/10 hover:text-white disabled:opacity-40"
       :disabled="!canSplit"
       title="Cut selected clip at playhead"
       @click="$emit('split')"
@@ -113,12 +113,12 @@
       Cut at playhead
     </button>
 
-    <span class="w-px h-6 bg-white/10 mx-1" aria-hidden="true" />
+    <span class="w-px h-6 bg-studio-slate/10 mx-1" aria-hidden="true" />
 
     <label class="inline-flex items-center gap-1.5">
       <span class="text-[10px] uppercase tracking-wide text-zinc-500">Quality</span>
       <select
-        class="px-2 py-1.5 rounded-lg text-xs font-medium text-zinc-200 bg-zinc-800 border border-white/10 hover:bg-white/10 focus:outline-none focus:border-emerald-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
+        class="px-2 py-1.5 rounded-lg text-xs font-medium text-zinc-200 bg-zinc-800 border border-white/10 hover:bg-studio-slate/10 focus:outline-none focus:border-emerald-400/50 disabled:opacity-40 disabled:cursor-not-allowed"
         :value="exportQuality"
         :disabled="exporting"
         :title="qualityTitle"

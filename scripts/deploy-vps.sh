@@ -16,7 +16,7 @@
 # PocketBase parity with local: on the VPS, /var/www/aielegance/.env must define
 # NUXT_PUBLIC_POCKETBASE_URL, POCKETBASE_INTERNAL_URL, POCKETBASE_ADMIN_* (and OPENROUTER_*).
 # Template: deploy/vps.env.example — run setup-db against prod PB when collections change:
-#   POCKETBASE_URL=https://aielegance.com/pb node scripts/setup-collections.js 'email' 'pass'
+#   POCKETBASE_URL=https://aifilmstud.io/pb node scripts/setup-collections.js 'email' 'pass'
 
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -25,8 +25,8 @@ cd "$ROOT"
 : "${VPS_HOST:=root@163.245.212.43}"
 : "${VPS_PATH:=/var/www/aielegance}"
 : "${DEPLOY_PM2_NAME:=aielegance}"
-# Browser-facing PocketBase (HTTPS on live site — avoids mixed-content on https://aielegance.com/)
-: "${NUXT_PUBLIC_POCKETBASE_URL:=https://aielegance.com/pb}"
+# Browser-facing PocketBase (HTTPS on live site — avoids mixed-content on https://aifilmstud.io/)
+: "${NUXT_PUBLIC_POCKETBASE_URL:=https://aifilmstud.io/pb}"
 
 SSH_BASE_OPTS="-o ServerAliveInterval=30 -o ServerAliveCountMax=6"
 if [ "${DEPLOY_SSH_DISABLE_MUX:-0}" = "1" ]; then
@@ -85,7 +85,7 @@ else
   echo "==> Restarting PM2 on server: $DEPLOY_PM2_NAME"
   if $SSH_CMD "$VPS_HOST" "command -v pm2 >/dev/null 2>&1 && pm2 restart $DEPLOY_PM2_NAME" \
     || $SSH_CMD "$VPS_HOST" "bash -lc 'pm2 restart $DEPLOY_PM2_NAME'"; then
-    echo "==> PM2 restart OK — hard-refresh https://aielegance.com (private window if needed)."
+    echo "==> PM2 restart OK — hard-refresh https://aifilmstud.io (private window if needed)."
   else
     echo "WARN: Could not pm2 restart over SSH. On the VPS run:"
     echo "      pm2 restart $DEPLOY_PM2_NAME"
@@ -95,6 +95,6 @@ fi
 
 echo ""
 echo "==> Reminder: VPS .env should mirror deploy/vps.env.example (PB URL, INTERNAL_URL, admin, OpenRouter)."
-echo "    PocketBase admin UI allowed origins: include https://aielegance.com (see pocketbase/README.md)."
+echo "    PocketBase admin UI allowed origins: include https://aifilmstud.io (see pocketbase/README.md)."
 echo "    If live shows “creative_projects collection is missing”, from your Mac run:"
 echo "      POCKETBASE_URL=$NUXT_PUBLIC_POCKETBASE_URL POCKETBASE_ADMIN_EMAIL=... POCKETBASE_ADMIN_PASSWORD=... npm run setup-db"

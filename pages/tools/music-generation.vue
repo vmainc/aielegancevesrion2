@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
     <header class="mb-8">
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+      <h1 class="font-display text-3xl sm:text-4xl text-ivory tracking-wide tracking-tight">
         Music generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
@@ -46,7 +46,7 @@
         v-else-if="uiPhase === 'complete'"
         class="space-y-8 mb-10"
       >
-        <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-5">
+        <section class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-5">
           <div>
             <h2 class="text-lg font-semibold text-gray-900">
               {{ trackSaved ? 'Track saved to your project' : 'Your track is ready' }}
@@ -94,7 +94,7 @@
             </button>
             <button
               type="button"
-              class="px-5 py-2.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-lg text-sm transition-colors disabled:opacity-50"
+              class="px-5 py-2.5 border border-gray-300 bg-studio-slate hover:bg-gray-50 text-gray-800 font-medium rounded-lg text-sm transition-colors disabled:opacity-50"
               :disabled="discarding"
               @click="discardAndRetry"
             >
@@ -122,7 +122,7 @@
             role="tab"
             class="px-4 py-2 text-sm font-medium rounded-md transition-colors"
             :class="inputMode === 'guide'
-              ? 'bg-white text-gray-900 shadow-sm'
+              ? 'bg-studio-slate text-gray-900 shadow-sm'
               : 'text-gray-600 hover:text-gray-900'"
             :aria-selected="inputMode === 'guide'"
             @click="inputMode = 'guide'"
@@ -134,7 +134,7 @@
             role="tab"
             class="px-4 py-2 text-sm font-medium rounded-md transition-colors"
             :class="inputMode === 'manual'
-              ? 'bg-white text-gray-900 shadow-sm'
+              ? 'bg-studio-slate text-gray-900 shadow-sm'
               : 'text-gray-600 hover:text-gray-900'"
             :aria-selected="inputMode === 'manual'"
             @click="inputMode = 'manual'"
@@ -145,7 +145,7 @@
 
         <div
           v-if="inputMode === 'guide'"
-          class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 mb-10 space-y-4"
+          class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 mb-10 space-y-4"
         >
           <MusicGenerationGuide
             ref="guideRef"
@@ -177,7 +177,7 @@
                 id="mg-prompt"
                 v-model="prompt"
                 rows="4"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
                 placeholder="Mood, instrumentation, tempo feel — e.g. tense orchestral underscore with low strings"
               />
             </div>
@@ -187,7 +187,7 @@
                 v-for="preset in stylePresets"
                 :key="preset.label"
                 type="button"
-                class="px-3 py-1.5 text-xs rounded-full border border-gray-300 bg-white text-gray-700 hover:border-primary/50 hover:text-primary transition-colors"
+                class="px-3 py-1.5 text-xs rounded-full border border-gray-300 bg-studio-slate text-gray-700 hover:border-primary/50 hover:text-primary transition-colors"
                 @click="applyPreset(preset)"
               >
                 {{ preset.label }}
@@ -199,7 +199,7 @@
               <select
                 id="mg-model"
                 v-model="selectedModelId"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
               >
                 <option v-for="m in models" :key="m.id" :value="m.id">
                   {{ m.name }} — {{ m.durationHint }} ({{ m.priceHint }})
@@ -231,7 +231,7 @@
                   min="40"
                   max="220"
                   placeholder="e.g. 90"
-                  class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                  class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
                 >
               </div>
             </div>
@@ -242,13 +242,13 @@
                 id="mg-lyrics"
                 v-model="lyrics"
                 rows="3"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
                 placeholder="Lyrics for vocal tracks (Pro model works best for full songs)"
               />
             </div>
           </section>
 
-          <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-4">
+          <section class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4">
             <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
               Save to project
             </h2>
@@ -274,7 +274,7 @@
                   <select
                     id="mg-project"
                     v-model="selectedProjectId"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
                   >
                     <option value="">Select a project…</option>
                     <option v-for="p in pbProjects" :key="p.id" :value="p.id">
@@ -318,7 +318,7 @@
         @click.self="closeCreateProjectModal"
       >
         <div
-          class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6"
+          class="w-full max-w-md rounded-xl border border-gray-200 bg-studio-slate shadow-xl p-6"
           @click.stop
         >
           <h2 id="mg-create-project-title" class="text-lg font-semibold text-gray-900 mb-1">

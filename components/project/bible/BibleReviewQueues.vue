@@ -23,7 +23,7 @@
           <span class="text-amber-900/80 font-medium">Source</span>
           <select
             v-model="pendingFactFilters.source"
-            class="mt-0.5 w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-sm"
+            class="mt-0.5 w-full rounded-lg border border-amber-200 bg-studio-slate px-2 py-1.5 text-sm"
           >
             <option value="all">All sources</option>
             <option value="seed">Seed</option>
@@ -35,7 +35,7 @@
           <span class="text-amber-900/80 font-medium">Fact type</span>
           <select
             v-model="pendingFactFilters.factType"
-            class="mt-0.5 w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-sm"
+            class="mt-0.5 w-full rounded-lg border border-amber-200 bg-studio-slate px-2 py-1.5 text-sm"
           >
             <option value="all">All types</option>
             <option
@@ -51,7 +51,7 @@
           <span class="text-amber-900/80 font-medium">Scope</span>
           <select
             v-model="pendingFactFilters.scope"
-            class="mt-0.5 w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-sm"
+            class="mt-0.5 w-full rounded-lg border border-amber-200 bg-studio-slate px-2 py-1.5 text-sm"
           >
             <option value="all">All scopes</option>
             <option value="entity">Entity-linked</option>
@@ -64,7 +64,7 @@
             v-model="pendingFactFilters.search"
             type="search"
             placeholder="Statement, type…"
-            class="mt-0.5 w-full rounded-lg border border-amber-200 bg-white px-2 py-1.5 text-sm"
+            class="mt-0.5 w-full rounded-lg border border-amber-200 bg-studio-slate px-2 py-1.5 text-sm"
           >
         </label>
       </div>
@@ -90,7 +90,7 @@
         </button>
         <button
           type="button"
-          class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-red-300 text-red-700 bg-white disabled:opacity-50"
+          class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-red-300 text-red-700 bg-studio-slate disabled:opacity-50"
           :disabled="mutating || selectedVisiblePendingCount === 0"
           @click="onBulkRejectSelected"
         >
@@ -98,7 +98,7 @@
         </button>
         <button
           type="button"
-          class="px-2.5 py-1 text-xs font-medium rounded-lg border border-emerald-300 text-emerald-800 bg-white disabled:opacity-50"
+          class="px-2.5 py-1 text-xs font-medium rounded-lg border border-emerald-300 text-emerald-800 bg-studio-slate disabled:opacity-50"
           :disabled="mutating || !visiblePendingFacts.length"
           @click="onBulkApproveAllVisible"
         >
@@ -106,7 +106,7 @@
         </button>
         <button
           type="button"
-          class="px-2.5 py-1 text-xs font-medium rounded-lg border border-red-200 text-red-700 bg-white disabled:opacity-50"
+          class="px-2.5 py-1 text-xs font-medium rounded-lg border border-red-200 text-red-700 bg-studio-slate disabled:opacity-50"
           :disabled="mutating || !visiblePendingFacts.length"
           @click="onBulkRejectAllVisible"
         >
@@ -124,7 +124,7 @@
         <li
           v-for="f in visiblePendingFacts"
           :key="f.id"
-          class="rounded-lg border border-amber-200/80 bg-white px-3 py-2 text-sm"
+          class="rounded-lg border border-amber-200/80 bg-studio-slate px-3 py-2 text-sm"
         >
           <div class="flex flex-wrap items-start gap-2">
             <input
@@ -204,7 +204,7 @@
           <span class="text-sky-900/80 font-medium">Type</span>
           <select
             v-model="tentativeItemFilters.kind"
-            class="mt-0.5 w-full rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-sm"
+            class="mt-0.5 w-full rounded-lg border border-sky-200 bg-studio-slate px-2 py-1.5 text-sm"
           >
             <option value="all">All</option>
             <option value="entity">Entity</option>
@@ -215,7 +215,7 @@
           <span class="text-sky-900/80 font-medium">Entity type</span>
           <select
             v-model="tentativeItemFilters.entityType"
-            class="mt-0.5 w-full rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-sm"
+            class="mt-0.5 w-full rounded-lg border border-sky-200 bg-studio-slate px-2 py-1.5 text-sm"
           >
             <option value="all">All entity types</option>
             <option
@@ -231,7 +231,7 @@
           <span class="text-sky-900/80 font-medium">Relationship type</span>
           <select
             v-model="tentativeItemFilters.relationshipType"
-            class="mt-0.5 w-full rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-sm"
+            class="mt-0.5 w-full rounded-lg border border-sky-200 bg-studio-slate px-2 py-1.5 text-sm"
           >
             <option value="all">All relationship types</option>
             <option
@@ -249,7 +249,7 @@
             v-model="tentativeItemFilters.search"
             type="search"
             placeholder="Name, type, relationship…"
-            class="mt-0.5 w-full rounded-lg border border-sky-200 bg-white px-2 py-1.5 text-sm"
+            class="mt-0.5 w-full rounded-lg border border-sky-200 bg-studio-slate px-2 py-1.5 text-sm"
           >
         </label>
       </div>
@@ -275,7 +275,7 @@
         </button>
         <button
           type="button"
-          class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-red-300 text-red-700 bg-white disabled:opacity-50"
+          class="px-2.5 py-1 text-xs font-semibold rounded-lg border border-red-300 text-red-700 bg-studio-slate disabled:opacity-50"
           :disabled="mutating || selectedVisibleTentativeCount === 0"
           @click="onBulkRetireTentativeSelected"
         >
@@ -283,7 +283,7 @@
         </button>
         <button
           type="button"
-          class="px-2.5 py-1 text-xs font-medium rounded-lg border border-emerald-300 text-emerald-800 bg-white disabled:opacity-50"
+          class="px-2.5 py-1 text-xs font-medium rounded-lg border border-emerald-300 text-emerald-800 bg-studio-slate disabled:opacity-50"
           :disabled="mutating || !visibleTentativeItems.length"
           @click="onBulkApproveAllVisibleTentative"
         >
@@ -291,7 +291,7 @@
         </button>
         <button
           type="button"
-          class="px-2.5 py-1 text-xs font-medium rounded-lg border border-red-200 text-red-700 bg-white disabled:opacity-50"
+          class="px-2.5 py-1 text-xs font-medium rounded-lg border border-red-200 text-red-700 bg-studio-slate disabled:opacity-50"
           :disabled="mutating || !visibleTentativeItems.length"
           @click="onBulkRetireAllVisibleTentative"
         >
@@ -309,7 +309,7 @@
         <li
           v-for="item in visibleTentativeItems"
           :key="tentativeReviewItemKey(item)"
-          class="rounded-lg border border-sky-200/80 bg-white px-3 py-2 text-sm"
+          class="rounded-lg border border-sky-200/80 bg-studio-slate px-3 py-2 text-sm"
         >
           <div class="flex flex-wrap items-start gap-2">
             <input

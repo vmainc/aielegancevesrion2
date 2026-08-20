@@ -41,7 +41,7 @@
         class="group"
       >
         <summary
-          class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-white flex flex-wrap items-center justify-between gap-2 hover:bg-gray-50"
+          class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-4 py-3 bg-studio-slate flex flex-wrap items-center justify-between gap-2 hover:bg-gray-50"
         >
           <div class="flex items-center gap-2 min-w-0">
             <span

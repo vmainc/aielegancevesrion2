@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
     <div class="mb-8">
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Speech to Text</h1>
+      <h1 class="font-display text-3xl sm:text-4xl text-ivory tracking-wide mb-2">Speech to Text</h1>
       <p class="text-gray-600 text-sm sm:text-base max-w-2xl">
         Upload an MP3 or WAV recording and convert the spoken audio into a readable transcript.
       </p>
@@ -50,7 +50,7 @@
               for="stt-file"
               class="cursor-pointer inline-flex flex-col items-center gap-2"
             >
-              <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-white border border-gray-200 text-primary" aria-hidden="true">
+              <span class="inline-flex h-12 w-12 items-center justify-center rounded-full bg-studio-slate border border-gray-200 text-primary" aria-hidden="true">
                 <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
                 </svg>
@@ -65,7 +65,7 @@
 
             <div
               v-if="selectedFile"
-              class="mt-5 mx-auto max-w-md rounded-lg border border-gray-200 bg-white px-4 py-3 text-left"
+              class="mt-5 mx-auto max-w-md rounded-lg border border-gray-200 bg-studio-slate px-4 py-3 text-left"
             >
               <div class="flex items-start justify-between gap-3">
                 <div class="min-w-0">
@@ -92,7 +92,7 @@
           </p>
         </div>
 
-        <fieldset class="rounded-xl border border-gray-200 bg-white p-5 space-y-5">
+        <fieldset class="rounded-xl border border-gray-200 bg-studio-slate p-5 space-y-5">
           <legend class="px-1 text-sm font-semibold text-gray-900">Transcript options</legend>
 
           <div>
@@ -126,7 +126,7 @@
             <select
               id="stt-language"
               v-model="language"
-              class="w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary bg-white"
+              class="w-full sm:w-64 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-primary bg-studio-slate"
             >
               <option
                 v-for="opt in languageOptions"
@@ -186,7 +186,7 @@
       <!-- Processing -->
       <section
         v-else-if="uiPhase === 'processing'"
-        class="rounded-xl border border-gray-200 bg-white shadow-sm px-5 py-10"
+        class="rounded-xl border border-gray-200 bg-studio-slate shadow-sm px-5 py-10"
         aria-live="polite"
         aria-busy="true"
       >
@@ -206,7 +206,7 @@
         class="space-y-5"
         aria-labelledby="stt-results-heading"
       >
-        <div class="rounded-xl border border-gray-200 bg-white shadow-sm p-5 space-y-4">
+        <div class="rounded-xl border border-gray-200 bg-studio-slate shadow-sm p-5 space-y-4">
           <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
               <h2 id="stt-results-heading" class="text-lg font-semibold text-gray-900">Transcript</h2>
@@ -310,7 +310,7 @@
         aria-labelledby="stt-history-heading"
       >
         <h2 id="stt-history-heading" class="text-sm font-semibold text-gray-900 mb-3">Recent Transcriptions</h2>
-        <ul class="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <ul class="divide-y divide-gray-100 rounded-xl border border-gray-200 bg-studio-slate overflow-hidden">
           <li
             v-for="item in history"
             :key="item.id"

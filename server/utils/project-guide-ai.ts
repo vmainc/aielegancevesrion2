@@ -52,7 +52,7 @@ function normalizeName (v: string): string {
 }
 
 export function buildProjectGuideSystemPrompt (ctx: ProjectGuideContext): string {
-  return `You are the Project Guide for AI Elegance — a film pre-production copilot embedded in one creative project.
+  return `You are the Project Guide for AI Film Studio — a film pre-production copilot embedded in one creative project.
 
 Your job:
 1. Help the filmmaker think through story, characters, tone, and continuity.

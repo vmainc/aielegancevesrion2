@@ -1,19 +1,19 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
+  <div class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-studio-charcoal">
     <div class="max-w-md w-full">
       <div class="text-center mb-8">
         <NuxtLink to="/" class="inline-block mb-4">
           <img
             :src="logo"
-            alt="AI Elegance"
-            class="h-16 w-auto mx-auto rounded-md shadow-sm"
+            alt="AI Film Studio"
+            class="h-16 w-auto mx-auto"
           />
         </NuxtLink>
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">Reset Password</h1>
-        <p class="text-gray-600">Enter your email to receive a password reset link</p>
+        <h1 class="font-display text-4xl text-ivory mb-2 tracking-wide">Reset Password</h1>
+        <p class="text-smoke">Enter your email to receive a password reset link</p>
       </div>
 
-      <div class="border border-gray-200 rounded-xl p-8 bg-white border border-gray-200 shadow-lg">
+      <div class="border border-primary/25 rounded-xl p-8 bg-studio-slate shadow-lg">
         <form @submit.prevent="handleRequestReset" class="space-y-6">
           <div v-if="error" class="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
             <p class="text-red-400 text-sm">{{ error }}</p>
@@ -24,7 +24,7 @@
           </div>
 
           <div>
-            <label for="email" class="block text-sm font-semibold text-gray-700 mb-2">
+            <label for="email" class="block text-sm font-semibold text-ivory mb-2">
               Email Address
             </label>
             <input
@@ -33,7 +33,7 @@
               type="email"
               autocomplete="email"
               required
-              class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+              class="w-full px-4 py-3 bg-studio-charcoal border border-gray-300 rounded-lg text-ivory placeholder-smoke focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
               placeholder="you@example.com"
             />
           </div>

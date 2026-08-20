@@ -45,7 +45,7 @@ const radioFieldName = computed(() => props.radioName || 'analyze-model')
 </script>
 
 <template>
-  <div class="rounded-xl border border-gray-200 bg-white p-4 sm:p-5">
+  <div class="rounded-xl border border-gray-200 bg-studio-slate p-4 sm:p-5">
     <p v-if="variant === 'ready'" class="text-xs font-bold uppercase tracking-wide text-primary mb-2">
       Screenplay ready
     </p>
@@ -63,7 +63,7 @@ const radioFieldName = computed(() => props.radioName || 'analyze-model')
       <label
         v-for="m in modelOptions"
         :key="`analyze-${m.id}`"
-        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-studio-slate cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
       >
         <input
           :checked="selectedModelId === m.id"
@@ -80,7 +80,7 @@ const radioFieldName = computed(() => props.radioName || 'analyze-model')
       <label
         v-for="m in modelOptions"
         :key="`analyze-compare-${m.id}`"
-        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+        class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-studio-slate cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
       >
         <input
           :checked="selectedModelIds.includes(m.id)"
@@ -119,7 +119,7 @@ const radioFieldName = computed(() => props.radioName || 'analyze-model')
 
     <div
       v-if="analyzing"
-      class="mt-4 rounded-xl border border-primary/20 bg-white/70 p-5"
+      class="mt-4 rounded-xl border border-primary/20 bg-studio-slate/70 p-5"
     >
       <FilmReelLoader
         size="sm"
@@ -132,7 +132,7 @@ const radioFieldName = computed(() => props.radioName || 'analyze-model')
       <article
         v-for="c in candidates"
         :key="`candidate-${c.modelId}`"
-        class="rounded-xl border border-gray-200 bg-white p-4"
+        class="rounded-xl border border-gray-200 bg-studio-slate p-4"
       >
         <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
           <p class="text-sm font-semibold text-gray-900">{{ c.label }}</p>

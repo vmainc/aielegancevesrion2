@@ -96,7 +96,7 @@
 
       <div
         v-if="characters.length || (editable && !characters.length)"
-        class="rounded-xl border border-gray-200 bg-white shadow-sm overflow-hidden"
+        class="rounded-xl border border-gray-200 bg-studio-slate shadow-sm overflow-hidden"
       >
         <div class="px-4 sm:px-5 py-4 border-b border-gray-200 bg-gray-50/90">
           <h3 class="text-sm font-semibold text-gray-900">

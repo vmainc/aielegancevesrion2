@@ -19,13 +19,13 @@
               :href="expandedImage.downloadUrl"
               target="_blank"
               rel="noopener noreferrer"
-              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-studio-slate/10 hover:bg-studio-slate/20 border border-white/20"
             >
               Download
             </a>
             <button
               type="button"
-              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-white/10 hover:bg-white/20 border border-white/20"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-studio-slate/10 hover:bg-studio-slate/20 border border-white/20"
               @click="emit('close-image')"
             >
               Close
@@ -49,7 +49,7 @@
       @click.self="emit('close-script')"
     >
       <div
-        class="w-full max-w-3xl max-h-[min(92vh,48rem)] rounded-xl border border-gray-200 bg-white shadow-xl flex flex-col overflow-hidden"
+        class="w-full max-w-3xl max-h-[min(92vh,48rem)] rounded-xl border border-gray-200 bg-studio-slate shadow-xl flex flex-col overflow-hidden"
         @click.stop
       >
         <div class="flex justify-between items-start gap-3 px-5 py-4 border-b border-gray-200 shrink-0">
@@ -82,7 +82,7 @@
       @click.self="emit('close-move')"
     >
       <div
-        class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
+        class="w-full max-w-md rounded-xl border border-gray-200 bg-studio-slate shadow-xl p-6 max-h-[90vh] overflow-y-auto"
         @click.stop
       >
         <h2 id="asset-move-title" class="text-lg font-semibold text-gray-900 mb-1">
@@ -148,7 +148,7 @@
       @click.self="emit('close-add')"
     >
       <div
-        class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
+        class="w-full max-w-md rounded-xl border border-gray-200 bg-studio-slate shadow-xl p-6 max-h-[90vh] overflow-y-auto"
         @click.stop
       >
         <h2 :id="modalTitleId" class="text-lg font-semibold text-gray-900 mb-4">

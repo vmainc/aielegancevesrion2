@@ -1,5 +1,5 @@
 <template>
-  <div class="border border-gray-200 rounded-lg p-6 bg-white flex flex-col h-full hover:border-gray-400 transition-colors shadow-sm">
+  <div class="border border-gray-200 rounded-lg p-6 bg-studio-slate flex flex-col h-full hover:border-gray-400 transition-colors shadow-sm">
     <div class="flex items-center gap-3 mb-4 flex-shrink-0">
       <div class="w-10 h-10 flex items-center justify-center flex-shrink-0 bg-gray-100 rounded-lg p-1.5">
         <!-- ClientOnly: icon asset URLs can differ SSR vs client and break hydration -->

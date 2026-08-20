@@ -130,8 +130,8 @@ ${JSON.stringify(input.shots).slice(0, 45000)}`
       headers: {
         Authorization: `Bearer ${apiKey.trim()}`,
         'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://aielegance.com',
-        'X-Title': 'AI Elegance Continuity'
+        'HTTP-Referer': 'https://aifilmstud.io',
+        'X-Title': 'AI Film Studio Continuity'
       },
       body: JSON.stringify(body)
     })

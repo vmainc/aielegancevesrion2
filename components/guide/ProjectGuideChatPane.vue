@@ -80,7 +80,7 @@ async function onSend () {
       </div>
 
       <div
-        class="flex-1 flex flex-col min-h-0 overflow-hidden bg-white"
+        class="flex-1 flex flex-col min-h-0 overflow-hidden bg-studio-slate"
         :class="compact ? '' : 'rounded-xl border border-gray-200 shadow-sm'"
       >
         <div
@@ -89,14 +89,14 @@ async function onSend () {
         >
           <div
             v-if="guideLoading && !messages.length"
-            class="rounded-lg border border-gray-200 bg-white px-4 py-6"
+            class="rounded-lg border border-gray-200 bg-studio-slate px-4 py-6"
           >
             <FilmReelLoader size="sm" label="Loading chat" sub-label="Fetching your guide history…" />
           </div>
 
           <div
             v-else-if="!messages.length"
-            class="rounded-lg border border-dashed border-gray-300 bg-white px-4 py-8 text-sm text-gray-600"
+            class="rounded-lg border border-dashed border-gray-300 bg-studio-slate px-4 py-8 text-sm text-gray-600"
           >
             <p class="text-base font-semibold text-gray-900 mb-1">
               {{ needsStory ? 'Start with your story' : 'Ask anything about this project' }}
@@ -148,7 +148,7 @@ async function onSend () {
               class="max-w-[92%] rounded-xl px-4 py-3 text-sm leading-relaxed shadow-sm"
               :class="msg.role === 'user'
                 ? 'bg-primary text-gray-950'
-                : 'bg-white border border-gray-200 text-gray-800'"
+                : 'bg-studio-slate border border-gray-200 text-gray-800'"
             >
               <p class="whitespace-pre-wrap">{{ msg.content }}</p>
 
@@ -179,7 +179,7 @@ async function onSend () {
                     </button>
                     <button
                       type="button"
-                      class="px-2.5 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-white disabled:opacity-50"
+                      class="px-2.5 py-1 rounded-md border border-gray-300 text-gray-700 hover:bg-studio-slate disabled:opacity-50"
                       :disabled="appliedSuggestionIds.has(s.id)"
                       @click="dismissSuggestion(msg.id, s.id)"
                     >
@@ -192,14 +192,14 @@ async function onSend () {
           </div>
 
           <div v-if="sending" class="flex justify-start">
-            <div class="rounded-xl px-4 py-3 bg-white border border-gray-200 shadow-sm">
+            <div class="rounded-xl px-4 py-3 bg-studio-slate border border-gray-200 shadow-sm">
               <FilmReelLoader size="sm" label="Thinking" sub-label="Reading your project context…" />
             </div>
           </div>
         </div>
 
         <form
-          class="border-t border-gray-200 bg-white p-3 flex flex-col gap-2 shrink-0"
+          class="border-t border-gray-200 bg-studio-slate p-3 flex flex-col gap-2 shrink-0"
           @submit.prevent="onSend"
         >
           <textarea

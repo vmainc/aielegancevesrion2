@@ -1,4 +1,4 @@
-# AI Elegance
+# AI Film Studio
 
 An **AI Film Operating System** — a persistent creative workspace where story, cast, shots, assets, and decisions live together. Built for feature-scale work (hundreds of shots, dozens of characters), not one-off clips.
 
@@ -78,7 +78,7 @@ Create a `.env` file in the root directory (see [.env.example](./.env.example)):
 
 ```bash
 # PocketBase API base (no trailing slash). Production behind nginx /pb/:
-# NUXT_PUBLIC_POCKETBASE_URL=https://aielegance.com/pb
+# NUXT_PUBLIC_POCKETBASE_URL=https://aifilmstud.io/pb
 VITE_POCKETBASE_URL=http://127.0.0.1:8090
 # (Aliases: NUXT_PUBLIC_POCKETBASE_URL or POCKETBASE_URL)
 
@@ -162,7 +162,7 @@ Hosting is a **Linux VPS**: Nuxt runs as **Node** (`node .output/server/index.mj
 1. **Production build** with the **public** PocketBase URL baked in (not `127.0.0.1`):
 
    ```bash
-   export NUXT_PUBLIC_POCKETBASE_URL=https://aielegance.com/pb
+   export NUXT_PUBLIC_POCKETBASE_URL=https://aifilmstud.io/pb
    npm run build
    ```
 

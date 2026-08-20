@@ -27,8 +27,8 @@ function openRouterSttHeaders (apiKey: string): Record<string, string> {
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     'Content-Type': 'application/json',
-    'HTTP-Referer': 'https://aielegance.com',
-    'X-Title': 'AI Elegance Speech to Text'
+    'HTTP-Referer': 'https://aifilmstud.io',
+    'X-Title': 'AI Film Studio Speech to Text'
   }
   if (process.env.OPENROUTER_REFERER) headers['HTTP-Referer'] = process.env.OPENROUTER_REFERER
   if (process.env.OPENROUTER_TITLE) headers['X-Title'] = process.env.OPENROUTER_TITLE

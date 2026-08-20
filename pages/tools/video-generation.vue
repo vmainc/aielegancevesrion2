@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
     <header class="mb-10">
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+      <h1 class="font-display text-3xl sm:text-4xl text-ivory tracking-wide tracking-tight">
         Video generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
@@ -72,7 +72,7 @@
         v-else-if="uiPhase === 'complete'"
         class="space-y-8 mb-10"
       >
-        <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6 space-y-5">
+        <section class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-5">
           <div>
             <h2 class="text-lg font-semibold text-gray-900">
               {{ successfulResults.length === 1 ? `Your ${resolution} clip is ready` : `Pick a ${resolution} clip to keep` }}
@@ -156,7 +156,7 @@
             </button>
             <button
               type="button"
-              class="px-5 py-2.5 border border-gray-300 bg-white hover:bg-gray-50 text-gray-800 font-medium rounded-lg text-sm transition-colors disabled:opacity-50"
+              class="px-5 py-2.5 border border-gray-300 bg-studio-slate hover:bg-gray-50 text-gray-800 font-medium rounded-lg text-sm transition-colors disabled:opacity-50"
               :disabled="keepingClip || discardingRun"
               @click="discardRunAndRetry"
             >
@@ -169,7 +169,7 @@
       <form v-else class="space-y-8 mb-10" @submit.prevent="onSubmit">
         <!-- 1. Model, format & project (collapsible) -->
         <details
-          class="rounded-xl border border-gray-200 bg-white overflow-hidden group"
+          class="rounded-xl border border-gray-200 bg-studio-slate overflow-hidden group"
           open
         >
           <summary
@@ -201,7 +201,7 @@
               id="vg-model"
               v-model="primaryModelId"
               required
-              class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              class="w-full px-3 py-2.5 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
             >
               <option value="" disabled>Select a model</option>
               <option v-for="m in models" :key="m.id" :value="m.id">
@@ -245,7 +245,7 @@
               <label
                 v-for="m in compareModelOptions"
                 :key="m.id"
-                class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 text-sm"
+                class="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-studio-slate cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5 text-sm"
               >
                 <input
                   v-model="compareModelIds"
@@ -264,7 +264,7 @@
               <select
                 id="vg-aspect"
                 v-model="aspectRatio"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
               >
                 <option value="16:9">16:9 (landscape)</option>
                 <option value="9:16">9:16 (vertical)</option>
@@ -276,7 +276,7 @@
               <select
                 id="vg-resolution"
                 v-model="resolution"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
               >
                 <option
                   v-for="q in resolutionOptions"
@@ -298,7 +298,7 @@
               <select
                 id="vg-duration"
                 v-model.number="durationSeconds"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
               >
                 <option
                   v-for="sec in durationOptions"
@@ -324,7 +324,7 @@
                 <select
                   id="vg-project"
                   v-model="selectedProjectId"
-                  class="flex-1 min-w-[12rem] px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                  class="flex-1 min-w-[12rem] px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
                 >
                   <option value="" disabled>Select project</option>
                   <option v-for="p in pbProjects" :key="p.id" :value="p.id">
@@ -333,7 +333,7 @@
                 </select>
                 <button
                   type="button"
-                  class="shrink-0 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white hover:bg-gray-50 text-gray-800"
+                  class="shrink-0 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-studio-slate hover:bg-gray-50 text-gray-800"
                   @click="openCreateProjectModal"
                 >
                   + New project
@@ -370,7 +370,7 @@
 
           <div
             v-if="showCharacterPicker"
-            class="rounded-lg border border-gray-200 bg-white px-4 py-3 space-y-2"
+            class="rounded-lg border border-gray-200 bg-studio-slate px-4 py-3 space-y-2"
           >
             <div>
               <label for="vg-characters" class="block text-sm font-medium text-gray-700">
@@ -412,7 +412,7 @@
               id="vg-prompt"
               v-model="prompt"
               rows="4"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
               placeholder="Motion, camera, lighting, mood — no background music"
             />
             <p
@@ -432,7 +432,7 @@
               v-model="negativePrompt"
               rows="3"
               maxlength="4000"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
               placeholder="e.g. wrong hair color, extra fingers, text overlays, watermark, cartoon style"
             />
             <p
@@ -475,7 +475,7 @@
             {{ endFrameCompatibilityHint }}
           </p>
 
-          <div v-if="anySelectedSupportsAudio" class="rounded-lg border border-gray-200 bg-white px-4 py-3 space-y-3">
+          <div v-if="anySelectedSupportsAudio" class="rounded-lg border border-gray-200 bg-studio-slate px-4 py-3 space-y-3">
             <label class="inline-flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
               <input
                 v-model="includeSpokenDialogue"
@@ -498,7 +498,7 @@
                   <select
                     id="vg-dialogue-speaker"
                     v-model="dialogueSpeakerId"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
                     :disabled="!dialogueSpeakerOptions.length"
                   >
                     <option value="" disabled>
@@ -523,7 +523,7 @@
                   <select
                     id="vg-dialogue-tone"
                     v-model="dialogueTone"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
                   >
                     <option
                       v-for="t in dialogueToneOptions"
@@ -543,7 +543,7 @@
                   id="vg-dialogue"
                   v-model="dialogueLine"
                   rows="2"
-                  class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                  class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
                   placeholder='e.g. "We have to leave — now."'
                 />
               </div>
@@ -594,7 +594,7 @@
                 id="vg-ambient"
                 v-model="ambientSoundPrompt"
                 rows="2"
-                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
                 placeholder="e.g. Soft rain on leaves, distant thunder, quiet forest birdsong"
               />
               <div class="flex flex-wrap gap-1.5 mt-2">
@@ -660,7 +660,7 @@
             v-for="m in models"
             v-show="selectedModelIdsList.includes(m.id) && slotByModel[m.id]"
             :key="m.id"
-            class="rounded-xl overflow-hidden border border-gray-200 bg-white flex flex-col shadow-sm"
+            class="rounded-xl overflow-hidden border border-gray-200 bg-studio-slate flex flex-col shadow-sm"
           >
             <div class="px-3 py-2.5 border-b border-gray-200 bg-gray-50 flex items-center gap-2">
               <span class="text-sm font-semibold text-gray-900">{{ m.name }}</span>
@@ -723,7 +723,7 @@
         @click.self="closeCreateProjectModal"
       >
         <div
-          class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6"
+          class="w-full max-w-md rounded-xl border border-gray-200 bg-studio-slate shadow-xl p-6"
           @click.stop
         >
           <h2 id="vg-create-project-title" class="text-lg font-semibold text-gray-900 mb-1">
@@ -2175,7 +2175,7 @@ async function onSubmit () {
 }
 
 useHead({
-  title: 'Video generation — AI Elegance',
-  meta: [{ name: 'description', content: 'Select video models and describe your shot on AI Elegance.' }]
+  title: 'Video generation — AI Film Studio',
+  meta: [{ name: 'description', content: 'Select video models and describe your shot on AI Film Studio.' }]
 })
 </script>

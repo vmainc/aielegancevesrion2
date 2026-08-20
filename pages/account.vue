@@ -1,8 +1,8 @@
 <template>
   <div class="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
     <div class="mb-8 sm:mb-10">
-      <h1 class="text-3xl sm:text-4xl font-bold text-gray-900 mb-2">My Account</h1>
-      <p class="text-sm sm:text-base text-gray-600">Manage your profile information and preferences</p>
+      <h1 class="font-display text-3xl sm:text-4xl text-ivory tracking-wide mb-2">My Account</h1>
+      <p class="text-sm sm:text-base text-smoke">Manage your profile information and preferences</p>
     </div>
 
     <!-- Image Crop Modal -->
@@ -11,7 +11,7 @@
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
       @click.self="cancelCrop"
     >
-      <div class="bg-white border border-gray-200 border border-gray-200 rounded-xl p-6 max-w-2xl w-full mx-4 shadow-2xl">
+      <div class="bg-studio-slate border border-gray-200 border border-gray-200 rounded-xl p-6 max-w-2xl w-full mx-4 shadow-2xl">
         <div class="flex items-center justify-between mb-4">
           <h2 class="text-xl font-bold text-gray-900">Crop Your Profile Picture</h2>
           <button
@@ -25,7 +25,7 @@
           </button>
         </div>
 
-        <div class="relative bg-white rounded-lg overflow-hidden mb-4" style="aspect-ratio: 1/1; max-height: 500px;">
+        <div class="relative bg-studio-slate rounded-lg overflow-hidden mb-4" style="aspect-ratio: 1/1; max-height: 500px;">
           <!-- Crop Area Container -->
           <div
             ref="cropContainer"
@@ -56,10 +56,10 @@
             <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
               <div class="w-64 h-64 rounded-full relative">
                 <div class="absolute inset-0 flex items-center justify-center">
-                  <div class="w-full h-px bg-white/10"></div>
+                  <div class="w-full h-px bg-studio-slate/10"></div>
                 </div>
                 <div class="absolute inset-0 flex items-center justify-center">
-                  <div class="h-full w-px bg-white/10"></div>
+                  <div class="h-full w-px bg-studio-slate/10"></div>
                 </div>
               </div>
             </div>
@@ -77,7 +77,7 @@
             min="0.5"
             max="3"
             step="0.05"
-            class="w-full h-2 bg-white rounded-lg appearance-none cursor-pointer accent-accent-cyan"
+            class="w-full h-2 bg-studio-slate rounded-lg appearance-none cursor-pointer accent-accent-cyan"
           />
           <div class="flex justify-between text-xs text-gray-500 mt-1">
             <span>50%</span>
@@ -89,7 +89,7 @@
         <div class="flex gap-3 justify-end">
           <button
             @click="cancelCrop"
-            class="px-6 py-2.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-white hover:border-gray-600 transition-colors"
+            class="px-6 py-2.5 border border-gray-200 rounded-lg text-gray-700 hover:bg-studio-slate hover:border-gray-600 transition-colors"
           >
             Cancel
           </button>
@@ -103,7 +103,7 @@
       </div>
     </div>
     
-    <div class="border border-gray-200 rounded-xl p-10 bg-white border border-gray-200 shadow-lg">
+    <div class="border border-gray-200 rounded-xl p-10 bg-studio-slate border border-gray-200 shadow-lg">
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-12">
         <!-- Left Section: Profile Picture -->
         <div class="lg:col-span-1">
@@ -171,7 +171,7 @@
                 @change="handleFileSelect"
               />
               <div class="flex flex-col items-center">
-                <div class="w-12 h-12 rounded-full bg-white flex items-center justify-center mb-4 group-hover:bg-accent-cyan/10 transition-colors">
+                <div class="w-12 h-12 rounded-full bg-studio-slate flex items-center justify-center mb-4 group-hover:bg-accent-cyan/10 transition-colors">
                   <svg
                     class="w-6 h-6 text-gray-600 group-hover:text-accent-cyan transition-colors"
                     fill="none"
@@ -222,7 +222,7 @@
               <input
                 v-model="formData.firstName"
                 type="text"
-                class="w-full px-4 py-3.5 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
+                class="w-full px-4 py-3.5 bg-studio-slate border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
                 placeholder="Enter your first name"
               />
             </div>
@@ -234,7 +234,7 @@
               <input
                 v-model="formData.lastName"
                 type="text"
-                class="w-full px-4 py-3.5 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
+                class="w-full px-4 py-3.5 bg-studio-slate border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
                 placeholder="Enter your last name"
               />
             </div>
@@ -246,7 +246,7 @@
               <input
                 v-model="formData.email"
                 type="email"
-                class="w-full px-4 py-3.5 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
+                class="w-full px-4 py-3.5 bg-studio-slate border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
                 placeholder="Enter your email"
               />
             </div>
@@ -271,7 +271,7 @@
               v-model="passwordData.currentPassword"
               type="password"
               autocomplete="current-password"
-              class="w-full px-4 py-3.5 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
+              class="w-full px-4 py-3.5 bg-studio-slate border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
               placeholder="Enter your current password"
             />
           </div>
@@ -285,7 +285,7 @@
               v-model="passwordData.newPassword"
               type="password"
               autocomplete="new-password"
-              class="w-full px-4 py-3.5 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
+              class="w-full px-4 py-3.5 bg-studio-slate border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
               placeholder="Enter your new password"
             />
             <p class="mt-1 text-xs text-gray-500">Must be at least 8 characters</p>
@@ -300,7 +300,7 @@
               v-model="passwordData.confirmPassword"
               type="password"
               autocomplete="new-password"
-              class="w-full px-4 py-3.5 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
+              class="w-full px-4 py-3.5 bg-studio-slate border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-accent-cyan/50 focus:border-accent-cyan transition-all"
               placeholder="Confirm your new password"
             />
           </div>

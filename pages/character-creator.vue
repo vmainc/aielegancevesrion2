@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
     <header class="mb-10">
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+      <h1 class="font-display text-3xl sm:text-4xl text-ivory tracking-wide tracking-tight">
         Character Creator
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
@@ -26,7 +26,7 @@
             id="cc-name"
             v-model="name"
             type="text"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
             placeholder="Character name"
             autocomplete="off"
           >
@@ -40,7 +40,7 @@
             id="cc-desc"
             v-model="description"
             rows="4"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
             placeholder="Appearance only: species/type, age, build, face, fur or hair, colors, markings, and clothing — not story beats or scenes"
           />
         </div>
@@ -49,7 +49,7 @@
           <select
             id="cc-style"
             v-model="stylePreset"
-            class="w-full sm:max-w-md px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+            class="w-full sm:max-w-md px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
           >
             <option
               v-for="opt in CHARACTER_STYLE_PRESETS"
@@ -115,7 +115,7 @@
         </div>
       </section>
 
-      <section class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+      <section class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6">
         <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide mb-3">
           Models
         </h2>
@@ -145,7 +145,7 @@
             <select
               id="cc-model-add"
               v-model="modelToAdd"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
               :disabled="!imageModels.length || loading"
               @change="addSelectedModel"
             >
@@ -170,7 +170,7 @@
             <span class="max-w-[16rem] truncate" :title="modelLabel(id)">{{ modelLabel(id) }}</span>
             <button
               type="button"
-              class="p-1 rounded-full text-gray-600 hover:text-red-700 hover:bg-white/80"
+              class="p-1 rounded-full text-gray-600 hover:text-red-700 hover:bg-studio-slate/80"
               :aria-label="`Remove ${modelLabel(id)}`"
               :disabled="loading"
               @click="removeModel(id)"
@@ -208,7 +208,7 @@
           v-for="id in selectedModelIds"
           v-show="slotByModel[id]"
           :key="id"
-          class="rounded-xl overflow-hidden border border-gray-200 bg-white flex flex-col shadow-sm"
+          class="rounded-xl overflow-hidden border border-gray-200 bg-studio-slate flex flex-col shadow-sm"
         >
           <div class="px-3 py-2.5 border-b border-gray-200 bg-gray-50">
             <span class="text-sm font-semibold text-gray-900">{{ modelLabel(id) }}</span>
@@ -276,7 +276,7 @@
         @click.self="closeSaveModal"
       >
         <div
-          class="w-full max-w-md rounded-xl border border-gray-200 bg-white shadow-xl p-6 max-h-[90vh] overflow-y-auto"
+          class="w-full max-w-md rounded-xl border border-gray-200 bg-studio-slate shadow-xl p-6 max-h-[90vh] overflow-y-auto"
           @click.stop
         >
           <h2 id="cc-save-dialog-title" class="text-lg font-semibold text-gray-900 mb-2">
@@ -414,7 +414,7 @@ type ImageModelsPayload = {
 }
 
 useHead({
-  title: 'Character Creator — AI Elegance',
+  title: 'Character Creator — AI Film Studio',
   meta: [{ name: 'description', content: 'Generate character portraits with multiple AI image models.' }]
 })
 

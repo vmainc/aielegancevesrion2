@@ -1,7 +1,7 @@
 <template>
   <div class="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-12">
     <div class="mb-8">
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Script Wizard</h1>
+      <h1 class="font-display text-3xl sm:text-4xl text-ivory tracking-wide mb-2">Script Wizard</h1>
       <p class="text-sm text-gray-600 max-w-3xl">
         Start from an AI story idea or upload a screenplay. Uploads create a cloud project and attach the script — continue in the project Overview with analyze or full import.
       </p>
@@ -48,7 +48,7 @@
         </div>
         <div
           v-if="uploading"
-          class="mt-6 rounded-xl border border-primary/25 bg-white/90 p-6 sm:p-8"
+          class="mt-6 rounded-xl border border-primary/25 bg-studio-slate/90 p-6 sm:p-8"
         >
           <FilmReelLoader
             size="lg"
@@ -60,7 +60,7 @@
       </div>
 
       <div class="grid lg:grid-cols-[22rem_1fr] gap-6">
-        <div class="rounded-xl border border-gray-200 bg-white overflow-hidden">
+        <div class="rounded-xl border border-gray-200 bg-studio-slate overflow-hidden">
           <div class="px-4 py-3 border-b border-gray-200 flex items-center justify-between">
             <h2 class="text-sm font-semibold uppercase tracking-wide text-gray-700">My scripts</h2>
             <button
@@ -101,7 +101,7 @@
           </p>
         </div>
 
-        <div class="rounded-xl border border-gray-200 bg-white p-5 sm:p-6">
+        <div class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6">
           <template v-if="!selectedScript">
             <p class="text-sm text-gray-500">
               {{
@@ -166,7 +166,7 @@
               </div>
               <div
                 v-if="stepAction || openingProject"
-                class="mt-4 rounded-xl border border-primary/25 bg-white/90 p-5"
+                class="mt-4 rounded-xl border border-primary/25 bg-studio-slate/90 p-5"
               >
                 <FilmReelLoader
                   size="sm"

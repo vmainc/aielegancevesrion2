@@ -93,7 +93,7 @@
                   </p>
                   <div class="flex gap-0.5">
                     <label
-                      class="flex-1 text-center px-0.5 py-0.5 text-[8px] font-semibold uppercase rounded bg-white/95 text-gray-900 cursor-pointer"
+                      class="flex-1 text-center px-0.5 py-0.5 text-[8px] font-semibold uppercase rounded bg-studio-slate/95 text-gray-900 cursor-pointer"
                       :class="uploadingViewId === slot.view.id ? 'opacity-60 pointer-events-none' : ''"
                     >
                       <input
@@ -267,7 +267,7 @@
                       </p>
                       <div class="flex gap-1">
                         <label
-                          class="flex-1 inline-flex justify-center px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-white/90 text-gray-900 cursor-pointer"
+                          class="flex-1 inline-flex justify-center px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-studio-slate/90 text-gray-900 cursor-pointer"
                           :class="uploadingViewId === slot.view.id ? 'opacity-60 pointer-events-none' : ''"
                         >
                           <input
@@ -403,7 +403,7 @@
         </section>
 
         <!-- Editable dossier (functional fields) -->
-        <details class="mt-6 group rounded-xl border border-gray-200 bg-white open:shadow-sm">
+        <details class="mt-6 group rounded-xl border border-gray-200 bg-studio-slate open:shadow-sm">
           <summary class="cursor-pointer list-none flex items-center justify-between gap-3 px-5 py-4 text-sm font-semibold text-gray-900">
             <span>Edit dossier fields</span>
             <span class="text-xs font-normal text-gray-500 group-open:hidden">Role, look, voice, avoid…</span>
@@ -486,11 +486,11 @@
         </details>
 
         <!-- Voice & performance -->
-        <section class="mt-6 rounded-xl border border-gray-200 bg-white p-5">
+        <section class="mt-6 rounded-xl border border-gray-200 bg-studio-slate p-5">
           <div class="flex items-center justify-between gap-2 mb-1">
             <h2 class="text-sm font-semibold text-gray-900">Voice &amp; performance references</h2>
             <label
-              class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 bg-white text-gray-800 hover:border-primary hover:text-primary cursor-pointer transition-colors"
+              class="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-lg border border-gray-300 bg-studio-slate text-gray-800 hover:border-primary hover:text-primary cursor-pointer transition-colors"
               :class="uploadingVoice ? 'opacity-60 pointer-events-none' : ''"
             >
               <input

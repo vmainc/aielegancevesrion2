@@ -26,7 +26,7 @@
           v-for="card in sectionCards"
           :key="card.path"
           :to="`/projects/${projectId}/${card.path}`"
-          class="rounded-xl border border-gray-200 bg-white p-5 shadow-sm hover:border-primary/40 hover:bg-gray-50/80 transition-all group"
+          class="rounded-xl border border-gray-200 bg-studio-slate p-5 shadow-sm hover:border-primary/40 hover:bg-gray-50/80 transition-all group"
         >
           <div class="flex items-start justify-between gap-2 mb-3">
             <h2 class="text-base font-semibold text-gray-900 group-hover:text-primary transition-colors">

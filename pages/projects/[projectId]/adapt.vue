@@ -15,7 +15,7 @@
     <div v-if="loadError" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800 mb-6" role="alert">
       {{ loadError }}
     </div>
-    <div v-else-if="!adapt" class="rounded-xl border border-gray-200 bg-white px-4 py-10">
+    <div v-else-if="!adapt" class="rounded-xl border border-gray-200 bg-studio-slate px-4 py-10">
       <FilmReelLoader size="sm" label="Loading adaptation" sub-label="Fetching Adapt to Film state…" />
     </div>
 
@@ -36,7 +36,7 @@
       </nav>
 
       <!-- Source -->
-      <section v-if="adapt.stage === 'source'" class="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+      <section v-if="adapt.stage === 'source'" class="rounded-xl border border-gray-200 bg-studio-slate p-5 space-y-4">
         <div>
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Project title</label>
           <input v-model="adapt.projectTitle" type="text" :class="fieldClass" @input="scheduleSave">
@@ -94,7 +94,7 @@
       </section>
 
       <!-- Adaptation -->
-      <section v-else-if="adapt.stage === 'adaptation'" class="rounded-xl border border-gray-200 bg-white p-5 space-y-5">
+      <section v-else-if="adapt.stage === 'adaptation'" class="rounded-xl border border-gray-200 bg-studio-slate p-5 space-y-5">
         <fieldset>
           <legend class="text-sm font-semibold text-gray-900 mb-2">Adaptation type</legend>
           <div class="grid gap-2 sm:grid-cols-2">
@@ -222,7 +222,7 @@
         >
           {{ adapt.longSourceWarning }}
         </div>
-        <div class="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+        <div class="rounded-xl border border-gray-200 bg-studio-slate p-5 space-y-4">
           <div class="flex flex-wrap gap-2">
             <button
               type="button"
@@ -283,7 +283,7 @@
       </section>
 
       <!-- Scenes -->
-      <section v-else-if="adapt.stage === 'scenes'" class="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+      <section v-else-if="adapt.stage === 'scenes'" class="rounded-xl border border-gray-200 bg-studio-slate p-5 space-y-4">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p class="text-sm font-medium text-gray-900">
@@ -380,7 +380,7 @@
       </section>
 
       <!-- Shots -->
-      <section v-else-if="adapt.stage === 'shots'" class="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+      <section v-else-if="adapt.stage === 'shots'" class="rounded-xl border border-gray-200 bg-studio-slate p-5 space-y-4">
         <button type="button" :class="btnPrimary" :disabled="generating" @click="runGenerate({ kind: 'shots' })">
           Generate shots for all approved scenes
         </button>
@@ -463,7 +463,7 @@
       <!-- Production -->
       <section v-else-if="adapt.stage === 'production'" class="space-y-5">
         <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div v-for="card in productionCards" :key="card.label" class="rounded-xl border border-gray-200 bg-white px-4 py-3">
+          <div v-for="card in productionCards" :key="card.label" class="rounded-xl border border-gray-200 bg-studio-slate px-4 py-3">
             <p class="text-xs text-gray-500 uppercase tracking-wide">{{ card.label }}</p>
             <p class="text-lg font-semibold text-gray-900 mt-1">{{ card.value }}</p>
           </div>
@@ -474,7 +474,7 @@
         >
           <p v-for="(w, i) in prodSummary.continuityWarnings" :key="i">{{ w }}</p>
         </div>
-        <div class="rounded-xl border border-gray-200 bg-white p-5 space-y-3">
+        <div class="rounded-xl border border-gray-200 bg-studio-slate p-5 space-y-3">
           <h2 class="text-sm font-semibold text-gray-900">Production checklist</h2>
           <label
             v-for="item in adapt.checklist"
@@ -490,7 +490,7 @@
             <span><span class="font-medium">{{ item.group }}</span> — {{ item.label }}</span>
           </label>
         </div>
-        <div class="rounded-xl border border-gray-200 bg-white p-5 space-y-4">
+        <div class="rounded-xl border border-gray-200 bg-studio-slate p-5 space-y-4">
           <h2 class="text-sm font-semibold text-gray-900">Scene → Shot board</h2>
           <div v-for="scene in adapt.scenes" :key="`prod-${scene.id}`" class="space-y-2">
             <p class="text-sm font-medium text-gray-900">
@@ -519,11 +519,11 @@
 
     <div
       v-if="generating"
-      class="fixed inset-0 z-40 flex items-center justify-center bg-white/70 backdrop-blur-[1px]"
+      class="fixed inset-0 z-40 flex items-center justify-center bg-studio-slate/70 backdrop-blur-[1px]"
       aria-live="polite"
       aria-busy="true"
     >
-      <div class="rounded-xl border border-gray-200 bg-white shadow-sm px-6 py-8 max-w-sm w-full mx-4">
+      <div class="rounded-xl border border-gray-200 bg-studio-slate shadow-sm px-6 py-8 max-w-sm w-full mx-4">
         <FilmReelLoader size="md" :label="jobMessage || 'Generating…'" sub-label="Keep this tab open while Adapt to Film works." />
       </div>
     </div>
@@ -565,11 +565,11 @@ import type {
 
 definePageMeta({ ssr: false })
 
-const fieldClass = 'w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary'
+const fieldClass = 'w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary'
 const labelClass = 'block text-xs font-medium text-gray-600 mb-1'
 const btnPrimary = 'px-4 py-2 rounded-lg bg-primary text-gray-950 text-sm font-semibold hover:bg-primary/90 disabled:opacity-45 disabled:cursor-not-allowed'
 const btnSecondary = 'px-4 py-2 rounded-lg bg-gray-200 text-gray-900 text-sm font-medium hover:bg-gray-300 disabled:opacity-45 disabled:cursor-not-allowed'
-const btnTiny = 'px-2.5 py-1 rounded-md bg-white border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-45'
+const btnTiny = 'px-2.5 py-1 rounded-md bg-studio-slate border border-gray-200 text-xs font-medium text-gray-800 hover:bg-gray-50 disabled:opacity-45'
 
 const route = useRoute()
 const { getAuthToken } = useAuth()

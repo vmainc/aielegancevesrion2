@@ -1,19 +1,19 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
+  <div class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-studio-charcoal">
     <div class="max-w-md w-full">
       <div class="text-center mb-8">
         <NuxtLink to="/" class="inline-block mb-4">
           <img
             :src="logo"
-            alt="AI Elegance"
-            class="h-16 w-auto mx-auto rounded-md shadow-sm"
+            alt="AI Film Studio"
+            class="h-16 w-auto mx-auto"
           />
         </NuxtLink>
-        <h1 class="text-3xl font-bold text-gray-900 mb-2">Set New Password</h1>
-        <p class="text-gray-600">Enter your new password below</p>
+        <h1 class="font-display text-4xl text-ivory mb-2 tracking-wide">Set New Password</h1>
+        <p class="text-smoke">Enter your new password below</p>
       </div>
 
-      <div class="border border-gray-200 rounded-xl p-8 bg-white border border-gray-200 shadow-lg">
+      <div class="border border-primary/25 rounded-xl p-8 bg-studio-slate shadow-lg">
         <form @submit.prevent="handleResetPassword" class="space-y-6">
           <div v-if="error" class="bg-red-500/10 border border-red-500/50 rounded-lg p-4">
             <p class="text-red-400 text-sm">{{ error }}</p>
@@ -24,7 +24,7 @@
           </div>
 
           <div>
-            <label for="password" class="block text-sm font-semibold text-gray-700 mb-2">
+            <label for="password" class="block text-sm font-semibold text-ivory mb-2">
               New Password
             </label>
             <input
@@ -34,14 +34,14 @@
               autocomplete="new-password"
               required
               minlength="8"
-              class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+              class="w-full px-4 py-3 bg-studio-charcoal border border-gray-300 rounded-lg text-ivory placeholder-smoke focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
               placeholder="••••••••"
             />
-            <p class="mt-1 text-xs text-gray-500">Must be at least 8 characters</p>
+            <p class="mt-1 text-xs text-smoke">Must be at least 8 characters</p>
           </div>
 
           <div>
-            <label for="passwordConfirm" class="block text-sm font-semibold text-gray-700 mb-2">
+            <label for="passwordConfirm" class="block text-sm font-semibold text-ivory mb-2">
               Confirm New Password
             </label>
             <input
@@ -51,7 +51,7 @@
               autocomplete="new-password"
               required
               minlength="8"
-              class="w-full px-4 py-3 bg-white border border-gray-300 rounded-lg text-gray-900 placeholder-gray-600 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
+              class="w-full px-4 py-3 bg-studio-charcoal border border-gray-300 rounded-lg text-ivory placeholder-smoke focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary transition-all"
               placeholder="••••••••"
             />
           </div>

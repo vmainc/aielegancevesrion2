@@ -8,8 +8,8 @@ function openRouterFetchHeaders (apiKey: string, accept: string): Record<string,
   }
   if (process.env.OPENROUTER_REFERER) headers['HTTP-Referer'] = process.env.OPENROUTER_REFERER
   if (process.env.OPENROUTER_TITLE) headers['X-Title'] = process.env.OPENROUTER_TITLE
-  if (!headers['HTTP-Referer']) headers['HTTP-Referer'] = 'https://aielegance.com'
-  if (!headers['X-Title']) headers['X-Title'] = 'AI Elegance Video'
+  if (!headers['HTTP-Referer']) headers['HTTP-Referer'] = 'https://aifilmstud.io'
+  if (!headers['X-Title']) headers['X-Title'] = 'AI Film Studio Video'
   return headers
 }
 

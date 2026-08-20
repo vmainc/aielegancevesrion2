@@ -34,7 +34,7 @@
         id="mg-guide-intent"
         v-model="brief.intent"
         rows="5"
-        class="w-full px-4 py-3 rounded-xl border border-gray-300 bg-white text-gray-900 text-base focus:outline-none focus:border-primary resize-y leading-relaxed"
+        class="w-full px-4 py-3 rounded-xl border border-gray-300 bg-studio-slate text-gray-900 text-base focus:outline-none focus:border-primary resize-y leading-relaxed"
         placeholder="e.g. I need a rock song about salamanders"
         :disabled="analyzing || busy"
         @keydown.meta.enter.prevent="goNext"
@@ -69,7 +69,7 @@
             <select
               id="mg-guide-project"
               v-model="brief.projectId"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
             >
               <option value="">Select a project…</option>
               <option v-for="p in projects" :key="p.id" :value="p.id">
@@ -107,7 +107,7 @@
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Length</label>
           <select
             v-model="brief.length"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
           >
             <option v-for="opt in lengthOptions" :key="opt.id" :value="opt.id">
               {{ opt.label }}
@@ -118,7 +118,7 @@
           <label class="block text-sm font-medium text-gray-700 mb-1.5">Vocals</label>
           <select
             v-model="brief.vocals"
-            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary"
+            class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
           >
             <option v-for="opt in vocalOptions" :key="opt.id" :value="opt.id">
               {{ opt.label }}
@@ -135,7 +135,7 @@
           id="mg-guide-own-lyrics"
           v-model="brief.ownLyrics"
           rows="4"
-          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
           placeholder="Paste lyrics…"
         />
       </div>
@@ -148,7 +148,7 @@
           id="mg-guide-mood"
           v-model="brief.mood"
           rows="2"
-          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
         />
       </div>
 
@@ -160,7 +160,7 @@
           id="mg-guide-prompt"
           v-model="brief.compositionPrompt"
           rows="4"
-          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-white text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+          class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
         />
       </div>
 

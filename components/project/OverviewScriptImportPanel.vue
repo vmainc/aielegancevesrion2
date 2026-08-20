@@ -1,5 +1,5 @@
 <template>
-  <div class="rounded-xl border border-gray-200 bg-white shadow-sm p-5 sm:p-6 mb-5 last:mb-0">
+  <div class="rounded-xl border border-gray-200 bg-studio-slate shadow-sm p-5 sm:p-6 mb-5 last:mb-0">
     <template v-if="!hideUploadStep">
       <h2 class="text-lg font-semibold text-gray-900 mb-1">{{ heading }}</h2>
       <p class="text-sm text-gray-600 mb-4">

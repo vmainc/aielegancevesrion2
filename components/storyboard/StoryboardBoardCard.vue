@@ -1,6 +1,6 @@
 <template>
   <li
-    class="relative rounded-xl border bg-white overflow-hidden flex flex-col shadow-sm transition-all"
+    class="relative rounded-xl border bg-studio-slate overflow-hidden flex flex-col shadow-sm transition-all"
     :class="[
       draggingShotId === shot.id ? 'opacity-40 border-gray-300' : 'border-gray-200',
       draggingShotId && draggingShotId !== shot.id && dropTargetIndex === index
@@ -105,7 +105,7 @@
         <button
           v-if="hasDisplayableFrame(shot, role)"
           type="button"
-          class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-300 bg-white text-gray-800 hover:bg-gray-100 disabled:opacity-45"
+          class="px-2 py-0.5 text-[10px] font-medium rounded border border-gray-300 bg-studio-slate text-gray-800 hover:bg-gray-100 disabled:opacity-45"
           :disabled="isSlotBusy(shot, role)"
           @click="onTriggerStoryboardUpload(shot, role)"
         >
@@ -127,7 +127,7 @@
 
     <div
       v-if="hasDisplayableFrame(shot, 'start') && hasDisplayableFrame(shot, 'end')"
-      class="px-3 py-2.5 border-b border-gray-100 bg-white shrink-0 space-y-1.5"
+      class="px-3 py-2.5 border-b border-gray-100 bg-studio-slate shrink-0 space-y-1.5"
     >
       <button
         type="button"
@@ -144,7 +144,7 @@
 
     <div
       v-if="shotCharacterMatches(shot).length"
-      class="px-3 py-1.5 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-white shrink-0"
+      class="px-3 py-1.5 flex flex-wrap items-center gap-2 border-b border-gray-100 bg-studio-slate shrink-0"
     >
       <span class="text-[10px] font-medium text-gray-400 uppercase tracking-wide shrink-0">Cast</span>
       <ul class="flex flex-wrap gap-1">
@@ -206,7 +206,7 @@
         >
           <button
             type="button"
-            class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-800 hover:bg-gray-50 disabled:opacity-45"
+            class="px-3 py-1.5 text-sm font-medium rounded-lg border border-gray-300 bg-studio-slate text-gray-800 hover:bg-gray-50 disabled:opacity-45"
             :disabled="isSlotBusy(shot, 'start')"
             @click="onTriggerStoryboardUpload(shot, 'start')"
           >
@@ -226,7 +226,7 @@
           <input
             v-model="shot.title"
             type="text"
-            class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+            class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
             @blur="onSaveShot(shot)"
           >
         </div>
@@ -241,7 +241,7 @@
           <textarea
             v-model="shot.description"
             rows="2"
-            class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y min-h-[3rem]"
+            class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y min-h-[3rem]"
             @blur="onSaveShot(shot)"
           />
         </div>
@@ -251,7 +251,7 @@
             <input
               v-model="shot.shotType"
               type="text"
-              class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+              class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
               @blur="onSaveShot(shot)"
             >
           </div>
@@ -260,7 +260,7 @@
             <input
               v-model="shot.cameraMove"
               type="text"
-              class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+              class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
               @blur="onSaveShot(shot)"
             >
           </div>
@@ -268,7 +268,7 @@
             <label class="block text-[11px] font-medium text-gray-500 mb-1">Clip (video)</label>
             <select
               v-model.number="shot.durationSeconds"
-              class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+              class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
               @change="onSaveShot(shot)"
             >
               <option :value="5">
@@ -329,7 +329,7 @@
             v-model="shot.imagePrompt"
             rows="10"
             placeholder="Director bible, cast, scene, still-frame description, and exclusions…"
-            class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y font-mono text-[13px] leading-relaxed"
+            class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y font-mono text-[13px] leading-relaxed"
             @blur="onSaveShot(shot)"
           />
           <p class="mt-1.5 text-[11px] text-gray-500 leading-snug">

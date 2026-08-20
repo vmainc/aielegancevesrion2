@@ -1,17 +1,17 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8">
+  <div class="min-h-screen flex items-center justify-center px-4 sm:px-6 lg:px-8 bg-studio-charcoal">
     <div class="max-w-md w-full text-center">
       <NuxtLink to="/" class="inline-block mb-6">
         <img
           :src="logo"
-          alt="AI Elegance"
-          class="h-16 w-auto mx-auto rounded-md shadow-sm"
+          alt="AI Film Studio"
+          class="h-16 w-auto mx-auto"
         />
       </NuxtLink>
-      <div class="border border-gray-200 rounded-xl p-8 bg-white shadow-lg">
-        <h1 class="text-2xl font-bold text-gray-900 mb-2">Invite only</h1>
-        <p class="text-sm text-gray-600 leading-relaxed mb-6">
-          AI Elegance accounts are created by invitation. If you need access, ask your administrator to add you in PocketBase.
+      <div class="border border-primary/25 rounded-xl p-8 bg-studio-slate shadow-lg">
+        <h1 class="font-display text-3xl text-ivory mb-2 tracking-wide">Invite only</h1>
+        <p class="text-sm text-smoke leading-relaxed mb-6">
+          AI Film Studio accounts are created by invitation. If you need access, ask your administrator to add you in PocketBase.
         </p>
         <NuxtLink
           to="/login"

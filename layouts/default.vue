@@ -1,6 +1,6 @@
 <template>
-  <div class="min-h-screen flex flex-col bg-white">
-    <nav class="shrink-0 bg-white border-b border-gray-200">
+  <div class="min-h-screen flex flex-col bg-studio-charcoal">
+    <nav class="shrink-0 bg-studio-charcoal border-b border-primary/30">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div
           class="flex justify-between items-center gap-4 h-[4.5rem] sm:h-20"
@@ -12,8 +12,8 @@
           >
             <img
               :src="logo"
-              alt="AI Elegance"
-              class="h-10 sm:h-12 w-auto block"
+              alt="AI Film Studio"
+              class="h-11 sm:h-14 w-auto block"
             />
           </NuxtLink>
 
@@ -44,7 +44,7 @@
                   </button>
                   <div
                     v-if="generateDropdownOpen"
-                    class="absolute right-0 top-full mt-2 min-w-[12rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
+                    class="absolute right-0 top-full mt-2 min-w-[12rem] bg-studio-slate border border-gray-200 rounded-lg shadow-lg z-50 py-1"
                   >
                     <NuxtLink
                       to="/tools/video-generation"
@@ -91,7 +91,7 @@
                   </button>
                   <div
                     v-if="assetsDropdownOpen"
-                    class="absolute right-0 top-full mt-2 min-w-[12rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
+                    class="absolute right-0 top-full mt-2 min-w-[12rem] bg-studio-slate border border-gray-200 rounded-lg shadow-lg z-50 py-1"
                   >
                     <NuxtLink
                       to="/assets/video"
@@ -146,7 +146,7 @@
                   </button>
                   <div
                     v-if="toolsDropdownOpen"
-                    class="absolute right-0 top-full mt-2 min-w-[14rem] bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
+                    class="absolute right-0 top-full mt-2 min-w-[14rem] bg-studio-slate border border-gray-200 rounded-lg shadow-lg z-50 py-1"
                   >
                     <NuxtLink
                       to="/tools"
@@ -263,7 +263,7 @@
                     <div
                       v-if="dropdownOpen"
                       ref="dropdownRef"
-                      class="absolute right-0 top-full mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50 py-1"
+                      class="absolute right-0 top-full mt-2 w-48 bg-studio-slate border border-gray-200 rounded-lg shadow-lg z-50 py-1"
                     >
                       <NuxtLink
                         to="/account"
@@ -342,7 +342,7 @@
         <div
           v-if="mobileMenuOpen"
           ref="mobileMenuRef"
-          class="lg:hidden border-t border-gray-200 bg-white"
+          class="lg:hidden border-t border-primary/20 bg-studio-charcoal"
         >
           <div class="px-4 py-4 space-y-2">
             <ClientOnly>
@@ -558,7 +558,7 @@
         </div>
       </Transition>
     </nav>
-    <main class="flex-1 bg-white text-gray-900">
+    <main class="flex-1 bg-studio-charcoal text-ivory">
       <slot />
     </main>
   </div>

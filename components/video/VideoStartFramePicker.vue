@@ -44,7 +44,7 @@
           class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
           :class="frameMode === 'upload'
             ? 'bg-primary text-gray-950 hover:bg-primary/90'
-            : 'bg-white border border-gray-300 text-gray-800 hover:bg-gray-50'"
+            : 'bg-studio-slate border border-gray-300 text-gray-800 hover:bg-gray-50'"
           @click="chooseUpload"
         >
           Choose file
@@ -54,7 +54,7 @@
           class="px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors"
           :class="frameMode === 'generate'
             ? 'bg-primary text-gray-950 hover:bg-primary/90'
-            : 'bg-white border border-gray-300 text-gray-800 hover:bg-gray-50'"
+            : 'bg-studio-slate border border-gray-300 text-gray-800 hover:bg-gray-50'"
           @click="frameMode = 'generate'"
         >
           Generate
@@ -70,7 +70,7 @@
 
       <div
         v-if="frameMode === 'generate'"
-        class="rounded-lg border border-gray-200 bg-white p-3 space-y-2"
+        class="rounded-lg border border-gray-200 bg-studio-slate p-3 space-y-2"
       >
         <div>
           <label
@@ -82,7 +82,7 @@
           <select
             :id="imageModelSelectId"
             v-model="imageModelId"
-            class="w-full px-2 py-1.5 rounded-lg border border-gray-300 bg-white text-gray-900 text-xs"
+            class="w-full px-2 py-1.5 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-xs"
           >
             <option
               v-for="m in imageModels"

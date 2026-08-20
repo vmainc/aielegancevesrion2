@@ -30,8 +30,8 @@
         <span class="text-primary font-medium">{{ stepBadge || 'Step —' }}</span>
         · {{ scriptImportStatusLine }}
       </p>
-      <section class="rounded-xl border-2 border-primary/40 bg-gradient-to-b from-primary/10 to-white shadow-sm p-6 sm:p-10 mb-8">
-        <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-3">
+      <section class="rounded-xl border-2 border-primary/40 bg-gradient-to-b from-primary/10 to-studio-charcoal shadow-sm p-6 sm:p-10 mb-8">
+        <h1 class="font-display text-3xl sm:text-4xl text-ivory tracking-wide tracking-tight mb-3">
           {{ project?.name }}
         </h1>
         <p class="text-base text-gray-700 mb-6 max-w-xl leading-relaxed">
@@ -62,10 +62,10 @@
 
     <section
       v-else-if="hasConcept"
-      class="rounded-xl border border-gray-200 bg-white shadow-sm p-6 sm:p-8 mb-10"
+      class="rounded-xl border border-gray-200 bg-studio-slate shadow-sm p-6 sm:p-8 mb-10"
     >
       <p class="text-xs font-semibold uppercase tracking-wide text-primary mb-3">Synopsis</p>
-      <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight mb-6">
+      <h1 class="font-display text-3xl sm:text-4xl text-ivory tracking-wide tracking-tight mb-6">
         {{ project?.name }}
       </h1>
       <div
@@ -149,7 +149,7 @@
 
       <div
         v-if="isIdeaWorkflow && canCloudImport"
-        class="mb-5 rounded-xl border-2 border-primary/40 bg-white p-4 sm:p-5"
+        class="mb-5 rounded-xl border-2 border-primary/40 bg-studio-slate p-4 sm:p-5"
       >
         <p class="text-xs font-bold uppercase tracking-wide text-primary mb-2">
           AI story analysis
@@ -162,7 +162,7 @@
           <label
             v-for="m in modelOptions"
             :key="`idea-analyze-${m.id}`"
-            class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+            class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-studio-slate cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
           >
             <input
               v-model="selectedModelIds"
@@ -206,7 +206,7 @@
           <article
             v-for="(r, idx) in ideaAnalysisResults"
             :key="`idea-analysis-${r.model}-${idx}`"
-            class="rounded-xl border p-4 bg-white shadow-sm"
+            class="rounded-xl border p-4 bg-studio-slate shadow-sm"
             :class="r.error ? 'border-red-200 bg-red-50/50' : 'border-gray-200'"
           >
             <div class="flex flex-wrap items-start justify-between gap-2 mb-2">
@@ -341,7 +341,7 @@
         <button
           v-if="hasConcept"
           type="button"
-          class="shrink-0 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-white transition-colors"
+          class="shrink-0 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 border border-gray-200 rounded-lg hover:bg-studio-slate transition-colors"
           @click="cancelGeneratorPanel"
         >
           Cancel
@@ -404,7 +404,7 @@
           ref="promptTextareaRef"
           v-model="conceptPrompt"
           rows="4"
-          class="w-full px-3 py-2 rounded-lg bg-white border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-5"
+          class="w-full px-3 py-2 rounded-lg bg-studio-slate border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y mb-5"
           placeholder="Describe your idea..."
           :disabled="generating"
         ></textarea>
@@ -416,7 +416,7 @@
             <label
               v-for="m in modelOptions"
               :key="m.id"
-              class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-white cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
+              class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 bg-studio-slate cursor-pointer hover:border-primary/40 has-[:checked]:border-primary has-[:checked]:bg-primary/5"
             >
               <input
                 v-model="selectedModelIds"
@@ -448,7 +448,7 @@
             <article
               v-for="(r, idx) in conceptResults"
               :key="`${r.model}-${idx}`"
-              class="rounded-xl border p-4 sm:p-5 bg-white shadow-sm"
+              class="rounded-xl border p-4 sm:p-5 bg-studio-slate shadow-sm"
               :class="r.error ? 'border-red-200 bg-red-50/50' : 'border-gray-200'"
             >
               <div class="flex flex-wrap items-start justify-between gap-2 mb-3">
@@ -484,7 +484,7 @@
 
     <div
       v-if="!scriptImportInProgress"
-      class="rounded-xl border border-gray-200 bg-white p-4 mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
+      class="rounded-xl border border-gray-200 bg-studio-slate p-4 mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3"
     >
       <div>
         <h2 class="text-sm font-semibold text-gray-900">Director & continuity</h2>
@@ -975,7 +975,7 @@ const scriptImportStatusLine = computed(() => {
   if (overviewImporting.value && !overviewFullImporting.value) {
     return 'Uploading screenplay — stay on this page.'
   }
-  return 'Screenplay saved — AI Elegance is reading it now.'
+  return 'Screenplay saved — AI Film Studio is reading it now.'
 })
 
 const scriptImportIntro = computed(() => {
