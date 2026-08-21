@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Build this app, rsync to /var/www/aielegance-com, restart PM2 aielegance-com.
+# Build this app, rsync to /var/www/aielegance-com, start PM2 aielegance-com on :3001.
 # Does not touch /var/www/aielegance or PM2 process "aielegance".
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -26,36 +26,50 @@ if [ "${DEPLOY_SKIP_BUILD:-0}" != "1" ]; then
   npm run build
 fi
 
-echo "==> Ensure $VPS_PATH exists on server (does not touch /var/www/aielegance)"
+echo "==> Ensure $VPS_PATH exists (does not touch /var/www/aielegance)"
 $SSH_CMD "$VPS_HOST" "mkdir -p '$VPS_PATH/.output'"
 
-echo "==> Rsync .output/ → $VPS_HOST:$VPS_PATH/.output/"
+echo "==> Rsync .output/ + start.mjs + ecosystem"
 rsync -avz --delete -e "$RSYNC_SSH" "$ROOT/.output/" "$VPS_HOST:$VPS_PATH/.output/"
+rsync -avz -e "$RSYNC_SSH" "$ROOT/start.mjs" "$ROOT/deploy/ecosystem.config.cjs" "$VPS_HOST:$VPS_PATH/"
 
-echo "==> Sync ecosystem file"
-rsync -avz -e "$RSYNC_SSH" "$ROOT/deploy/ecosystem.config.cjs" "$VPS_HOST:$VPS_PATH/ecosystem.config.cjs"
-
-echo "==> Restart PM2 $DEPLOY_PM2_NAME on port $APP_PORT"
+echo "==> Start/restart PM2 $DEPLOY_PM2_NAME on 127.0.0.1:$APP_PORT"
 $SSH_CMD "$VPS_HOST" bash -s <<EOS
 set -euo pipefail
 cd '$VPS_PATH'
-if [ ! -f .env ]; then
-  echo "ERROR: $VPS_PATH/.env is missing. Copy from the app .env.example and set OPENROUTER_API_KEY."
+if [ ! -f .output/server/index.mjs ]; then
+  echo "ERROR: $VPS_PATH/.output/server/index.mjs missing after rsync"
   exit 1
 fi
-export HOST=127.0.0.1
-export PORT='$APP_PORT'
+if [ ! -f .env ]; then
+  echo "WARN: $VPS_PATH/.env missing — app will listen on $APP_PORT but compare calls need OPENROUTER_API_KEY."
+  echo "      Copy deploy/vps.env.example to $VPS_PATH/.env on the server."
+fi
 if ! command -v pm2 >/dev/null 2>&1; then
   echo "ERROR: pm2 is not installed"
   exit 1
 fi
+export HOST=127.0.0.1
+export PORT='$APP_PORT'
+export NITRO_HOST=127.0.0.1
+export NITRO_PORT='$APP_PORT'
+export NODE_ENV=production
 if pm2 describe '$DEPLOY_PM2_NAME' >/dev/null 2>&1; then
-  pm2 restart '$DEPLOY_PM2_NAME' --update-env
-else
-  HOST=127.0.0.1 PORT='$APP_PORT' pm2 start '$VPS_PATH/.output/server/index.mjs' --name '$DEPLOY_PM2_NAME' --cwd '$VPS_PATH'
+  pm2 delete '$DEPLOY_PM2_NAME' || true
 fi
+pm2 start '$VPS_PATH/start.mjs' \\
+  --name '$DEPLOY_PM2_NAME' \\
+  --cwd '$VPS_PATH' \\
+  --update-env
 pm2 save
+sleep 1
+ss -tlnp | grep -E ':${APP_PORT}\\b' || {
+  echo "ERROR: nothing listening on $APP_PORT after start"
+  pm2 logs '$DEPLOY_PM2_NAME' --lines 40 --nostream
+  exit 1
+}
+echo "OK: $DEPLOY_PM2_NAME listening on $APP_PORT"
+curl -sS -o /dev/null -w "local_http=%{http_code}\\n" --max-time 5 "http://127.0.0.1:${APP_PORT}/" || true
 EOS
 
 echo "==> Done. Film Studio PM2 'aielegance' was not restarted."
-echo "    Apply nginx last: ./scripts/apply-nginx.sh"
