@@ -54,7 +54,7 @@ export async function pollOpenRouterVideoJob (jobId: string): Promise<string> {
     await new Promise(r => setTimeout(r, wait))
     wait = Math.min(14_000, Math.floor(wait * 1.22))
   }
-  throw new Error('Still rendering — try again in a bit or check OpenRouter.')
+  throw new Error('Still rendering — try again in a bit or check the video job.')
 }
 
 export async function generateOpenRouterVideo (

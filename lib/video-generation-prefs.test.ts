@@ -21,6 +21,14 @@ describe('videoToolDurationOptions', () => {
     ).toEqual([5, 10, 15])
   })
 
+  it('includes 30 when Seedance 2.5 is selected', () => {
+    expect(
+      videoToolDurationOptions([
+        { supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 20, 30] }
+      ])
+    ).toEqual([5, 10, 15, 30])
+  })
+
   it('omits 15 when only Seedance 1.5 Pro is selected', () => {
     expect(
       videoToolDurationOptions([{ supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12] }])
@@ -29,9 +37,10 @@ describe('videoToolDurationOptions', () => {
 })
 
 describe('parseVideoGenerationDurationSeconds', () => {
-  it('accepts 15', () => {
+  it('accepts 15 and 30', () => {
     expect(parseVideoGenerationDurationSeconds(15)).toBe(15)
     expect(parseVideoGenerationDurationSeconds('15')).toBe(15)
+    expect(parseVideoGenerationDurationSeconds(30)).toBe(30)
     expect(parseVideoGenerationDurationSeconds(12)).toBeUndefined()
   })
 })
@@ -54,6 +63,12 @@ describe('videoToolResolutionOptions', () => {
     expect(
       videoToolResolutionOptions([{ supportedResolutions: ['720p', '480p'] }])
     ).toEqual(['720p'])
+  })
+
+  it('includes 1080p for Atlas Seedance 2.5 catalog', () => {
+    expect(
+      videoToolResolutionOptions([{ supportedResolutions: ['720p', '1080p'] }])
+    ).toEqual(['720p', '1080p'])
   })
 
   it('shows 1080p when any selected model lists it', () => {

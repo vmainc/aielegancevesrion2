@@ -1,4 +1,6 @@
+import { ATLAS_SEEDANCE_25_VIDEO_MODEL, isOpenRouterSeedance25Listing } from '~/lib/atlas-cloud-video'
 import { modelSupportsNativeNegativePrompt } from '~/lib/video-negative-prompt'
+import { resolveAtlasCloudApiKey, resolveOpenRouterApiKey } from '~/server/utils/server-env'
 
 /** Hidden from the video model picker — still reachable via API if needed elsewhere. */
 const EXCLUDED_OPENROUTER_VIDEO_MODEL_IDS = new Set([
@@ -163,6 +165,41 @@ async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> 
   return map
 }
 
+function withAtlasCatalog (
+  config: ReturnType<typeof useRuntimeConfig>,
+  payload: {
+    source: 'api' | 'fallback'
+    models: VideoModelRow[]
+    notice?: string
+    error?: string
+  }
+) {
+  const atlasKey = resolveAtlasCloudApiKey(config)
+  const atlasModels: VideoModelRow[] = atlasKey
+    ? [{
+        ...ATLAS_SEEDANCE_25_VIDEO_MODEL,
+        supportedResolutions: ['720p', '1080p']
+      }]
+    : []
+  const noticeParts = [payload.notice?.trim()].filter((x): x is string => Boolean(x))
+  if (!atlasKey) {
+    noticeParts.push(
+      'Set ATLASCLOUD_API_KEY in .env (https://www.atlascloud.ai/console/api-keys) to enable Seedance 2.5.'
+    )
+  }
+  // OpenRouter's Seedance 2.5 listing is 720p-only. When Atlas is configured, hide it
+  // so the picker uses the Atlas row (native 720p + 1080p).
+  const rest = atlasKey
+    ? payload.models.filter(m => !isOpenRouterSeedance25Listing(m.id))
+    : payload.models
+  return {
+    ...payload,
+    models: [...atlasModels, ...rest],
+    atlasCloudConfigured: Boolean(atlasKey),
+    ...(noticeParts.length ? { notice: noticeParts.join(' ') } : {})
+  }
+}
+
 export default defineEventHandler(async () => {
   const config = useRuntimeConfig()
   const apiKey = resolveOpenRouterApiKey(config)
@@ -181,11 +218,11 @@ export default defineEventHandler(async () => {
   }
 
   if (!apiKey) {
-    return {
-      source: 'fallback' as const,
+    return withAtlasCatalog(config, {
+      source: 'fallback',
       models: FALLBACK_VIDEO_MODELS,
-      notice: 'Set OPENROUTER_API_KEY in your environment to load the live model list from OpenRouter.',
-    }
+      notice: 'Set OPENROUTER_API_KEY in your environment to load the live model list from OpenRouter.'
+    })
   }
 
   const url = new URL('https://openrouter.ai/api/v1/models')
@@ -195,23 +232,23 @@ export default defineEventHandler(async () => {
   const rawText = await res.text()
 
   if (!res.ok) {
-    return {
-      source: 'fallback' as const,
+    return withAtlasCatalog(config, {
+      source: 'fallback',
       models: FALLBACK_VIDEO_MODELS,
       notice: `OpenRouter returned HTTP ${res.status}. Showing reference models.`,
-      error: rawText.slice(0, 200),
-    }
+      error: rawText.slice(0, 200)
+    })
   }
 
   let json: { data?: unknown[] }
   try {
     json = JSON.parse(rawText) as { data?: unknown[] }
   } catch {
-    return {
-      source: 'fallback' as const,
+    return withAtlasCatalog(config, {
+      source: 'fallback',
       models: FALLBACK_VIDEO_MODELS,
-      notice: 'Could not parse OpenRouter response. Showing reference models.',
-    }
+      notice: 'Could not parse OpenRouter response. Showing reference models.'
+    })
   }
 
   const rows: VideoModelRow[] = []
@@ -261,15 +298,15 @@ export default defineEventHandler(async () => {
   }
 
   if (visibleRows.length === 0) {
-    return {
-      source: 'fallback' as const,
+    return withAtlasCatalog(config, {
+      source: 'fallback',
       models: FALLBACK_VIDEO_MODELS.filter(m => !isExcludedOpenRouterVideoModel(m.id)),
-      notice: 'No video models returned from OpenRouter. Showing reference models.',
-    }
+      notice: 'No video models returned from OpenRouter. Showing reference models.'
+    })
   }
 
-  return {
-    source: 'api' as const,
-    models: visibleRows,
-  }
+  return withAtlasCatalog(config, {
+    source: 'api',
+    models: visibleRows
+  })
 })

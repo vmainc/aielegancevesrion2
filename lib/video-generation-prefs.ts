@@ -3,8 +3,11 @@ const STORAGE_KEY = 'video_generation_prefs_v1'
 export type VideoGenerationAspectRatio = '16:9' | '9:16' | '1:1'
 
 /** Common clip lengths offered in Video tools (per-model snap still applies). */
-export const VIDEO_TOOL_CLIP_SECONDS = [5, 10, 15] as const
+export const VIDEO_TOOL_CLIP_SECONDS = [5, 10, 15, 30] as const
 export type VideoToolClipSeconds = (typeof VIDEO_TOOL_CLIP_SECONDS)[number]
+
+/** Shown when selected models have no duration metadata (most OpenRouter models). */
+const VIDEO_TOOL_CLIP_SECONDS_DEFAULT: VideoToolClipSeconds[] = [5, 10, 15]
 
 /** Resolutions offered in Video tools (per-model snap still applies). */
 export const VIDEO_TOOL_RESOLUTIONS = ['720p', '1080p'] as const
@@ -28,7 +31,7 @@ export function parseVideoGenerationAspectRatio (raw: unknown): VideoGenerationA
 
 export function parseVideoGenerationDurationSeconds (raw: unknown): VideoToolClipSeconds | undefined {
   const n = typeof raw === 'number' ? raw : Number(raw)
-  if (n === 5 || n === 10 || n === 15) return n
+  if (n === 5 || n === 10 || n === 15 || n === 30) return n
   return undefined
 }
 
@@ -121,7 +124,7 @@ export function videoToolDurationOptions (
   const sets = selectedModels
     .map(m => m.supportedDurations)
     .filter((d): d is number[] => Array.isArray(d) && d.length > 0)
-  if (!sets.length) return [...VIDEO_TOOL_CLIP_SECONDS]
+  if (!sets.length) return [...VIDEO_TOOL_CLIP_SECONDS_DEFAULT]
   const union = new Set(sets.flatMap(s => s.map(n => Math.floor(Number(n)))))
   const opts = VIDEO_TOOL_CLIP_SECONDS.filter(s => union.has(s))
   return opts.length ? opts : [5, 10]

@@ -34,6 +34,10 @@ POCKETBASE_ADMIN_PASSWORD=your-admin-password
 # OpenRouter API Key (required for AI models and Speech to Text)
 # Get your API key from https://openrouter.ai
 OPENROUTER_API_KEY=your-openrouter-api-key
+
+# Atlas Cloud — Seedance 2.5 video (optional; required to use that model)
+# https://www.atlascloud.ai/console/api-keys
+ATLASCLOUD_API_KEY=your-atlas-cloud-api-key
 ```
 
 ## Finding Your PocketBase Admin Credentials

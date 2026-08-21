@@ -91,6 +91,10 @@ POCKETBASE_ADMIN_PASSWORD=your-admin-password
 # Required: OpenRouter API key (script analysis, shot/storyboard/image/video generation)
 # https://openrouter.ai/keys
 OPENROUTER_API_KEY=your-openrouter-api-key
+
+# Optional: Atlas Cloud API key for Seedance 2.5 video
+# https://www.atlascloud.ai/console/api-keys
+ATLASCLOUD_API_KEY=your-atlas-cloud-api-key
 ```
 
 **Important:** PocketBase admin credentials are used by server routes that call PocketBase as superuser. Use the same email/password you used when setting up PocketBase.

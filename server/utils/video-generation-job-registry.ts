@@ -1,5 +1,5 @@
 /**
- * In-memory registry so short HTTP requests can poll OpenRouter video jobs without holding the original POST open.
+ * In-memory registry so short HTTP requests can poll video jobs without holding the original POST open.
  * Single Node process (typical VPS). Jobs expire after TTL.
  */
 type RegistryEntry = {
@@ -8,6 +8,7 @@ type RegistryEntry = {
   model: string
   userId: string
   createdAt: number
+  provider: 'openrouter' | 'atlascloud'
 }
 
 const jobs = new Map<string, RegistryEntry>()

@@ -826,6 +826,11 @@ import {
   type VideoToolResolution
 } from '~/lib/video-generation-prefs'
 import {
+  ATLAS_SEEDANCE_25_PICKER_ID,
+  isAtlasCloudVideoModel,
+  isSeedance25ModelId
+} from '~/lib/atlas-cloud-video'
+import {
   collectCharacterPortraitUrls,
   findCharactersInShot,
   type ProjectCharacterRef
@@ -853,6 +858,7 @@ type ApiPayload = {
   source?: string
   models?: VideoModel[]
   notice?: string
+  atlasCloudConfigured?: boolean
 }
 
 type Slot = {
@@ -1309,18 +1315,29 @@ const durationOptions = computed(() => {
 })
 
 const durationHint = computed(() => {
-  if (!durationOptions.value.includes(15)) {
-    return '15s needs Seedance 2.0 or 2.0 Fast (or another model that lists 15s).'
+  if (!durationOptions.value.includes(15) && !durationOptions.value.includes(30)) {
+    return '15s and 30s need Seedance 2.0 / 2.5 (or another model that lists those lengths).'
+  }
+  if (durationSeconds.value === 30) {
+    return '30s is native on Seedance 2.5 (Atlas Cloud). Other selected models snap to their closest length.'
   }
   if (durationSeconds.value === 15) {
-    return '15s is supported by Seedance 2.0 / 2.0 Fast. Other selected models snap to their closest length.'
+    return '15s is supported by Seedance 2.0 / 2.5. Other selected models snap to their closest length.'
   }
   return ''
 })
 
 const resolutionOptions = computed(() => {
   const selected = models.value.filter(m => selectedModelIdsList.value.includes(m.id))
-  return videoToolResolutionOptions(selected.length ? selected : models.value)
+  const opts = videoToolResolutionOptions(selected.length ? selected : models.value)
+  const atlas1080 =
+    data.value?.atlasCloudConfigured === true &&
+    selectedModelIdsList.value.some(id => isSeedance25ModelId(id))
+  if (!atlas1080 || opts.includes('1080p')) return opts
+  return videoToolResolutionOptions([
+    ...selected.map(m => ({ supportedResolutions: m.supportedResolutions })),
+    { supportedResolutions: ['720p', '1080p'] }
+  ])
 })
 
 const resolutionHint = computed(() => {
@@ -1433,10 +1450,11 @@ function hydrateVideoGenerationPrefs () {
   }
 
   if (!modelsPrefsHydrated.value && models.value.length) {
+    const atlasDefault = models.value.find(m => m.id === ATLAS_SEEDANCE_25_PICKER_ID)?.id || ''
     const validPrimary =
       prefs.primaryModelId && models.value.some(m => m.id === prefs.primaryModelId)
         ? prefs.primaryModelId
-        : models.value[0]?.id || ''
+        : atlasDefault || models.value[0]?.id || ''
     if (validPrimary) {
       primaryModelId.value = validPrimary
     }
@@ -1756,6 +1774,7 @@ function modelSupportsLastFrame (m: VideoModel | undefined): boolean {
   // Unknown catalog entry — allow end frame for known families that support it.
   const id = m.id.toLowerCase()
   return (
+    isAtlasCloudVideoModel(id) ||
     id.startsWith('google/veo') ||
     id.startsWith('kwaivgi/kling') ||
     id.startsWith('bytedance/seedance') ||
@@ -2008,7 +2027,7 @@ async function runOneModel (modelId: string) {
             ? effectiveCharacterIds.value
             : pre?.characterIds,
           model: modelId,
-          provider: 'openrouter',
+          provider: isAtlasCloudVideoModel(modelId) ? 'atlascloud' : 'openrouter',
           promptForHash: resolvedGenerationPrompt(),
           bibleContext: pre?.productionBibleContext ?? null
         })

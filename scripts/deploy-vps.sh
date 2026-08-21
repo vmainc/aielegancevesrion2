@@ -94,7 +94,7 @@ else
 fi
 
 echo ""
-echo "==> Reminder: VPS .env should mirror deploy/vps.env.example (PB URL, INTERNAL_URL, admin, OpenRouter)."
+echo "==> Reminder: VPS .env should mirror deploy/vps.env.example (PB URL, INTERNAL_URL, admin, OpenRouter, Atlas Cloud)."
 echo "    PocketBase admin UI allowed origins: include https://aifilmstud.io (see pocketbase/README.md)."
 echo "    If live shows “creative_projects collection is missing”, from your Mac run:"
 echo "      POCKETBASE_URL=$NUXT_PUBLIC_POCKETBASE_URL POCKETBASE_ADMIN_EMAIL=... POCKETBASE_ADMIN_PASSWORD=... npm run setup-db"

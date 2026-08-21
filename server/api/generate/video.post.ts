@@ -1,5 +1,7 @@
 import { readBody, setResponseStatus } from 'h3'
-import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import { isAtlasCloudVideoModel, isSeedance25ModelId, snapAtlasSeedanceDuration } from '~/lib/atlas-cloud-video'
+import { resolveAtlasCloudApiKey, resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import { atlasCloudGenerateVideo, startAtlasCloudVideoJob } from '~/server/utils/atlascloud-video-job'
 import { openRouterGenerateVideo } from '~/server/utils/openrouter-generate-video'
 import { startOpenRouterVideoJob } from '~/server/utils/openrouter-video-job'
 import { resolveReferenceImageUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
@@ -94,8 +96,18 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig()
-  const apiKey = resolveOpenRouterApiKey(config)
-  if (!apiKey) {
+  const atlasKey = resolveAtlasCloudApiKey(config)
+  const useAtlas =
+    isAtlasCloudVideoModel(model) || (Boolean(atlasKey) && isSeedance25ModelId(model))
+  const openRouterKey = useAtlas ? undefined : resolveOpenRouterApiKey(config)
+
+  if (useAtlas && !atlasKey) {
+    throw createError({
+      statusCode: 500,
+      message: 'Atlas Cloud API key not configured. Set ATLASCLOUD_API_KEY in .env.'
+    })
+  }
+  if (!useAtlas && !openRouterKey) {
     throw createError({
       statusCode: 500,
       message: 'OpenRouter API key not configured. Set OPENROUTER_API_KEY in .env.'
@@ -115,13 +127,17 @@ export default defineEventHandler(async (event) => {
     ? await resolveReferenceImageUrlForServerFetch(lastFrameImageUrl, resolveOpts)
     : ''
 
-  let supportedDurations: number[] | null = null
-  try {
-    supportedDurations = await getOpenRouterVideoModelSupportedDurations(model)
-  } catch {
-    supportedDurations = null
-  }
-  const durationSeconds = snapVideoDurationToOpenRouterModel(durationRaw, supportedDurations)
+  const durationSeconds = useAtlas
+    ? snapAtlasSeedanceDuration(durationRaw)
+    : await (async () => {
+      let supportedDurations: number[] | null = null
+      try {
+        supportedDurations = await getOpenRouterVideoModelSupportedDurations(model)
+      } catch {
+        supportedDurations = null
+      }
+      return snapVideoDurationToOpenRouterModel(durationRaw, supportedDurations)
+    })()
 
   const { includeSpokenDialogue, includeAmbientSound, generateAudio } =
     resolveVideoGenerationAudioFromBody(body as Record<string, unknown>)
@@ -133,23 +149,73 @@ export default defineEventHandler(async (event) => {
         ? body.negative_prompt.trim()
         : ''
 
-  const jobArgs = {
-    prompt: applyVideoGenerationPromptPolicy(prompt, {
-      includeSpokenDialogue,
-      includeAmbientSound
-    }),
-    model,
-    apiKey,
-    aspectRatio,
-    resolution,
-    durationSeconds,
-    firstFrameImageUrl: resolvedFrame || undefined,
-    lastFrameImageUrl: resolvedLastFrame || undefined,
-    generateAudio,
-    negativePrompt: negativePrompt || undefined
-  }
+  const promptForJob = applyVideoGenerationPromptPolicy(prompt, {
+    includeSpokenDialogue,
+    includeAmbientSound
+  })
 
   try {
+    if (useAtlas && atlasKey) {
+      const jobArgs = {
+        prompt: promptForJob,
+        model,
+        apiKey: atlasKey,
+        aspectRatio,
+        resolution,
+        durationSeconds,
+        firstFrameImageUrl: resolvedFrame || undefined,
+        lastFrameImageUrl: resolvedLastFrame || undefined,
+        generateAudio
+      }
+      if (syncBlocking) {
+        const out = await atlasCloudGenerateVideo(jobArgs)
+        return {
+          async: false,
+          jobId: out.jobId,
+          videoUrl: out.videoUrl,
+          model: out.model,
+          status: out.status
+        }
+      }
+      const started = await startAtlasCloudVideoJob(jobArgs)
+      if (started.status === 'completed' && started.videoUrl) {
+        return {
+          async: false,
+          jobId: started.jobId,
+          videoUrl: started.videoUrl,
+          model: started.model,
+          status: 'completed'
+        }
+      }
+      registerVideoGenerationJob(started.jobId, {
+        pollUrl: started.pollUrl,
+        apiKey: atlasKey,
+        model: started.model,
+        userId,
+        provider: 'atlascloud'
+      })
+      setResponseStatus(event, 202)
+      return {
+        async: true,
+        jobId: started.jobId,
+        status: started.status,
+        model: started.model
+      }
+    }
+
+    const jobArgs = {
+      prompt: promptForJob,
+      model,
+      apiKey: openRouterKey!,
+      aspectRatio,
+      resolution,
+      durationSeconds,
+      firstFrameImageUrl: resolvedFrame || undefined,
+      lastFrameImageUrl: resolvedLastFrame || undefined,
+      generateAudio,
+      negativePrompt: negativePrompt || undefined
+    }
+
     if (syncBlocking) {
       const out = await openRouterGenerateVideo(jobArgs)
       return {
@@ -174,9 +240,10 @@ export default defineEventHandler(async (event) => {
 
     registerVideoGenerationJob(started.jobId, {
       pollUrl: started.pollUrl,
-      apiKey,
+      apiKey: openRouterKey!,
       model: started.model,
-      userId
+      userId,
+      provider: 'openrouter'
     })
 
     setResponseStatus(event, 202)

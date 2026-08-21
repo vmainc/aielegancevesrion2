@@ -13,6 +13,16 @@ export function resolveOpenRouterApiKey(config: { openrouterApiKey?: string }): 
   return s || undefined
 }
 
+export function resolveAtlasCloudApiKey(config: { atlascloudApiKey?: string }): string | undefined {
+  const v =
+    (config.atlascloudApiKey && String(config.atlascloudApiKey).trim()) ||
+    process.env.NUXT_ATLASCLOUD_API_KEY ||
+    process.env.ATLASCLOUD_API_KEY ||
+    process.env.ATLAS_CLOUD_API_KEY
+  const s = v ? String(v).trim() : ''
+  return s || undefined
+}
+
 export function resolvePocketBaseAdmin(config: {
   pocketbaseAdminEmail?: string
   pocketbaseAdminPassword?: string
