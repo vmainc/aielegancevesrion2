@@ -2,23 +2,10 @@
 
 ## Live HTTP (2026-08-21)
 
-- `https://aifilmstud.io` → **200**, `x-powered-by: Nuxt`, Film Studio. Do not touch.
-- `https://aielegance.com` → **502 Bad Gateway** `nginx/1.24.0 (Ubuntu)`.
+- `https://aifilmstud.io` → **200**, Film Studio on `:3000` (PM2 `aielegance`). Do not touch.
+- `https://aielegance.com` → **200**, AIElegance compare on `:3001` (PM2 `aielegance-com`).
 
-Cause: the aielegance.com vhost `proxy_pass` was retargeted to `127.0.0.1:3001` before PM2 `aielegance-com` was listening. nginx’s default 502 page is what you get when that port is closed.
-
-This cloud agent cannot SSH (`Permission denied (publickey,password)` to `root@163.245.212.43`). Recover from the Film Studio Mac deploy host.
-
-## Recover (Mac with SSH)
-
-```bash
-cd aielegance-compare
-npm run deploy          # intended: compare UI on aielegance.com
-# or, to stop the 502 immediately by serving Film Studio on both domains:
-npm run rollback-nginx
-```
-
-`scripts/apply-nginx.sh` now refuses to retarget unless `http://127.0.0.1:3001/` is healthy, so a bare nginx switch cannot recreate this 502.
+A 502 on aielegance.com means nginx is proxying to `:3001` but that process is down. `npm run deploy` from a host that can SSH starts it. The cloud image has no `rsync`; deploy falls back to `tar` over ssh.
 
 ## Expected on-box layout
 

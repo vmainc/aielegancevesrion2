@@ -16,13 +16,11 @@ Models are configured with `AIELEGANCE_MODELS` (JSON). No code change needed to 
 
 ## 502 on aielegance.com
 
-nginx is already sending `aielegance.com` to **port 3001**. A 502 means nothing is listening there. Film Studio on 3000 / `aifilmstud.io` is unrelated — leave it alone.
-
-From a Mac that can SSH as `root@163.245.212.43`:
+nginx sends `aielegance.com` to **port 3001**. A 502 (including `/favicon.ico`) means that process is down. Film Studio on 3000 / `aifilmstud.io` is unrelated — leave it alone.
 
 ```bash
 cd aielegance-compare
-npm run deploy          # rsync + start PM2 aielegance-com on :3001
+npm run deploy          # upload + start PM2 aielegance-com on :3001 (rsync or tar)
 # if files are already on the server and the process just died:
 npm run fix-502
 ```
