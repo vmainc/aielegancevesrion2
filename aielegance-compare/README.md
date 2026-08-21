@@ -14,15 +14,26 @@ npm run dev            # http://127.0.0.1:3001
 
 Models are configured with `AIELEGANCE_MODELS` (JSON). No code change needed to add/remove/rename.
 
-## Production (same VPS as Film Studio)
+## 502 on aielegance.com
 
-1. `./scripts/inspect-vps.sh` — confirm Film Studio is `/var/www/aielegance`, PM2 `aielegance`, port 3000, and that `aielegance.com` currently proxies to 3000.
-2. Create `/var/www/aielegance-com/.env` from `deploy/vps.env.example`.
-3. `npm run deploy` — rsyncs `.output/` to `/var/www/aielegance-com`, PM2 `aielegance-com` on **3001**.
-4. `./scripts/apply-nginx.sh` — patches **only** the aielegance.com site `proxy_pass` 3000 → 3001, then `nginx -t` and reload.
-5. Check:
-   - https://aifilmstud.io → Film Studio
-   - https://aielegance.com → AIElegance compare
+nginx is already sending `aielegance.com` to **port 3001**. A 502 means nothing is listening there. Film Studio on 3000 / `aifilmstud.io` is unrelated — leave it alone.
+
+From a Mac that can SSH as `root@163.245.212.43`:
+
+```bash
+cd aielegance-compare
+npm run deploy          # rsync + start PM2 aielegance-com on :3001
+# if files are already on the server and the process just died:
+npm run fix-502
+```
+
+Emergency restore (aielegance.com shows Film Studio again, 502 gone):
+
+```bash
+npm run rollback-nginx
+```
+
+Confirm: `curl -sI https://aielegance.com | head` is `200` with title AIElegance, and `https://aifilmstud.io` is still Film Studio.
 
 ## Isolated identities
 

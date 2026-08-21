@@ -29,10 +29,11 @@ function loadEnvFile (file) {
 }
 
 loadEnvFile(resolve(process.cwd(), '.env'))
-process.env.HOST = process.env.HOST || '127.0.0.1'
-process.env.PORT = process.env.PORT || '3001'
-process.env.NITRO_HOST = process.env.NITRO_HOST || process.env.HOST
-process.env.NITRO_PORT = process.env.NITRO_PORT || process.env.PORT
+// Film Studio owns :3000. Never let .env / PM2 inherit that port.
+process.env.HOST = '127.0.0.1'
+process.env.PORT = '3001'
+process.env.NITRO_HOST = '127.0.0.1'
+process.env.NITRO_PORT = '3001'
 process.env.NODE_ENV = process.env.NODE_ENV || 'production'
 
 await import('./.output/server/index.mjs')

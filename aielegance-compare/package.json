@@ -10,6 +10,9 @@
     "postinstall": "nuxt prepare",
     "test": "vitest run",
     "deploy": "bash scripts/deploy-vps.sh",
+    "go-live": "bash scripts/go-live.sh",
+    "fix-502": "bash scripts/fix-502.sh",
+    "rollback-nginx": "bash scripts/rollback-nginx.sh",
     "inspect-vps": "bash scripts/inspect-vps.sh"
   },
   "devDependencies": {

@@ -42,8 +42,12 @@ if [ ! -f .output/server/index.mjs ]; then
   exit 1
 fi
 if [ ! -f .env ]; then
-  echo "WARN: $VPS_PATH/.env missing — app will listen on $APP_PORT but compare calls need OPENROUTER_API_KEY."
-  echo "      Copy deploy/vps.env.example to $VPS_PATH/.env on the server."
+  cat > .env <<'ENV'
+HOST=127.0.0.1
+PORT=3001
+NODE_ENV=production
+ENV
+  echo "WARN: wrote a stub $VPS_PATH/.env (no OPENROUTER_API_KEY). Homepage will boot; compare API needs the key."
 fi
 if ! command -v pm2 >/dev/null 2>&1; then
   echo "ERROR: pm2 is not installed"
