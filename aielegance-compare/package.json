@@ -1,0 +1,28 @@
+{
+  "name": "aielegance-compare",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "build": "nuxt build",
+    "dev": "nuxt dev --port 3001 --host 127.0.0.1",
+    "preview": "nuxt preview --port 3001",
+    "start": "node -r dotenv/config .output/server/index.mjs",
+    "postinstall": "nuxt prepare",
+    "test": "vitest run",
+    "deploy": "bash scripts/deploy-vps.sh",
+    "inspect-vps": "bash scripts/inspect-vps.sh"
+  },
+  "devDependencies": {
+    "@nuxtjs/tailwindcss": "^6.14.0",
+    "autoprefixer": "^10.4.16",
+    "nuxt": "^3.12.0",
+    "postcss": "^8.4.35",
+    "tailwindcss": "^3.4.1",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.7"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "markdown-it": "^14.1.0"
+  }
+}

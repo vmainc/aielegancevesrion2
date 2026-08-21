@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+html,
+body {
+  background: #F6F3EE;
+  color: #161513;
+}
+
+.prose-answer :where(p, ul, ol) {
+  margin-top: 0.6em;
+  margin-bottom: 0.6em;
+}
+.prose-answer :where(p, li) {
+  line-height: 1.55;
+}
+.prose-answer ul,
+.prose-answer ol {
+  padding-left: 1.2em;
+}
+.prose-answer ul {
+  list-style: disc;
+}
+.prose-answer ol {
+  list-style: decimal;
+}
+.prose-answer code {
+  font-size: 0.9em;
+  background: #F0EBE3;
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+}
+.prose-answer pre {
+  overflow-x: auto;
+  background: #F0EBE3;
+  padding: 0.85rem 1rem;
+  border-radius: 0.6rem;
+  font-size: 0.85rem;
+}
+.prose-answer pre code {
+  background: none;
+  padding: 0;
+}
+.prose-answer a {
+  color: #2F5D50;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.prose-answer h1,
+.prose-answer h2,
+.prose-answer h3 {
+  font-family: Fraunces, Georgia, serif;
+  font-weight: 600;
+  margin-top: 1em;
+  margin-bottom: 0.4em;
+}
