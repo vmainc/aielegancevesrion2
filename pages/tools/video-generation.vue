@@ -45,7 +45,7 @@
         role="status"
       >
         <span
-          class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold tracking-wide bg-gray-900 text-white"
+          class="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold tracking-wide bg-gray-900 text-gray-950"
         >{{ resolution }}</span>
         <p class="text-sm text-gray-600">
           {{ qualityStatusLine }}
@@ -135,7 +135,7 @@
           <button
             v-if="successfulResults.length"
             type="button"
-            class="w-full flex items-center justify-center gap-2.5 px-6 py-4 rounded-xl bg-gray-900 hover:bg-gray-800 text-white font-bold text-base sm:text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            class="w-full flex items-center justify-center gap-2.5 px-6 py-4 rounded-xl bg-gray-900 hover:bg-gray-800 text-gray-950 font-bold text-base sm:text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             :disabled="!selectedPlaybackUrl || downloadingClip"
             @click="downloadSelectedClip"
           >
