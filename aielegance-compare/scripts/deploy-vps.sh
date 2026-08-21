@@ -29,9 +29,15 @@ fi
 echo "==> Ensure $VPS_PATH exists (does not touch /var/www/aielegance)"
 $SSH_CMD "$VPS_HOST" "mkdir -p '$VPS_PATH/.output'"
 
-echo "==> Rsync .output/ + start.mjs + ecosystem"
-rsync -avz --delete -e "$RSYNC_SSH" "$ROOT/.output/" "$VPS_HOST:$VPS_PATH/.output/"
-rsync -avz -e "$RSYNC_SSH" "$ROOT/start.mjs" "$ROOT/deploy/ecosystem.config.cjs" "$VPS_HOST:$VPS_PATH/"
+echo "==> Upload .output/ + start.mjs + ecosystem (does not touch /var/www/aielegance)"
+if command -v rsync >/dev/null 2>&1; then
+  rsync -avz --delete -e "$RSYNC_SSH" "$ROOT/.output/" "$VPS_HOST:$VPS_PATH/.output/"
+  rsync -avz -e "$RSYNC_SSH" "$ROOT/start.mjs" "$ROOT/deploy/ecosystem.config.cjs" "$VPS_HOST:$VPS_PATH/"
+else
+  echo "rsync not installed locally — uploading with tar over ssh"
+  tar -C "$ROOT" -czf - .output start.mjs deploy/ecosystem.config.cjs \
+    | $SSH_CMD "$VPS_HOST" "tar -C '$VPS_PATH' -xzf - && mv -f '$VPS_PATH/deploy/ecosystem.config.cjs' '$VPS_PATH/ecosystem.config.cjs' && rmdir '$VPS_PATH/deploy' 2>/dev/null || true"
+fi
 
 echo "==> Start/restart PM2 $DEPLOY_PM2_NAME on 127.0.0.1:$APP_PORT"
 $SSH_CMD "$VPS_HOST" bash -s <<EOS
