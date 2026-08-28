@@ -30,6 +30,11 @@ const cards = [
     blurb: 'Generate AI video clips with OpenRouter — upload a starting frame, pick models, save to projects.',
   },
   {
+    to: '/tools/fix-shot',
+    title: 'Fix Shot',
+    blurb: 'Keep the shot. Repair identity drift, eyes, wardrobe, or background without regenerating the whole clip.',
+  },
+  {
     to: '/tools/music-generation',
     title: 'Music generation',
     blurb: 'Compose score beds and themes with Google Lyria and save them to projects.',

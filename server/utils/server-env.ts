@@ -13,6 +13,15 @@ export function resolveOpenRouterApiKey(config: { openrouterApiKey?: string }): 
   return s || undefined
 }
 
+export function resolveLumaApiKey(config: { lumaApiKey?: string }): string | undefined {
+  const v =
+    (config.lumaApiKey && String(config.lumaApiKey).trim()) ||
+    process.env.NUXT_LUMA_API_KEY ||
+    process.env.LUMA_API_KEY
+  const s = v ? String(v).trim() : ''
+  return s || undefined
+}
+
 export function resolveAtlasCloudApiKey(config: { atlascloudApiKey?: string }): string | undefined {
   const v =
     (config.atlascloudApiKey && String(config.atlascloudApiKey).trim()) ||

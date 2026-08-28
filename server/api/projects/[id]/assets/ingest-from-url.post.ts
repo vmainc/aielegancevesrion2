@@ -16,7 +16,7 @@ import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import type { ProjectAssetKind } from '~/types/project-asset'
 
 const KINDS: ProjectAssetKind[] = ['script', 'character', 'storyboard', 'video', 'other']
-const MAX_FILE_BYTES = 52_428_800
+const MAX_FILE_BYTES = 157_286_400
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')

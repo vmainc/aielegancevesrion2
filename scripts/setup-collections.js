@@ -547,18 +547,12 @@ async function createCollections(adminEmail, adminPassword) {
               }
             },
             {
-              name: 'sort_order',
-              type: 'number',
-              required: false,
-              options: { min: 0, onlyInt: true }
-            },
-            {
               name: 'file',
               type: 'file',
               required: false,
               options: {
                 maxSelect: 1,
-                maxSize: 52428800
+                maxSize: 157286400
               }
             }
           ]

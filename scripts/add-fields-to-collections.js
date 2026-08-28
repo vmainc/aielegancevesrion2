@@ -328,6 +328,21 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
       } else {
         console.log('  ✓ project relation already optional (or field missing)\n');
       }
+
+      const fileField = (col.fields || col.schema || []).find(f => f?.name === 'file')
+      const fileMax = fileField?.maxSize || fileField?.options?.maxSize || 0
+      if (fileField && Number(fileMax) < 157286400) {
+        const updatedFields = (col.fields || col.schema || []).map((f) => {
+          if (f?.name !== 'file') return flattenField(f)
+          return flattenField({
+            ...f,
+            maxSize: 157286400,
+            options: { ...(f.options || {}), maxSelect: f.maxSelect || 1, maxSize: 157286400 }
+          })
+        })
+        await pb.collections.update(col.id, { fields: updatedFields })
+        console.log('  ➕ Updated: project_assets.file maxSize is now 150MB\n')
+      }
     } catch (_e) {
       console.log('⚠️  project_assets not found. Skipping...\n');
     }

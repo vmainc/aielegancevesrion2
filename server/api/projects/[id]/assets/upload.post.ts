@@ -7,7 +7,7 @@ import type { ProjectAssetKind } from '~/types/project-asset'
 
 const KINDS: ProjectAssetKind[] = ['script', 'character', 'storyboard', 'video', 'other']
 /** Align with PocketBase `project_assets.file` maxSize in setup-collections.js */
-const MAX_FILE_BYTES = 52_428_800
+const MAX_FILE_BYTES = 157_286_400
 
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')

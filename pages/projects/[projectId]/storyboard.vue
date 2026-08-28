@@ -273,6 +273,7 @@
             :deleting-board-id="deletingBoardId"
             :generating-all-frames="generatingAllFrames"
             :opening-video-shot-id="openingVideoShotId"
+            :opening-fix-shot-id="openingFixShotId"
             :frame-preview-box-class="framePreviewBoxClass"
             :frame-preview-loading="framePreviewLoading"
             :frame-preview-failed="framePreviewFailed"
@@ -300,6 +301,7 @@
             :on-generate-frame="generateFrame"
             :on-clear-storyboard-frame="clearStoryboardFrame"
             :on-generate-video="openVideoGenerationForBoard"
+            :on-fix-shot="openFixShotForBoard"
             :on-board-details-toggle="onBoardDetailsToggle"
             :on-save-shot="saveShot"
           />
@@ -414,6 +416,7 @@ import {
   navigateToVideoGenerationFromPanel,
   type VideoGenerationPrefill
 } from '~/lib/video-generation-prefill'
+import { navigateToFixShot } from '~/lib/video-repair/navigate'
 import {
   mergeProductionBibleGenerationOptions,
   productionBibleGenerationDebugLabel
@@ -499,6 +502,7 @@ const shotStoryboardFramesMap = computed(() => {
 
 const generatingAllFrames = ref(false)
 const openingVideoShotId = ref<string | null>(null)
+const openingFixShotId = ref<string | null>(null)
 const generateError = ref('')
 const persistenceWarning = ref('')
 const shotsPersisted = ref(true)
@@ -984,6 +988,27 @@ async function openVideoGenerationForBoard (shot: CreativeShot) {
     )
   } finally {
     if (openingVideoShotId.value === shot.id) openingVideoShotId.value = null
+  }
+}
+
+async function openFixShotForBoard (shot: CreativeShot) {
+  const pid = projectId.value
+  const sceneId = selectedSceneId.value
+  if (!pid || !isCloudProjectId(pid) || !sceneId) {
+    toast.showToast('Save this project to the cloud before using Fix Shot.', 'info')
+    return
+  }
+  openingFixShotId.value = shot.id
+  try {
+    await navigateToFixShot({
+      projectId: pid,
+      sceneId,
+      shotId: shot.id
+    })
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not open Fix Shot.'), 'error')
+  } finally {
+    if (openingFixShotId.value === shot.id) openingFixShotId.value = null
   }
 }
 

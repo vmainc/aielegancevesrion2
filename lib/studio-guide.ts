@@ -77,6 +77,13 @@ export const STUDIO_GUIDE_STATIC_DESTINATIONS: StudioGuideDestination[] = [
     kind: 'static'
   },
   {
+    id: 'fix-shot',
+    label: 'Fix Shot',
+    description: 'Repair an existing clip without regenerating the whole shot.',
+    path: '/tools/fix-shot',
+    kind: 'static'
+  },
+  {
     id: 'music-generation',
     label: 'Generate music',
     description: 'Create soundtrack and music cues.',

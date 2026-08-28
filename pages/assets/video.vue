@@ -11,6 +11,7 @@
 <script setup lang="ts">
 const actions = [
   { to: '/projects', label: 'Open projects', primary: true },
-  { to: '/tools/video-generation', label: 'Video tools' }
+  { to: '/tools/video-generation', label: 'Video tools' },
+  { to: '/tools/fix-shot', label: 'Fix Shot' }
 ]
 </script>

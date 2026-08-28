@@ -10,7 +10,8 @@ export const GENERATION_PATH = {
   CHARACTER_CREATOR: 'character_creator',
   VIDEO_GENERATION: 'video_generation',
   PROJECT_VIDEO_PANEL: 'project_video_panel',
-  GENERATE_CHARACTER_API: 'generate_character_api'
+  GENERATE_CHARACTER_API: 'generate_character_api',
+  VIDEO_REPAIR: 'video_repair'
 } as const
 
 export type GenerationPath = typeof GENERATION_PATH[keyof typeof GENERATION_PATH]
@@ -246,7 +247,8 @@ export const GENERATION_PATH_LABELS: Record<GenerationPath, string> = {
   [GENERATION_PATH.CHARACTER_CREATOR]: 'Character Creator',
   [GENERATION_PATH.VIDEO_GENERATION]: 'Video generation',
   [GENERATION_PATH.PROJECT_VIDEO_PANEL]: 'Project video panel',
-  [GENERATION_PATH.GENERATE_CHARACTER_API]: 'Generate character API'
+  [GENERATION_PATH.GENERATE_CHARACTER_API]: 'Generate character API',
+  [GENERATION_PATH.VIDEO_REPAIR]: 'Fix Shot'
 }
 
 export function generationPathDisplayLabel (path: string): string {

@@ -38,6 +38,15 @@ OPENROUTER_API_KEY=your-openrouter-api-key
 # Atlas Cloud — Seedance 2.5 video (optional; required to use that model)
 # https://www.atlascloud.ai/console/api-keys
 ATLASCLOUD_API_KEY=your-atlas-cloud-api-key
+
+# Fix Shot (video repair). OpenRouter is the default gateway; Luma Modify is optional.
+# VIDEO_REPAIR_DEFAULT_PROVIDER=openrouter
+# VIDEO_REPAIR_DEFAULT_MODEL=runway/aleph-2
+# VIDEO_REPAIR_MAX_DURATION=30
+# VIDEO_REPAIR_MAX_UPLOAD_MB=150
+# VIDEO_REPAIR_MAX_CONCURRENT_JOBS=2
+# LUMA_API_KEY=
+# LUMA_MODIFY_MODEL=ray-2
 ```
 
 ## Finding Your PocketBase Admin Credentials
