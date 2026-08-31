@@ -20,8 +20,10 @@ export default defineEventHandler(async (event) => {
   if (!staged) {
     throw createError({ statusCode: 404, message: 'Expired' })
   }
-  setHeader(event, 'Content-Type', staged.mime)
+  setHeader(event, 'Content-Type', staged.mime || 'video/mp4')
+  setHeader(event, 'Content-Length', String(staged.data.length))
   setHeader(event, 'Cache-Control', 'private, max-age=300')
+  setHeader(event, 'Accept-Ranges', 'bytes')
   setResponseStatus(event, 200)
   return staged.data
 })

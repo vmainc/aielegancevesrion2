@@ -99,7 +99,9 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
         throw createError({ statusCode: 400, message: 'A repair instruction is required.' })
       }
 
-      const sourceUrl = (input.publicSourceVideoUrl || input.sourceVideoUrl || '').trim()
+      // Prefer the caller-resolved URL (often a data URI for small clips). Do not
+      // override with publicSourceVideoUrl — OpenRouter may fail fetching our host.
+      const sourceUrl = (input.sourceVideoUrl || input.publicSourceVideoUrl || '').trim()
       if (!sourceUrl) {
         throw createError({ statusCode: 400, message: 'A source video is required.' })
       }
@@ -112,7 +114,7 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
       ]
 
       const ref = input.referenceFrames[0]
-      const imageUrl = (input.publicReferenceImageUrl || ref?.url || '').trim()
+      const imageUrl = (ref?.url || input.publicReferenceImageUrl || '').trim()
       if (imageUrl) {
         let url = imageUrl
         if (!/^https?:\/\//i.test(imageUrl) || imageUrl.startsWith('data:')) {
@@ -136,7 +138,7 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
       const created = await fetchWithTimeout(
         'https://openrouter.ai/api/v1/videos',
         { method: 'POST', headers: orHeaders(key), body: JSON.stringify(body) },
-        60_000
+        120_000
       )
       const parsed = await readJsonOrText(created)
       if (!created.ok) {
@@ -145,7 +147,13 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
           const errMsg = (parsed.json as { error?: { message?: unknown } }).error?.message
           if (typeof errMsg === 'string' && errMsg.trim()) msg = errMsg.trim()
         }
-        console.error('[video-repair:openrouter] create failed', created.status, msg)
+        console.error(
+          '[video-repair:openrouter] create failed',
+          created.status,
+          msg,
+          'source=',
+          sourceUrl.startsWith('data:') ? `data-uri(${sourceUrl.length} chars)` : sourceUrl.slice(0, 120)
+        )
         throw createError({
           statusCode: created.status === 401 ? 401 : created.status === 402 ? 402 : 502,
           message: userFacingOpenRouterError(msg, created.status)
@@ -210,6 +218,7 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
 }
 
 function userFacingOpenRouterError (raw: string, httpStatus: number): string {
+  const short = raw.replace(/\s+/g, ' ').trim().slice(0, 220)
   const t = raw.toLowerCase()
   if (httpStatus === 401) return 'Repair service authentication failed. Check OPENROUTER_API_KEY.'
   if (httpStatus === 402) return 'Not enough OpenRouter credits to run this repair.'
@@ -218,13 +227,13 @@ function userFacingOpenRouterError (raw: string, httpStatus: number): string {
     return 'The repair was blocked by the model’s content policy. Adjust the clip or instructions.'
   }
   if (/unsupported|unknown model|not found/i.test(t)) {
-    return 'This repair model is not available right now. Try Auto or another engine in Advanced.'
-  }
-  if (/duration|parameter|invalid|reference|video_url|input_reference/i.test(t)) {
-    const short = raw.replace(/\s+/g, ' ').trim().slice(0, 180)
     return short
-      ? `The repair service rejected this request: ${short}`
-      : 'The repair service rejected this request. Try a shorter clip or simpler instruction.'
+      ? `This repair model is not available: ${short}`
+      : 'This repair model is not available right now. Try Auto or another engine in Advanced.'
+  }
+  // Always surface a short provider message — generic 502s are otherwise undiagnosable in prod.
+  if (short) {
+    return `The repair service could not start this job: ${short}`
   }
   return 'The repair service could not start this job. Check the clip length and try again.'
 }

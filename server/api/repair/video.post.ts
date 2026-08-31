@@ -165,13 +165,22 @@ export default defineEventHandler(async (event) => {
   if (referenceImageUrl) {
     referenceFrames.push({ url: referenceImageUrl, source: 'character' })
   } else if (referenceMediaId) {
-    referenceFrames.push({
-      url: publicRef || (await imageDataUriFromMedia(referenceMediaId)),
-      timestampSeconds: Number.isFinite(Number(body.referenceTimestampSeconds))
-        ? Number(body.referenceTimestampSeconds)
-        : undefined,
-      source: 'extracted_frame'
-    })
+    // Prefer inline data for OpenRouter; Luma still uses publicRef via publicReferenceImageUrl.
+    let refUrl: string
+    try {
+      refUrl = await imageDataUriFromMedia(referenceMediaId)
+    } catch {
+      refUrl = publicRef || ''
+    }
+    if (refUrl) {
+      referenceFrames.push({
+        url: refUrl,
+        timestampSeconds: Number.isFinite(Number(body.referenceTimestampSeconds))
+          ? Number(body.referenceTimestampSeconds)
+          : undefined,
+        source: 'extracted_frame'
+      })
+    }
   }
 
   let sourceVideoUrl: string

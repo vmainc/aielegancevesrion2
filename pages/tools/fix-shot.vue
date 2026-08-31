@@ -9,7 +9,7 @@
     </header>
 
     <p
-      v-if="!isAuthenticated"
+      v-if="authReady && !isAuthenticated"
       class="rounded-xl border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700 mb-6"
     >
       <NuxtLink to="/login" class="text-primary font-medium underline">Log in</NuxtLink>
@@ -353,7 +353,7 @@ import { useProjectCharacterRefs } from '~/composables/useProjectCharacterRefs'
 useHead({ title: 'Fix Shot' })
 
 const JOB_STORAGE = 'aie_fix_shot_active_job'
-const { isAuthenticated, getAuthToken } = useAuth()
+const { isAuthenticated, authReady, getAuthToken } = useAuth()
 const route = useRoute()
 const toast = useToast()
 

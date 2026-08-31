@@ -102,30 +102,35 @@ export async function stageRemoteVideoUrl (url: string): Promise<{ mediaId: stri
   return { mediaId: staged.mediaId, mime: staged.mime }
 }
 
-/** Prefer a public HTTPS URL; otherwise a data URI for small clips (OpenRouter). */
+/**
+ * Prefer an inline data URI for small clips (OpenRouter does not need to fetch our host).
+ * Fall back to a public HTTPS URL for larger files.
+ */
 export async function sourceUrlForOpenRouter (opts: {
   publicUrl: string | null
   mediaId?: string
   maxDataUriBytes?: number
 }): Promise<string> {
-  if (opts.publicUrl) return opts.publicUrl
   const id = opts.mediaId
+  const cap = opts.maxDataUriBytes ?? 12_000_000
+  if (id) {
+    const staged = await readVideoRepairMedia(id)
+    if (!staged) {
+      throw createError({ statusCode: 404, message: 'Source video expired. Upload it again.' })
+    }
+    if (staged.data.length <= cap) {
+      return bufferToDataUri(staged.data, staged.mime)
+    }
+  }
+  if (opts.publicUrl) return opts.publicUrl
   if (!id) {
     throw createError({ statusCode: 400, message: 'A source video is required.' })
   }
-  const staged = await readVideoRepairMedia(id)
-  if (!staged) {
-    throw createError({ statusCode: 404, message: 'Source video expired. Upload it again.' })
-  }
-  const cap = opts.maxDataUriBytes ?? 12_000_000
-  if (staged.data.length > cap) {
-    throw createError({
-      statusCode: 400,
-      message:
-        'This clip is too large to send without a public URL. Deploy Fix Shot on a reachable host, or set VIDEO_REPAIR_PUBLIC_BASE_URL to a tunnel.'
-    })
-  }
-  return bufferToDataUri(staged.data, staged.mime)
+  throw createError({
+    statusCode: 400,
+    message:
+      'This clip is too large to send without a public URL. Deploy Fix Shot on a reachable host, or set VIDEO_REPAIR_PUBLIC_BASE_URL to a tunnel.'
+  })
 }
 
 export async function imageDataUriFromMedia (mediaId: string): Promise<string> {
