@@ -124,15 +124,14 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
         })
       }
 
+      // Aleph (and other edit models) take length from the source clip.
+      // Do not send `duration` — Aleph lists supported_durations: null and rejects it.
       const body: Record<string, unknown> = {
         model,
         prompt,
         input_references: inputReferences
       }
       if (input.aspectRatio) body.aspect_ratio = input.aspectRatio
-      if (typeof input.durationSeconds === 'number' && Number.isFinite(input.durationSeconds)) {
-        body.duration = Math.max(1, Math.floor(input.durationSeconds))
-      }
 
       const created = await fetchWithTimeout(
         'https://openrouter.ai/api/v1/videos',
@@ -220,6 +219,12 @@ function userFacingOpenRouterError (raw: string, httpStatus: number): string {
   }
   if (/unsupported|unknown model|not found/i.test(t)) {
     return 'This repair model is not available right now. Try Auto or another engine in Advanced.'
+  }
+  if (/duration|parameter|invalid|reference|video_url|input_reference/i.test(t)) {
+    const short = raw.replace(/\s+/g, ' ').trim().slice(0, 180)
+    return short
+      ? `The repair service rejected this request: ${short}`
+      : 'The repair service rejected this request. Try a shorter clip or simpler instruction.'
   }
   return 'The repair service could not start this job. Check the clip length and try again.'
 }

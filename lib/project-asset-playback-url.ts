@@ -13,7 +13,24 @@ export function projectAssetMediaPathOnly (url: string): string {
 }
 
 export function isProjectAssetMediaPath (url: string): boolean {
-  return /^\/api\/projects\/[^/]+\/assets\/[^/]+\/media$/.test(projectAssetMediaPathOnly(url))
+  return /^\/api\/projects\/[^/]+\/assets\/[^/]+\/media$/.test(playbackPathOnly(url))
+}
+
+/** Fix Shot staged result media (`GET /api/repair/video/result/:id`). */
+export function isRepairVideoResultPath (url: string): boolean {
+  return /^\/api\/repair\/video\/result\/[^/]+$/.test(playbackPathOnly(url))
+}
+
+function playbackPathOnly (url: string): string {
+  let path = url.trim()
+  if (/^https?:\/\//i.test(path)) {
+    try {
+      path = new URL(path).pathname
+    } catch {
+      return projectAssetMediaPathOnly(url)
+    }
+  }
+  return projectAssetMediaPathOnly(path)
 }
 
 /** Parse `projectAssetMediaPath` URLs (absolute or relative; query/hash stripped). */
@@ -52,7 +69,8 @@ export function appendPlaybackAccessToken (url: string, token: string | null | u
   const u = url.trim()
   if (!u || !token?.trim()) return u
   if (/[?&]access_token=/.test(u)) return u
-  if (!isProjectAssetMediaPath(u)) return u
+  // `<video src>` cannot send Authorization — token must be in the query string.
+  if (!isProjectAssetMediaPath(u) && !isRepairVideoResultPath(u)) return u
   const join = u.includes('?') ? '&' : '?'
   return `${u}${join}access_token=${encodeURIComponent(token.trim())}`
 }

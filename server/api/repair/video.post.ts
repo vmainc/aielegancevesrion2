@@ -199,40 +199,24 @@ export default defineEventHandler(async (event) => {
     durationSeconds
   })
 
-  const started = await repairVideo(
-    {
-      sourceVideo: sourceVideoUrl,
-      prompt,
-      referenceFrames,
-      repairMode,
-      duration: durationSeconds ?? undefined,
-      provider: routing.provider,
-      model: routing.model,
-      publicSourceVideoUrl: publicSource || undefined,
-      publicReferenceImageUrl: publicRef || undefined
-    },
-    {
-      openRouterApiKey: resolveOpenRouterApiKey(config),
-      lumaApiKey: resolveLumaApiKey(config)
-    }
-  )
-
+  // Persist before calling the provider so public token URLs resolve when
+  // OpenRouter / Luma fetch the source (and optional reference) video.
   const job: StoredVideoRepairJob = {
     id: jobId,
     userId,
     provider: routing.provider,
-    model: started.model || routing.model,
-    status: started.status === 'completed' ? 'completed' : started.status,
+    model: routing.model,
+    status: 'pending',
     sourceVideo: videoRepairResultPath(sourceMediaId),
-    outputVideo: started.outputVideoUrl || null,
+    outputVideo: null,
     createdAt: now,
-    completedAt: started.status === 'completed' ? now : null,
+    completedAt: null,
     error: null,
     estimatedCost,
-    actualCost: started.actualCost ?? null,
+    actualCost: null,
     durationSeconds,
-    providerJobId: started.providerJobId,
-    pollUrl: started.pollUrl,
+    providerJobId: '',
+    pollUrl: '',
     publicToken,
     sourceMediaId,
     referenceMediaId: referenceMediaId || undefined,
@@ -250,11 +234,48 @@ export default defineEventHandler(async (event) => {
       ? Number(body.referenceTimestampSeconds)
       : undefined
   }
+  await saveVideoRepairJob(job)
 
-  if (started.status === 'completed' && started.outputVideoUrl) {
-    job.outputVideo = started.outputVideoUrl
+  let started
+  try {
+    started = await repairVideo(
+      {
+        sourceVideo: sourceVideoUrl,
+        prompt,
+        referenceFrames,
+        repairMode,
+        duration: durationSeconds ?? undefined,
+        provider: routing.provider,
+        model: routing.model,
+        publicSourceVideoUrl: publicSource || undefined,
+        publicReferenceImageUrl: publicRef || undefined
+      },
+      {
+        openRouterApiKey: resolveOpenRouterApiKey(config),
+        lumaApiKey: resolveLumaApiKey(config)
+      }
+    )
+  } catch (e: unknown) {
+    const msg =
+      e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string'
+        ? (e as { message: string }).message
+        : 'The repair service could not start this job.'
+    job.status = 'failed'
+    job.error = msg
+    job.completedAt = new Date().toISOString()
+    await saveVideoRepairJob(job)
+    throw e
   }
 
+  job.model = started.model || routing.model
+  job.status = started.status === 'completed' ? 'completed' : started.status
+  job.providerJobId = started.providerJobId
+  job.pollUrl = started.pollUrl
+  job.actualCost = started.actualCost ?? null
+  job.completedAt = started.status === 'completed' ? new Date().toISOString() : null
+  if (started.outputVideoUrl) {
+    job.outputVideo = started.outputVideoUrl
+  }
   await saveVideoRepairJob(job)
 
   if (job.status === 'completed' && job.outputVideo) {

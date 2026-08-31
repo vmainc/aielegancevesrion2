@@ -160,7 +160,7 @@
             :key="cat.id"
             type="button"
             class="px-3 py-1.5 text-xs font-semibold rounded-full border transition-colors"
-            :class="selected.has(cat.id)
+            :class="selected.includes(cat.id)
               ? 'bg-primary text-gray-950 border-primary'
               : 'border-gray-300 text-gray-700 hover:border-primary/50'"
             @click="toggleCategory(cat.id)"
@@ -370,7 +370,7 @@ const engines = (Object.keys(REPAIR_ENGINE_LABELS) as RepairEngineChoice[]).map(
 }))
 const exampleDesc = defaultRepairDescriptionExample()
 
-const selected = ref(new Set<RepairCategoryId>())
+const selected = ref<RepairCategoryId[]>([])
 const description = ref('')
 const repairMode = ref<RepairMode>('balanced')
 const engine = ref<RepairEngineChoice>('auto')
@@ -407,11 +407,11 @@ const analyzeSummary = ref('')
 const findings = ref<ShotAnalysisFinding[]>([])
 const versions = ref<ShotVideoVersion[]>([])
 
-const voiceOnly = computed(() => hasVoiceOnlyRepair([...selected.value]))
+const voiceOnly = computed(() => hasVoiceOnlyRepair(selected.value))
 const canSubmit = computed(() => {
   if (!isAuthenticated.value) return false
   if (!sourcePlayback.value) return false
-  if (!visualRepairCategories([...selected.value]).length) return false
+  if (!visualRepairCategories(selected.value).length) return false
   if (!description.value.trim()) return false
   if (voiceOnly.value) return false
   return true
@@ -434,10 +434,8 @@ function authHeaders (): Record<string, string> {
 }
 
 function toggleCategory (id: RepairCategoryId) {
-  const next = new Set(selected.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  selected.value = next
+  const cur = selected.value
+  selected.value = cur.includes(id) ? cur.filter(x => x !== id) : [...cur, id]
 }
 
 function persistJobId (id: string) {
@@ -783,10 +781,8 @@ async function runAnalyze () {
 }
 
 function applyFinding (f: ShotAnalysisFinding) {
-  if (f.repairCategory) {
-    const next = new Set(selected.value)
-    next.add(f.repairCategory)
-    selected.value = next
+  if (f.repairCategory && !selected.value.includes(f.repairCategory)) {
+    selected.value = [...selected.value, f.repairCategory]
   }
   if (f.description && !description.value.trim()) description.value = f.description
 }
