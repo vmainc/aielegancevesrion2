@@ -4,6 +4,29 @@ import {
   buildVideoRepairPrompt,
   versionLabelFromCategories
 } from './promptBuilder'
+import { resolveEffectiveRepairMode } from './types'
+
+describe('resolveEffectiveRepairMode', () => {
+  it('bumps face/eye categories to reimagine', () => {
+    expect(resolveEffectiveRepairMode('balanced', ['face_eyes'], 'fix the look')).toBe('reimagine')
+    expect(resolveEffectiveRepairMode('preserve', ['character_consistency'], 'keep identity')).toBe(
+      'reimagine'
+    )
+  })
+
+  it('bumps when description mentions eyes even without the category', () => {
+    expect(
+      resolveEffectiveRepairMode('balanced', ['other'], "Macklin's eyes must be dark brown")
+    ).toBe('reimagine')
+  })
+
+  it('leaves non-face repairs on the requested mode', () => {
+    expect(resolveEffectiveRepairMode('balanced', ['background'], 'fix the wall glitch')).toBe(
+      'balanced'
+    )
+    expect(resolveEffectiveRepairMode('preserve', ['clothing'], 'keep the jacket')).toBe('preserve')
+  })
+})
 
 describe('buildVideoRepairPrompt', () => {
   it('combines preservation, categories, character, and user description under Aleph limit', () => {
@@ -25,7 +48,8 @@ describe('buildVideoRepairPrompt', () => {
     expect(prompt).toMatch(/the woman/i)
     expect(prompt).toMatch(/reference image/i)
     expect(prompt).toMatch(/Filmmaker instruction/i)
-    expect(prompt).toMatch(/Smallest possible correction/i)
+    // Face/eye categories auto-bump to reimagine for a visible correction.
+    expect(prompt).toMatch(/clearly visible change|Strong visible correction/i)
   })
 
   it('puts filmmaker intent first and strengthens reimagine', () => {

@@ -1,6 +1,6 @@
 import { repairCategoryById, visualRepairCategories, type RepairCategoryId } from './categories'
 import { sourceLookMatchPromptLine } from './sourceModel'
-import type { RepairMode, VideoRepairPromptContext } from './types'
+import { resolveEffectiveRepairMode, type RepairMode, type VideoRepairPromptContext } from './types'
 
 /** Runway Aleph / OpenRouter promptText hard limit. */
 export const ALEPH_PROMPT_MAX_CHARS = 1000
@@ -105,8 +105,8 @@ export function buildVideoRepairPrompt (
   const maxChars = Math.max(200, Math.floor(opts?.maxChars ?? ALEPH_PROMPT_MAX_CHARS))
   const compact = maxChars <= ALEPH_PROMPT_MAX_CHARS
   const visual = visualRepairCategories(ctx.categories)
-  const mode = ctx.repairMode
   const user = (ctx.userDescription || '').trim()
+  const mode = resolveEffectiveRepairMode(ctx.repairMode, visual, user)
   const intent = user ? `Filmmaker instruction: ${user}` : ''
   const priority =
     mode === 'reimagine'

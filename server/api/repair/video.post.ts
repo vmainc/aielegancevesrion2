@@ -10,6 +10,7 @@ import { readAssetSourceGenerationModel } from '~/lib/video-repair/sourceModel'
 import {
   parseRepairEngineChoice,
   parseRepairMode,
+  resolveEffectiveRepairMode,
   type VideoRepairReferenceFrame
 } from '~/lib/video-repair/types'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
@@ -83,7 +84,11 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const repairMode = parseRepairMode(body.repairMode)
+  const repairMode = resolveEffectiveRepairMode(
+    parseRepairMode(body.repairMode),
+    visual,
+    userDescription
+  )
   const engineChoice = parseRepairEngineChoice(body.engine)
   const projectId = str(body.projectId)
   const sceneId = str(body.sceneId)

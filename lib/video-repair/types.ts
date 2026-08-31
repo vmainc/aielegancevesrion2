@@ -86,6 +86,43 @@ export function parseRepairMode (v: unknown, fallback: RepairMode = 'balanced'):
   return isRepairMode(v) ? v : fallback
 }
 
+/** Categories where Aleph often no-ops unless correction strength is high. */
+const STRONG_REPAIR_CATEGORY_IDS: ReadonlySet<RepairCategoryId> = new Set([
+  'face_eyes',
+  'character_consistency',
+  'lip_sync'
+])
+
+/** Filmmaker text that implies a face/eye correction even without a category chip. */
+const FACE_EYE_REPAIR_HINT =
+  /\b(eyes?|eye[\s-]?colo(?:u)?r|irises?|pupils?|facial|eyelids?|eyebrows?|eye[\s-]?size|eye[\s-]?shape|face\s+proportions?)\b/i
+
+/**
+ * Face/eye (and related identity) fixes tend to look unchanged under preserve/balanced.
+ * Detect those so we can bump to a stronger correction automatically.
+ */
+export function needsStrongRepairCorrection (
+  categories: RepairCategoryId[],
+  userDescription: string
+): boolean {
+  if (categories.some(id => STRONG_REPAIR_CATEGORY_IDS.has(id))) return true
+  return FACE_EYE_REPAIR_HINT.test(userDescription || '')
+}
+
+/**
+ * Effective mode sent to the repair engine. Face/eye work always gets reimagine
+ * unless the caller already asked for it.
+ */
+export function resolveEffectiveRepairMode (
+  mode: RepairMode,
+  categories: RepairCategoryId[],
+  userDescription: string
+): RepairMode {
+  if (mode === 'reimagine') return 'reimagine'
+  if (needsStrongRepairCorrection(categories, userDescription)) return 'reimagine'
+  return mode
+}
+
 export function parseRepairEngineChoice (v: unknown, fallback: RepairEngineChoice = 'auto'): RepairEngineChoice {
   return isRepairEngineChoice(v) ? v : fallback
 }
