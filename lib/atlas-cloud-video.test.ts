@@ -9,6 +9,7 @@ import {
   atlasSeedanceRatio,
   atlasSeedanceResolution,
   isAtlasCloudVideoModel,
+  normalizeVideoModelToOpenRouter,
   isSeedance25ModelId,
   parseAtlasCloudPrediction,
   resolveAtlasSeedanceModelId,
@@ -29,10 +30,21 @@ describe('isAtlasCloudVideoModel', () => {
     expect(isAtlasCloudVideoModel('google/veo-3.1')).toBe(false)
   })
 
-  it('recognizes Seedance 2.5 ids for Atlas routing when the key is present', () => {
+  it('recognizes Seedance 2.5 ids (legacy Atlas or OpenRouter)', () => {
     expect(isSeedance25ModelId(ATLAS_SEEDANCE_25_PICKER_ID)).toBe(true)
     expect(isSeedance25ModelId('bytedance/seedance-2.5')).toBe(true)
     expect(isSeedance25ModelId('bytedance/seedance-2.0')).toBe(false)
+  })
+})
+
+describe('normalizeVideoModelToOpenRouter', () => {
+  it('maps legacy Atlas Seedance ids to OpenRouter', () => {
+    expect(normalizeVideoModelToOpenRouter(ATLAS_SEEDANCE_25_PICKER_ID)).toBe(
+      'bytedance/seedance-2.5'
+    )
+    expect(normalizeVideoModelToOpenRouter(ATLAS_SEEDANCE_25_T2V)).toBe('bytedance/seedance-2.5')
+    expect(normalizeVideoModelToOpenRouter('bytedance/seedance-2.5')).toBe('bytedance/seedance-2.5')
+    expect(normalizeVideoModelToOpenRouter('google/veo-3.1')).toBe('google/veo-3.1')
   })
 })
 

@@ -1,6 +1,5 @@
-import { ATLAS_SEEDANCE_25_VIDEO_MODEL, isOpenRouterSeedance25Listing } from '~/lib/atlas-cloud-video'
 import { modelSupportsNativeNegativePrompt } from '~/lib/video-negative-prompt'
-import { resolveAtlasCloudApiKey, resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 
 /** Hidden from the video model picker — still reachable via API if needed elsewhere. */
 const EXCLUDED_OPENROUTER_VIDEO_MODEL_IDS = new Set([
@@ -15,6 +14,16 @@ function isExcludedOpenRouterVideoModel (id: string): boolean {
 
 /** Matches OpenRouter’s directory when the API is unavailable or key is missing. */
 const FALLBACK_VIDEO_MODELS = [
+  {
+    id: 'bytedance/seedance-2.5',
+    name: 'ByteDance: Seedance 2.5',
+    description: 'Seedance 2.5 via OpenRouter — text/image-to-video with start/end frames.',
+    provider: 'ByteDance',
+    generateAudio: true,
+    supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    supportedFrameImages: ['first_frame', 'last_frame'] as const,
+    supportedResolutions: ['720p', '1080p'] as const,
+  },
   {
     id: 'bytedance/seedance-2.0',
     name: 'ByteDance: Seedance 2.0',
@@ -165,38 +174,16 @@ async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> 
   return map
 }
 
-function withAtlasCatalog (
-  config: ReturnType<typeof useRuntimeConfig>,
-  payload: {
-    source: 'api' | 'fallback'
-    models: VideoModelRow[]
-    notice?: string
-    error?: string
-  }
-) {
-  const atlasKey = resolveAtlasCloudApiKey(config)
-  const atlasModels: VideoModelRow[] = atlasKey
-    ? [{
-        ...ATLAS_SEEDANCE_25_VIDEO_MODEL,
-        supportedResolutions: ['720p', '1080p']
-      }]
-    : []
-  const noticeParts = [payload.notice?.trim()].filter((x): x is string => Boolean(x))
-  if (!atlasKey) {
-    noticeParts.push(
-      'Set ATLASCLOUD_API_KEY in .env (https://www.atlascloud.ai/console/api-keys) to enable Seedance 2.5.'
-    )
-  }
-  // OpenRouter's Seedance 2.5 listing is 720p-only. When Atlas is configured, hide it
-  // so the picker uses the Atlas row (native 720p + 1080p).
-  const rest = atlasKey
-    ? payload.models.filter(m => !isOpenRouterSeedance25Listing(m.id))
-    : payload.models
+/** OpenRouter-only catalog. Legacy Atlas Seedance rows are no longer injected. */
+function withVideoCatalog (payload: {
+  source: 'api' | 'fallback'
+  models: VideoModelRow[]
+  notice?: string
+  error?: string
+}) {
   return {
     ...payload,
-    models: [...atlasModels, ...rest],
-    atlasCloudConfigured: Boolean(atlasKey),
-    ...(noticeParts.length ? { notice: noticeParts.join(' ') } : {})
+    atlasCloudConfigured: false
   }
 }
 
@@ -218,7 +205,7 @@ export default defineEventHandler(async () => {
   }
 
   if (!apiKey) {
-    return withAtlasCatalog(config, {
+    return withVideoCatalog({
       source: 'fallback',
       models: FALLBACK_VIDEO_MODELS,
       notice: 'Set OPENROUTER_API_KEY in your environment to load the live model list from OpenRouter.'
@@ -232,7 +219,7 @@ export default defineEventHandler(async () => {
   const rawText = await res.text()
 
   if (!res.ok) {
-    return withAtlasCatalog(config, {
+    return withVideoCatalog({
       source: 'fallback',
       models: FALLBACK_VIDEO_MODELS,
       notice: `OpenRouter returned HTTP ${res.status}. Showing reference models.`,
@@ -244,7 +231,7 @@ export default defineEventHandler(async () => {
   try {
     json = JSON.parse(rawText) as { data?: unknown[] }
   } catch {
-    return withAtlasCatalog(config, {
+    return withVideoCatalog({
       source: 'fallback',
       models: FALLBACK_VIDEO_MODELS,
       notice: 'Could not parse OpenRouter response. Showing reference models.'
@@ -298,14 +285,14 @@ export default defineEventHandler(async () => {
   }
 
   if (visibleRows.length === 0) {
-    return withAtlasCatalog(config, {
+    return withVideoCatalog({
       source: 'fallback',
       models: FALLBACK_VIDEO_MODELS.filter(m => !isExcludedOpenRouterVideoModel(m.id)),
       notice: 'No video models returned from OpenRouter. Showing reference models.'
     })
   }
 
-  return withAtlasCatalog(config, {
+  return withVideoCatalog({
     source: 'api',
     models: visibleRows
   })

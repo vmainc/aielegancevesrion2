@@ -46,15 +46,29 @@ export function isAtlasCloudVideoModel (id: string): boolean {
   )
 }
 
-/** OpenRouter catalog id for Seedance 2.5 (720p-only on OpenRouter; 1080p is Atlas). */
+/** OpenRouter catalog id for Seedance 2.5. */
 export function isOpenRouterSeedance25Listing (id: string): boolean {
   return id.trim().toLowerCase() === 'bytedance/seedance-2.5'
 }
 
-/** Any Seedance 2.5 picker / API id (Atlas or OpenRouter listing). */
+/** Any Seedance 2.5 picker / API id (legacy Atlas ids or OpenRouter listing). */
 export function isSeedance25ModelId (id: string): boolean {
   const s = id.trim().toLowerCase()
   return isAtlasCloudVideoModel(s) || s.startsWith('bytedance/seedance-2.5')
+}
+
+/**
+ * Map legacy Atlas Seedance picker/endpoint ids to the OpenRouter catalog id.
+ * New video jobs always go through OpenRouter.
+ */
+export function normalizeVideoModelToOpenRouter (id: string): string {
+  const s = id.trim()
+  if (!s) return s
+  if (isSeedance25ModelId(s)) return 'bytedance/seedance-2.5'
+  if (s.toLowerCase().startsWith('atlas/')) {
+    return s.slice('atlas/'.length)
+  }
+  return s
 }
 
 export function resolveAtlasSeedanceModelId (opts: {
