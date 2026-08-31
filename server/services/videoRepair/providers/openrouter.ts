@@ -2,7 +2,6 @@ import { createError } from 'h3'
 import { repairModePromptAddon } from '~/lib/video-repair/promptBuilder'
 import type { RepairMode } from '~/lib/video-repair/types'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
-import { fetchImageAsDataUrlForVideo } from '~/server/utils/openrouter-video-job'
 import { assertHttpsProviderMediaUrl } from '~/server/utils/video-repair-public-url'
 import type {
   VideoRepairProviderAdapter,
@@ -10,6 +9,27 @@ import type {
   VideoRepairProviderStartInput,
   VideoRepairProviderStartResult
 } from '../types'
+
+/** Aleph image guidance via Runway keyframes passthrough (HTTPS URIs only). */
+async function buildAlephKeyframes (
+  input: VideoRepairProviderStartInput
+): Promise<Array<{ uri: string; seconds: number }>> {
+  const publicRef = (input.publicReferenceImageUrl || '').trim()
+  const frame = input.referenceFrames[0]
+  const candidate = /^https:\/\//i.test(publicRef)
+    ? publicRef
+    : (frame?.url || '').trim()
+  if (!candidate || candidate.startsWith('data:') || !/^https:\/\//i.test(candidate)) {
+    // Skip non-HTTPS refs rather than poisoning the request with image_url/references.
+    return []
+  }
+  const uri = assertHttpsProviderMediaUrl(candidate, 'Reference image')
+  const seconds =
+    typeof frame?.timestampSeconds === 'number' && Number.isFinite(frame.timestampSeconds)
+      ? Math.max(0, frame.timestampSeconds)
+      : 0
+  return [{ uri, seconds }]
+}
 
 type VideoJobResponse = {
   id?: string
