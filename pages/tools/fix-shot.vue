@@ -141,6 +141,10 @@
           >
         </label>
         <p v-if="uploadHint" class="text-xs text-gray-500">{{ uploadHint }}</p>
+        <p v-if="sourceModelLabel" class="text-xs text-gray-500">
+          Original generated with <span class="text-primary font-medium">{{ sourceModelLabel }}</span>
+          — repair will try to match that look.
+        </p>
         <div v-if="sourcePlayback" class="rounded-lg overflow-hidden border border-gray-200 bg-black">
           <video
             :src="playbackSrc(sourcePlayback)"
@@ -336,8 +340,10 @@ import {
   REPAIR_ENGINE_LABELS,
   REPAIR_MODE_LABELS,
   defaultRepairDescriptionExample,
+  formatSourceGenerationModelLabel,
   formatTimecode,
   hasVoiceOnlyRepair,
+  readAssetSourceGenerationModel,
   visualRepairCategories,
   type RepairCategoryId,
   type RepairEngineChoice,
@@ -383,7 +389,9 @@ const sourceAssetId = ref('')
 const sourceMediaId = ref('')
 const sourcePlayback = ref('')
 const sourceDuration = ref<number | null>(null)
+const sourceGenerationModel = ref('')
 const uploadHint = ref('')
+const sourceModelLabel = computed(() => formatSourceGenerationModelLabel(sourceGenerationModel.value))
 
 const referenceMediaId = ref('')
 const referencePreview = ref('')
@@ -513,6 +521,7 @@ function onPickLibraryClip () {
   sourceDuration.value = typeof clip.metadata?.duration_seconds === 'number'
     ? Number(clip.metadata.duration_seconds)
     : null
+  sourceGenerationModel.value = readAssetSourceGenerationModel(clip.metadata)
 }
 
 function onSourceMeta (e: Event) {
@@ -539,6 +548,7 @@ async function onUploadSource (e: Event) {
     sourceMediaId.value = res.mediaId
     sourcePlayback.value = res.playbackUrl
     sourceDuration.value = res.durationSeconds
+    sourceGenerationModel.value = ''
     uploadHint.value = ''
   } catch (err: unknown) {
     uploadHint.value = ''
@@ -635,6 +645,7 @@ async function submitRepair () {
         shotId: shotId.value || undefined,
         sourceAssetId: sourceAssetId.value || undefined,
         sourceMediaId: sourceMediaId.value || undefined,
+        sourceGenerationModel: sourceGenerationModel.value || undefined,
         durationSeconds: sourceDuration.value,
         referenceMediaId: referenceMediaId.value || undefined,
         referenceImageUrl: !referenceMediaId.value && characterPortraitUrl.value === referencePreview.value

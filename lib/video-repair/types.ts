@@ -33,6 +33,8 @@ export type VideoRepairPromptContext = {
   userDescription: string
   repairMode: RepairMode
   hasReferenceFrame: boolean
+  /** Model id that generated the source clip (e.g. bytedance/seedance-2.0). */
+  sourceGenerationModel?: string
   characterName?: string
   characterAppearance?: string
   characterNotes?: string

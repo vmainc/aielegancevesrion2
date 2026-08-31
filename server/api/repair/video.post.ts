@@ -6,11 +6,13 @@ import {
 } from '~/lib/video-repair/categories'
 import { buildVideoRepairPrompt } from '~/lib/video-repair/promptBuilder'
 import { resolveRepairEngine } from '~/lib/video-repair/routing'
+import { readAssetSourceGenerationModel } from '~/lib/video-repair/sourceModel'
 import {
   parseRepairEngineChoice,
   parseRepairMode,
   type VideoRepairReferenceFrame
 } from '~/lib/video-repair/types'
+import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { audioRepairUnavailableMessage } from '~/server/services/audioRepair'
 import { repairVideo } from '~/server/services/videoRepair'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
@@ -137,11 +139,37 @@ export default defineEventHandler(async (event) => {
     }
   })
 
+  let sourceGenerationModel = str(body.sourceGenerationModel ?? body.sourceModel)
+  if (!sourceGenerationModel && sourceAssetId && projectId) {
+    try {
+      const pb = await getAuthenticatedPocketBase()
+      const record = (await pb.collection('project_assets').getOne(sourceAssetId)) as Record<
+        string,
+        unknown
+      >
+      const meta = record.metadata
+      let metadata: Record<string, unknown> | null = null
+      if (meta && typeof meta === 'object' && !Array.isArray(meta)) {
+        metadata = meta as Record<string, unknown>
+      } else if (typeof meta === 'string' && meta.trim()) {
+        try {
+          metadata = JSON.parse(meta) as Record<string, unknown>
+        } catch {
+          metadata = null
+        }
+      }
+      sourceGenerationModel = readAssetSourceGenerationModel(metadata)
+    } catch {
+      /* keep empty — look-match line is optional */
+    }
+  }
+
   const prompt = buildVideoRepairPrompt({
     categories: visual,
     userDescription,
     repairMode,
     hasReferenceFrame: Boolean(referenceMediaId || referenceImageUrl),
+    sourceGenerationModel: sourceGenerationModel || undefined,
     characterName: str(body.characterName),
     characterAppearance: str(body.characterAppearance),
     characterNotes: str(body.characterNotes),

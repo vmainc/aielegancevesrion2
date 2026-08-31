@@ -34,12 +34,15 @@ describe('buildVideoRepairPrompt', () => {
       userDescription: "Macklin's eyes must be dark brown and smaller.",
       repairMode: 'reimagine',
       hasReferenceFrame: true,
-      characterName: 'Macklin'
+      characterName: 'Macklin',
+      sourceGenerationModel: 'bytedance/seedance-2.0'
     })
     expect(prompt.length).toBeLessThanOrEqual(ALEPH_PROMPT_MAX_CHARS)
     expect(prompt.indexOf('Filmmaker instruction')).toBeLessThan(prompt.indexOf('Keep original camera'))
     expect(prompt).toMatch(/clearly visible change/i)
     expect(prompt).toMatch(/reference image as the target look/i)
+    expect(prompt).toMatch(/Seedance 2\.0/)
+    expect(prompt).toMatch(/lighting, color grade/)
   })
 
   it('ignores voice-only categories for visual instructions', () => {

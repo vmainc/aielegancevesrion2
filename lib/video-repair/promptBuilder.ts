@@ -1,4 +1,5 @@
 import { repairCategoryById, visualRepairCategories, type RepairCategoryId } from './categories'
+import { sourceLookMatchPromptLine } from './sourceModel'
 import type { RepairMode, VideoRepairPromptContext } from './types'
 
 /** Runway Aleph / OpenRouter promptText hard limit. */
@@ -116,13 +117,15 @@ export function buildVideoRepairPrompt (
   const refNote = ctx.hasReferenceFrame
     ? 'Use the reference image as the target look (eye color/size, identity, proportions).'
     : ''
+  const sourceLook = sourceLookMatchPromptLine(ctx.sourceGenerationModel || '')
   const preservation = mode === 'reimagine' ? PRESERVATION_CAMERA : PRESERVATION_STRICT
 
-  // Priority order: instruction first, then guidance, then optional context.
+  // Priority order: instruction first, then look-match / guidance, then optional context.
   return packPrompt(
     [
       intent,
       priority,
+      sourceLook,
       refNote,
       MODE_INSTRUCTIONS[mode],
       characterBlock(ctx, compact),

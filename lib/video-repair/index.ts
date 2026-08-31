@@ -1,6 +1,7 @@
 export * from './categories'
 export * from './types'
 export * from './promptBuilder'
+export * from './sourceModel'
 export * from './routing'
 export * from './versions'
 export * from './limits'
