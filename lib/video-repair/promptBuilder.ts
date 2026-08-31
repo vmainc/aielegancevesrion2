@@ -1,20 +1,24 @@
 import { repairCategoryById, visualRepairCategories, type RepairCategoryId } from './categories'
 import type { RepairMode, VideoRepairPromptContext } from './types'
 
-const PRESERVATION_BLOCK = [
-  'Preserve the original camera movement, framing, actor motion, facial performance, timing, environment, lighting, clothing and composition.',
-  'Correct only the identified continuity problem.',
-  'Do not redesign the shot.',
-  'Do not change blocking, lens, or edit timing.'
+const PRESERVATION_CAMERA = [
+  'Keep the original camera movement, framing, blocking, lens, timing, and edit points.',
+  'Do not redesign the shot or invent a new scene.'
+].join(' ')
+
+const PRESERVATION_STRICT = [
+  PRESERVATION_CAMERA,
+  'Preserve actor motion, facial performance, environment, lighting, clothing and composition except where the filmmaker instruction requires a change.',
+  'Correct only the identified continuity problem.'
 ].join(' ')
 
 const MODE_INSTRUCTIONS: Record<RepairMode, string> = {
   preserve:
     'Make the smallest possible visual correction. Stay extremely close to the source footage. If anything is ambiguous, keep the original.',
   balanced:
-    'Correct the identified continuity problem while leaving everything else unchanged.',
+    'Apply a clear, visible correction to the identified problem while leaving everything else unchanged.',
   reimagine:
-    'You may restyle or more substantially correct the identified problem, but keep camera movement, framing, actor motion and timing.'
+    'Apply a strong, clearly visible correction to the identified problem. The filmmaker instruction takes priority over matching the source for that problem. Keep camera movement, framing, and timing.'
 }
 
 function joinNonEmpty (parts: Array<string | undefined | null>, sep = '\n\n'): string {
@@ -79,17 +83,33 @@ function userIntent (description: string): string {
 
 /**
  * Server-side repair instruction. Combines categories, user text, reference,
- * character/scene context, and strong preservation language.
+ * character/scene context, and mode-appropriate preservation language.
  */
 export function buildVideoRepairPrompt (ctx: VideoRepairPromptContext): string {
   const visual = visualRepairCategories(ctx.categories)
+  const mode = ctx.repairMode
+  const preservation = mode === 'reimagine' ? PRESERVATION_CAMERA : PRESERVATION_STRICT
+  const intent = userIntent(ctx.userDescription)
+  const priority =
+    mode === 'reimagine'
+      ? 'Priority: the filmmaker instruction must produce a clearly visible change for the named problem. Do not return an unchanged copy of the source.'
+      : mode === 'balanced'
+        ? 'Priority: the correction must be noticeable on the named problem while preserving the rest of the shot.'
+        : ''
+  const refNote = ctx.hasReferenceFrame
+    ? 'Use the supplied reference image as the target look for the correction (especially identity, eye color/size, and facial proportions).'
+    : ''
+
+  // Put filmmaker intent early so models do not over-weight preservation boilerplate.
   const prompt = joinNonEmpty([
-    PRESERVATION_BLOCK,
-    MODE_INSTRUCTIONS[ctx.repairMode],
+    intent,
+    priority,
+    refNote,
+    MODE_INSTRUCTIONS[mode],
     characterBlock(ctx),
     categoryInstructions(visual),
     sceneBlock(ctx),
-    userIntent(ctx.userDescription)
+    preservation
   ])
   return prompt.slice(0, 8000)
 }

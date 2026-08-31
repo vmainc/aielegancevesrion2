@@ -14,7 +14,7 @@ describe('buildVideoRepairPrompt', () => {
       sceneHeading: 'INT. KITCHEN - DAY',
       shotTitle: 'Close-up on Mara'
     })
-    expect(prompt).toMatch(/Preserve the original camera movement/i)
+    expect(prompt).toMatch(/Keep the original camera movement/i)
     expect(prompt).toMatch(/Do not redesign the shot/i)
     expect(prompt).toMatch(/facial proportions and eye size/i)
     expect(prompt).toMatch(/skin tone/i)
@@ -25,6 +25,20 @@ describe('buildVideoRepairPrompt', () => {
     expect(prompt).toMatch(/smallest possible visual correction/i)
   })
 
+  it('puts filmmaker intent first and strengthens reimagine', () => {
+    const prompt = buildVideoRepairPrompt({
+      categories: ['face_eyes'],
+      userDescription: "Macklin's eyes must be dark brown and smaller.",
+      repairMode: 'reimagine',
+      hasReferenceFrame: true,
+      characterName: 'Macklin'
+    })
+    expect(prompt.indexOf('Filmmaker instruction')).toBeLessThan(prompt.indexOf('Keep the original camera'))
+    expect(prompt).toMatch(/clearly visible change/i)
+    expect(prompt).toMatch(/reference image as the target look/i)
+    expect(prompt).not.toMatch(/Preserve actor motion, facial performance/i)
+  })
+
   it('ignores voice-only categories for visual instructions', () => {
     const prompt = buildVideoRepairPrompt({
       categories: ['voice'],
@@ -32,7 +46,7 @@ describe('buildVideoRepairPrompt', () => {
       repairMode: 'balanced',
       hasReferenceFrame: false
     })
-    expect(prompt).toMatch(/Preserve the original camera movement/i)
+    expect(prompt).toMatch(/Keep the original camera movement/i)
     expect(prompt).not.toMatch(/voice identity/i)
   })
 })
