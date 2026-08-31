@@ -176,7 +176,16 @@
           Voice repair is handled separately from visual repair.
         </p>
         <div>
-          <label for="repair-desc" class="block text-sm font-medium text-gray-700 mb-2">Describe what needs fixing</label>
+          <div class="flex justify-between items-center gap-2 mb-2">
+            <label for="repair-desc" class="text-sm font-medium text-gray-700">Describe what needs fixing</label>
+            <PromptEnhanceButton
+              v-model="description"
+              context="video_repair"
+              field-hint="Fix Shot repair instruction"
+              :project-id="projectId || undefined"
+              :disabled="!isAuthenticated"
+            />
+          </div>
           <textarea
             id="repair-desc"
             v-model="description"
@@ -184,6 +193,9 @@
             :placeholder="exampleDesc"
             class="w-full px-3 py-2 rounded-lg bg-charcoal border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
           />
+          <p class="mt-1.5 text-[11px] text-gray-500">
+            Tip: write the problem in plain language, then Enhance to sharpen it for the repair model.
+          </p>
         </div>
       </section>
 
@@ -211,47 +223,29 @@
         </button>
       </section>
 
-      <section class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4">
-        <h2 class="text-[11px] font-semibold uppercase tracking-cinema text-gray-500">Repair strength</h2>
-        <div class="grid sm:grid-cols-3 gap-3">
+      <details class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:px-6 sm:py-4">
+        <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 cursor-pointer">
+          Advanced · Repair engine
+        </summary>
+        <div class="mt-3 flex flex-wrap gap-2">
           <button
-            v-for="mode in modes"
-            :key="mode.id"
+            v-for="eng in engines"
+            :key="eng.id"
             type="button"
-            class="text-left rounded-xl border px-4 py-3 transition-colors"
-            :class="repairMode === mode.id
-              ? 'border-primary bg-primary/10'
-              : 'border-gray-200 hover:border-primary/40'"
-            @click="repairMode = mode.id"
+            class="px-3 py-1.5 text-xs font-semibold rounded-lg border"
+            :class="engine === eng.id
+              ? 'bg-primary text-gray-950 border-primary'
+              : 'border-gray-300 text-gray-700'"
+            :disabled="eng.id === 'luma' && !lumaConfigured"
+            @click="engine = eng.id"
           >
-            <p class="text-sm font-semibold text-gray-900 uppercase tracking-wide">{{ mode.label }}</p>
-            <p class="text-xs text-gray-500 mt-1">{{ mode.hint }}</p>
+            {{ eng.label }}
           </button>
         </div>
-        <details class="pt-2">
-          <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 cursor-pointer">
-            Advanced · Repair engine
-          </summary>
-          <div class="mt-3 flex flex-wrap gap-2">
-            <button
-              v-for="eng in engines"
-              :key="eng.id"
-              type="button"
-              class="px-3 py-1.5 text-xs font-semibold rounded-lg border"
-              :class="engine === eng.id
-                ? 'bg-primary text-gray-950 border-primary'
-                : 'border-gray-300 text-gray-700'"
-              :disabled="eng.id === 'luma' && !lumaConfigured"
-              @click="engine = eng.id"
-            >
-              {{ eng.label }}
-            </button>
-          </div>
-          <p v-if="!lumaConfigured" class="mt-2 text-[11px] text-gray-500">
-            Luma Modify appears when LUMA_API_KEY is set on the server.
-          </p>
-        </details>
-      </section>
+        <p v-if="!lumaConfigured" class="mt-2 text-[11px] text-gray-500">
+          Luma Modify appears when LUMA_API_KEY is set on the server.
+        </p>
+      </details>
 
       <section class="rounded-xl border border-dashed border-gray-300 bg-gray-50/40 p-5 sm:p-6 space-y-3">
         <div class="flex items-center justify-between gap-3">
@@ -338,7 +332,6 @@ import { appendPlaybackAccessToken, projectAssetPlaybackSrc } from '~/lib/projec
 import {
   REPAIR_CATEGORIES,
   REPAIR_ENGINE_LABELS,
-  REPAIR_MODE_LABELS,
   defaultRepairDescriptionExample,
   formatSourceGenerationModelLabel,
   formatTimecode,
@@ -369,7 +362,6 @@ const shotId = computed(() => String(route.query.shotId || '').trim())
 const queryAssetId = computed(() => String(route.query.assetId || '').trim())
 
 const categories = REPAIR_CATEGORIES
-const modes = (Object.keys(REPAIR_MODE_LABELS) as RepairMode[]).map(id => ({ id, ...REPAIR_MODE_LABELS[id] }))
 const engines = (Object.keys(REPAIR_ENGINE_LABELS) as RepairEngineChoice[]).map(id => ({
   id,
   label: REPAIR_ENGINE_LABELS[id]
@@ -378,6 +370,7 @@ const exampleDesc = defaultRepairDescriptionExample()
 
 const selected = ref<RepairCategoryId[]>([])
 const description = ref('')
+/** Strength UI removed — balanced is the default; the enhanced prompt carries intent. */
 const repairMode = ref<RepairMode>('balanced')
 const engine = ref<RepairEngineChoice>('auto')
 const lumaConfigured = ref(false)

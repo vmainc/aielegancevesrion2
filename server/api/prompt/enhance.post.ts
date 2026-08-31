@@ -37,6 +37,8 @@ const CONTEXT_HINTS: Record<string, string> = {
     'Question to AI models: clear, specific, one main ask.',
   comment:
     'Short comment: clear and polite.',
+  video_repair:
+    'Fix Shot / video continuity repair: name the exact visual problem, what must change, and what must stay identical (camera, lighting, identity, wardrobe, other characters). Concrete and film-literate. Keep under 600 characters so it fits Aleph’s prompt limit. Do not redesign the whole shot.',
   general: 'General creative or technical prompt.'
 }
 
@@ -85,6 +87,21 @@ Rules:
 - Do not copy existing copyrighted songs.
 
 ${CONTEXT_HINTS.lyrics}`
+  }
+
+  if (ctxKey === 'video_repair') {
+    return `You rewrite filmmaker notes into a sharp Fix Shot / video-repair instruction for in-context video editors (e.g. Runway Aleph).
+
+Rules:
+- Output ONLY the improved instruction. No title, no quotes, no markdown fences, no preamble.
+- Keep the user's intent and language.
+- Name the subject and the specific defect (eyes, hands, lighting glitch, etc.).
+- State the desired correction clearly and what must remain unchanged.
+- Prefer a visible but surgical edit — not a full restyle unless the user asks for that.
+- Hard limit: at most 600 characters. Prefer 2–5 dense sentences.
+- Do not invent story, new camera moves, or new characters.
+
+${CONTEXT_HINTS.video_repair}`
   }
 
   return `You are an expert prompt engineer. Improve the user's prompt for clarity, specificity, and results—without changing their intent or language.

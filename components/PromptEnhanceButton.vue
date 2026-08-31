@@ -66,15 +66,19 @@ const props = withDefaults(
       | 'story'
       | 'shot_image'
       | 'shot_video'
+      | 'video_repair'
       | 'question'
       | 'comment'
       | 'general'
     fieldHint?: string
+    /** Optional project id when not available from the route (e.g. Fix Shot query). */
+    projectId?: string
     disabled?: boolean
   }>(),
   {
     context: 'general',
     fieldHint: undefined,
+    projectId: undefined,
     disabled: false
   }
 )
@@ -93,18 +97,22 @@ async function run () {
   if (!trimmed.value || loading.value) return
   loading.value = true
   try {
+    const fromParams =
+      typeof route.params.projectId === 'string'
+        ? route.params.projectId
+        : Array.isArray(route.params.projectId)
+          ? route.params.projectId[0]
+          : ''
+    const fromQuery = typeof route.query.projectId === 'string' ? route.query.projectId : ''
+    const projectId = (props.projectId || fromParams || fromQuery || '').trim() || undefined
+
     const res = await $fetch<{ enhanced: string }>('/api/prompt/enhance', {
       method: 'POST',
       body: {
         prompt: props.modelValue,
         context: props.context,
         fieldHint: props.fieldHint,
-        projectId:
-          typeof route.params.projectId === 'string'
-            ? route.params.projectId
-            : Array.isArray(route.params.projectId)
-              ? route.params.projectId[0]
-              : undefined
+        projectId
       }
     })
     emit('update:modelValue', res.enhanced)
