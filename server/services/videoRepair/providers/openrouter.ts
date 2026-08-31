@@ -1,5 +1,5 @@
 import { createError } from 'h3'
-import { repairModePromptAddon } from '~/lib/video-repair/promptBuilder'
+import { ALEPH_PROMPT_MAX_CHARS, repairModePromptAddon } from '~/lib/video-repair/promptBuilder'
 import type { RepairMode } from '~/lib/video-repair/types'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import { assertHttpsProviderMediaUrl } from '~/server/utils/video-repair-public-url'
@@ -89,9 +89,10 @@ function mapStatus (raw: string): VideoRepairProviderStartResult['status'] {
 }
 
 function promptForMode (prompt: string, mode: RepairMode): string {
+  // Aleph promptText max is 1000 chars — never send more.
   const addon = repairModePromptAddon(mode)
-  if (prompt.includes(addon)) return prompt.slice(0, 8000)
-  return `${prompt}\n\n${addon}`.slice(0, 8000)
+  const base = prompt.includes(addon) ? prompt : `${prompt}\n${addon}`
+  return base.trim().slice(0, ALEPH_PROMPT_MAX_CHARS)
 }
 
 function videoContentUrl (jobId: string, unsigned?: string[]): string {

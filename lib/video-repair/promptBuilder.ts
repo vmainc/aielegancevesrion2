@@ -1,27 +1,23 @@
 import { repairCategoryById, visualRepairCategories, type RepairCategoryId } from './categories'
 import type { RepairMode, VideoRepairPromptContext } from './types'
 
-const PRESERVATION_CAMERA = [
-  'Keep the original camera movement, framing, blocking, lens, timing, and edit points.',
-  'Do not redesign the shot or invent a new scene.'
-].join(' ')
+/** Runway Aleph / OpenRouter promptText hard limit. */
+export const ALEPH_PROMPT_MAX_CHARS = 1000
 
-const PRESERVATION_STRICT = [
-  PRESERVATION_CAMERA,
-  'Preserve actor motion, facial performance, environment, lighting, clothing and composition except where the filmmaker instruction requires a change.',
-  'Correct only the identified continuity problem.'
-].join(' ')
+const PRESERVATION_CAMERA =
+  'Keep original camera, framing, blocking, timing. Do not redesign the shot.'
+
+const PRESERVATION_STRICT =
+  `${PRESERVATION_CAMERA} Preserve motion, lighting, clothing, and composition except where the instruction requires a change.`
 
 const MODE_INSTRUCTIONS: Record<RepairMode, string> = {
-  preserve:
-    'Make the smallest possible visual correction. Stay extremely close to the source footage. If anything is ambiguous, keep the original.',
-  balanced:
-    'Apply a clear, visible correction to the identified problem while leaving everything else unchanged.',
+  preserve: 'Smallest possible correction; if ambiguous, keep the original.',
+  balanced: 'Clear visible correction to the named problem; leave everything else unchanged.',
   reimagine:
-    'Apply a strong, clearly visible correction to the identified problem. The filmmaker instruction takes priority over matching the source for that problem. Keep camera movement, framing, and timing.'
+    'Strong visible correction to the named problem; instruction overrides matching the source for that problem. Keep camera and timing.'
 }
 
-function joinNonEmpty (parts: Array<string | undefined | null>, sep = '\n\n'): string {
+function joinNonEmpty (parts: Array<string | undefined | null>, sep = '\n'): string {
   return parts.map(p => (p || '').trim()).filter(Boolean).join(sep)
 }
 
@@ -30,29 +26,30 @@ function categoryInstructions (ids: RepairCategoryId[]): string {
   if (!visual.length) return ''
   const lines = visual.map(id => repairCategoryById(id).promptFocus).filter(Boolean)
   if (!lines.length) return ''
-  return `Specifically: ${lines.join(' ')}`
+  return `Focus: ${lines.join(' ')}`
 }
 
-function characterBlock (ctx: VideoRepairPromptContext): string {
+function characterBlock (ctx: VideoRepairPromptContext, compact: boolean): string {
   const name = (ctx.characterName || '').trim()
   const appearance = (ctx.characterAppearance || '').trim()
   const notes = (ctx.characterNotes || '').trim()
   if (!name && !appearance && !notes) {
-    if (ctx.hasReferenceFrame) {
-      return 'Maintain identity and appearance based on the supplied reference image throughout the shot.'
-    }
-    return ''
+    return ctx.hasReferenceFrame
+      ? 'Match identity to the reference image.'
+      : ''
   }
   const bits: string[] = []
   if (name) {
     bits.push(
-      `Maintain ${name}'s identity and appearance${ctx.hasReferenceFrame ? ' based on the supplied reference image' : ''} throughout the shot.`
+      ctx.hasReferenceFrame
+        ? `Keep ${name}'s identity; match the reference image.`
+        : `Keep ${name}'s identity throughout.`
     )
   } else if (ctx.hasReferenceFrame) {
-    bits.push('Maintain identity and appearance based on the supplied reference image throughout the shot.')
+    bits.push('Match identity to the reference image.')
   }
-  if (appearance) bits.push(`Locked appearance: ${appearance}`)
-  if (notes) bits.push(`Visual notes: ${notes}`)
+  if (!compact && appearance) bits.push(`Appearance: ${appearance}`)
+  if (!compact && notes) bits.push(`Notes: ${notes}`)
   return bits.join(' ')
 }
 
@@ -72,46 +69,69 @@ function sceneBlock (ctx: VideoRepairPromptContext): string {
   }
   if (shotDesc) parts.push(shotDesc)
   if (!parts.length) return ''
-  return `Production context (do not invent new story): ${parts.join(' ')}`
+  return `Context: ${parts.join(' ')}`
 }
 
-function userIntent (description: string): string {
-  const d = description.trim()
-  if (!d) return ''
-  return `Filmmaker instruction: ${d}`
+function packPrompt (parts: string[], maxChars: number): string {
+  let out = ''
+  for (const part of parts) {
+    const p = part.trim()
+    if (!p) continue
+    const next = out ? `${out}\n${p}` : p
+    if (next.length <= maxChars) {
+      out = next
+      continue
+    }
+    if (!out) {
+      // First (filmmaker) chunk must fit — hard truncate.
+      return p.slice(0, maxChars)
+    }
+    // Keep what we have; skip lower-priority parts.
+    break
+  }
+  return out.slice(0, maxChars)
 }
 
 /**
  * Server-side repair instruction. Combines categories, user text, reference,
  * character/scene context, and mode-appropriate preservation language.
+ * Defaults to Aleph's 1000-char promptText limit.
  */
-export function buildVideoRepairPrompt (ctx: VideoRepairPromptContext): string {
+export function buildVideoRepairPrompt (
+  ctx: VideoRepairPromptContext,
+  opts?: { maxChars?: number }
+): string {
+  const maxChars = Math.max(200, Math.floor(opts?.maxChars ?? ALEPH_PROMPT_MAX_CHARS))
+  const compact = maxChars <= ALEPH_PROMPT_MAX_CHARS
   const visual = visualRepairCategories(ctx.categories)
   const mode = ctx.repairMode
-  const preservation = mode === 'reimagine' ? PRESERVATION_CAMERA : PRESERVATION_STRICT
-  const intent = userIntent(ctx.userDescription)
+  const user = (ctx.userDescription || '').trim()
+  const intent = user ? `Filmmaker instruction: ${user}` : ''
   const priority =
     mode === 'reimagine'
-      ? 'Priority: the filmmaker instruction must produce a clearly visible change for the named problem. Do not return an unchanged copy of the source.'
+      ? 'Make a clearly visible change for the named problem; do not return an unchanged copy.'
       : mode === 'balanced'
-        ? 'Priority: the correction must be noticeable on the named problem while preserving the rest of the shot.'
+        ? 'The named correction must be noticeable.'
         : ''
   const refNote = ctx.hasReferenceFrame
-    ? 'Use the supplied reference image as the target look for the correction (especially identity, eye color/size, and facial proportions).'
+    ? 'Use the reference image as the target look (eye color/size, identity, proportions).'
     : ''
+  const preservation = mode === 'reimagine' ? PRESERVATION_CAMERA : PRESERVATION_STRICT
 
-  // Put filmmaker intent early so models do not over-weight preservation boilerplate.
-  const prompt = joinNonEmpty([
-    intent,
-    priority,
-    refNote,
-    MODE_INSTRUCTIONS[mode],
-    characterBlock(ctx),
-    categoryInstructions(visual),
-    sceneBlock(ctx),
-    preservation
-  ])
-  return prompt.slice(0, 8000)
+  // Priority order: instruction first, then guidance, then optional context.
+  return packPrompt(
+    [
+      intent,
+      priority,
+      refNote,
+      MODE_INSTRUCTIONS[mode],
+      characterBlock(ctx, compact),
+      categoryInstructions(visual),
+      compact ? '' : sceneBlock(ctx),
+      preservation
+    ],
+    maxChars
+  )
 }
 
 /** Extra prompt language for providers that have no native preserve/flex/reimagine modes. */
