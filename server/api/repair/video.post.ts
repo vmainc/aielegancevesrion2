@@ -161,44 +161,34 @@ export default defineEventHandler(async (event) => {
     ? `${publicBase}?kind=reference`
     : null
 
+  if (!publicSource) {
+    throw createError({
+      statusCode: 400,
+      message:
+        'Repair needs a public HTTPS source URL. Set VIDEO_REPAIR_PUBLIC_BASE_URL=https://aifilmstud.io in the server .env (OpenRouter Aleph rejects data URIs and http://).'
+    })
+  }
+
   const referenceFrames: VideoRepairReferenceFrame[] = []
   if (referenceImageUrl) {
     referenceFrames.push({ url: referenceImageUrl, source: 'character' })
   } else if (referenceMediaId) {
-    // Prefer inline data for OpenRouter; Luma still uses publicRef via publicReferenceImageUrl.
-    let refUrl: string
-    try {
-      refUrl = await imageDataUriFromMedia(referenceMediaId)
-    } catch {
-      refUrl = publicRef || ''
-    }
-    if (refUrl) {
-      referenceFrames.push({
-        url: refUrl,
-        timestampSeconds: Number.isFinite(Number(body.referenceTimestampSeconds))
-          ? Number(body.referenceTimestampSeconds)
-          : undefined,
-        source: 'extracted_frame'
-      })
-    }
-  }
-
-  let sourceVideoUrl: string
-  if (routing.provider === 'luma') {
-    if (!publicSource) {
-      throw createError({
-        statusCode: 400,
-        message:
-          'Luma Modify needs a publicly reachable source URL. Use Auto / Runway Aleph locally, or set VIDEO_REPAIR_PUBLIC_BASE_URL to a tunnel.'
-      })
-    }
-    sourceVideoUrl = publicSource
-  } else {
-    sourceVideoUrl = await sourceUrlForOpenRouter({
-      publicUrl: publicSource,
-      mediaId: sourceMediaId
+    referenceFrames.push({
+      url: publicRef || (await imageDataUriFromMedia(referenceMediaId)),
+      timestampSeconds: Number.isFinite(Number(body.referenceTimestampSeconds))
+        ? Number(body.referenceTimestampSeconds)
+        : undefined,
+      source: 'extracted_frame'
     })
   }
+
+  const sourceVideoUrl =
+    routing.provider === 'luma'
+      ? publicSource
+      : await sourceUrlForOpenRouter({
+          publicUrl: publicSource,
+          mediaId: sourceMediaId
+        })
 
   const jobId = newVideoRepairJobId()
   const now = new Date().toISOString()

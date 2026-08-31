@@ -103,33 +103,28 @@ export async function stageRemoteVideoUrl (url: string): Promise<{ mediaId: stri
 }
 
 /**
- * Prefer an inline data URI for small clips (OpenRouter does not need to fetch our host).
- * Fall back to a public HTTPS URL for larger files.
+ * OpenRouter Aleph only accepts HTTPS video URLs (not data: URIs).
+ * The public token URL must already be persisted before the provider fetches it.
  */
 export async function sourceUrlForOpenRouter (opts: {
   publicUrl: string | null
   mediaId?: string
-  maxDataUriBytes?: number
 }): Promise<string> {
-  const id = opts.mediaId
-  const cap = opts.maxDataUriBytes ?? 12_000_000
-  if (id) {
-    const staged = await readVideoRepairMedia(id)
+  const pub = (opts.publicUrl || '').trim()
+  if (/^https:\/\//i.test(pub)) return pub
+  if (/^http:\/\//i.test(pub)) return `https://${pub.slice('http://'.length)}`
+
+  // Confirm media exists so the error is about reachability, not a missing upload.
+  if (opts.mediaId) {
+    const staged = await readVideoRepairMedia(opts.mediaId)
     if (!staged) {
       throw createError({ statusCode: 404, message: 'Source video expired. Upload it again.' })
     }
-    if (staged.data.length <= cap) {
-      return bufferToDataUri(staged.data, staged.mime)
-    }
-  }
-  if (opts.publicUrl) return opts.publicUrl
-  if (!id) {
-    throw createError({ statusCode: 400, message: 'A source video is required.' })
   }
   throw createError({
     statusCode: 400,
     message:
-      'This clip is too large to send without a public URL. Deploy Fix Shot on a reachable host, or set VIDEO_REPAIR_PUBLIC_BASE_URL to a tunnel.'
+      'OpenRouter Aleph needs a public HTTPS source URL. Set VIDEO_REPAIR_PUBLIC_BASE_URL=https://aifilmstud.io in the server .env (data URIs are not allowed).'
   })
 }
 

@@ -3,6 +3,7 @@ import { repairModePromptAddon } from '~/lib/video-repair/promptBuilder'
 import type { RepairMode } from '~/lib/video-repair/types'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import { fetchImageAsDataUrlForVideo } from '~/server/utils/openrouter-video-job'
+import { assertHttpsProviderMediaUrl } from '~/server/utils/video-repair-public-url'
 import type {
   VideoRepairProviderAdapter,
   VideoRepairProviderPollResult,
@@ -99,12 +100,11 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
         throw createError({ statusCode: 400, message: 'A repair instruction is required.' })
       }
 
-      // Prefer the caller-resolved URL (often a data URI for small clips). Do not
-      // override with publicSourceVideoUrl — OpenRouter may fail fetching our host.
-      const sourceUrl = (input.sourceVideoUrl || input.publicSourceVideoUrl || '').trim()
-      if (!sourceUrl) {
-        throw createError({ statusCode: 400, message: 'A source video is required.' })
-      }
+      // Aleph rejects data: and http: for video_url — HTTPS only.
+      const sourceUrl = assertHttpsProviderMediaUrl(
+        input.publicSourceVideoUrl || input.sourceVideoUrl || '',
+        'Source video'
+      )
 
       const inputReferences: Array<Record<string, unknown>> = [
         {
@@ -113,12 +113,16 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
         }
       ]
 
+      // Prefer HTTPS public reference; fall back to data URI only for images.
       const ref = input.referenceFrames[0]
-      const imageUrl = (ref?.url || input.publicReferenceImageUrl || '').trim()
-      if (imageUrl) {
-        let url = imageUrl
-        if (!/^https?:\/\//i.test(imageUrl) || imageUrl.startsWith('data:')) {
-          url = await fetchImageAsDataUrlForVideo(imageUrl, 6_000_000)
+      const publicRef = (input.publicReferenceImageUrl || '').trim()
+      const refCandidate = /^https:\/\//i.test(publicRef)
+        ? publicRef
+        : (ref?.url || publicRef || '').trim()
+      if (refCandidate) {
+        let url = refCandidate
+        if (url.startsWith('data:') || !/^https:\/\//i.test(url)) {
+          url = await fetchImageAsDataUrlForVideo(url, 6_000_000)
         }
         inputReferences.push({
           type: 'image_url',

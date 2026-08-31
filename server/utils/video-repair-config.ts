@@ -59,10 +59,14 @@ export function getLumaModifyModel (): string {
 
 /** Public origin providers can fetch tokenized media from. */
 export function getVideoRepairPublicBaseUrl (): string {
-  return envStr(
+  // Prefer an explicit HTTPS origin. OPENROUTER_REFERER is a reasonable fallback on prod.
+  const raw = envStr(
     'VIDEO_REPAIR_PUBLIC_BASE_URL',
-    envStr('OPENROUTER_REFERER', '')
+    envStr('OPENROUTER_REFERER', envStr('NUXT_PUBLIC_SITE_URL', ''))
   ).replace(/\/+$/, '')
+  if (!raw) return ''
+  if (/^http:\/\//i.test(raw)) return `https://${raw.slice('http://'.length)}`
+  return raw
 }
 
 /** Aleph list price as of docs — used only for internal cost estimates. */
