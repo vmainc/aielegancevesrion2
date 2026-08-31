@@ -106,6 +106,10 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
         'Source video'
       )
 
+      // Aleph requires the source as input_references[video_url] only.
+      // Do NOT put images in input_references — OpenRouter maps those to Runway
+      // `references`, which Aleph rejects ("Unrecognized key: references").
+      // Reference images go through allowed passthrough: provider.options.runway.keyframes.
       const inputReferences: Array<Record<string, unknown>> = [
         {
           type: 'video_url',
@@ -113,31 +117,21 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
         }
       ]
 
-      // Prefer HTTPS public reference; fall back to data URI only for images.
-      const ref = input.referenceFrames[0]
-      const publicRef = (input.publicReferenceImageUrl || '').trim()
-      const refCandidate = /^https:\/\//i.test(publicRef)
-        ? publicRef
-        : (ref?.url || publicRef || '').trim()
-      if (refCandidate) {
-        let url = refCandidate
-        if (url.startsWith('data:') || !/^https:\/\//i.test(url)) {
-          url = await fetchImageAsDataUrlForVideo(url, 6_000_000)
-        }
-        inputReferences.push({
-          type: 'image_url',
-          image_url: { url }
-        })
-      }
-
-      // Aleph (and other edit models) take length from the source clip.
-      // Do not send `duration` — Aleph lists supported_durations: null and rejects it.
       const body: Record<string, unknown> = {
         model,
         prompt,
         input_references: inputReferences
       }
       if (input.aspectRatio) body.aspect_ratio = input.aspectRatio
+
+      const keyframes = await buildAlephKeyframes(input)
+      if (keyframes.length) {
+        body.provider = {
+          options: {
+            runway: { keyframes }
+          }
+        }
+      }
 
       const created = await fetchWithTimeout(
         'https://openrouter.ai/api/v1/videos',
