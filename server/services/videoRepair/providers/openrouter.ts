@@ -1,4 +1,5 @@
 import { createError } from 'h3'
+import { buildAlephKeyframeEntries } from '~/lib/video-repair/alephKeyframes'
 import { ALEPH_PROMPT_MAX_CHARS, repairModePromptAddon } from '~/lib/video-repair/promptBuilder'
 import type { RepairMode } from '~/lib/video-repair/types'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
@@ -11,9 +12,9 @@ import type {
 } from '../types'
 
 /** Aleph image guidance via Runway keyframes passthrough (HTTPS URIs only). */
-async function buildAlephKeyframes (
+function buildAlephKeyframes (
   input: VideoRepairProviderStartInput
-): Promise<Array<{ uri: string; seconds: number }>> {
+): Array<{ uri: string; seconds: number }> {
   const publicRef = (input.publicReferenceImageUrl || '').trim()
   const frame = input.referenceFrames[0]
   const candidate = /^https:\/\//i.test(publicRef)
@@ -24,11 +25,8 @@ async function buildAlephKeyframes (
     return []
   }
   const uri = assertHttpsProviderMediaUrl(candidate, 'Reference image')
-  const seconds =
-    typeof frame?.timestampSeconds === 'number' && Number.isFinite(frame.timestampSeconds)
-      ? Math.max(0, frame.timestampSeconds)
-      : 0
-  return [{ uri, seconds }]
+  // Pin the same look at start / mid / end so the correction does not fade mid-clip.
+  return buildAlephKeyframeEntries(uri, input.durationSeconds)
 }
 
 type VideoJobResponse = {
@@ -145,7 +143,7 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
       }
       if (input.aspectRatio) body.aspect_ratio = input.aspectRatio
 
-      const keyframes = await buildAlephKeyframes(input)
+      const keyframes = buildAlephKeyframes(input)
       if (keyframes.length) {
         body.provider = {
           options: {

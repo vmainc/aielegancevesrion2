@@ -65,6 +65,7 @@ describe('buildVideoRepairPrompt', () => {
     expect(prompt.indexOf('Filmmaker instruction')).toBeLessThan(prompt.indexOf('Keep original camera'))
     expect(prompt).toMatch(/clearly visible change/i)
     expect(prompt).toMatch(/reference image as the target look/i)
+    expect(prompt).toMatch(/entire clip|do not revert/i)
     expect(prompt).toMatch(/Seedance 2\.0/)
     expect(prompt).toMatch(/lighting, color grade/)
   })

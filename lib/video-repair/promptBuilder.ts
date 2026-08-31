@@ -115,7 +115,7 @@ export function buildVideoRepairPrompt (
         ? 'The named correction must be noticeable.'
         : ''
   const refNote = ctx.hasReferenceFrame
-    ? 'Use the reference image as the target look (eye color/size, identity, proportions).'
+    ? 'Use the reference image as the target look (eye color/size, identity, proportions). Hold that corrected look for the entire clip — do not revert mid-shot.'
     : ''
   const sourceLook = sourceLookMatchPromptLine(ctx.sourceGenerationModel || '')
   const preservation = mode === 'reimagine' ? PRESERVATION_CAMERA : PRESERVATION_STRICT
