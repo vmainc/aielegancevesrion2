@@ -423,7 +423,7 @@ const jobStatusLabel = computed(() => {
   return 'Submitting repair job…'
 })
 
-const { refs: characterRefs, load: loadCharacters } = useProjectCharacterRefs(projectId)
+const { refs: characterRefs, reload: loadCharacters } = useProjectCharacterRefs(projectId)
 
 function playbackSrc (url: string): string {
   return appendPlaybackAccessToken(url, getAuthToken())
