@@ -32,7 +32,8 @@ export const REPAIR_CATEGORIES: RepairCategoryDef[] = [
     id: 'face_eyes',
     label: 'Face / Eyes',
     kind: 'visual',
-    promptFocus: 'Correct facial proportions and eye size/shape. Prevent facial identity from drifting.'
+    promptFocus:
+      'Correct iris/eye color, eye size, and facial proportions. The named eye/face fix must be clearly visible in every frame.'
   },
   {
     id: 'character_consistency',

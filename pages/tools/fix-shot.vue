@@ -211,8 +211,18 @@
           <p class="text-sm text-gray-600">
             Reference locked
             <span v-if="referenceTimecode" class="font-mono text-primary">{{ referenceTimecode }}</span>
+            <span v-else class="text-primary"> (uploaded)</span>
           </p>
         </div>
+        <p
+          v-if="selected.includes('face_eyes')"
+          class="text-sm text-amber-100/90 bg-amber-950/40 border border-amber-800/50 rounded-lg px-3 py-2"
+        >
+          <strong class="text-amber-100">Face / Eyes tip:</strong>
+          Upload a close-up where the <em>correct</em> iris color is clearly visible.
+          A frame from this clip usually has the wrong eyes and will not help.
+          Headlamp glare can make light eyes look “correct” in stills — check the irises carefully.
+        </p>
         <button
           v-if="characterPortraitUrl"
           type="button"

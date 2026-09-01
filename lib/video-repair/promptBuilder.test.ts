@@ -42,14 +42,13 @@ describe('buildVideoRepairPrompt', () => {
       shotTitle: 'Close-up on Mara'
     })
     expect(prompt.length).toBeLessThanOrEqual(ALEPH_PROMPT_MAX_CHARS)
-    expect(prompt).toMatch(/Keep original camera/i)
-    expect(prompt).toMatch(/facial proportions and eye size/i)
+    expect(prompt).toMatch(/iris\/eye color|iris color/i)
     expect(prompt).toMatch(/skin tone/i)
     expect(prompt).toMatch(/the woman/i)
-    expect(prompt).toMatch(/reference image/i)
+    expect(prompt).toMatch(/reference/i)
     expect(prompt).toMatch(/Filmmaker instruction/i)
     // Face/eye categories auto-bump to reimagine for a visible correction.
-    expect(prompt).toMatch(/clearly visible change|Strong visible correction/i)
+    expect(prompt).toMatch(/obvious in every frame|Strong visible correction/i)
   })
 
   it('puts filmmaker intent first and strengthens reimagine', () => {
@@ -62,12 +61,11 @@ describe('buildVideoRepairPrompt', () => {
       sourceGenerationModel: 'bytedance/seedance-2.0'
     })
     expect(prompt.length).toBeLessThanOrEqual(ALEPH_PROMPT_MAX_CHARS)
-    expect(prompt.indexOf('Filmmaker instruction')).toBeLessThan(prompt.indexOf('Keep original camera'))
-    expect(prompt).toMatch(/clearly visible change/i)
-    expect(prompt).toMatch(/reference image as the target look/i)
-    expect(prompt).toMatch(/entire clip|do not revert/i)
+    expect(prompt.indexOf('Filmmaker instruction')).toBe(0)
+    expect(prompt).toMatch(/obvious in every frame|clearly visible change/i)
+    expect(prompt).toMatch(/iris color and eye size|correct iris color/i)
     expect(prompt).toMatch(/Seedance 2\.0/)
-    expect(prompt).toMatch(/lighting, color grade/)
+    expect(prompt).toMatch(/Exception: eye color/i)
   })
 
   it('ignores voice-only categories for visual instructions', () => {

@@ -154,6 +154,21 @@ export function createOpenRouterVideoRepairAdapter (apiKey: string): VideoRepair
           }
         }
       }
+      console.info(
+        '[video-repair:openrouter] start',
+        'model=',
+        model,
+        'mode=',
+        input.repairMode,
+        'duration=',
+        input.durationSeconds ?? 'n/a',
+        'durationTrusted=',
+        input.durationTrusted === true,
+        'keyframes=',
+        keyframes.map(k => k.seconds).join(',') || 'none',
+        'promptChars=',
+        prompt.length
+      )
 
       const created = await fetchWithTimeout(
         'https://openrouter.ai/api/v1/videos',

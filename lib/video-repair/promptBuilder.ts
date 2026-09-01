@@ -30,24 +30,38 @@ function categoryInstructions (ids: RepairCategoryId[]): string {
   return `Focus: ${lines.join(' ')}`
 }
 
+function isFaceEyesRepair (ctx: VideoRepairPromptContext): boolean {
+  return visualRepairCategories(ctx.categories).includes('face_eyes')
+}
+
 function characterBlock (ctx: VideoRepairPromptContext, compact: boolean): string {
   const name = (ctx.characterName || '').trim()
   const appearance = (ctx.characterAppearance || '').trim()
   const notes = (ctx.characterNotes || '').trim()
+  const faceEyes = isFaceEyesRepair(ctx)
   if (!name && !appearance && !notes) {
-    return ctx.hasReferenceFrame
-      ? 'Match identity to the reference image.'
-      : ''
+    if (!ctx.hasReferenceFrame) return ''
+    return faceEyes
+      ? 'From the reference, take only eye color/size (and any named face fix). Do not restyle the whole face from the reference.'
+      : 'Match identity to the reference image.'
   }
   const bits: string[] = []
   if (name) {
-    bits.push(
-      ctx.hasReferenceFrame
-        ? `Keep ${name}'s identity; match the reference image.`
-        : `Keep ${name}'s identity throughout.`
-    )
+    if (ctx.hasReferenceFrame && faceEyes) {
+      bits.push(
+        `Keep ${name}'s identity. Copy iris color and eye size from the reference; do not replace the whole face with the reference pose.`
+      )
+    } else if (ctx.hasReferenceFrame) {
+      bits.push(`Keep ${name}'s identity; match the reference image.`)
+    } else {
+      bits.push(`Keep ${name}'s identity throughout.`)
+    }
   } else if (ctx.hasReferenceFrame) {
-    bits.push('Match identity to the reference image.')
+    bits.push(
+      faceEyes
+        ? 'From the reference, take only eye color/size (and any named face fix). Do not restyle the whole face from the reference.'
+        : 'Match identity to the reference image.'
+    )
   }
   if (!compact && appearance) bits.push(`Appearance: ${appearance}`)
   if (!compact && notes) bits.push(`Notes: ${notes}`)
@@ -108,16 +122,28 @@ export function buildVideoRepairPrompt (
   const user = (ctx.userDescription || '').trim()
   const mode = resolveEffectiveRepairMode(ctx.repairMode, visual, user)
   const intent = user ? `Filmmaker instruction: ${user}` : ''
+  const faceEyes = visual.includes('face_eyes')
   const priority =
     mode === 'reimagine'
-      ? 'Make a clearly visible change for the named problem; do not return an unchanged copy.'
+      ? faceEyes
+        ? 'Eyes/face change must be obvious in every frame (iris color and size). Do not return an unchanged copy.'
+        : 'Make a clearly visible change for the named problem; do not return an unchanged copy.'
       : mode === 'balanced'
         ? 'The named correction must be noticeable.'
         : ''
   const refNote = ctx.hasReferenceFrame
-    ? 'Use the reference image as the target look (eye color/size, identity, proportions). Hold that corrected look for the entire clip — do not revert mid-shot.'
+    ? faceEyes
+      ? 'Reference image defines the correct iris color and eye size only. Apply that look for the entire clip; ignore headlamp catchlights that make irises look lighter.'
+      : 'Use the reference image as the target look (eye color/size, identity, proportions). Hold that corrected look for the entire clip — do not revert mid-shot.'
     : ''
-  const sourceLook = sourceLookMatchPromptLine(ctx.sourceGenerationModel || '')
+  // For eye fixes, do not let "match Seedance grade" override the iris color change.
+  const sourceLook = faceEyes
+    ? (() => {
+        const line = sourceLookMatchPromptLine(ctx.sourceGenerationModel || '')
+        if (!line) return ''
+        return `${line} Exception: eye color/size follow the filmmaker instruction and reference, not the source grade.`
+      })()
+    : sourceLookMatchPromptLine(ctx.sourceGenerationModel || '')
   const preservation = mode === 'reimagine' ? PRESERVATION_CAMERA : PRESERVATION_STRICT
 
   // Priority order: instruction first, then look-match / guidance, then optional context.
@@ -125,8 +151,8 @@ export function buildVideoRepairPrompt (
     [
       intent,
       priority,
-      sourceLook,
       refNote,
+      sourceLook,
       MODE_INSTRUCTIONS[mode],
       characterBlock(ctx, compact),
       categoryInstructions(visual),
