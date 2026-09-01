@@ -117,6 +117,94 @@
     <!-- Form -->
     <div v-else class="space-y-8">
       <section class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4">
+        <div>
+          <h2 class="text-[11px] font-semibold uppercase tracking-cinema text-primary mb-1">
+            Project &amp; character
+          </h2>
+          <p class="text-sm text-gray-600">
+            Choose the project, then the cast member to keep consistent. Bible bio and lookbook lock into the repair.
+          </p>
+        </div>
+        <div class="space-y-2 max-w-xl">
+          <label for="fix-shot-project" class="block text-sm font-medium text-gray-700">Project</label>
+          <select
+            id="fix-shot-project"
+            v-model="selectedProjectId"
+            class="w-full px-3 py-2 rounded-lg bg-charcoal border border-gray-300 text-gray-900 text-sm focus:outline-none focus:border-primary"
+            @change="onProjectChange"
+          >
+            <option value="">Select a project…</option>
+            <option v-for="p in pbProjects" :key="p.id" :value="p.id">
+              {{ p.name }}
+            </option>
+          </select>
+          <p v-if="projectsHydrated && !pbProjects.length" class="text-xs text-gray-500">
+            No projects yet — create one from the dashboard, then return here.
+          </p>
+        </div>
+        <div v-if="projectId" class="space-y-3">
+          <label class="block text-sm font-medium text-gray-700">Character to keep consistent</label>
+          <p v-if="charactersLoading" class="text-sm text-gray-500">Loading cast…</p>
+          <p v-else-if="!characterRefs.length" class="text-sm text-gray-500">
+            No cast on this project yet — add them on the Characters step, or upload a reference below.
+          </p>
+          <ProjectCharacterTypeahead
+            v-else
+            v-model="selectedCharacterIds"
+            input-id="fix-shot-character"
+            :options="characterTypeaheadOptions"
+            placeholder="Type a character name… (e.g. Macklin)"
+            hint="One character per repair. Lookbook front plate locks as the reference unless you override it."
+          />
+          <div v-if="selectedCharacter" class="space-y-3">
+            <p class="text-sm text-gray-700">
+              <span class="font-semibold text-gray-900">{{ selectedCharacter.name }}</span>
+              <span v-if="characterAppearance" class="text-gray-600">
+                — {{ appearancePreview }}
+              </span>
+            </p>
+            <div v-if="characterPlateUrls.length" class="flex flex-wrap gap-2">
+              <button
+                v-for="(url, i) in characterPlateUrls"
+                :key="`${url}-${i}`"
+                type="button"
+                class="relative rounded-lg border overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary"
+                :class="characterPortraitUrl === url
+                  ? 'border-primary ring-1 ring-primary'
+                  : 'border-gray-300 hover:border-primary/50'"
+                :title="i === 0 ? 'Front / featured lookbook plate' : `Lookbook plate ${i + 1}`"
+                :disabled="frameBusy"
+                @click="lockBiblePlate(url)"
+              >
+                <img
+                  :src="playbackSrc(url)"
+                  :alt="`${selectedCharacter.name} plate ${i + 1}`"
+                  class="w-20 h-20 object-cover bg-black"
+                >
+              </button>
+            </div>
+            <div class="flex flex-wrap gap-2 items-center">
+              <button
+                v-if="characterPortraitUrl"
+                type="button"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-gray-950 hover:bg-primary/90 disabled:opacity-40"
+                :disabled="frameBusy"
+                @click="useCharacterReference"
+              >
+                {{ frameBusy ? 'Locking…' : 'Use bible lookbook as reference' }}
+              </button>
+              <p
+                v-if="referenceSource === 'bible'"
+                class="text-xs text-primary font-medium"
+              >
+                Bible lookbook locked as repair reference
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4">
         <h2 class="text-[11px] font-semibold uppercase tracking-cinema text-gray-500">Source video</h2>
         <div v-if="libraryClips.length" class="space-y-2">
           <label class="block text-sm text-gray-700">Existing clip</label>
@@ -199,77 +287,14 @@
         </div>
       </section>
 
-      <section
-        v-if="projectId"
-        class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4"
-      >
-        <div>
-          <h2 class="text-[11px] font-semibold uppercase tracking-cinema text-primary mb-1">
-            Character bible
-          </h2>
-          <p class="text-sm text-gray-600">
-            Pick the cast member to keep consistent (bio + lookbook plates). Best for face, eyes, and identity fixes.
-          </p>
-        </div>
-        <p v-if="!characterRefs.length" class="text-sm text-gray-500">
-          No cast on this project yet — add them on the Characters step, or upload a reference below.
-        </p>
-        <ProjectCharacterTypeahead
-          v-else
-          v-model="selectedCharacterIds"
-          input-id="fix-shot-character"
-          :options="characterTypeaheadOptions"
-          placeholder="Type a character name… (e.g. Macklin)"
-          hint="One character per repair. Lookbook front plate is locked as the reference unless you override it."
-        />
-        <div v-if="selectedCharacter" class="space-y-3">
-          <p class="text-sm text-gray-700">
-            <span class="font-semibold text-gray-900">{{ selectedCharacter.name }}</span>
-            <span v-if="characterAppearance" class="text-gray-600">
-              — {{ appearancePreview }}
-            </span>
-          </p>
-          <div v-if="characterPlateUrls.length" class="flex flex-wrap gap-2">
-            <button
-              v-for="(url, i) in characterPlateUrls"
-              :key="`${url}-${i}`"
-              type="button"
-              class="relative rounded-lg border overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary"
-              :class="characterPortraitUrl === url
-                ? 'border-primary ring-1 ring-primary'
-                : 'border-gray-300 hover:border-primary/50'"
-              :title="i === 0 ? 'Front / featured lookbook plate' : `Lookbook plate ${i + 1}`"
-              :disabled="frameBusy"
-              @click="lockBiblePlate(url)"
-            >
-              <img
-                :src="playbackSrc(url)"
-                :alt="`${selectedCharacter.name} plate ${i + 1}`"
-                class="w-20 h-20 object-cover bg-black"
-              >
-            </button>
-          </div>
-          <div class="flex flex-wrap gap-2">
-            <button
-              v-if="characterPortraitUrl"
-              type="button"
-              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-gray-950 hover:bg-primary/90 disabled:opacity-40"
-              :disabled="frameBusy"
-              @click="useCharacterReference"
-            >
-              {{ frameBusy ? 'Locking…' : 'Use bible lookbook as reference' }}
-            </button>
-            <p
-              v-if="referenceSource === 'bible'"
-              class="self-center text-xs text-primary font-medium"
-            >
-              Bible lookbook locked as repair reference
-            </p>
-          </div>
-        </div>
-      </section>
-
       <section v-if="sourcePlayback" class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4">
+        <h2 class="text-[11px] font-semibold uppercase tracking-cinema text-gray-500">
+          Reference override
+          <span class="normal-case tracking-normal font-normal text-gray-500"> (optional)</span>
+        </h2>
+        <p class="text-sm text-gray-600">
+          Bible lookbook is preferred. Use this only to extract a frame or upload a different still.
+        </p>
         <FixShotReferenceFrameScrubber
           :src="playbackSrc(sourcePlayback)"
           :busy="frameBusy"
@@ -318,47 +343,6 @@
           Luma Modify appears when LUMA_API_KEY is set on the server.
         </p>
       </details>
-
-      <section class="rounded-xl border border-dashed border-gray-300 bg-gray-50/40 p-5 sm:p-6 space-y-3">
-        <div class="flex items-center justify-between gap-3">
-          <div>
-            <h2 class="text-[11px] font-semibold uppercase tracking-cinema text-gray-500">Analyze shot</h2>
-            <p class="text-xs text-gray-500 mt-1">Experimental — sampled frames, not a full computer-vision pass.</p>
-          </div>
-          <button
-            type="button"
-            class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 text-gray-800 hover:border-primary/50 disabled:opacity-40"
-            :disabled="analyzing || !sourcePlayback"
-            @click="runAnalyze"
-          >
-            {{ analyzing ? 'Analyzing…' : 'Analyze shot' }}
-          </button>
-        </div>
-        <p v-if="analyzeSummary" class="text-sm text-gray-700">{{ analyzeSummary }}</p>
-        <ul v-if="findings.length" class="space-y-2">
-          <li
-            v-for="(f, i) in findings"
-            :key="i"
-            class="flex items-start justify-between gap-3 rounded-lg border border-gray-200 px-3 py-2"
-          >
-            <div>
-              <p class="text-sm text-gray-900">{{ f.description }}</p>
-              <p class="text-[11px] text-gray-500 mt-0.5">
-                {{ f.type.replace(/_/g, ' ') }} · {{ f.severity }}
-                <span v-if="f.startTime || f.endTime"> · {{ f.startTime }}s–{{ f.endTime }}s</span>
-              </p>
-            </div>
-            <button
-              v-if="f.repairCategory"
-              type="button"
-              class="shrink-0 px-2 py-1 text-[10px] font-bold uppercase rounded bg-primary text-gray-950"
-              @click="applyFinding(f)"
-            >
-              Fix
-            </button>
-          </li>
-        </ul>
-      </section>
 
       <p v-if="formError" class="text-sm text-red-600">{{ formError }}</p>
       <button
@@ -413,7 +397,6 @@ import {
   type RepairCategoryId,
   type RepairEngineChoice,
   type RepairMode,
-  type ShotAnalysisFinding,
   type ShotVideoVersion
 } from '~/lib/video-repair'
 import type { ProjectAsset } from '~/types/project-asset'
@@ -435,9 +418,16 @@ useHead({ title: 'Fix Shot' })
 const JOB_STORAGE = 'aie_fix_shot_active_job'
 const { isAuthenticated, authReady, getAuthToken } = useAuth()
 const route = useRoute()
+const router = useRouter()
 const toast = useToast()
+const {
+  projects: pbProjects,
+  hydrated: projectsHydrated,
+  loadServerProjects
+} = useCreativeProject()
 
-const projectId = computed(() => String(route.query.projectId || '').trim())
+const selectedProjectId = ref(String(route.query.projectId || '').trim())
+const projectId = computed(() => selectedProjectId.value.trim())
 const sceneId = computed(() => String(route.query.sceneId || '').trim())
 const shotId = computed(() => String(route.query.shotId || '').trim())
 const queryAssetId = computed(() => String(route.query.assetId || '').trim())
@@ -490,9 +480,6 @@ const formError = ref('')
 const actionError = ref('')
 const accepting = ref(false)
 const savedNote = ref('')
-const analyzing = ref(false)
-const analyzeSummary = ref('')
-const findings = ref<ShotAnalysisFinding[]>([])
 const versions = ref<ShotVideoVersion[]>([])
 
 const voiceOnly = computed(() => hasVoiceOnlyRepair(selected.value))
@@ -511,7 +498,11 @@ const jobStatusLabel = computed(() => {
   return 'Submitting repair job…'
 })
 
-const { refs: characterRefs, reload: loadCharacters } = useProjectCharacterRefs(projectId)
+const {
+  refs: characterRefs,
+  loading: charactersLoading,
+  reload: loadCharacters
+} = useProjectCharacterRefs(projectId)
 
 const selectedCharacter = computed(() => {
   const id = selectedCharacterIds.value[0] || ''
@@ -586,7 +577,10 @@ async function loadConfig () {
 
 async function loadLibrary () {
   const pid = projectId.value
-  if (!pid || !isAuthenticated.value) return
+  if (!pid || !isAuthenticated.value) {
+    libraryClips.value = []
+    return
+  }
   try {
     const res = await $fetch<{ items: ProjectAsset[] }>(`/api/projects/${pid}/assets`, {
       query: { kind: 'video' },
@@ -596,7 +590,7 @@ async function loadLibrary () {
     libraryClips.value = shotId.value
       ? items.filter(a => (a.shotId || String(a.metadata?.shot_id || '')) === shotId.value)
       : items
-    if (queryAssetId.value) {
+    if (queryAssetId.value && libraryClips.value.some(c => c.id === queryAssetId.value)) {
       sourceAssetId.value = queryAssetId.value
       onPickLibraryClip()
     } else if (libraryClips.value.length === 1) {
@@ -605,7 +599,46 @@ async function loadLibrary () {
     }
   } catch (e: unknown) {
     console.warn('[fix-shot] library load', e)
+    libraryClips.value = []
   }
+}
+
+async function onProjectChange () {
+  const pid = selectedProjectId.value.trim()
+  const nextQuery: Record<string, string> = {}
+  for (const [k, v] of Object.entries(route.query)) {
+    if (typeof v === 'string' && v && k !== 'projectId') nextQuery[k] = v
+  }
+  if (pid) nextQuery.projectId = pid
+  await router.replace({ query: nextQuery })
+
+  selectedCharacterIds.value = []
+  characterId.value = ''
+  characterName.value = ''
+  characterAppearance.value = ''
+  characterNotes.value = ''
+  characterPortraitUrl.value = ''
+  characterPlateUrls.value = []
+  if (referenceSource.value === 'bible') {
+    referenceMediaId.value = ''
+    referencePreview.value = ''
+    referenceTimecode.value = ''
+    referenceTimestamp.value = null
+    referenceSource.value = 'none'
+  }
+  sourceAssetId.value = ''
+  sourceMediaId.value = ''
+  sourcePlayback.value = ''
+  sourceDuration.value = null
+  sourceGenerationModel.value = ''
+  libraryClips.value = []
+  versions.value = []
+
+  if (!pid) return
+  await loadLibrary()
+  await loadCharacters()
+  onSourceCharacters()
+  await loadVersions()
 }
 
 async function loadVersions () {
@@ -918,34 +951,6 @@ async function downloadRepaired () {
   }
 }
 
-async function runAnalyze () {
-  analyzing.value = true
-  analyzeSummary.value = ''
-  findings.value = []
-  try {
-    const res = await $fetch<{ summary: string; findings: ShotAnalysisFinding[] }>('/api/repair/analyze', {
-      method: 'POST',
-      headers: { ...authHeaders(), 'Content-Type': 'application/json' },
-      body: {
-        frameMediaIds: referenceMediaId.value ? [referenceMediaId.value] : []
-      }
-    })
-    analyzeSummary.value = res.summary
-    findings.value = res.findings || []
-  } catch (e: unknown) {
-    analyzeSummary.value = formatApiFetchError(e, 'Analyze Shot could not run.')
-  } finally {
-    analyzing.value = false
-  }
-}
-
-function applyFinding (f: ShotAnalysisFinding) {
-  if (f.repairCategory && !selected.value.includes(f.repairCategory)) {
-    selected.value = [...selected.value, f.repairCategory]
-  }
-  if (f.description && !description.value.trim()) description.value = f.description
-}
-
 async function revertTo (assetId: string) {
   const pid = projectId.value
   const sid = shotId.value
@@ -969,10 +974,16 @@ async function revertTo (assetId: string) {
 onMounted(async () => {
   if (!isAuthenticated.value) return
   await loadConfig()
-  await loadLibrary()
-  await loadCharacters()
-  onSourceCharacters()
-  await loadVersions()
+  await loadServerProjects()
+  if (!selectedProjectId.value && pbProjects.value.length === 1) {
+    selectedProjectId.value = pbProjects.value[0]!.id
+    await onProjectChange()
+  } else if (projectId.value) {
+    await loadLibrary()
+    await loadCharacters()
+    onSourceCharacters()
+    await loadVersions()
+  }
   const qJob = String(route.query.jobId || '').trim()
   let stored = ''
   try {
