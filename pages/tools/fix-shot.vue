@@ -154,7 +154,7 @@
             input-id="fix-shot-character"
             :options="characterTypeaheadOptions"
             placeholder="Type a character name… (e.g. Macklin)"
-            hint="One character per repair. Lookbook front plate locks as the reference unless you override it."
+            hint="One character per repair. Selecting them locks their lookbook plate as the repair reference."
           />
           <div v-if="selectedCharacter" class="space-y-3">
             <p class="text-sm text-gray-700">
@@ -194,7 +194,7 @@
                 {{ frameBusy ? 'Locking…' : 'Use bible lookbook as reference' }}
               </button>
               <p
-                v-if="referenceSource === 'bible'"
+                v-if="referenceMediaId"
                 class="text-xs text-primary font-medium"
               >
                 Bible lookbook locked as repair reference
@@ -287,39 +287,6 @@
         </div>
       </section>
 
-      <section v-if="sourcePlayback" class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4">
-        <h2 class="text-[11px] font-semibold uppercase tracking-cinema text-gray-500">
-          Reference override
-          <span class="normal-case tracking-normal font-normal text-gray-500"> (optional)</span>
-        </h2>
-        <p class="text-sm text-gray-600">
-          Bible lookbook is preferred. Use this only to extract a frame or upload a different still.
-        </p>
-        <FixShotReferenceFrameScrubber
-          :src="playbackSrc(sourcePlayback)"
-          :busy="frameBusy"
-          @extract="onExtractFrame"
-          @upload="onUploadReference"
-        />
-        <div v-if="referencePreview" class="flex items-center gap-3">
-          <img :src="referencePreview" alt="Reference" class="w-24 h-16 object-cover rounded border border-primary/40">
-          <p class="text-sm text-gray-600">
-            Reference locked
-            <span v-if="referenceSource === 'bible'" class="text-primary"> (bible lookbook)</span>
-            <span v-else-if="referenceTimecode" class="font-mono text-primary">{{ referenceTimecode }}</span>
-            <span v-else class="text-primary"> (uploaded)</span>
-          </p>
-        </div>
-        <p
-          v-if="selected.includes('face_eyes') || selected.includes('character_consistency')"
-          class="text-sm text-amber-100/90 bg-amber-950/40 border border-amber-800/50 rounded-lg px-3 py-2"
-        >
-          <strong class="text-amber-100">Consistency tip:</strong>
-          Prefer the <em>character bible</em> lookbook above — it has the locked correct look (eyes, face, wardrobe).
-          A frame from this clip often has the defect you are trying to fix.
-        </p>
-      </section>
-
       <details class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:px-6 sm:py-4">
         <summary class="text-xs font-semibold uppercase tracking-wide text-gray-500 cursor-pointer">
           Advanced · Repair engine
@@ -390,7 +357,6 @@ import {
   REPAIR_ENGINE_LABELS,
   defaultRepairDescriptionExample,
   formatSourceGenerationModelLabel,
-  formatTimecode,
   hasVoiceOnlyRepair,
   readAssetSourceGenerationModel,
   visualRepairCategories,
@@ -459,10 +425,6 @@ const sourceModelLabel = computed(() => formatSourceGenerationModelLabel(sourceG
 
 const referenceMediaId = ref('')
 const referencePreview = ref('')
-const referenceTimecode = ref('')
-const referenceTimestamp = ref<number | null>(null)
-/** How the locked reference was chosen — bible lookbook vs scrubber/upload override. */
-const referenceSource = ref<'none' | 'bible' | 'manual'>('none')
 const frameBusy = ref(false)
 const selectedCharacterIds = ref<string[]>([])
 const characterId = ref('')
@@ -619,13 +581,8 @@ async function onProjectChange () {
   characterNotes.value = ''
   characterPortraitUrl.value = ''
   characterPlateUrls.value = []
-  if (referenceSource.value === 'bible') {
-    referenceMediaId.value = ''
-    referencePreview.value = ''
-    referenceTimecode.value = ''
-    referenceTimestamp.value = null
-    referenceSource.value = 'none'
-  }
+  referenceMediaId.value = ''
+  referencePreview.value = ''
   sourceAssetId.value = ''
   sourceMediaId.value = ''
   sourcePlayback.value = ''
@@ -700,35 +657,20 @@ async function onUploadSource (e: Event) {
   }
 }
 
-async function uploadFrameBlob (blob: Blob, timestamp?: number) {
+async function uploadFrameBlob (blob: Blob) {
   frameBusy.value = true
   try {
     const fd = new FormData()
     fd.append('file', blob, 'frame.jpg')
-    if (timestamp != null) fd.append('timestampSeconds', String(timestamp))
-    const res = await $fetch<{ mediaId: string; playbackUrl: string; timestampSeconds: number | null }>(
+    const res = await $fetch<{ mediaId: string; playbackUrl: string }>(
       '/api/repair/video/extract-frame',
       { method: 'POST', headers: authHeaders(), body: fd }
     )
     referenceMediaId.value = res.mediaId
     referencePreview.value = playbackSrc(res.playbackUrl)
-    if (timestamp != null) {
-      referenceTimestamp.value = timestamp
-      referenceTimecode.value = formatTimecode(timestamp)
-    }
   } finally {
     frameBusy.value = false
   }
-}
-
-async function onExtractFrame (blob: Blob, timestampSeconds: number) {
-  referenceSource.value = 'manual'
-  await uploadFrameBlob(blob, timestampSeconds)
-}
-
-async function onUploadReference (file: File) {
-  referenceSource.value = 'manual'
-  await uploadFrameBlob(file)
 }
 
 async function useCharacterReference () {
@@ -739,9 +681,6 @@ async function useCharacterReference () {
     if (!res.ok) throw new Error('Could not load character bible plate')
     const blob = await res.blob()
     await uploadFrameBlob(blob)
-    referenceSource.value = 'bible'
-    referenceTimecode.value = ''
-    referenceTimestamp.value = null
   } catch (e: unknown) {
     formError.value = formatApiFetchError(e, 'Could not use the character bible lookbook.')
   } finally {
@@ -774,8 +713,8 @@ async function applyCharacter (c: ProjectCharacterRef | null) {
   const plates = collectCharacterPortraitUrls([c], 4)
   characterPlateUrls.value = plates
   characterPortraitUrl.value = plates[0] || c.portraitUrl || ''
-  // Auto-lock bible front plate unless the filmmaker already overrode with a manual ref.
-  if (referenceSource.value !== 'manual' && characterPortraitUrl.value) {
+  // Auto-lock bible front plate as the Aleph reference.
+  if (characterPortraitUrl.value) {
     await useCharacterReference()
   }
 }
@@ -827,10 +766,9 @@ async function submitRepair () {
         sourceGenerationModel: sourceGenerationModel.value || undefined,
         durationSeconds: sourceDuration.value,
         referenceMediaId: referenceMediaId.value || undefined,
-        referenceImageUrl: !referenceMediaId.value && characterPortraitUrl.value === referencePreview.value
+        referenceImageUrl: !referenceMediaId.value && characterPortraitUrl.value
           ? characterPortraitUrl.value
           : undefined,
-        referenceTimestampSeconds: referenceTimestamp.value,
         characterId: characterId.value || undefined,
         characterName: characterName.value || undefined,
         characterAppearance: characterAppearance.value || undefined,
