@@ -199,6 +199,76 @@
         </div>
       </section>
 
+      <section
+        v-if="projectId"
+        class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4"
+      >
+        <div>
+          <h2 class="text-[11px] font-semibold uppercase tracking-cinema text-primary mb-1">
+            Character bible
+          </h2>
+          <p class="text-sm text-gray-600">
+            Pick the cast member to keep consistent (bio + lookbook plates). Best for face, eyes, and identity fixes.
+          </p>
+        </div>
+        <p v-if="!characterRefs.length" class="text-sm text-gray-500">
+          No cast on this project yet — add them on the Characters step, or upload a reference below.
+        </p>
+        <ProjectCharacterTypeahead
+          v-else
+          v-model="selectedCharacterIds"
+          input-id="fix-shot-character"
+          :options="characterTypeaheadOptions"
+          placeholder="Type a character name… (e.g. Macklin)"
+          hint="One character per repair. Lookbook front plate is locked as the reference unless you override it."
+        />
+        <div v-if="selectedCharacter" class="space-y-3">
+          <p class="text-sm text-gray-700">
+            <span class="font-semibold text-gray-900">{{ selectedCharacter.name }}</span>
+            <span v-if="characterAppearance" class="text-gray-600">
+              — {{ appearancePreview }}
+            </span>
+          </p>
+          <div v-if="characterPlateUrls.length" class="flex flex-wrap gap-2">
+            <button
+              v-for="(url, i) in characterPlateUrls"
+              :key="`${url}-${i}`"
+              type="button"
+              class="relative rounded-lg border overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary"
+              :class="characterPortraitUrl === url
+                ? 'border-primary ring-1 ring-primary'
+                : 'border-gray-300 hover:border-primary/50'"
+              :title="i === 0 ? 'Front / featured lookbook plate' : `Lookbook plate ${i + 1}`"
+              :disabled="frameBusy"
+              @click="lockBiblePlate(url)"
+            >
+              <img
+                :src="playbackSrc(url)"
+                :alt="`${selectedCharacter.name} plate ${i + 1}`"
+                class="w-20 h-20 object-cover bg-black"
+              >
+            </button>
+          </div>
+          <div class="flex flex-wrap gap-2">
+            <button
+              v-if="characterPortraitUrl"
+              type="button"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-gray-950 hover:bg-primary/90 disabled:opacity-40"
+              :disabled="frameBusy"
+              @click="useCharacterReference"
+            >
+              {{ frameBusy ? 'Locking…' : 'Use bible lookbook as reference' }}
+            </button>
+            <p
+              v-if="referenceSource === 'bible'"
+              class="self-center text-xs text-primary font-medium"
+            >
+              Bible lookbook locked as repair reference
+            </p>
+          </div>
+        </div>
+      </section>
+
       <section v-if="sourcePlayback" class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4">
         <FixShotReferenceFrameScrubber
           :src="playbackSrc(sourcePlayback)"
@@ -210,27 +280,19 @@
           <img :src="referencePreview" alt="Reference" class="w-24 h-16 object-cover rounded border border-primary/40">
           <p class="text-sm text-gray-600">
             Reference locked
-            <span v-if="referenceTimecode" class="font-mono text-primary">{{ referenceTimecode }}</span>
+            <span v-if="referenceSource === 'bible'" class="text-primary"> (bible lookbook)</span>
+            <span v-else-if="referenceTimecode" class="font-mono text-primary">{{ referenceTimecode }}</span>
             <span v-else class="text-primary"> (uploaded)</span>
           </p>
         </div>
         <p
-          v-if="selected.includes('face_eyes')"
+          v-if="selected.includes('face_eyes') || selected.includes('character_consistency')"
           class="text-sm text-amber-100/90 bg-amber-950/40 border border-amber-800/50 rounded-lg px-3 py-2"
         >
-          <strong class="text-amber-100">Face / Eyes tip:</strong>
-          Upload a close-up where the <em>correct</em> iris color is clearly visible.
-          A frame from this clip usually has the wrong eyes and will not help.
-          Headlamp glare can make light eyes look “correct” in stills — check the irises carefully.
+          <strong class="text-amber-100">Consistency tip:</strong>
+          Prefer the <em>character bible</em> lookbook above — it has the locked correct look (eyes, face, wardrobe).
+          A frame from this clip often has the defect you are trying to fix.
         </p>
-        <button
-          v-if="characterPortraitUrl"
-          type="button"
-          class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 text-gray-800 hover:border-primary/50"
-          @click="useCharacterReference"
-        >
-          Use character reference
-        </button>
       </section>
 
       <details class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:px-6 sm:py-4">
@@ -356,7 +418,16 @@ import {
 } from '~/lib/video-repair'
 import type { ProjectAsset } from '~/types/project-asset'
 import type { CreativeShot } from '~/types/creative-shot'
-import { findCharactersInShot } from '~/lib/shot-character-continuity'
+import {
+  castMemberToVisualInput,
+  resolveCharacterVisualDescription
+} from '~/lib/character-visual-description'
+import {
+  collectCharacterPortraitUrls,
+  findCharactersInShot,
+  type ProjectCharacterRef
+} from '~/lib/shot-character-continuity'
+import type { CharacterTypeaheadOption } from '~/components/project/CharacterTypeahead.vue'
 import { useProjectCharacterRefs } from '~/composables/useProjectCharacterRefs'
 
 useHead({ title: 'Fix Shot' })
@@ -400,10 +471,16 @@ const referenceMediaId = ref('')
 const referencePreview = ref('')
 const referenceTimecode = ref('')
 const referenceTimestamp = ref<number | null>(null)
+/** How the locked reference was chosen — bible lookbook vs scrubber/upload override. */
+const referenceSource = ref<'none' | 'bible' | 'manual'>('none')
 const frameBusy = ref(false)
+const selectedCharacterIds = ref<string[]>([])
+const characterId = ref('')
 const characterPortraitUrl = ref('')
+const characterPlateUrls = ref<string[]>([])
 const characterName = ref('')
 const characterAppearance = ref('')
+const characterNotes = ref('')
 
 const phase = ref<'form' | 'repairing' | 'result'>('form')
 const jobId = ref('')
@@ -435,6 +512,36 @@ const jobStatusLabel = computed(() => {
 })
 
 const { refs: characterRefs, reload: loadCharacters } = useProjectCharacterRefs(projectId)
+
+const selectedCharacter = computed(() => {
+  const id = selectedCharacterIds.value[0] || ''
+  if (!id) return null
+  return characterRefs.value.find(c => c.id === id) || null
+})
+
+const characterTypeaheadOptions = computed<CharacterTypeaheadOption[]>(() =>
+  characterRefs.value.map(c => ({
+    id: c.id,
+    name: c.name,
+    badge: (c.plateUrls?.length || c.portraitUrl) ? 'lookbook' : undefined
+  }))
+)
+
+const appearancePreview = computed(() => {
+  const t = characterAppearance.value.trim()
+  if (!t) return ''
+  return t.length > 160 ? `${t.slice(0, 159).trimEnd()}…` : t
+})
+
+watch(selectedCharacterIds, (ids) => {
+  // One character per repair — typeahead is multi-select elsewhere.
+  if (ids.length > 1) {
+    selectedCharacterIds.value = [ids[ids.length - 1]!]
+    return
+  }
+  const c = ids[0] ? characterRefs.value.find(x => x.id === ids[0]) || null : null
+  void applyCharacter(c)
+})
 
 function playbackSrc (url: string): string {
   return appendPlaybackAccessToken(url, getAuthToken())
@@ -582,10 +689,12 @@ async function uploadFrameBlob (blob: Blob, timestamp?: number) {
 }
 
 async function onExtractFrame (blob: Blob, timestampSeconds: number) {
+  referenceSource.value = 'manual'
   await uploadFrameBlob(blob, timestampSeconds)
 }
 
 async function onUploadReference (file: File) {
+  referenceSource.value = 'manual'
   await uploadFrameBlob(file)
 }
 
@@ -594,13 +703,47 @@ async function useCharacterReference () {
   frameBusy.value = true
   try {
     const res = await fetch(playbackSrc(characterPortraitUrl.value), { headers: authHeaders() })
-    if (!res.ok) throw new Error('Could not load character reference')
+    if (!res.ok) throw new Error('Could not load character bible plate')
     const blob = await res.blob()
     await uploadFrameBlob(blob)
+    referenceSource.value = 'bible'
+    referenceTimecode.value = ''
+    referenceTimestamp.value = null
   } catch (e: unknown) {
-    formError.value = formatApiFetchError(e, 'Could not use the character reference.')
+    formError.value = formatApiFetchError(e, 'Could not use the character bible lookbook.')
   } finally {
     frameBusy.value = false
+  }
+}
+
+async function lockBiblePlate (url: string) {
+  characterPortraitUrl.value = url
+  await useCharacterReference()
+}
+
+async function applyCharacter (c: ProjectCharacterRef | null) {
+  if (!c) {
+    characterId.value = ''
+    characterName.value = ''
+    characterAppearance.value = ''
+    characterNotes.value = ''
+    characterPortraitUrl.value = ''
+    characterPlateUrls.value = []
+    return
+  }
+  characterId.value = c.id
+  characterName.value = c.name
+  characterAppearance.value = resolveCharacterVisualDescription(castMemberToVisualInput(c))
+  characterNotes.value = [c.signatureDetails, c.portraitNotes, c.portraitPromptUsed]
+    .map(s => (s || '').trim())
+    .filter(Boolean)
+    .join(' · ')
+  const plates = collectCharacterPortraitUrls([c], 4)
+  characterPlateUrls.value = plates
+  characterPortraitUrl.value = plates[0] || c.portraitUrl || ''
+  // Auto-lock bible front plate unless the filmmaker already overrode with a manual ref.
+  if (referenceSource.value !== 'manual' && characterPortraitUrl.value) {
+    await useCharacterReference()
   }
 }
 
@@ -622,9 +765,8 @@ function onSourceCharacters () {
   const hits = findCharactersInShot(shot, characterRefs.value)
   const c = hits[0] || characterRefs.value[0]
   if (!c) return
-  characterName.value = c.name
-  characterAppearance.value = c.appearanceDescription || c.roleDescription || ''
-  characterPortraitUrl.value = c.portraitUrl || ''
+  // Triggers watch → applyCharacter (bio + lookbook auto-lock).
+  selectedCharacterIds.value = [c.id]
 }
 
 async function submitRepair () {
@@ -656,8 +798,10 @@ async function submitRepair () {
           ? characterPortraitUrl.value
           : undefined,
         referenceTimestampSeconds: referenceTimestamp.value,
-        characterName: characterName.value,
-        characterAppearance: characterAppearance.value
+        characterId: characterId.value || undefined,
+        characterName: characterName.value || undefined,
+        characterAppearance: characterAppearance.value || undefined,
+        characterNotes: characterNotes.value || undefined
       }
     })
     jobId.value = res.id

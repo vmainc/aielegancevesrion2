@@ -34,11 +34,19 @@ function isFaceEyesRepair (ctx: VideoRepairPromptContext): boolean {
   return visualRepairCategories(ctx.categories).includes('face_eyes')
 }
 
+function truncateForPrompt (text: string, max: number): string {
+  const t = text.trim().replace(/\s+/g, ' ')
+  if (!t || t.length <= max) return t
+  return `${t.slice(0, Math.max(0, max - 1)).trimEnd()}…`
+}
+
 function characterBlock (ctx: VideoRepairPromptContext, compact: boolean): string {
   const name = (ctx.characterName || '').trim()
   const appearance = (ctx.characterAppearance || '').trim()
   const notes = (ctx.characterNotes || '').trim()
   const faceEyes = isFaceEyesRepair(ctx)
+  const identityRepair =
+    faceEyes || visualRepairCategories(ctx.categories).includes('character_consistency')
   if (!name && !appearance && !notes) {
     if (!ctx.hasReferenceFrame) return ''
     return faceEyes
@@ -49,12 +57,12 @@ function characterBlock (ctx: VideoRepairPromptContext, compact: boolean): strin
   if (name) {
     if (ctx.hasReferenceFrame && faceEyes) {
       bits.push(
-        `Keep ${name}'s identity. Copy iris color and eye size from the reference; do not replace the whole face with the reference pose.`
+        `Keep ${name}'s identity from the cast bible. Copy iris color and eye size from the reference plate; do not replace the whole face with the reference pose.`
       )
     } else if (ctx.hasReferenceFrame) {
-      bits.push(`Keep ${name}'s identity; match the reference image.`)
+      bits.push(`Keep ${name}'s identity from the cast bible; match the reference plate.`)
     } else {
-      bits.push(`Keep ${name}'s identity throughout.`)
+      bits.push(`Keep ${name}'s identity from the cast bible throughout.`)
     }
   } else if (ctx.hasReferenceFrame) {
     bits.push(
@@ -63,8 +71,15 @@ function characterBlock (ctx: VideoRepairPromptContext, compact: boolean): strin
         : 'Match identity to the reference image.'
     )
   }
-  if (!compact && appearance) bits.push(`Appearance: ${appearance}`)
-  if (!compact && notes) bits.push(`Notes: ${notes}`)
+  // Compact Aleph prompts still need bible appearance — previously dropped entirely.
+  const appearanceBudget = compact ? (identityRepair ? 280 : 160) : 600
+  const notesBudget = compact ? (identityRepair ? 120 : 80) : 400
+  if (appearance) {
+    bits.push(`Bible look: ${truncateForPrompt(appearance, appearanceBudget)}`)
+  }
+  if (notes) {
+    bits.push(`Plate notes: ${truncateForPrompt(notes, notesBudget)}`)
+  }
   return bits.join(' ')
 }
 
@@ -146,15 +161,16 @@ export function buildVideoRepairPrompt (
     : sourceLookMatchPromptLine(ctx.sourceGenerationModel || '')
   const preservation = mode === 'reimagine' ? PRESERVATION_CAMERA : PRESERVATION_STRICT
 
-  // Priority order: instruction first, then look-match / guidance, then optional context.
+  // Priority: filmmaker intent → reference → bible identity → look-match → mode.
+  // Character bible must come before sourceLook so it is not packed out of Aleph's 1000-char limit.
   return packPrompt(
     [
       intent,
       priority,
       refNote,
+      characterBlock(ctx, compact),
       sourceLook,
       MODE_INSTRUCTIONS[mode],
-      characterBlock(ctx, compact),
       categoryInstructions(visual),
       compact ? '' : sceneBlock(ctx),
       preservation

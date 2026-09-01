@@ -45,7 +45,8 @@ describe('buildVideoRepairPrompt', () => {
     expect(prompt).toMatch(/iris\/eye color|iris color/i)
     expect(prompt).toMatch(/skin tone/i)
     expect(prompt).toMatch(/the woman/i)
-    expect(prompt).toMatch(/reference/i)
+    expect(prompt).toMatch(/Bible look:.*dark brown hair/i)
+    expect(prompt).toMatch(/cast bible|reference/i)
     expect(prompt).toMatch(/Filmmaker instruction/i)
     // Face/eye categories auto-bump to reimagine for a visible correction.
     expect(prompt).toMatch(/obvious in every frame|Strong visible correction/i)
@@ -58,12 +59,16 @@ describe('buildVideoRepairPrompt', () => {
       repairMode: 'reimagine',
       hasReferenceFrame: true,
       characterName: 'Macklin',
+      characterAppearance: 'Macklin, late 30s, deep dark brown eyes, short curly black hair, trimmed beard',
+      characterNotes: 'Front lookbook plate — dark brown irises',
       sourceGenerationModel: 'bytedance/seedance-2.0'
     })
     expect(prompt.length).toBeLessThanOrEqual(ALEPH_PROMPT_MAX_CHARS)
     expect(prompt.indexOf('Filmmaker instruction')).toBe(0)
     expect(prompt).toMatch(/obvious in every frame|clearly visible change/i)
     expect(prompt).toMatch(/iris color and eye size|correct iris color/i)
+    expect(prompt).toMatch(/Bible look:.*dark brown eyes/i)
+    expect(prompt).toMatch(/Plate notes:/i)
     expect(prompt).toMatch(/Seedance 2\.0/)
     expect(prompt).toMatch(/Exception: eye color/i)
   })
