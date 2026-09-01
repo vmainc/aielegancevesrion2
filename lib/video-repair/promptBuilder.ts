@@ -131,11 +131,11 @@ export function buildVideoRepairPrompt (
       : mode === 'balanced'
         ? 'The named correction must be noticeable.'
         : ''
-  // Optional image keyframes (rare). Bible lookbooks are prompt-text only.
+  // Face-crop keyframes (from bible lookbook) guide eyes/identity only — never the whole set.
   const refNote = ctx.hasReferenceFrame
     ? faceEyes
-      ? 'If a reference image is attached, use it only for iris color/size — never replace the shot composition with it.'
-      : 'If a reference image is attached, use it only for the named fix — never replace the shot composition with it.'
+      ? 'A close-up face reference is attached for iris color/size only. Keep the source framing, cave/environment, wardrobe, headlamp, and other characters. Never replace the shot with a studio character sheet.'
+      : 'A close-up identity reference is attached for the named fix only. Keep the source framing and environment. Never replace the shot with a studio character sheet.'
     : ''
   // For eye fixes, do not let "match Seedance grade" override the iris color change.
   const sourceLook = faceEyes

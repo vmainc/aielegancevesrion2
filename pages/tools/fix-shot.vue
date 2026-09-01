@@ -154,7 +154,7 @@
             input-id="fix-shot-character"
             :options="characterTypeaheadOptions"
             placeholder="Type a character name… (e.g. Macklin)"
-            hint="One character per repair. Their bible bio guides the fix in the prompt — lookbook images are not sent as keyframes."
+            hint="One character per repair. For Face/Eyes we send a face-crop of their lookbook (not the full body plate) so the shot stays intact."
           />
           <div v-if="selectedCharacter" class="space-y-3">
             <p class="text-sm text-gray-700">
@@ -178,7 +178,7 @@
               </div>
             </div>
             <p class="text-xs text-primary font-medium">
-              Bible look used in the repair prompt only — not as an image keyframe (avoids restyling the whole shot).
+              Face/Eyes repairs use a face-crop from this lookbook as the keyframe — not the full-body plate.
             </p>
           </div>
         </div>
