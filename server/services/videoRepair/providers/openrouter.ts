@@ -26,7 +26,10 @@ function buildAlephKeyframes (
   }
   const uri = assertHttpsProviderMediaUrl(candidate, 'Reference image')
   // Pin the same look at start / mid / end so the correction does not fade mid-clip.
-  return buildAlephKeyframeEntries(uri, input.durationSeconds)
+  // Only multi-pin when duration is probed — client metadata often overstates length.
+  return buildAlephKeyframeEntries(uri, input.durationSeconds, {
+    durationTrusted: input.durationTrusted === true
+  })
 }
 
 type VideoJobResponse = {

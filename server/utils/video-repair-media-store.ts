@@ -65,6 +65,16 @@ export async function readVideoRepairMedia (
   return { data, mime: mimeForExt(ext) }
 }
 
+/** Absolute path to a staged repair media file, or null if missing. */
+export async function resolveVideoRepairMediaPath (id: string): Promise<string | null> {
+  if (!/^[a-f0-9]{32}$/i.test(id)) return null
+  await mkdir(MEDIA_DIR, { recursive: true })
+  const files = await readdir(MEDIA_DIR)
+  const match = files.find(f => f.startsWith(`${id}.`))
+  if (!match) return null
+  return join(MEDIA_DIR, match)
+}
+
 export async function deleteVideoRepairMedia (id: string): Promise<void> {
   if (!/^[a-f0-9]{32}$/i.test(id)) return
   try {

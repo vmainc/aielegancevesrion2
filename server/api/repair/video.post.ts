@@ -36,9 +36,11 @@ import {
   saveVideoRepairJob,
   type StoredVideoRepairJob
 } from '~/server/utils/video-repair-job-store'
+import { probeMediaDurationSeconds } from '~/server/utils/probe-media-duration'
 import {
   newVideoRepairPublicToken,
   pruneOldVideoRepairMedia,
+  resolveVideoRepairMediaPath,
   videoRepairResultPath
 } from '~/server/utils/video-repair-media-store'
 import { buildProviderFetchableUrl } from '~/server/utils/video-repair-public-url'
@@ -100,7 +102,8 @@ export default defineEventHandler(async (event) => {
   const referenceMediaId = str(body.referenceMediaId)
   const referenceImageUrl = str(body.referenceImageUrl)
   const durationRaw = Number(body.durationSeconds ?? body.duration)
-  const durationSeconds = Number.isFinite(durationRaw) ? durationRaw : null
+  let durationSeconds = Number.isFinite(durationRaw) ? durationRaw : null
+  let durationTrusted = false
   const limits = getVideoRepairLimits()
   if (durationSeconds != null && durationSeconds > limits.maxDurationSeconds) {
     throw createError({
@@ -130,6 +133,28 @@ export default defineEventHandler(async (event) => {
   }
   if (!sourceMediaId) {
     throw createError({ statusCode: 400, message: 'Select or upload a source video.' })
+  }
+
+  // Prefer probed file duration — asset metadata often stores the requested length (e.g. 5s)
+  // while the encoded clip is shorter (e.g. 3s). Aleph rejects keyframes past real duration.
+  try {
+    const mediaPath = await resolveVideoRepairMediaPath(sourceMediaId)
+    if (mediaPath) {
+      const probed = await probeMediaDurationSeconds(mediaPath)
+      if (probed != null && probed > 0) {
+        durationSeconds = probed
+        durationTrusted = true
+        if (probed > limits.maxDurationSeconds) {
+          throw createError({
+            statusCode: 400,
+            message: `Clip is too long (max ${limits.maxDurationSeconds}s). Trim it before repairing.`
+          })
+        }
+      }
+    }
+  } catch (e: unknown) {
+    if (e && typeof e === 'object' && 'statusCode' in e) throw e
+    /* ffprobe optional — fall back to client duration with start-only keyframes */
   }
 
   const config = useRuntimeConfig()
@@ -277,6 +302,7 @@ export default defineEventHandler(async (event) => {
         referenceFrames,
         repairMode,
         duration: durationSeconds ?? undefined,
+        durationTrusted,
         provider: routing.provider,
         model: routing.model,
         publicSourceVideoUrl: publicSource || undefined,

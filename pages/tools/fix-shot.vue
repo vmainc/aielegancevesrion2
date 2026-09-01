@@ -511,15 +511,16 @@ function onPickLibraryClip () {
   if (!clip) return
   sourceMediaId.value = ''
   sourcePlayback.value = projectAssetPlaybackSrc(clip, getAuthToken())
-  sourceDuration.value = typeof clip.metadata?.duration_seconds === 'number'
-    ? Number(clip.metadata.duration_seconds)
-    : null
+  // Prefer the real encoded length from the video element (onSourceMeta).
+  // Asset metadata often stores the requested generation length (e.g. 5s) while
+  // the file is shorter — that used to push Aleph keyframes past clip end.
+  sourceDuration.value = null
   sourceGenerationModel.value = readAssetSourceGenerationModel(clip.metadata)
 }
 
 function onSourceMeta (e: Event) {
   const v = e.target as HTMLVideoElement
-  if (Number.isFinite(v.duration)) sourceDuration.value = v.duration
+  if (Number.isFinite(v.duration) && v.duration > 0) sourceDuration.value = v.duration
 }
 
 async function onUploadSource (e: Event) {

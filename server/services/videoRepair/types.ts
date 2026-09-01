@@ -20,6 +20,8 @@ export type VideoRepairProviderStartInput = {
   referenceFrames: VideoRepairReferenceFrame[]
   repairMode: RepairMode
   durationSeconds?: number
+  /** True when durationSeconds came from ffprobe (or another reliable probe). */
+  durationTrusted?: boolean
   model: string
   aspectRatio?: string
   /** HTTPS URL providers can fetch (tokenized public media). */
@@ -64,6 +66,7 @@ export type RepairVideoInput = {
   referenceFrames: VideoRepairReferenceFrame[]
   repairMode: RepairMode
   duration?: number
+  durationTrusted?: boolean
   provider: VideoRepairProviderId
   model: string
   aspectRatio?: string

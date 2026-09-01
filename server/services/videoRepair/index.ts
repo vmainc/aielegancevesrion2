@@ -51,6 +51,7 @@ export async function repairVideo (
     referenceFrames: input.referenceFrames,
     repairMode: input.repairMode,
     durationSeconds: input.duration,
+    durationTrusted: input.durationTrusted,
     model: input.model,
     aspectRatio: input.aspectRatio,
     publicSourceVideoUrl: input.publicSourceVideoUrl,
