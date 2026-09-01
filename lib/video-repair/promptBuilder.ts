@@ -5,6 +5,9 @@ import { resolveEffectiveRepairMode, type RepairMode, type VideoRepairPromptCont
 /** Runway Aleph / OpenRouter promptText hard limit. */
 export const ALEPH_PROMPT_MAX_CHARS = 1000
 
+const EDIT_IN_PLACE =
+  'Edit the source video in place. Keep the same shot, framing, blocking, timing, environment, and other characters. Do not replace the clip with a character sheet, studio backdrop, or new composition.'
+
 const PRESERVATION_CAMERA =
   'Keep original camera, framing, blocking, timing. Do not redesign the shot.'
 
@@ -15,11 +18,7 @@ const MODE_INSTRUCTIONS: Record<RepairMode, string> = {
   preserve: 'Smallest possible correction; if ambiguous, keep the original.',
   balanced: 'Clear visible correction to the named problem; leave everything else unchanged.',
   reimagine:
-    'Strong visible correction to the named problem; instruction overrides matching the source for that problem. Keep camera and timing.'
-}
-
-function joinNonEmpty (parts: Array<string | undefined | null>, sep = '\n'): string {
-  return parts.map(p => (p || '').trim()).filter(Boolean).join(sep)
+    'Strong visible correction to the named problem only; do not restyle the rest of the shot. Keep camera and timing.'
 }
 
 function categoryInstructions (ids: RepairCategoryId[]): string {
@@ -47,38 +46,24 @@ function characterBlock (ctx: VideoRepairPromptContext, compact: boolean): strin
   const faceEyes = isFaceEyesRepair(ctx)
   const identityRepair =
     faceEyes || visualRepairCategories(ctx.categories).includes('character_consistency')
-  if (!name && !appearance && !notes) {
-    if (!ctx.hasReferenceFrame) return ''
-    return faceEyes
-      ? 'From the reference, take only eye color/size (and any named face fix). Do not restyle the whole face from the reference.'
-      : 'Match identity to the reference image.'
-  }
+  if (!name && !appearance && !notes) return ''
+
   const bits: string[] = []
   if (name) {
-    if (ctx.hasReferenceFrame && faceEyes) {
-      bits.push(
-        `Keep ${name}'s identity from the cast bible. Copy iris color and eye size from the reference plate; do not replace the whole face with the reference pose.`
-      )
-    } else if (ctx.hasReferenceFrame) {
-      bits.push(`Keep ${name}'s identity from the cast bible; match the reference plate.`)
-    } else {
-      bits.push(`Keep ${name}'s identity from the cast bible throughout.`)
-    }
-  } else if (ctx.hasReferenceFrame) {
     bits.push(
       faceEyes
-        ? 'From the reference, take only eye color/size (and any named face fix). Do not restyle the whole face from the reference.'
-        : 'Match identity to the reference image.'
+        ? `Keep ${name}'s identity from the cast bible text (eye color/size). Do not recreate them from a lookbook plate or change pose/wardrobe/background.`
+        : `Keep ${name}'s identity from the cast bible text. Do not recreate them from a lookbook plate or change the shot.`
     )
   }
   // Compact Aleph prompts still need bible appearance — previously dropped entirely.
   const appearanceBudget = compact ? (identityRepair ? 280 : 160) : 600
   const notesBudget = compact ? (identityRepair ? 120 : 80) : 400
   if (appearance) {
-    bits.push(`Bible look: ${truncateForPrompt(appearance, appearanceBudget)}`)
+    bits.push(`Bible look (text only): ${truncateForPrompt(appearance, appearanceBudget)}`)
   }
   if (notes) {
-    bits.push(`Plate notes: ${truncateForPrompt(notes, notesBudget)}`)
+    bits.push(`Bible notes (text only): ${truncateForPrompt(notes, notesBudget)}`)
   }
   return bits.join(' ')
 }
@@ -141,34 +126,34 @@ export function buildVideoRepairPrompt (
   const priority =
     mode === 'reimagine'
       ? faceEyes
-        ? 'Eyes/face change must be obvious in every frame (iris color and size). Do not return an unchanged copy.'
-        : 'Make a clearly visible change for the named problem; do not return an unchanged copy.'
+        ? 'Eyes/face change must be obvious in every frame (iris color and size). Do not return an unchanged copy. Do not invent a new shot.'
+        : 'Make a clearly visible change for the named problem; do not return an unchanged copy. Do not invent a new shot.'
       : mode === 'balanced'
         ? 'The named correction must be noticeable.'
         : ''
+  // Optional image keyframes (rare). Bible lookbooks are prompt-text only.
   const refNote = ctx.hasReferenceFrame
     ? faceEyes
-      ? 'Reference image defines the correct iris color and eye size only. Apply that look for the entire clip; ignore headlamp catchlights that make irises look lighter.'
-      : 'Use the reference image as the target look (eye color/size, identity, proportions). Hold that corrected look for the entire clip — do not revert mid-shot.'
+      ? 'If a reference image is attached, use it only for iris color/size — never replace the shot composition with it.'
+      : 'If a reference image is attached, use it only for the named fix — never replace the shot composition with it.'
     : ''
   // For eye fixes, do not let "match Seedance grade" override the iris color change.
   const sourceLook = faceEyes
     ? (() => {
         const line = sourceLookMatchPromptLine(ctx.sourceGenerationModel || '')
         if (!line) return ''
-        return `${line} Exception: eye color/size follow the filmmaker instruction and reference, not the source grade.`
+        return `${line} Exception: eye color/size follow the filmmaker instruction and bible text, not the source grade.`
       })()
     : sourceLookMatchPromptLine(ctx.sourceGenerationModel || '')
   const preservation = mode === 'reimagine' ? PRESERVATION_CAMERA : PRESERVATION_STRICT
 
-  // Priority: filmmaker intent → reference → bible identity → look-match → mode.
-  // Character bible must come before sourceLook so it is not packed out of Aleph's 1000-char limit.
   return packPrompt(
     [
       intent,
+      EDIT_IN_PLACE,
       priority,
-      refNote,
       characterBlock(ctx, compact),
+      refNote,
       sourceLook,
       MODE_INSTRUCTIONS[mode],
       categoryInstructions(visual),

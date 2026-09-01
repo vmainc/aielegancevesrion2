@@ -35,29 +35,28 @@ describe('buildVideoRepairPrompt', () => {
       userDescription:
         "The woman's eyes become too large halfway through the shot. Keep her facial proportions, skin tone, hair and clothing consistent with the beginning of the video.",
       repairMode: 'preserve',
-      hasReferenceFrame: true,
+      hasReferenceFrame: false,
       characterName: 'the woman',
       characterAppearance: 'mid-30s, dark brown hair, olive skin',
       sceneHeading: 'INT. KITCHEN - DAY',
       shotTitle: 'Close-up on Mara'
     })
     expect(prompt.length).toBeLessThanOrEqual(ALEPH_PROMPT_MAX_CHARS)
+    expect(prompt).toMatch(/Edit the source video in place/i)
     expect(prompt).toMatch(/iris\/eye color|iris color/i)
     expect(prompt).toMatch(/skin tone/i)
     expect(prompt).toMatch(/the woman/i)
-    expect(prompt).toMatch(/Bible look:.*dark brown hair/i)
-    expect(prompt).toMatch(/cast bible|reference/i)
+    expect(prompt).toMatch(/Bible look \(text only\):.*dark brown hair/i)
     expect(prompt).toMatch(/Filmmaker instruction/i)
-    // Face/eye categories auto-bump to reimagine for a visible correction.
     expect(prompt).toMatch(/obvious in every frame|Strong visible correction/i)
   })
 
-  it('puts filmmaker intent first and strengthens reimagine', () => {
+  it('puts filmmaker intent first and strengthens reimagine with bible text only', () => {
     const prompt = buildVideoRepairPrompt({
       categories: ['face_eyes'],
       userDescription: "Macklin's eyes must be dark brown and smaller.",
       repairMode: 'reimagine',
-      hasReferenceFrame: true,
+      hasReferenceFrame: false,
       characterName: 'Macklin',
       characterAppearance: 'Macklin, late 30s, deep dark brown eyes, short curly black hair, trimmed beard',
       characterNotes: 'Front lookbook plate — dark brown irises',
@@ -65,12 +64,24 @@ describe('buildVideoRepairPrompt', () => {
     })
     expect(prompt.length).toBeLessThanOrEqual(ALEPH_PROMPT_MAX_CHARS)
     expect(prompt.indexOf('Filmmaker instruction')).toBe(0)
+    expect(prompt).toMatch(/Edit the source video in place/i)
+    expect(prompt).toMatch(/character sheet|studio backdrop/i)
     expect(prompt).toMatch(/obvious in every frame|clearly visible change/i)
-    expect(prompt).toMatch(/iris color and eye size|correct iris color/i)
-    expect(prompt).toMatch(/Bible look:.*dark brown eyes/i)
-    expect(prompt).toMatch(/Plate notes:/i)
+    expect(prompt).toMatch(/Bible look \(text only\):.*dark brown eyes/i)
+    expect(prompt).toMatch(/Bible notes \(text only\)/i)
     expect(prompt).toMatch(/Seedance 2\.0/)
     expect(prompt).toMatch(/Exception: eye color/i)
+  })
+
+  it('warns against restyling when an image keyframe is present', () => {
+    const prompt = buildVideoRepairPrompt({
+      categories: ['face_eyes'],
+      userDescription: 'Darken the irises.',
+      repairMode: 'reimagine',
+      hasReferenceFrame: true,
+      characterName: 'Macklin'
+    })
+    expect(prompt).toMatch(/never replace the shot composition/i)
   })
 
   it('ignores voice-only categories for visual instructions', () => {

@@ -154,7 +154,7 @@
             input-id="fix-shot-character"
             :options="characterTypeaheadOptions"
             placeholder="Type a character name… (e.g. Macklin)"
-            hint="One character per repair. Selecting them locks their lookbook plate as the repair reference."
+            hint="One character per repair. Their bible bio guides the fix in the prompt — lookbook images are not sent as keyframes."
           />
           <div v-if="selectedCharacter" class="space-y-3">
             <p class="text-sm text-gray-700">
@@ -164,42 +164,22 @@
               </span>
             </p>
             <div v-if="characterPlateUrls.length" class="flex flex-wrap gap-2">
-              <button
+              <div
                 v-for="(url, i) in characterPlateUrls"
                 :key="`${url}-${i}`"
-                type="button"
-                class="relative rounded-lg border overflow-hidden focus:outline-none focus:ring-2 focus:ring-primary"
-                :class="characterPortraitUrl === url
-                  ? 'border-primary ring-1 ring-primary'
-                  : 'border-gray-300 hover:border-primary/50'"
-                :title="i === 0 ? 'Front / featured lookbook plate' : `Lookbook plate ${i + 1}`"
-                :disabled="frameBusy"
-                @click="lockBiblePlate(url)"
+                class="rounded-lg border border-gray-300 overflow-hidden"
+                :title="i === 0 ? 'Front / featured lookbook (prompt only)' : `Lookbook plate ${i + 1}`"
               >
                 <img
                   :src="playbackSrc(url)"
                   :alt="`${selectedCharacter.name} plate ${i + 1}`"
                   class="w-20 h-20 object-cover bg-black"
                 >
-              </button>
+              </div>
             </div>
-            <div class="flex flex-wrap gap-2 items-center">
-              <button
-                v-if="characterPortraitUrl"
-                type="button"
-                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-gray-950 hover:bg-primary/90 disabled:opacity-40"
-                :disabled="frameBusy"
-                @click="useCharacterReference"
-              >
-                {{ frameBusy ? 'Locking…' : 'Use bible lookbook as reference' }}
-              </button>
-              <p
-                v-if="referenceMediaId"
-                class="text-xs text-primary font-medium"
-              >
-                Bible lookbook locked as repair reference
-              </p>
-            </div>
+            <p class="text-xs text-primary font-medium">
+              Bible look used in the repair prompt only — not as an image keyframe (avoids restyling the whole shot).
+            </p>
           </div>
         </div>
       </section>
@@ -423,9 +403,6 @@ const sourceGenerationModel = ref('')
 const uploadHint = ref('')
 const sourceModelLabel = computed(() => formatSourceGenerationModelLabel(sourceGenerationModel.value))
 
-const referenceMediaId = ref('')
-const referencePreview = ref('')
-const frameBusy = ref(false)
 const selectedCharacterIds = ref<string[]>([])
 const characterId = ref('')
 const characterPortraitUrl = ref('')
@@ -581,8 +558,6 @@ async function onProjectChange () {
   characterNotes.value = ''
   characterPortraitUrl.value = ''
   characterPlateUrls.value = []
-  referenceMediaId.value = ''
-  referencePreview.value = ''
   sourceAssetId.value = ''
   sourceMediaId.value = ''
   sourcePlayback.value = ''
@@ -657,43 +632,7 @@ async function onUploadSource (e: Event) {
   }
 }
 
-async function uploadFrameBlob (blob: Blob) {
-  frameBusy.value = true
-  try {
-    const fd = new FormData()
-    fd.append('file', blob, 'frame.jpg')
-    const res = await $fetch<{ mediaId: string; playbackUrl: string }>(
-      '/api/repair/video/extract-frame',
-      { method: 'POST', headers: authHeaders(), body: fd }
-    )
-    referenceMediaId.value = res.mediaId
-    referencePreview.value = playbackSrc(res.playbackUrl)
-  } finally {
-    frameBusy.value = false
-  }
-}
-
-async function useCharacterReference () {
-  if (!characterPortraitUrl.value) return
-  frameBusy.value = true
-  try {
-    const res = await fetch(playbackSrc(characterPortraitUrl.value), { headers: authHeaders() })
-    if (!res.ok) throw new Error('Could not load character bible plate')
-    const blob = await res.blob()
-    await uploadFrameBlob(blob)
-  } catch (e: unknown) {
-    formError.value = formatApiFetchError(e, 'Could not use the character bible lookbook.')
-  } finally {
-    frameBusy.value = false
-  }
-}
-
-async function lockBiblePlate (url: string) {
-  characterPortraitUrl.value = url
-  await useCharacterReference()
-}
-
-async function applyCharacter (c: ProjectCharacterRef | null) {
+function applyCharacter (c: ProjectCharacterRef | null) {
   if (!c) {
     characterId.value = ''
     characterName.value = ''
@@ -713,10 +652,7 @@ async function applyCharacter (c: ProjectCharacterRef | null) {
   const plates = collectCharacterPortraitUrls([c], 4)
   characterPlateUrls.value = plates
   characterPortraitUrl.value = plates[0] || c.portraitUrl || ''
-  // Auto-lock bible front plate as the Aleph reference.
-  if (characterPortraitUrl.value) {
-    await useCharacterReference()
-  }
+  // Do NOT upload lookbook plates as Aleph keyframes — full-body sheets restyle the whole shot.
 }
 
 function onSourceCharacters () {
@@ -737,7 +673,6 @@ function onSourceCharacters () {
   const hits = findCharactersInShot(shot, characterRefs.value)
   const c = hits[0] || characterRefs.value[0]
   if (!c) return
-  // Triggers watch → applyCharacter (bio + lookbook auto-lock).
   selectedCharacterIds.value = [c.id]
 }
 
@@ -765,10 +700,6 @@ async function submitRepair () {
         sourceMediaId: sourceMediaId.value || undefined,
         sourceGenerationModel: sourceGenerationModel.value || undefined,
         durationSeconds: sourceDuration.value,
-        referenceMediaId: referenceMediaId.value || undefined,
-        referenceImageUrl: !referenceMediaId.value && characterPortraitUrl.value
-          ? characterPortraitUrl.value
-          : undefined,
         characterId: characterId.value || undefined,
         characterName: characterName.value || undefined,
         characterAppearance: characterAppearance.value || undefined,
