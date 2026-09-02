@@ -25,8 +25,8 @@ function buildAlephKeyframes (
     return []
   }
   const uri = assertHttpsProviderMediaUrl(candidate, 'Reference image')
-  // Pin the same look at start / mid / end so the correction does not fade mid-clip.
-  // Only multi-pin when duration is probed — client metadata often overstates length.
+  // Pin the same reference across the clip (dense for ~3s) so the fix does not
+  // fade after frame 0. Untrusted durations still multi-pin under a safe ceiling.
   return buildAlephKeyframeEntries(uri, input.durationSeconds, {
     durationTrusted: input.durationTrusted === true
   })

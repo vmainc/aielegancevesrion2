@@ -83,6 +83,7 @@ describe('buildVideoRepairPrompt', () => {
     })
     expect(prompt).toMatch(/filmmaker reference still/i)
     expect(prompt).toMatch(/iris color\/size only/i)
+    expect(prompt).toMatch(/EVERY frame|entire clip/i)
     expect(prompt).toMatch(/studio portrait|character sheet/i)
   })
 

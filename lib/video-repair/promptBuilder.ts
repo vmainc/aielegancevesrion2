@@ -134,8 +134,8 @@ export function buildVideoRepairPrompt (
   // User-uploaded reference stills guide the named fix only — never restyle the shot.
   const refNote = ctx.hasReferenceFrame
     ? faceEyes
-      ? 'A filmmaker reference still is attached for iris color/size only. Keep the source framing, environment, wardrobe, lighting setup, and other characters. Never replace the shot with a studio portrait or character sheet.'
-      : 'A filmmaker reference still is attached for the named fix only. Keep the source framing and environment. Never replace the shot with a studio portrait or character sheet.'
+      ? 'A filmmaker reference still is attached for iris color/size only. Hold that corrected look in EVERY frame for the full clip — do not fade back to the source eyes after the first frame. Keep the source framing, environment, wardrobe, lighting setup, and other characters. Never replace the shot with a studio portrait or character sheet.'
+      : 'A filmmaker reference still is attached for the named fix only. Hold the correction for the entire clip — do not fade back to the source after the first frame. Keep the source framing and environment. Never replace the shot with a studio portrait or character sheet.'
     : ''
   // For eye fixes, do not let "match Seedance grade" override the iris color change.
   const sourceLook = faceEyes
