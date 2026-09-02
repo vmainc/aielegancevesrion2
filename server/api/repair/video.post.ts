@@ -44,8 +44,6 @@ import {
   videoRepairResultPath
 } from '~/server/utils/video-repair-media-store'
 import { buildProviderFetchableUrl } from '~/server/utils/video-repair-public-url'
-import { cropLookbookPlateToFaceJpeg } from '~/server/utils/face-crop-lookbook'
-import { loadCharacterLookbookPlateBuffer } from '~/server/utils/load-character-plate-buffer'
 import {
   imageDataUriFromMedia,
   loadProjectAssetVideoBuffer,
@@ -101,7 +99,7 @@ export default defineEventHandler(async (event) => {
   const sourceAssetId = str(body.sourceAssetId)
   const sourceMediaIdIn = str(body.sourceMediaId)
   const sourceUrlIn = str(body.sourceVideoUrl)
-  let referenceMediaId = str(body.referenceMediaId)
+  const referenceMediaId = str(body.referenceMediaId)
   const referenceImageUrl = str(body.referenceImageUrl)
   const durationRaw = Number(body.durationSeconds ?? body.duration)
   let durationSeconds = Number.isFinite(durationRaw) ? durationRaw : null
@@ -196,41 +194,14 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // Face/identity repairs: stage a FACE CROP of the bible lookbook as Aleph keyframes.
-  // Full-body plates restyle the whole shot; prompt-only often changes nothing.
-  const wantsFaceRef =
-    !referenceMediaId &&
-    !referenceImageUrl &&
-    Boolean(projectId && characterId) &&
-    (visual.includes('face_eyes') || visual.includes('character_consistency'))
-  if (wantsFaceRef) {
-    try {
-      const plate = await loadCharacterLookbookPlateBuffer(projectId, characterId)
-      if (plate) {
-        const cropped = await cropLookbookPlateToFaceJpeg(plate.data)
-        if (cropped) {
-          const staged = await stageBufferAsRepairMedia(cropped.data, cropped.mime)
-          referenceMediaId = staged.mediaId
-          console.info(
-            '[repair/video] staged face-crop lookbook keyframe',
-            'character=',
-            characterId,
-            'bytes=',
-            cropped.data.length
-          )
-        }
-      }
-    } catch (e: unknown) {
-      console.warn('[repair/video] face-crop lookbook failed; continuing prompt-only', e)
-    }
-  }
-
-  const hasReferenceFrame = Boolean(referenceMediaId || referenceImageUrl)
+  // Bible identity stays in the prompt text. Keyframes come only from an explicit
+  // user upload (referenceMediaId / referenceImageUrl) — auto lookbook/face-crop
+  // keyframes restyled the whole shot into a studio plate.
   const prompt = buildVideoRepairPrompt({
     categories: visual,
     userDescription,
     repairMode,
-    hasReferenceFrame,
+    hasReferenceFrame: Boolean(referenceMediaId || referenceImageUrl),
     sourceGenerationModel: sourceGenerationModel || undefined,
     characterName: str(body.characterName),
     characterAppearance: str(body.characterAppearance),

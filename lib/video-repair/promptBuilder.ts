@@ -131,11 +131,11 @@ export function buildVideoRepairPrompt (
       : mode === 'balanced'
         ? 'The named correction must be noticeable.'
         : ''
-  // Face-crop keyframes (from bible lookbook) guide eyes/identity only — never the whole set.
+  // User-uploaded reference stills guide the named fix only — never restyle the shot.
   const refNote = ctx.hasReferenceFrame
     ? faceEyes
-      ? 'A close-up face reference is attached for iris color/size only. Keep the source framing, cave/environment, wardrobe, headlamp, and other characters. Never replace the shot with a studio character sheet.'
-      : 'A close-up identity reference is attached for the named fix only. Keep the source framing and environment. Never replace the shot with a studio character sheet.'
+      ? 'A filmmaker reference still is attached for iris color/size only. Keep the source framing, environment, wardrobe, lighting setup, and other characters. Never replace the shot with a studio portrait or character sheet.'
+      : 'A filmmaker reference still is attached for the named fix only. Keep the source framing and environment. Never replace the shot with a studio portrait or character sheet.'
     : ''
   // For eye fixes, do not let "match Seedance grade" override the iris color change.
   const sourceLook = faceEyes

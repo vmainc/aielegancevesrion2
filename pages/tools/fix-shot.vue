@@ -122,7 +122,7 @@
             Project &amp; character
           </h2>
           <p class="text-sm text-gray-600">
-            Choose the project, then the cast member to keep consistent. Bible bio and lookbook lock into the repair.
+            Choose the project, then the cast member. Bible bio guides identity in the prompt; upload a reference still below for visual accuracy.
           </p>
         </div>
         <div class="space-y-2 max-w-xl">
@@ -154,7 +154,7 @@
             input-id="fix-shot-character"
             :options="characterTypeaheadOptions"
             placeholder="Type a character name… (e.g. Macklin)"
-            hint="One character per repair. For Face/Eyes we send a face-crop of their lookbook (not the full body plate) so the shot stays intact."
+            hint="One character per repair. Bible bio is prompt-only — upload a reference still for eye/face accuracy."
           />
           <div v-if="selectedCharacter" class="space-y-3">
             <p class="text-sm text-gray-700">
@@ -177,8 +177,8 @@
                 >
               </div>
             </div>
-            <p class="text-xs text-primary font-medium">
-              Face/Eyes repairs use a face-crop from this lookbook as the keyframe — not the full-body plate.
+            <p class="text-xs text-gray-500">
+              Lookbook shown for context only — not sent as a keyframe (that was restyling the whole shot).
             </p>
           </div>
         </div>
@@ -263,6 +263,49 @@
           />
           <p class="mt-1.5 text-[11px] text-gray-500">
             Tip: write the problem in plain language, then Enhance to sharpen it for the repair model.
+          </p>
+        </div>
+      </section>
+
+      <section class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-4">
+        <div>
+          <h2 class="text-[11px] font-semibold uppercase tracking-cinema text-primary mb-1">
+            Reference still
+          </h2>
+          <p class="text-sm text-gray-600">
+            Optional but recommended for Face/Eyes. Upload a still that shows the <em>correct</em> look
+            (e.g. dark brown eyes). This is the only image sent as an Aleph keyframe — bible lookbooks stay prompt-only.
+          </p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+          <label class="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-300 text-sm font-semibold text-gray-800 hover:border-primary/50 cursor-pointer">
+            {{ frameBusy ? 'Uploading…' : 'Upload reference image' }}
+            <input
+              type="file"
+              accept="image/jpeg,image/png,image/webp"
+              class="sr-only"
+              :disabled="frameBusy"
+              @change="onUploadReference"
+            >
+          </label>
+          <button
+            v-if="referenceMediaId"
+            type="button"
+            class="px-3 py-2 text-sm font-semibold rounded-lg border border-gray-300 text-gray-700 hover:border-red-400/60"
+            :disabled="frameBusy"
+            @click="clearReference"
+          >
+            Clear reference
+          </button>
+        </div>
+        <div v-if="referencePreview" class="flex items-center gap-3">
+          <img
+            :src="referencePreview"
+            alt="Uploaded reference"
+            class="w-28 h-28 object-cover rounded-lg border border-primary/40 bg-black"
+          >
+          <p class="text-sm text-primary font-medium">
+            Reference locked — will guide the named fix across the clip
           </p>
         </div>
       </section>
@@ -410,6 +453,9 @@ const characterPlateUrls = ref<string[]>([])
 const characterName = ref('')
 const characterAppearance = ref('')
 const characterNotes = ref('')
+const referenceMediaId = ref('')
+const referencePreview = ref('')
+const frameBusy = ref(false)
 
 const phase = ref<'form' | 'repairing' | 'result'>('form')
 const jobId = ref('')
@@ -565,6 +611,7 @@ async function onProjectChange () {
   sourceGenerationModel.value = ''
   libraryClips.value = []
   versions.value = []
+  clearReference()
 
   if (!pid) return
   await loadLibrary()
@@ -632,6 +679,38 @@ async function onUploadSource (e: Event) {
   }
 }
 
+function clearReference () {
+  referenceMediaId.value = ''
+  referencePreview.value = ''
+}
+
+async function uploadFrameBlob (blob: Blob) {
+  frameBusy.value = true
+  formError.value = ''
+  try {
+    const fd = new FormData()
+    fd.append('file', blob, 'reference.jpg')
+    const res = await $fetch<{ mediaId: string; playbackUrl: string }>(
+      '/api/repair/video/extract-frame',
+      { method: 'POST', headers: authHeaders(), body: fd }
+    )
+    referenceMediaId.value = res.mediaId
+    referencePreview.value = playbackSrc(res.playbackUrl)
+  } catch (e: unknown) {
+    formError.value = formatApiFetchError(e, 'Could not upload that reference image.')
+  } finally {
+    frameBusy.value = false
+  }
+}
+
+async function onUploadReference (e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  await uploadFrameBlob(file)
+}
+
 function applyCharacter (c: ProjectCharacterRef | null) {
   if (!c) {
     characterId.value = ''
@@ -652,7 +731,7 @@ function applyCharacter (c: ProjectCharacterRef | null) {
   const plates = collectCharacterPortraitUrls([c], 4)
   characterPlateUrls.value = plates
   characterPortraitUrl.value = plates[0] || c.portraitUrl || ''
-  // Do NOT upload lookbook plates as Aleph keyframes — full-body sheets restyle the whole shot.
+  // Bible plates stay prompt-only. User-uploaded reference stills become keyframes.
 }
 
 function onSourceCharacters () {
@@ -700,6 +779,7 @@ async function submitRepair () {
         sourceMediaId: sourceMediaId.value || undefined,
         sourceGenerationModel: sourceGenerationModel.value || undefined,
         durationSeconds: sourceDuration.value,
+        referenceMediaId: referenceMediaId.value || undefined,
         characterId: characterId.value || undefined,
         characterName: characterName.value || undefined,
         characterAppearance: characterAppearance.value || undefined,

@@ -73,7 +73,7 @@ describe('buildVideoRepairPrompt', () => {
     expect(prompt).toMatch(/Exception: eye color/i)
   })
 
-  it('warns against restyling when a face-crop keyframe is present', () => {
+  it('warns against restyling when a filmmaker reference still is present', () => {
     const prompt = buildVideoRepairPrompt({
       categories: ['face_eyes'],
       userDescription: 'Darken the irises.',
@@ -81,8 +81,9 @@ describe('buildVideoRepairPrompt', () => {
       hasReferenceFrame: true,
       characterName: 'Macklin'
     })
-    expect(prompt).toMatch(/iris color\/size only|face reference/i)
-    expect(prompt).toMatch(/studio character sheet/i)
+    expect(prompt).toMatch(/filmmaker reference still/i)
+    expect(prompt).toMatch(/iris color\/size only/i)
+    expect(prompt).toMatch(/studio portrait|character sheet/i)
   })
 
   it('ignores voice-only categories for visual instructions', () => {
