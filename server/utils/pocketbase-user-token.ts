@@ -9,7 +9,7 @@ export type PocketBaseUserFromRequestOpts = {
   allowAccessTokenQuery?: boolean
 }
 
-function extractUserJwtFromEvent (event: H3Event, opts?: PocketBaseUserFromRequestOpts): string {
+function peekUserJwtFromEvent (event: H3Event, opts?: PocketBaseUserFromRequestOpts): string | null {
   const raw = getHeader(event, 'authorization') || getHeader(event, 'Authorization') || ''
   const m = raw.match(/^Bearer\s+(.+)$/i)
   const fromHeader = m?.[1]?.trim()
@@ -21,6 +21,12 @@ function extractUserJwtFromEvent (event: H3Event, opts?: PocketBaseUserFromReque
       return q.access_token.trim()
     }
   }
+  return null
+}
+
+function extractUserJwtFromEvent (event: H3Event, opts?: PocketBaseUserFromRequestOpts): string {
+  const token = peekUserJwtFromEvent(event, opts)
+  if (token) return token
 
   const msg =
     opts?.allowAccessTokenQuery && event.method === 'GET'
@@ -38,7 +44,23 @@ export async function getPocketBaseUserIdFromRequest (
   opts?: PocketBaseUserFromRequestOpts
 ): Promise<string> {
   const token = extractUserJwtFromEvent(event, opts)
+  return refreshUserIdFromToken(event, token)
+}
 
+/**
+ * Same as getPocketBaseUserIdFromRequest, but guests (no token) return null.
+ * An invalid token still 401s so a bad session is not treated as anonymous.
+ */
+export async function tryGetPocketBaseUserIdFromRequest (
+  event: H3Event,
+  opts?: PocketBaseUserFromRequestOpts
+): Promise<string | null> {
+  const token = peekUserJwtFromEvent(event, opts)
+  if (!token) return null
+  return refreshUserIdFromToken(event, token)
+}
+
+async function refreshUserIdFromToken (_event: H3Event, token: string): Promise<string> {
   const config = useRuntimeConfig()
   const admin = resolvePocketBaseAdmin(config)
   const base =

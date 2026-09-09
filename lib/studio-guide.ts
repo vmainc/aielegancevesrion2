@@ -1,3 +1,5 @@
+import { conversationTitleFromQuestion } from '~/lib/conversation-title'
+
 /** Studio-wide Guide — routing assistant (client + server). */
 
 export type StudioGuideAction = {
@@ -35,6 +37,7 @@ export type StudioGuideChatMessage = {
   /** When set, UI shows a Build card so the Guide can create the project. */
   buildProject?: StudioGuideBuildProject
   createdAt: string
+  model?: string
 }
 
 export type StudioGuideDestination = {
@@ -210,6 +213,8 @@ export type StudioGuideChat = {
   messages: StudioGuideChatMessage[]
   createdAt: string
   updatedAt: string
+  /** PocketBase `conversations` id once this thread has been saved for a signed-in user. */
+  pbConversationId?: string
 }
 
 export type StudioGuideChatStore = {
@@ -408,16 +413,16 @@ function parseMessage (m: unknown): StudioGuideChatMessage | null {
     content: msg.content,
     createdAt: typeof msg.createdAt === 'string' ? msg.createdAt : new Date().toISOString(),
     actions: parseActions(msg.actions),
-    buildProject: parseStudioGuideBuildProject(msg.buildProject)
+    buildProject: parseStudioGuideBuildProject(msg.buildProject),
+    ...(typeof msg.model === 'string' && msg.model.trim() ? { model: msg.model.trim() } : {})
   }
 }
 
-/** Title from the first user message (ChatGPT-style). */
+/** Title from the first user message (first ~50–70 characters). */
 export function titleFromStudioGuideMessages (messages: StudioGuideChatMessage[]): string {
   const firstUser = messages.find(m => m.role === 'user' && m.content.trim())
   if (!firstUser) return 'New chat'
-  const t = firstUser.content.trim().replace(/\s+/g, ' ')
-  return t.length > 48 ? `${t.slice(0, 48).trim()}…` : t
+  return conversationTitleFromQuestion(firstUser.content)
 }
 
 export function createEmptyStudioGuideChat (): StudioGuideChat {
@@ -448,7 +453,16 @@ function parseChat (raw: unknown): StudioGuideChat | null {
     typeof o.title === 'string' && o.title.trim()
       ? o.title.trim().slice(0, 80)
       : titleFromStudioGuideMessages(messages)
-  return { id: o.id, title, messages, createdAt, updatedAt }
+  return {
+    id: o.id,
+    title,
+    messages,
+    createdAt,
+    updatedAt,
+    ...(typeof o.pbConversationId === 'string' && o.pbConversationId
+      ? { pbConversationId: o.pbConversationId }
+      : {})
+  }
 }
 
 /** Legacy single-thread message array. */

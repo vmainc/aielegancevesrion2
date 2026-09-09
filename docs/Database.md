@@ -12,6 +12,8 @@ Migrations for existing installs: `scripts/add-fields-to-collections.js`
 ```
 users
   │
+  ├── conversations ── messages
+  │
   ├── creative_projects ─────┬── creative_scenes ─── creative_shots
   │                          ├── creative_characters
   │                          └── project_assets
@@ -27,7 +29,19 @@ users
 
 ### `users` (built-in)
 
-Authentication via email/password. Optional `name`. All creative rows reference `owned_by` → `users`.
+Authentication via email/password. Fields: `name`, `email`, `avatar`, `created`, `updated`. Public registration is enabled (`createRule` empty). Own-record list/view/update/delete.
+
+---
+
+### `conversations`
+
+Signed-in Studio Guide (Home) threads. `user` → `users`. Title is the first ~50–70 characters of the first question. Rules: owner only (`user = @request.auth.id`).
+
+### `messages`
+
+Turns in a conversation. `conversation` → `conversations` (cascade delete), `user` → `users`, `role` (`user` | `assistant` | `system`), `content`, `model`. Rules require both `user` and `conversation.user` to match the authenticated user.
+
+See [POCKETBASE_SETUP.md](./POCKETBASE_SETUP.md) for full rules.
 
 ---
 

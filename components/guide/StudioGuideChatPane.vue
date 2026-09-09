@@ -93,16 +93,6 @@ async function onSend () {
   </div>
 
   <div
-    v-else-if="!isAuthenticated"
-    class="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900"
-  >
-    <NuxtLink to="/login?redirect=/guide" class="font-semibold text-primary hover:underline">
-      Sign in
-    </NuxtLink>
-    to use Home — your Studio Guide.
-  </div>
-
-  <div
     v-else
     class="flex flex-col min-h-0 h-full overflow-hidden"
     :class="compact ? '' : 'sm:rounded-xl sm:border sm:border-gray-200 sm:bg-studio-slate sm:shadow-sm'"
@@ -375,14 +365,26 @@ async function onSend () {
             @keydown.enter.exact.prevent="onSend"
           />
           <div class="flex flex-wrap items-center justify-between gap-2">
-            <button
-              type="button"
-              class="text-xs text-gray-500 hover:text-red-700 disabled:opacity-40"
-              :disabled="sending || building || !messages.length"
-              @click="clearActiveChat"
-            >
-              Clear this chat
-            </button>
+            <div class="flex flex-wrap items-center gap-3">
+              <button
+                type="button"
+                class="text-xs text-gray-500 hover:text-red-700 disabled:opacity-40"
+                :disabled="sending || building || !messages.length"
+                @click="clearActiveChat"
+              >
+                Clear this chat
+              </button>
+              <p
+                v-if="authReady && !isAuthenticated"
+                class="text-xs text-gray-500"
+              >
+                <NuxtLink
+                  to="/login?redirect=/guide"
+                  class="text-primary hover:underline font-medium"
+                >Sign in</NuxtLink>
+                to save your conversations.
+              </p>
+            </div>
             <button
               type="submit"
               class="px-4 py-2 text-sm font-semibold rounded-lg bg-primary text-gray-950 hover:bg-primary/90 disabled:opacity-50"

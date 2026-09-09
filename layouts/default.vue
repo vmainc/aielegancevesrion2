@@ -82,6 +82,12 @@
                 >
                   Projects
                 </NuxtLink>
+                <NuxtLink
+                  to="/history"
+                  class="inline-flex items-center text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
+                >
+                  History
+                </NuxtLink>
                 <div ref="assetsMenuRef" class="relative">
                   <button
                     type="button"
@@ -251,17 +257,32 @@
 
             <!-- Account / login (part of right menu) -->
             <ClientOnly>
-              <div class="flex items-center">
-                <template v-if="showAuthenticatedUi">
+              <div class="flex items-center gap-2 sm:gap-3">
+                <template v-if="!authReady">
+                  <span class="inline-block h-9 w-28 sm:w-40" aria-hidden="true" />
+                </template>
+                <template v-else-if="isAuthenticated">
                   <div ref="accountMenuRef" class="relative hidden lg:flex items-center">
                     <button
                       type="button"
-                      class="inline-flex items-center gap-1.5 text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
+                      class="inline-flex items-center gap-2 text-gray-700 hover:text-primary transition-colors text-base font-medium leading-none"
                       :aria-expanded="dropdownOpen"
                       aria-haspopup="true"
                       aria-label="Account"
                       @click.stop="toggleDropdown"
                     >
+                      <img
+                        v-if="avatarUrl"
+                        :src="avatarUrl"
+                        alt=""
+                        class="w-8 h-8 rounded-full object-cover border border-primary/40"
+                      />
+                      <span
+                        v-else
+                        class="w-8 h-8 rounded-full bg-primary/15 border border-primary/40 text-primary text-xs font-semibold inline-flex items-center justify-center"
+                      >
+                        {{ userInitial }}
+                      </span>
                       <span>{{ userFirstName || 'Account' }}</span>
                       <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
@@ -274,17 +295,24 @@
                     >
                       <NuxtLink
                         to="/account"
-                        class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-t-lg"
+                        class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                         @click="closeDropdown"
                       >
-                        Settings
+                        My Account
+                      </NuxtLink>
+                      <NuxtLink
+                        to="/history"
+                        class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
+                        @click="closeDropdown"
+                      >
+                        History
                       </NuxtLink>
                       <button
                         type="button"
                         class="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-red-600 transition-colors rounded-b-lg"
                         @click="handleLogout"
                       >
-                        Logout
+                        Log Out
                       </button>
                     </div>
                   </div>
@@ -292,19 +320,20 @@
                 <template v-else>
                   <NuxtLink
                     to="/login"
+                    class="hidden sm:inline-flex items-center text-gray-700 hover:text-primary transition-colors text-sm sm:text-base font-medium leading-none px-2"
+                  >
+                    Log In
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/register"
                     class="inline-flex items-center justify-center px-3 sm:px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-sm sm:text-base leading-none"
                   >
-                    Login
+                    Create Account
                   </NuxtLink>
                 </template>
               </div>
               <template #fallback>
-                <NuxtLink
-                  to="/login"
-                  class="hidden lg:inline-flex items-center justify-center px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors leading-none"
-                >
-                  Login
-                </NuxtLink>
+                <span class="hidden lg:inline-block h-9 w-40" aria-hidden="true" />
               </template>
             </ClientOnly>
 
@@ -401,6 +430,13 @@
                 >
                   Projects
                 </NuxtLink>
+                <NuxtLink
+                  to="/history"
+                  class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 active:bg-gray-50 transition-colors rounded-lg font-medium"
+                  @click="closeMobileMenu"
+                >
+                  History
+                </NuxtLink>
                 <div class="rounded-lg border border-gray-200 overflow-hidden">
                   <div class="block px-4 py-3.5 text-gray-900 font-medium bg-gray-50 border-b border-gray-200">
                     Assets
@@ -487,14 +523,21 @@
                     class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
                     @click="closeMobileMenu"
                   >
-                    Settings
+                    My Account
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/history"
+                    class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium"
+                    @click="closeMobileMenu"
+                  >
+                    History
                   </NuxtLink>
                   <button
                     type="button"
                     class="w-full text-left px-4 py-3.5 text-gray-700 hover:text-red-600 hover:bg-gray-50 transition-colors rounded-lg font-medium"
                     @click="handleMobileLogout"
                   >
-                    Logout
+                    Log Out
                   </button>
                 </div>
               </template>
@@ -527,13 +570,20 @@
                 >
                   Workflow
                 </NuxtLink>
-                <div class="pt-2 border-t border-gray-200 mt-2">
+                <div class="pt-2 border-t border-gray-200 mt-2 space-y-2">
                   <NuxtLink
                     to="/login"
+                    class="block px-4 py-3.5 text-gray-700 hover:text-primary hover:bg-gray-50 transition-colors rounded-lg font-medium text-center"
+                    @click="closeMobileMenu"
+                  >
+                    Log In
+                  </NuxtLink>
+                  <NuxtLink
+                    to="/register"
                     class="block px-4 py-3.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg transition-colors text-center"
                     @click="closeMobileMenu"
                   >
-                    Login
+                    Create Account
                   </NuxtLink>
                 </div>
               </template>
@@ -581,7 +631,7 @@
 <script setup>
 import logo from '~/assets/img/logo.png'
 
-const { showAuthenticatedUi, logout, user } = useAuth()
+const { showAuthenticatedUi, authReady, isAuthenticated, logout, user, avatarUrl } = useAuth()
 
 const dropdownOpen = ref(false)
 const dropdownRef = ref(null)
@@ -598,6 +648,12 @@ const mobileMenuRef = ref(null)
 const userFirstName = computed(() => {
   if (!user.value?.name) return null
   return user.value.name.split(' ')[0]
+})
+
+const userInitial = computed(() => {
+  const n = userFirstName.value || user.value?.email
+  if (!n || typeof n !== 'string') return 'A'
+  return n.charAt(0).toUpperCase()
 })
 
 function closeAllDesktopDropdowns () {

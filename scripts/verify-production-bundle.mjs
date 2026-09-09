@@ -29,6 +29,22 @@ for (const dir of nuxtDirs) {
       )
       process.exit(1)
     }
+    const secretHits = [
+      'POCKETBASE_ADMIN_PASSWORD',
+      'POCKETBASE_ADMIN_EMAIL',
+      'OPENROUTER_API_KEY',
+      'ATLASCLOUD_API_KEY',
+      'LUMA_API_KEY',
+      'sk-or-v1-'
+    ].filter((marker) => text.includes(marker))
+    if (secretHits.length) {
+      console.error(
+        'verify-production-bundle: client chunk looks like it contains server secrets:',
+        path.relative(root, filePath),
+        secretHits.join(', ')
+      )
+      process.exit(1)
+    }
   }
   console.log(
     'verify-production-bundle: OK — no @vite/client in',

@@ -1,7 +1,8 @@
 import { ApiErrorCode, isAbortLikeError, throwApiError } from '~/server/utils/api-error-envelope'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 import { buildOpenRouterChatCompletionBody } from '~/server/utils/openrouter-chat-completion'
-import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { tryGetPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
+import { getRequestIP } from 'h3'
 import { getAuthenticatedPocketBase } from '~/server/utils/pocketbase'
 import { checkRateLimit, rateLimitKey } from '~/server/utils/rate-limit'
 import { listSharedProjectIdsForUser } from '~/server/utils/project-access'
@@ -61,8 +62,9 @@ async function loadAccessibleProjects (userId: string): Promise<StudioGuideProje
 }
 
 export default defineEventHandler(async (event) => {
-  const userId = await getPocketBaseUserIdFromRequest(event)
-  checkRateLimit(rateLimitKey(userId, 'studio-guide'), 30, 60_000)
+  const userId = await tryGetPocketBaseUserIdFromRequest(event)
+  const rateId = userId || getRequestIP(event, { xForwardedFor: true }) || 'anonymous'
+  checkRateLimit(rateLimitKey(rateId, 'studio-guide'), userId ? 30 : 12, 60_000)
 
   const body = await readBody<{ messages?: ChatTurn[] }>(event)
   const messages = Array.isArray(body?.messages) ? body.messages : []
@@ -77,7 +79,7 @@ export default defineEventHandler(async (event) => {
     throwApiError(400, ApiErrorCode.VALIDATION_ERROR, 'messages must include at least one user turn')
   }
 
-  const projects = await loadAccessibleProjects(userId)
+  const projects = userId ? await loadAccessibleProjects(userId) : []
   const allowedProjectIds = new Set(projects.map(p => p.id))
 
   const config = useRuntimeConfig()
@@ -174,7 +176,8 @@ export default defineEventHandler(async (event) => {
       continue
     }
 
-    return parseStudioGuideResponse(content, allowedProjectIds)
+    const parsed = parseStudioGuideResponse(content, allowedProjectIds)
+    return { ...parsed, model: candidate }
   }
 
   throwApiError(

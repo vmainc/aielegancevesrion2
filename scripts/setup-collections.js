@@ -1161,6 +1161,132 @@ async function createCollections(adminEmail, adminPassword) {
       console.log('⚠️  Could not ensure project_members:', e.message || e, '\n');
     }
 
+    console.log('👤 Ensuring users collection allows email/password registration...');
+    try {
+      const users = await pb.collections.getFirstListItem('name="users"');
+      const usersPatch = {
+        createRule: '',
+        listRule: 'id = @request.auth.id',
+        viewRule: 'id = @request.auth.id',
+        updateRule: 'id = @request.auth.id',
+        deleteRule: 'id = @request.auth.id'
+      };
+      if (users.verification && typeof users.verification === 'object') {
+        usersPatch.verification = { ...users.verification, enabled: false };
+      }
+      if (users.password && typeof users.password === 'object') {
+        usersPatch.password = { ...users.password, enabled: true, identityFields: ['email'] };
+      }
+      await pb.collections.update(users.id, usersPatch);
+      console.log('  ✅ users: public sign-up, own-record list/view/update/delete\n');
+    } catch (e) {
+      console.log('⚠️  Could not update users collection:', e.message || e, '\n');
+    }
+
+    // User conversation history (Studio Guide persistence)
+    console.log('🗂️  Ensuring conversations and messages collections...');
+    try {
+      console.log('  Ensuring "conversations"...');
+      try {
+        await pb.collections.getFirstListItem('name="conversations"');
+        console.log('  ⚠️  "conversations" already exists, skipping...');
+      } catch (_missing) {
+        await createCollectionThenRules(pb, {
+          name: 'conversations',
+          type: 'base',
+          listRule: '@request.auth.id != "" && user = @request.auth.id',
+          viewRule: '@request.auth.id != "" && user = @request.auth.id',
+          createRule: '@request.auth.id != "" && user = @request.auth.id',
+          updateRule: '@request.auth.id != "" && user = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && user = @request.auth.id',
+          indexes: [
+            'CREATE INDEX idx_conversations_user_created ON conversations (user, created)'
+          ],
+          fields: [
+            {
+              name: 'user',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            { name: 'title', type: 'text', required: true, options: { max: 200 } }
+          ]
+        });
+        console.log('  ✅ "conversations" created');
+      }
+
+      const conversationsId = await getCollectionIdByName(pb, 'conversations');
+
+      console.log('  Ensuring "messages"...');
+      try {
+        await pb.collections.getFirstListItem('name="messages"');
+        console.log('  ⚠️  "messages" already exists, skipping...');
+      } catch (_missing) {
+        const messageOwnerRule =
+          '@request.auth.id != "" && user = @request.auth.id && conversation.user = @request.auth.id';
+        await createCollectionThenRules(pb, {
+          name: 'messages',
+          type: 'base',
+          listRule: messageOwnerRule,
+          viewRule: messageOwnerRule,
+          createRule: messageOwnerRule,
+          updateRule: messageOwnerRule,
+          deleteRule: messageOwnerRule,
+          indexes: [
+            'CREATE INDEX idx_messages_conversation_created ON messages (conversation, created)'
+          ],
+          fields: [
+            {
+              name: 'conversation',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: conversationsId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['title']
+              }
+            },
+            {
+              name: 'user',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: true,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'role',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [{ value: 'user' }, { value: 'assistant' }, { value: 'system' }]
+              }
+            },
+            { name: 'content', type: 'text', required: true, options: { max: 20000 } },
+            { name: 'model', type: 'text', required: false, options: { max: 200 } }
+          ]
+        });
+        console.log('  ✅ "messages" created');
+      }
+
+      console.log('✅ conversations / messages collections ensured\n');
+    } catch (e) {
+      console.log('⚠️  Could not ensure conversations/messages:', e.message || e, '\n');
+    }
+
     console.log('🎉 All collections have been set up successfully!');
     console.log('\nCollections created:');
     console.log('  ✓ creative_projects / creative_scenes / creative_characters - Script import workspace (if created this run)');
@@ -1171,7 +1297,8 @@ async function createCollections(adminEmail, adminPassword) {
     console.log('  ✓ guide_messages / creative_decisions - Project Guide chat + decision log (if created this run)');
     console.log('  ✓ project_timelines - Per-project timeline documents (if created this run)');
     console.log('  ✓ project_members - Shared project access for team members (if created this run)');
-    console.log('  ✓ users - Created automatically by PocketBase');
+    console.log('  ✓ conversations / messages - Signed-in Studio Guide history (if created this run)');
+    console.log('  ✓ users - Created automatically by PocketBase (public email/password registration)');
     console.log('\n✨ You can now use the application!');
 
   } catch (error) {

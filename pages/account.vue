@@ -198,13 +198,22 @@
               </div>
             </div>
             
-            <div class="pt-4 border-t border-gray-200">
+            <div class="pt-4 border-t border-gray-200 space-y-4">
               <div class="text-center">
-                <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Current Email</p>
+                <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Email</p>
                 <ClientOnly>
                   <p class="text-gray-700 font-medium">{{ userEmail }}</p>
                   <template #fallback>
                     <p class="text-gray-700 font-medium">Loading...</p>
+                  </template>
+                </ClientOnly>
+              </div>
+              <div class="text-center">
+                <p class="text-xs text-gray-500 uppercase tracking-wide mb-1">Member since</p>
+                <ClientOnly>
+                  <p class="text-gray-700 font-medium">{{ memberSince }}</p>
+                  <template #fallback>
+                    <p class="text-gray-700 font-medium">—</p>
                   </template>
                 </ClientOnly>
               </div>
@@ -326,10 +335,14 @@
       
       <!-- Update Profile Button -->
       <div class="mt-10 pt-8 border-t border-gray-200">
-        <div class="flex items-center justify-between">
-          <div class="text-sm text-gray-500">
-            Make sure your information is up to date
-          </div>
+        <div class="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+          <button
+            type="button"
+            class="px-6 py-3.5 border border-gray-300 text-gray-700 hover:text-red-500 hover:border-red-500/50 rounded-lg font-semibold transition-all"
+            @click="logout"
+          >
+            Log Out
+          </button>
           <button
             @click="updateProfile"
             :disabled="loading"
@@ -351,11 +364,13 @@
 </template>
 
 <script setup lang="ts">
+import { friendlyProfileError } from '~/lib/auth-errors'
+
 definePageMeta({
   middleware: 'auth'
 })
 
-const { user, changePassword } = useAuth()
+const { user, changePassword, logout } = useAuth()
 const { error: showError, success: showSuccess, warning: showWarning } = useToast()
 const fileInput = ref(null)
 const profilePicture = ref(null)
@@ -399,6 +414,14 @@ const isPasswordFormValid = computed(() => {
 })
 
 const userEmail = computed(() => user.value?.email || '')
+
+const memberSince = computed(() => {
+  const raw = user.value?.created
+  if (!raw || typeof raw !== 'string') return '—'
+  const d = new Date(raw)
+  if (Number.isNaN(d.getTime())) return '—'
+  return d.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })
+})
 
 // Computed style for the draggable image
 const imageStyle = computed(() => {
@@ -725,14 +748,7 @@ const updateProfile = async () => {
     showSuccess('Profile updated successfully!')
   } catch (error: any) {
     console.error('Error updating profile:', error)
-    const status = error?.status ?? error?.response?.status
-    if (status === 401 || status === 404) {
-      showError(
-        'Your session does not match this site’s database (common after a deploy or URL change). Log out, then log in again.'
-      )
-    } else {
-      showError(error.response?.message || error.message || 'Failed to update profile')
-    }
+    showError(friendlyProfileError(error))
   } finally {
     loading.value = false
   }

@@ -1,12 +1,13 @@
 import { safeInternalPath } from '~/lib/safe-internal-path'
 
 const NEEDS_AUTH = [
-  /^\/guide(\/|$)/,
   /^\/projects(\/|$)/,
   /^\/assets(\/|$)/,
   /^\/tools(\/|$)/,
   /^\/character-creator(\/|$)/,
-  /^\/adapt-to-film(\/|$)/
+  /^\/adapt-to-film(\/|$)/,
+  /^\/account(\/|$)/,
+  /^\/history(\/|$)/
 ]
 
 function requiresWorkspaceAuth (path: string): boolean {

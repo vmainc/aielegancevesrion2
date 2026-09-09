@@ -1,88 +1,88 @@
-import PocketBase from 'pocketbase'
 import { resolveBrowserPocketBaseUrl } from '~/lib/resolve-browser-pocketbase-url'
+import { getSharedPocketBaseClient } from '~/lib/create-pocketbase-client'
+import {
+  friendlyLoginError,
+  friendlyPasswordResetError,
+  friendlyRegisterError
+} from '~/lib/auth-errors'
 
-// Create a shared PocketBase instance
-let pbInstance: PocketBase | null = null
+type AuthUser = {
+  id: string
+  email?: string
+  name?: string
+  avatar?: string
+  created?: string
+  [key: string]: unknown
+}
+
+function asAuthUser (model: unknown): AuthUser | null {
+  if (!model || typeof model !== 'object' || !('id' in (model as object))) return null
+  return model as AuthUser
+}
 
 /** Attach once after hydration so SSR HTML matches the first client paint (avoids hydration mismatch). */
 let authStoreListenerAttached = false
 
 const getPocketBaseInstance = () => {
-  if (!pbInstance) {
-    const config = useRuntimeConfig()
-    const base = import.meta.client
-      ? resolveBrowserPocketBaseUrl(config.public.pocketbaseUrl)
-      : config.public.pocketbaseUrl
-    pbInstance = new PocketBase(base)
-  }
-  return pbInstance
+  const config = useRuntimeConfig()
+  const base = import.meta.client
+    ? resolveBrowserPocketBaseUrl(String(config.public.pocketbaseUrl || ''))
+    : String(config.public.pocketbaseUrl || '')
+  return getSharedPocketBaseClient(base)
 }
 
 export const useAuth = () => {
   const pb = getPocketBaseInstance()
 
-  // Initialize with null, will be set by initAuth
-  const user = useState('auth_user', () => null)
+  const user = useState<AuthUser | null>('auth_user', () => null)
   const authToken = useState<string | null>('auth_token', () => null)
   /** False until after first client mount + initAuth — layout stays on guest SSR markup during hydration. */
   const authReady = useState('auth_ready', () => false)
   const isAuthenticated = computed(() => !!user.value || !!authToken.value)
   /** Use in templates: true only when session is known and user is signed in. */
   const showAuthenticatedUi = computed(() => authReady.value && isAuthenticated.value)
+  const currentUser = computed(() => user.value)
 
   if (import.meta.client && !authStoreListenerAttached) {
     authStoreListenerAttached = true
     pb.authStore.onChange((_token, model) => {
-      user.value = model
+      user.value = asAuthUser(model)
       authToken.value = _token || null
     })
   }
 
-  // Initialize auth from stored token
   const initAuth = async () => {
-    // Only run on client side
     if (process.server) {
       return
     }
 
     try {
-      // PocketBase automatically loads auth from localStorage when instance is created
-      // Set user value from authStore (which has loaded from localStorage)
-      user.value = pb.authStore.model || null
+      user.value = asAuthUser(pb.authStore.model)
       authToken.value = pb.authStore.token || null
 
       if (!pb.authStore.token) {
         return
       }
-      
-      // If we have auth data and it's valid, try to refresh to get latest user data
+
       if (pb.authStore.model && pb.authStore.isValid) {
         try {
-          // Try to refresh to ensure we have the latest user data
           await pb.collection('users').authRefresh()
-          user.value = pb.authStore.model
-        } catch (refreshError) {
-          // Refresh failed - token might be expired or invalid
-          // Check if token is still marked as valid
+          user.value = asAuthUser(pb.authStore.model)
+        } catch {
           if (pb.authStore.isValid && pb.authStore.model) {
-            // Token still valid, use existing model
-            user.value = pb.authStore.model
+            user.value = asAuthUser(pb.authStore.model)
             authToken.value = pb.authStore.token || null
           } else {
-            // Token is invalid/expired, clear it
             pb.authStore.clear()
             user.value = null
             authToken.value = null
           }
         }
       } else if (pb.authStore.model && !pb.authStore.isValid && pb.authStore.token) {
-        // We have a model but token is invalid - might be expired
-        // Try refreshing once to see if we can renew it
         try {
           await pb.collection('users').authRefresh()
-          user.value = pb.authStore.model
+          user.value = asAuthUser(pb.authStore.model)
         } catch {
-          // Can't refresh, token is truly invalid
           pb.authStore.clear()
           user.value = null
           authToken.value = null
@@ -90,9 +90,8 @@ export const useAuth = () => {
       }
     } catch (error) {
       console.error('Auth initialization error:', error)
-      // On error, preserve auth if it's still valid, otherwise clear
       if (pb.authStore.model && pb.authStore.isValid) {
-        user.value = pb.authStore.model
+        user.value = asAuthUser(pb.authStore.model)
         authToken.value = pb.authStore.token || null
       } else {
         pb.authStore.clear()
@@ -102,83 +101,69 @@ export const useAuth = () => {
     }
   }
 
-  function formatLoginError(error: any): string {
-    const genericPb = 'Something went wrong while processing your request.'
-    const msg = typeof error?.message === 'string' ? error.message : ''
-    if (msg && msg !== genericPb) {
-      return msg
-    }
-    const orig = error?.originalError
-    const net =
-      orig?.name === 'TypeError' ||
-      /failed to fetch|networkerror|load failed/i.test(String(orig?.message || ''))
-    if (net || (error?.status === 0 && !error?.response?.data)) {
-      return 'Cannot reach PocketBase. If the app is on a port like :3000, use a build with Nitro’s /pb proxy, or add this origin in PocketBase Settings → API.'
-    }
-    const data = error?.response?.data ?? error?.data
-    if (data && typeof data === 'object') {
-      const parts: string[] = []
-      for (const key of Object.keys(data)) {
-        const v = data[key]
-        if (v?.message) parts.push(`${key}: ${v.message}`)
-      }
-      if (parts.length) return parts.join(' ')
-    }
-    return error?.response?.message || msg || 'Login failed'
-  }
-
-  // Login
   const login = async (email: string, password: string) => {
     try {
-      const authData = await pb.collection('users').authWithPassword(email, password)
-      user.value = authData.record
+      const authData = await pb.collection('users').authWithPassword(email.trim(), password)
+      user.value = asAuthUser(authData.record)
       authToken.value = pb.authStore.token || null
       return { success: true, error: null }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: formatLoginError(error)
+        error: friendlyLoginError(error)
       }
     }
   }
 
-  function formatPocketBaseError(error: any, fallback: string): string {
-    const data = error?.response?.data ?? error?.data
-    if (data && typeof data === 'object') {
-      const parts: string[] = []
-      for (const key of Object.keys(data)) {
-        const v = data[key]
-        if (v?.message) parts.push(`${key}: ${v.message}`)
-        else if (typeof v === 'string') parts.push(`${key}: ${v}`)
-      }
-      if (parts.length) return parts.join(' ')
-    }
-    return error?.response?.message || error?.message || fallback
-  }
+  const register = async (
+    name: string,
+    email: string,
+    password: string,
+    passwordConfirm: string
+  ) => {
+    const trimmedName = name.trim()
+    const trimmedEmail = email.trim()
 
-  // Signup (email + password only; no verification flow — disable that in PocketBase users collection)
-  const signup = async (email: string, password: string, passwordConfirm: string) => {
+    if (!trimmedName) {
+      return { success: false, error: 'Please enter your name.' }
+    }
+    if (!trimmedEmail) {
+      return { success: false, error: 'Please enter a valid email address.' }
+    }
+    if (password !== passwordConfirm) {
+      return { success: false, error: 'Passwords do not match.' }
+    }
+    if (password.length < 8) {
+      return { success: false, error: 'Password must be at least 8 characters.' }
+    }
+
     try {
       await pb.collection('users').create({
-        email: email.trim(),
+        name: trimmedName,
+        email: trimmedEmail,
         password,
-        passwordConfirm
+        passwordConfirm,
+        emailVisibility: true
       })
 
-      const authData = await pb.collection('users').authWithPassword(email.trim(), password)
-      user.value = authData.record
+      const authData = await pb.collection('users').authWithPassword(trimmedEmail, password)
+      user.value = asAuthUser(authData.record)
       authToken.value = pb.authStore.token || null
 
       return { success: true, error: null }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: formatPocketBaseError(error, 'Signup failed')
+        error: friendlyRegisterError(error)
       }
     }
   }
 
-  // Logout
+  /** @deprecated Use register() — kept for older call sites. */
+  const signup = async (email: string, password: string, passwordConfirm: string) => {
+    return register('', email, password, passwordConfirm)
+  }
+
   const logout = () => {
     pb.authStore.clear()
     user.value = null
@@ -186,12 +171,10 @@ export const useAuth = () => {
     navigateTo('/login')
   }
 
-  // Get current user ID
   const getUserId = () => {
     return user.value?.id || null
   }
 
-  // Change password (when logged in)
   const changePassword = async (oldPassword: string, newPassword: string, passwordConfirm: string) => {
     if (!user.value) {
       return {
@@ -203,14 +186,14 @@ export const useAuth = () => {
     if (newPassword !== passwordConfirm) {
       return {
         success: false,
-        error: 'New passwords do not match'
+        error: 'Passwords do not match.'
       }
     }
 
     if (newPassword.length < 8) {
       return {
         success: false,
-        error: 'Password must be at least 8 characters'
+        error: 'Password must be at least 8 characters.'
       }
     }
 
@@ -221,69 +204,77 @@ export const useAuth = () => {
         passwordConfirm
       })
       return { success: true, error: null }
-    } catch (error: any) {
+    } catch {
       return {
         success: false,
-        error: error.response?.message || error.message || 'Failed to change password'
+        error: 'Could not change password. Check your current password and try again.'
       }
     }
   }
 
-  // Request password reset (forgot password)
   const requestPasswordReset = async (email: string) => {
     try {
-      await pb.collection('users').requestPasswordReset(email)
+      await pb.collection('users').requestPasswordReset(email.trim())
       return { success: true, error: null }
-    } catch (error: any) {
-      // Don't reveal if email exists or not for security
+    } catch {
+      // Don't reveal whether the email exists
       return { success: true, error: null }
     }
   }
 
-  // Confirm password reset (with token from email)
   const confirmPasswordReset = async (token: string, password: string, passwordConfirm: string) => {
     if (password !== passwordConfirm) {
       return {
         success: false,
-        error: 'Passwords do not match'
+        error: 'Passwords do not match.'
       }
     }
 
     if (password.length < 8) {
       return {
         success: false,
-        error: 'Password must be at least 8 characters'
+        error: 'Password must be at least 8 characters.'
       }
     }
 
     try {
       await pb.collection('users').confirmPasswordReset(token, password, passwordConfirm)
       return { success: true, error: null }
-    } catch (error: any) {
+    } catch (error: unknown) {
       return {
         success: false,
-        error: error.response?.message || error.message || 'Failed to reset password. The token may be invalid or expired.'
+        error: friendlyPasswordResetError(error)
       }
     }
   }
 
-  // Get PocketBase instance (with auth)
   const getPocketBase = () => {
     return pb
   }
 
-  /** Bearer token for Nuxt server routes that validate the session (client only). */
   const getAuthToken = () => {
     if (process.server) return null
     return authToken.value || pb.authStore.token || null
   }
 
+  const avatarUrl = computed(() => {
+    if (!user.value?.avatar) return null
+    try {
+      return pb.files.getURL(user.value, String(user.value.avatar))
+    } catch {
+      return null
+    }
+  })
+
   return {
     user: readonly(user),
+    currentUser,
     authReady: readonly(authReady),
     isAuthenticated,
     showAuthenticatedUi,
+    avatarUrl,
     login,
+    register,
     signup,
     logout,
     getUserId,
@@ -295,4 +286,3 @@ export const useAuth = () => {
     confirmPasswordReset
   }
 }
-

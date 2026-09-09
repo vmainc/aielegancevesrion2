@@ -27,6 +27,7 @@ import type { CreativeProject } from '~/types/creative-project'
  */
 export function useStudioGuideChat () {
   const { getAuthToken, isAuthenticated } = useAuth()
+  const { persistGuideTurn, deleteConversation } = useConversations()
   const { projects, loadServerProjects, clientReady, registerImportedProject, withProjectQuery } =
     useCreativeProject()
   const toast = useToast()
@@ -107,6 +108,10 @@ export function useStudioGuideChat () {
   function deleteChat (chatId: string) {
     if (sending.value || building.value) return
     if (!globalThis.confirm('Delete this chat?')) return
+    const target = store.value.chats.find((c) => c.id === chatId)
+    if (target?.pbConversationId && isAuthenticated.value) {
+      void deleteConversation(target.pbConversationId).catch(() => {})
+    }
     let next = deleteStudioGuideChat(store.value, chatId)
     if (!next.chats.length) {
       const chat = createEmptyStudioGuideChat()
@@ -147,13 +152,35 @@ export function useStudioGuideChat () {
     void sendMessage()
   }
 
+  async function persistTurnQuietly (opts: {
+    role: 'user' | 'assistant'
+    content: string
+    model?: string
+    titleSource: string
+  }) {
+    if (!isAuthenticated.value) return
+    try {
+      const chat = ensureActiveChat()
+      const pbId = await persistGuideTurn({
+        conversationId: chat.pbConversationId,
+        titleSource: opts.titleSource,
+        role: opts.role,
+        content: opts.content,
+        model: opts.model
+      })
+      if (pbId && pbId !== chat.pbConversationId) {
+        patchActiveChat((c) => ({ ...c, pbConversationId: pbId }))
+      }
+    } catch (e) {
+      console.warn('Could not save conversation history', e)
+    }
+  }
+
   async function sendMessage () {
     const text = draft.value.trim()
-    if (!text || sending.value || building.value || !isAuthenticated.value) return
+    if (!text || sending.value || building.value) return
 
     const token = getAuthToken()
-    if (!token) return
-
     ensureActiveChat()
     appendMessage({
       id: newStudioGuideMessageId(),
@@ -164,24 +191,37 @@ export function useStudioGuideChat () {
     draft.value = ''
     sending.value = true
 
+    await persistTurnQuietly({ role: 'user', content: text, titleSource: text })
+
     try {
       const history = messages.value.map((m) => ({ role: m.role, content: m.content }))
+      const headers: Record<string, string> = {}
+      if (token) headers.Authorization = `Bearer ${token}`
       const res = await $fetch<{
         reply: string
         actions: StudioGuideAction[]
         buildProject?: StudioGuideBuildProject
+        model?: string
       }>('/api/guide', {
         method: 'POST',
-        headers: { Authorization: `Bearer ${token}` },
+        headers,
         body: { messages: history }
       })
+      const reply = res.reply || 'Here’s where I’d start.'
       appendMessage({
         id: newStudioGuideMessageId(),
         role: 'assistant',
-        content: res.reply || 'Here’s where I’d start.',
+        content: reply,
         actions: res.actions || [],
         buildProject: res.buildProject,
-        createdAt: new Date().toISOString()
+        createdAt: new Date().toISOString(),
+        ...(res.model ? { model: res.model } : {})
+      })
+      await persistTurnQuietly({
+        role: 'assistant',
+        content: reply,
+        model: res.model,
+        titleSource: text
       })
     } catch (e: unknown) {
       toast.showToast(formatApiFetchError(e, 'Could not reach Guide'), 'error')
@@ -197,9 +237,16 @@ export function useStudioGuideChat () {
   }
 
   async function buildFromBrief (build: StudioGuideBuildProject) {
-    if (building.value || sending.value || !isAuthenticated.value) return
+    if (building.value || sending.value) return
+    if (!isAuthenticated.value) {
+      await navigateTo({ path: '/login', query: { redirect: '/guide' } })
+      return
+    }
     const token = getAuthToken()
-    if (!token) return
+    if (!token) {
+      await navigateTo({ path: '/login', query: { redirect: '/guide' } })
+      return
+    }
 
     building.value = true
     try {

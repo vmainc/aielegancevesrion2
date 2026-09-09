@@ -484,6 +484,7 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
     }
 
     console.log('🎉 Field addition complete!');
+    console.log('✓ conversations / messages are created by npm run setup-db if missing');
     console.log('\nYour collections now have all required fields.');
     console.log('You can verify this in the PocketBase admin UI by checking the collection schemas.');
 

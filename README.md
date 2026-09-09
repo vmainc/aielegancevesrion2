@@ -101,6 +101,8 @@ ATLASCLOUD_API_KEY=your-atlas-cloud-api-key
 
 See [ENV_SETUP.md](./ENV_SETUP.md) for detailed instructions.
 
+**Auth + history schema:** after PocketBase is running, `npm run setup-db` also enables public registration on `users` and creates `conversations` / `messages`. Details: [docs/POCKETBASE_SETUP.md](./docs/POCKETBASE_SETUP.md).
+
 ### 4. Create PocketBase collections
 
 **Option A: Automated setup (recommended)**
@@ -192,7 +194,7 @@ If logs show missing files under `.output/server/chunks/public/_nuxt/`, the sync
 
 | Doc | Contents |
 |-----|----------|
-| [docs/Vision.md](./docs/Vision.md) | Product north star and architectural principles |
+| [docs/POCKETBASE_SETUP.md](./docs/POCKETBASE_SETUP.md) | Users, conversations/messages, env, local + production PocketBase |
 | [docs/Architecture.md](./docs/Architecture.md) | System layers, domain model, generation pipeline |
 | [docs/Database.md](./docs/Database.md) | PocketBase schema and relationships |
 | [docs/Roadmap.md](./docs/Roadmap.md) | Phased evolution toward full Film OS |
@@ -201,7 +203,7 @@ If logs show missing files under `.output/server/chunks/public/_nuxt/`, the sync
 | [ENV_SETUP.md](./ENV_SETUP.md) | Environment variables |
 | [COLLECTIONS_SETUP.md](./COLLECTIONS_SETUP.md) | Manual PocketBase schema setup |
 
-After pulling updates, run `npm run setup-db` (or `npm run add-fields`) to provision **`guide_messages`**, **`creative_decisions`**, and **`project_assets`** scene/shot/character relations on existing installs.
+After pulling updates, run `npm run setup-db` (or `npm run add-fields`) to provision **`conversations`**, **`messages`**, **`guide_messages`**, **`creative_decisions`**, and **`project_assets`** scene/shot/character relations on existing installs.
 
 ## Project layout
 

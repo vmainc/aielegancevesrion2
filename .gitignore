@@ -11,8 +11,8 @@ AI Elegance logo design.png
 # Staged uploads (video start frames, etc.)
 .data/
 
-# PocketBase
+# PocketBase binary and local data (keep pb_migrations/*.js in git)
 pocketbase/pb_data/
-pocketbase/pb_migrations/
 pocketbase/pocketbase
+pocketbase/pocketbase.exe
 

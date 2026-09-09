@@ -14,6 +14,8 @@
 
 If the app won’t start, styles look wrong, or ports are stuck: `npm run dev:fix` clears Nuxt/Vite caches and frees **3000** and **3001**, then starts Nuxt only — start PocketBase separately (`npm run pb:serve`) if you use it.
 
+Auth, registration, and conversation history: [docs/POCKETBASE_SETUP.md](./docs/POCKETBASE_SETUP.md).
+
 **Shell noise:** If your terminal prints `no such file or directory: /opt/homebrew/bin/brew`, fix or remove the `brew` line at the top of `~/.zshrc` (Homebrew path wrong or not installed).
 
 ---

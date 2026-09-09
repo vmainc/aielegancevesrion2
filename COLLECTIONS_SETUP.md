@@ -48,21 +48,21 @@ The script authenticates as **superuser** (`_superusers`) and ensures:
 - **`creative_shots`** — storyboard shots per scene (if parents exist)
 - **`project_assets`** — per-project assets (scripts, characters, storyboards, video, optional files)
 
-**`users`** is provided by PocketBase for authentication.
+**`users`** is PocketBase’s built-in auth collection. `npm run setup-db` sets API rules so guests can register (`createRule` empty) and users can only read/update their own record.
 
-The app no longer uses **`questions`**, **`ratings`**, **`comments`**, or **`user_points`**. Those collections are not created by this script. If they exist on an old database, you can delete them in the admin UI when you no longer need the data.
+The script also creates **`conversations`** and **`messages`** for signed-in Studio Guide history. Field-level details: [docs/POCKETBASE_SETUP.md](./docs/POCKETBASE_SETUP.md).
 
 Field-level details: [pocketbase/README.md](./pocketbase/README.md) and `scripts/setup-collections.js`.
 
 ## Users collection: signup without email verification
 
-The app sign-up page only sends **email**, **password**, and **passwordConfirm**. For that to work end-to-end:
+The register page sends **name**, **email**, **password**, and **passwordConfirm**. For that to work end-to-end:
 
-1. Open PocketBase Admin → **Collections** → **`users`** (the Auth collection).
-2. **Collection settings** (gear icon) → find authentication / email options (wording varies by PocketBase version) and **turn off** anything like **“Require email verification”** or **“Only verified users can log in”**, so new users can sign in immediately after register.
+1. Open PocketBase Admin → **Collections** → **`users`**.
+2. **Collection settings** → turn **off** “Require email verification” / “Only verified users can log in” (or rely on `npm run setup-db`, which disables verification when the Admin API exposes it).
 3. **API rules** for **`users`**:
-   - **Create**: allow guests to register, e.g. `@request.auth.id = ""` (only unauthenticated requests can create their own account). Adjust if your version uses a different rule template for “public sign-up”.
-   - Ensure **Update** / **Delete** rules still protect other users’ records as you intend.
+   - **Create**: empty (public sign-up) — `npm run setup-db` applies this.
+   - **List / View / Update / Delete**: `id = @request.auth.id`.
 
 Also add your Nuxt origin to **Settings → allowed API origins** (e.g. `https://aielegance.com`) so the browser can call PocketBase from the app.
 

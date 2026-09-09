@@ -1,17 +1,18 @@
-export default defineNuxtRouteMiddleware(async (to, from) => {
-  // Only check auth on client side
+import { safeInternalPath } from '~/lib/safe-internal-path'
+
+export default defineNuxtRouteMiddleware(async (to) => {
   if (process.server) {
     return
   }
 
   const { isAuthenticated, initAuth } = useAuth()
-  
-  // Wait for auth initialization to complete
   await initAuth()
-  
-  // Double-check after initialization
+
   if (!isAuthenticated.value) {
-    return navigateTo('/login')
+    const next = safeInternalPath(to.fullPath, '/account')
+    return navigateTo({
+      path: '/login',
+      query: { redirect: next }
+    })
   }
 })
-

@@ -13,9 +13,11 @@ Create these **collection names and field names** exactly as below. The Nuxt ser
 
 ### `users` (built-in auth collection)
 
-Usually created by PocketBase. The app uses email/password auth and optional `name`. Ensure **Email/password** auth is enabled. If sign-up fails, disable “Confirm email” in the collection settings or complete the verification flow.
+Usually created by PocketBase. The app uses email/password auth, `name`, and optional `avatar`. `npm run setup-db` enables public registration. See [docs/POCKETBASE_SETUP.md](../docs/POCKETBASE_SETUP.md).
 
-### Creative workspace
+### `conversations` / `messages`
+
+Signed-in Studio Guide history. Created by `npm run setup-db` and by `pocketbase/pb_migrations/`. Users can only read and delete their own rows. See [docs/POCKETBASE_SETUP.md](../docs/POCKETBASE_SETUP.md).
 
 The setup script creates **`creative_projects`**, **`creative_scenes`**, **`creative_characters`**, and **`creative_shots`** with the fields used by script import, overview, storyboard, and related APIs. See `scripts/setup-collections.js` for the full schema.
 
