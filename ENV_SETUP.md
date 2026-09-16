@@ -35,7 +35,7 @@ POCKETBASE_ADMIN_PASSWORD=your-admin-password
 # Get your API key from https://openrouter.ai
 OPENROUTER_API_KEY=your-openrouter-api-key
 
-# Atlas Cloud — Seedance 2.5 video (optional; required to use that model)
+# Atlas Cloud — optional; Seedance 2.5 native 1080p (720p uses OpenRouter)
 # https://www.atlascloud.ai/console/api-keys
 ATLASCLOUD_API_KEY=your-atlas-cloud-api-key
 

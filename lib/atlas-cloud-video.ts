@@ -59,7 +59,7 @@ export function isSeedance25ModelId (id: string): boolean {
 
 /**
  * Map legacy Atlas Seedance picker/endpoint ids to the OpenRouter catalog id.
- * New video jobs always go through OpenRouter.
+ * Default Seedance 2.5 jobs go through OpenRouter; 1080p uses Atlas when configured.
  */
 export function normalizeVideoModelToOpenRouter (id: string): string {
   const s = id.trim()
@@ -69,6 +69,31 @@ export function normalizeVideoModelToOpenRouter (id: string): string {
     return s.slice('atlas/'.length)
   }
   return s
+}
+
+/**
+ * OpenRouter Seedance 2.5 is 720p-max. Native 1080p goes through Atlas Cloud when keyed.
+ */
+export function shouldRouteSeedance25ViaAtlas (opts: {
+  modelId: string
+  resolution?: string | null
+  atlasKeyConfigured: boolean
+}): boolean {
+  if (!opts.atlasKeyConfigured) return false
+  if (!isSeedance25ModelId(opts.modelId)) return false
+  return String(opts.resolution || '').trim().toLowerCase() === '1080p'
+}
+
+/** When Atlas is configured, advertise 1080p on the OpenRouter Seedance 2.5 picker row. */
+export function enrichSeedance25ResolutionsForAtlas (
+  modelId: string,
+  resolutions: string[] | undefined,
+  atlasConfigured: boolean
+): string[] | undefined {
+  if (!atlasConfigured || !isOpenRouterSeedance25Listing(modelId)) return resolutions
+  const base = resolutions?.length ? [...resolutions] : ['480p', '720p']
+  if (!base.includes('1080p')) base.push('1080p')
+  return base
 }
 
 export function resolveAtlasSeedanceModelId (opts: {

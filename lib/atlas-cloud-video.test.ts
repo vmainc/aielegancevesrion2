@@ -8,11 +8,13 @@ import {
   atlasPredictionIsTerminalSuccess,
   atlasSeedanceRatio,
   atlasSeedanceResolution,
+  enrichSeedance25ResolutionsForAtlas,
   isAtlasCloudVideoModel,
   normalizeVideoModelToOpenRouter,
   isSeedance25ModelId,
   parseAtlasCloudPrediction,
   resolveAtlasSeedanceModelId,
+  shouldRouteSeedance25ViaAtlas,
   snapAtlasSeedanceDuration
 } from '~/lib/atlas-cloud-video'
 
@@ -45,6 +47,69 @@ describe('normalizeVideoModelToOpenRouter', () => {
     expect(normalizeVideoModelToOpenRouter(ATLAS_SEEDANCE_25_T2V)).toBe('bytedance/seedance-2.5')
     expect(normalizeVideoModelToOpenRouter('bytedance/seedance-2.5')).toBe('bytedance/seedance-2.5')
     expect(normalizeVideoModelToOpenRouter('google/veo-3.1')).toBe('google/veo-3.1')
+  })
+})
+
+describe('shouldRouteSeedance25ViaAtlas', () => {
+  it('routes Seedance 2.5 1080p through Atlas when keyed', () => {
+    expect(
+      shouldRouteSeedance25ViaAtlas({
+        modelId: 'bytedance/seedance-2.5',
+        resolution: '1080p',
+        atlasKeyConfigured: true
+      })
+    ).toBe(true)
+    expect(
+      shouldRouteSeedance25ViaAtlas({
+        modelId: ATLAS_SEEDANCE_25_PICKER_ID,
+        resolution: '1080p',
+        atlasKeyConfigured: true
+      })
+    ).toBe(true)
+  })
+
+  it('keeps 720p Seedance 2.5 on OpenRouter', () => {
+    expect(
+      shouldRouteSeedance25ViaAtlas({
+        modelId: 'bytedance/seedance-2.5',
+        resolution: '720p',
+        atlasKeyConfigured: true
+      })
+    ).toBe(false)
+  })
+
+  it('does not route without Atlas key or for other models', () => {
+    expect(
+      shouldRouteSeedance25ViaAtlas({
+        modelId: 'bytedance/seedance-2.5',
+        resolution: '1080p',
+        atlasKeyConfigured: false
+      })
+    ).toBe(false)
+    expect(
+      shouldRouteSeedance25ViaAtlas({
+        modelId: 'bytedance/seedance-2.0',
+        resolution: '1080p',
+        atlasKeyConfigured: true
+      })
+    ).toBe(false)
+  })
+})
+
+describe('enrichSeedance25ResolutionsForAtlas', () => {
+  it('adds 1080p to OpenRouter Seedance 2.5 when Atlas is configured', () => {
+    expect(
+      enrichSeedance25ResolutionsForAtlas('bytedance/seedance-2.5', ['480p', '720p'], true)
+    ).toEqual(['480p', '720p', '1080p'])
+  })
+
+  it('leaves resolutions alone without Atlas or for other models', () => {
+    expect(
+      enrichSeedance25ResolutionsForAtlas('bytedance/seedance-2.5', ['480p', '720p'], false)
+    ).toEqual(['480p', '720p'])
+    expect(
+      enrichSeedance25ResolutionsForAtlas('bytedance/seedance-2.0', ['720p'], true)
+    ).toEqual(['720p'])
   })
 })
 

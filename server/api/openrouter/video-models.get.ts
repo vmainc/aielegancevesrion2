@@ -1,5 +1,6 @@
+import { enrichSeedance25ResolutionsForAtlas, isOpenRouterSeedance25Listing } from '~/lib/atlas-cloud-video'
 import { modelSupportsNativeNegativePrompt } from '~/lib/video-negative-prompt'
-import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import { resolveAtlasCloudApiKey, resolveOpenRouterApiKey } from '~/server/utils/server-env'
 
 /** Hidden from the video model picker — still reachable via API if needed elsewhere. */
 const EXCLUDED_OPENROUTER_VIDEO_MODEL_IDS = new Set([
@@ -176,16 +177,35 @@ async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> 
   return map
 }
 
-/** OpenRouter-only catalog. Legacy Atlas Seedance rows are no longer injected. */
-function withVideoCatalog (payload: {
-  source: 'api' | 'fallback'
-  models: VideoModelRow[]
-  notice?: string
-  error?: string
-}) {
+/** OpenRouter catalog + optional Atlas 1080p enrichment for Seedance 2.5. */
+function withVideoCatalog (
+  config: ReturnType<typeof useRuntimeConfig>,
+  payload: {
+    source: 'api' | 'fallback'
+    models: VideoModelRow[]
+    notice?: string
+    error?: string
+  }
+) {
+  const atlasConfigured = Boolean(resolveAtlasCloudApiKey(config))
+  const models = payload.models.map((row) => {
+    const supportedResolutions = enrichSeedance25ResolutionsForAtlas(
+      row.id,
+      row.supportedResolutions ? [...row.supportedResolutions] : undefined,
+      atlasConfigured
+    )
+    if (!supportedResolutions) return row
+    const next: VideoModelRow = { ...row, supportedResolutions }
+    if (atlasConfigured && isOpenRouterSeedance25Listing(row.id)) {
+      next.description =
+        'Seedance 2.5 via OpenRouter (720p) or Atlas Cloud (1080p) — text/image-to-video with start/end frames; clips up to 30s.'
+    }
+    return next
+  })
   return {
     ...payload,
-    atlasCloudConfigured: false
+    models,
+    atlasCloudConfigured: atlasConfigured
   }
 }
 
@@ -207,7 +227,7 @@ export default defineEventHandler(async () => {
   }
 
   if (!apiKey) {
-    return withVideoCatalog({
+    return withVideoCatalog(config, {
       source: 'fallback',
       models: FALLBACK_VIDEO_MODELS,
       notice: 'Set OPENROUTER_API_KEY in your environment to load the live model list from OpenRouter.'
@@ -221,7 +241,7 @@ export default defineEventHandler(async () => {
   const rawText = await res.text()
 
   if (!res.ok) {
-    return withVideoCatalog({
+    return withVideoCatalog(config, {
       source: 'fallback',
       models: FALLBACK_VIDEO_MODELS,
       notice: `OpenRouter returned HTTP ${res.status}. Showing reference models.`,
@@ -233,7 +253,7 @@ export default defineEventHandler(async () => {
   try {
     json = JSON.parse(rawText) as { data?: unknown[] }
   } catch {
-    return withVideoCatalog({
+    return withVideoCatalog(config, {
       source: 'fallback',
       models: FALLBACK_VIDEO_MODELS,
       notice: 'Could not parse OpenRouter response. Showing reference models.'
@@ -287,14 +307,14 @@ export default defineEventHandler(async () => {
   }
 
   if (visibleRows.length === 0) {
-    return withVideoCatalog({
+    return withVideoCatalog(config, {
       source: 'fallback',
       models: FALLBACK_VIDEO_MODELS.filter(m => !isExcludedOpenRouterVideoModel(m.id)),
       notice: 'No video models returned from OpenRouter. Showing reference models.'
     })
   }
 
-  return withVideoCatalog({
+  return withVideoCatalog(config, {
     source: 'api',
     models: visibleRows
   })

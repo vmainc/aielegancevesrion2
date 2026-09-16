@@ -1341,6 +1341,12 @@ const resolutionHint = computed(() => {
     if (snaps.length) {
       return `${snaps.map(m => m.name).join(', ')} will generate at 720p.`
     }
+    const seedance25 = selected.some(m =>
+      m.id === 'bytedance/seedance-2.5' || m.id.toLowerCase().includes('seedance-2.5')
+    )
+    if (seedance25 && data.value?.atlasCloudConfigured) {
+      return '1080p for Seedance 2.5 runs via Atlas Cloud (OpenRouter stays at 720p).'
+    }
     return '1080p takes longer and costs more than 720p.'
   }
   return ''

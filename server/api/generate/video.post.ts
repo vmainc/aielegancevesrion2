@@ -1,6 +1,11 @@
 import { readBody, setResponseStatus } from 'h3'
-import { normalizeVideoModelToOpenRouter } from '~/lib/atlas-cloud-video'
-import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import {
+  normalizeVideoModelToOpenRouter,
+  shouldRouteSeedance25ViaAtlas,
+  snapAtlasSeedanceDuration
+} from '~/lib/atlas-cloud-video'
+import { resolveAtlasCloudApiKey, resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import { atlasCloudGenerateVideo, startAtlasCloudVideoJob } from '~/server/utils/atlascloud-video-job'
 import { openRouterGenerateVideo } from '~/server/utils/openrouter-generate-video'
 import { startOpenRouterVideoJob } from '~/server/utils/openrouter-video-job'
 import { resolveReferenceImageUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
@@ -55,7 +60,7 @@ export default defineEventHandler(async (event) => {
   const model = normalizeVideoModelToOpenRouter(modelRaw)
 
   const aspectRatio = normalizeAspect(body?.aspectRatio ?? body?.aspect_ratio)
-  const resolution = normalizeResolution(body?.resolution) ?? '720p'
+  let resolution = normalizeResolution(body?.resolution) ?? '720p'
   const durationRaw = clampInt(body?.durationSeconds ?? body?.duration, 5, 1, 60)
 
   const frameImageUrl =
@@ -97,9 +102,33 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig()
+  const atlasKey = resolveAtlasCloudApiKey(config)
+  // OpenRouter Seedance 2.5 has no 1080p — without Atlas, snap down so the job still runs.
+  if (
+    !atlasKey &&
+    shouldRouteSeedance25ViaAtlas({
+      modelId: model,
+      resolution,
+      atlasKeyConfigured: true
+    })
+  ) {
+    resolution = '720p'
+  }
+  const useAtlas = shouldRouteSeedance25ViaAtlas({
+    modelId: model,
+    resolution,
+    atlasKeyConfigured: Boolean(atlasKey)
+  })
+
   const openRouterKey = resolveOpenRouterApiKey(config)
 
-  if (!openRouterKey) {
+  if (useAtlas && !atlasKey) {
+    throw createError({
+      statusCode: 500,
+      message: 'Atlas Cloud API key not configured. Set ATLASCLOUD_API_KEY in .env for Seedance 2.5 1080p.'
+    })
+  }
+  if (!useAtlas && !openRouterKey) {
     throw createError({
       statusCode: 500,
       message: 'OpenRouter API key not configured. Set OPENROUTER_API_KEY in .env.'
@@ -119,13 +148,18 @@ export default defineEventHandler(async (event) => {
     ? await resolveReferenceImageUrlForServerFetch(lastFrameImageUrl, resolveOpts)
     : ''
 
-  let supportedDurations: number[] | null = null
-  try {
-    supportedDurations = await getOpenRouterVideoModelSupportedDurations(model)
-  } catch {
-    supportedDurations = null
+  let durationSeconds: number
+  if (useAtlas) {
+    durationSeconds = snapAtlasSeedanceDuration(durationRaw)
+  } else {
+    let supportedDurations: number[] | null = null
+    try {
+      supportedDurations = await getOpenRouterVideoModelSupportedDurations(model)
+    } catch {
+      supportedDurations = null
+    }
+    durationSeconds = snapVideoDurationToOpenRouterModel(durationRaw, supportedDurations)
   }
-  const durationSeconds = snapVideoDurationToOpenRouterModel(durationRaw, supportedDurations)
 
   const { includeSpokenDialogue, includeAmbientSound, generateAudio } =
     resolveVideoGenerationAudioFromBody(body as Record<string, unknown>)
@@ -143,10 +177,58 @@ export default defineEventHandler(async (event) => {
   })
 
   try {
+    if (useAtlas && atlasKey) {
+      const jobArgs = {
+        prompt: promptForJob,
+        model,
+        apiKey: atlasKey,
+        aspectRatio,
+        resolution,
+        durationSeconds,
+        firstFrameImageUrl: resolvedFrame || undefined,
+        lastFrameImageUrl: resolvedLastFrame || undefined,
+        generateAudio
+      }
+      if (syncBlocking) {
+        const out = await atlasCloudGenerateVideo(jobArgs)
+        return {
+          async: false,
+          jobId: out.jobId,
+          videoUrl: out.videoUrl,
+          model: out.model,
+          status: out.status
+        }
+      }
+      const started = await startAtlasCloudVideoJob(jobArgs)
+      if (started.status === 'completed' && started.videoUrl) {
+        return {
+          async: false,
+          jobId: started.jobId,
+          videoUrl: started.videoUrl,
+          model: started.model,
+          status: 'completed'
+        }
+      }
+      registerVideoGenerationJob(started.jobId, {
+        pollUrl: started.pollUrl,
+        apiKey: atlasKey,
+        model: started.model,
+        userId,
+        provider: 'atlascloud'
+      })
+      setResponseStatus(event, 202)
+      return {
+        async: true,
+        jobId: started.jobId,
+        status: started.status,
+        model: started.model
+      }
+    }
+
     const jobArgs = {
       prompt: promptForJob,
       model,
-      apiKey: openRouterKey,
+      apiKey: openRouterKey!,
       aspectRatio,
       resolution,
       durationSeconds,
