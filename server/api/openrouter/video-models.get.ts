@@ -17,12 +17,14 @@ const FALLBACK_VIDEO_MODELS = [
   {
     id: 'bytedance/seedance-2.5',
     name: 'ByteDance: Seedance 2.5',
-    description: 'Seedance 2.5 via OpenRouter — text/image-to-video with start/end frames.',
+    description:
+      'Seedance 2.5 via OpenRouter — text/image-to-video with start/end frames; clips up to 30s.',
     provider: 'ByteDance',
     generateAudio: true,
-    supportedDurations: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
+    // Match OpenRouter `GET /api/v1/videos/models` for bytedance/seedance-2.5.
+    supportedDurations: Array.from({ length: 27 }, (_, i) => i + 4),
     supportedFrameImages: ['first_frame', 'last_frame'] as const,
-    supportedResolutions: ['720p', '1080p'] as const,
+    supportedResolutions: ['480p', '720p'] as const,
   },
   {
     id: 'bytedance/seedance-2.0',
