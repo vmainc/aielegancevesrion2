@@ -4,10 +4,19 @@ import {
   shouldRouteSeedance25ViaAtlas,
   snapAtlasSeedanceDuration
 } from '~/lib/atlas-cloud-video'
-import { resolveAtlasCloudApiKey, resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import { shouldRouteSeedance25ViaWaveSpeed } from '~/lib/wavespeed-video'
+import {
+  resolveAtlasCloudApiKey,
+  resolveOpenRouterApiKey,
+  resolveWaveSpeedApiKey
+} from '~/server/utils/server-env'
 import { atlasCloudGenerateVideo, startAtlasCloudVideoJob } from '~/server/utils/atlascloud-video-job'
 import { openRouterGenerateVideo } from '~/server/utils/openrouter-generate-video'
 import { startOpenRouterVideoJob } from '~/server/utils/openrouter-video-job'
+import {
+  startWaveSpeedVideoJob,
+  waveSpeedGenerateVideo
+} from '~/server/utils/wavespeed-video-job'
 import { resolveReferenceImageUrlForServerFetch } from '~/server/utils/resolve-pocketbase-proxied-url-for-fetch'
 import {
   getOpenRouterVideoModelSupportedDurations,
@@ -20,6 +29,7 @@ import {
 import { registerVideoGenerationJob } from '~/server/utils/video-generation-job-registry'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { checkRateLimit, rateLimitKey } from '~/server/utils/rate-limit'
+import { getVideoRepairPublicBaseUrl } from '~/server/utils/video-repair-config'
 
 type Aspect =
   | '16:9'
@@ -102,33 +112,49 @@ export default defineEventHandler(async (event) => {
   }
 
   const config = useRuntimeConfig()
+  const waveSpeedKey = resolveWaveSpeedApiKey(config)
   const atlasKey = resolveAtlasCloudApiKey(config)
-  // OpenRouter Seedance 2.5 has no 1080p — without Atlas, snap down so the job still runs.
+  const hdKeyConfigured = Boolean(waveSpeedKey || atlasKey)
+  // OpenRouter Seedance 2.5 has no 1080p — without WaveSpeed/Atlas, snap down so the job still runs.
   if (
-    !atlasKey &&
-    shouldRouteSeedance25ViaAtlas({
+    !hdKeyConfigured &&
+    shouldRouteSeedance25ViaWaveSpeed({
       modelId: model,
       resolution,
-      atlasKeyConfigured: true
+      waveSpeedKeyConfigured: true
     })
   ) {
     resolution = '720p'
   }
-  const useAtlas = shouldRouteSeedance25ViaAtlas({
+  // Prefer WaveSpeed (cheaper) over Atlas for Seedance 2.5 1080p.
+  const useWaveSpeed = shouldRouteSeedance25ViaWaveSpeed({
     modelId: model,
     resolution,
-    atlasKeyConfigured: Boolean(atlasKey)
+    waveSpeedKeyConfigured: Boolean(waveSpeedKey)
   })
+  const useAtlas =
+    !useWaveSpeed &&
+    shouldRouteSeedance25ViaAtlas({
+      modelId: model,
+      resolution,
+      atlasKeyConfigured: Boolean(atlasKey)
+    })
 
   const openRouterKey = resolveOpenRouterApiKey(config)
 
+  if (useWaveSpeed && !waveSpeedKey) {
+    throw createError({
+      statusCode: 500,
+      message: 'WaveSpeed API key not configured. Set WAVESPEED_API_KEY in .env for Seedance 2.5 1080p.'
+    })
+  }
   if (useAtlas && !atlasKey) {
     throw createError({
       statusCode: 500,
       message: 'Atlas Cloud API key not configured. Set ATLASCLOUD_API_KEY in .env for Seedance 2.5 1080p.'
     })
   }
-  if (!useAtlas && !openRouterKey) {
+  if (!useWaveSpeed && !useAtlas && !openRouterKey) {
     throw createError({
       statusCode: 500,
       message: 'OpenRouter API key not configured. Set OPENROUTER_API_KEY in .env.'
@@ -149,7 +175,7 @@ export default defineEventHandler(async (event) => {
     : ''
 
   let durationSeconds: number
-  if (useAtlas) {
+  if (useWaveSpeed || useAtlas) {
     durationSeconds = snapAtlasSeedanceDuration(durationRaw)
   } else {
     let supportedDurations: number[] | null = null
@@ -177,6 +203,56 @@ export default defineEventHandler(async (event) => {
   })
 
   try {
+    if (useWaveSpeed && waveSpeedKey) {
+      // Prefer original client paths for public URL rewriting (staged frames /pb).
+      const jobArgs = {
+        prompt: promptForJob,
+        apiKey: waveSpeedKey,
+        aspectRatio,
+        resolution,
+        durationSeconds,
+        firstFrameImageUrl: frameImageUrl || resolvedFrame || undefined,
+        lastFrameImageUrl: lastFrameImageUrl || resolvedLastFrame || undefined,
+        generateAudio,
+        publicPocketbaseUrl: publicPb || undefined,
+        sitePublicBaseUrl: getVideoRepairPublicBaseUrl() || undefined
+      }
+      if (syncBlocking) {
+        const out = await waveSpeedGenerateVideo(jobArgs)
+        return {
+          async: false,
+          jobId: out.jobId,
+          videoUrl: out.videoUrl,
+          model: out.model,
+          status: out.status
+        }
+      }
+      const started = await startWaveSpeedVideoJob(jobArgs)
+      if (started.status === 'completed' && started.videoUrl) {
+        return {
+          async: false,
+          jobId: started.jobId,
+          videoUrl: started.videoUrl,
+          model: started.model,
+          status: 'completed'
+        }
+      }
+      registerVideoGenerationJob(started.jobId, {
+        pollUrl: started.pollUrl,
+        apiKey: waveSpeedKey,
+        model: started.model,
+        userId,
+        provider: 'wavespeed'
+      })
+      setResponseStatus(event, 202)
+      return {
+        async: true,
+        jobId: started.jobId,
+        status: started.status,
+        model: started.model
+      }
+    }
+
     if (useAtlas && atlasKey) {
       const jobArgs = {
         prompt: promptForJob,

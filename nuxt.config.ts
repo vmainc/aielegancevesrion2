@@ -64,6 +64,8 @@ export default defineNuxtConfig({
       process.env.NUXT_ATLASCLOUD_API_KEY ||
       process.env.ATLASCLOUD_API_KEY ||
       process.env.ATLAS_CLOUD_API_KEY,
+    wavespeedApiKey:
+      process.env.NUXT_WAVESPEED_API_KEY || process.env.WAVESPEED_API_KEY,
     lumaApiKey: process.env.NUXT_LUMA_API_KEY || process.env.LUMA_API_KEY,
     openaiApiKey: process.env.NUXT_OPENAI_API_KEY || process.env.OPENAI_API_KEY,
     omdbApiKey: process.env.NUXT_OMDB_API_KEY || process.env.OMDB_API_KEY || '',

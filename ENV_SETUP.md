@@ -35,9 +35,12 @@ POCKETBASE_ADMIN_PASSWORD=your-admin-password
 # Get your API key from https://openrouter.ai
 OPENROUTER_API_KEY=your-openrouter-api-key
 
-# Atlas Cloud — optional; Seedance 2.5 native 1080p (720p uses OpenRouter)
+# Atlas Cloud — optional fallback for Seedance 2.5 native 1080p
 # https://www.atlascloud.ai/console/api-keys
 ATLASCLOUD_API_KEY=your-atlas-cloud-api-key
+
+# WaveSpeed — preferred Seedance 2.5 native 1080p (https://wavespeed.ai)
+WAVESPEED_API_KEY=your-wavespeed-api-key
 
 # Fix Shot (video repair). OpenRouter is the default gateway; Luma Modify is optional.
 # VIDEO_REPAIR_DEFAULT_PROVIDER=openrouter

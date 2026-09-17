@@ -8,7 +8,7 @@ type RegistryEntry = {
   model: string
   userId: string
   createdAt: number
-  provider: 'openrouter' | 'atlascloud'
+  provider: 'openrouter' | 'atlascloud' | 'wavespeed'
 }
 
 const jobs = new Map<string, RegistryEntry>()

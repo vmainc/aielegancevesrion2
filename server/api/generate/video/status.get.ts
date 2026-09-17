@@ -1,6 +1,7 @@
 import { createError, getQuery } from 'h3'
 import { pollAtlasCloudVideoOnce } from '~/server/utils/atlascloud-video-job'
 import { pollOpenRouterVideoOnce } from '~/server/utils/openrouter-video-job'
+import { pollWaveSpeedVideoOnce } from '~/server/utils/wavespeed-video-job'
 import { removeVideoGenerationJob, takeVideoGenerationJob } from '~/server/utils/video-generation-job-registry'
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 
@@ -25,12 +26,17 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const useWaveSpeed =
+    job.provider === 'wavespeed' || job.pollUrl.includes('wavespeed.ai')
   const useAtlas =
-    job.provider === 'atlascloud' || job.pollUrl.includes('atlascloud.ai')
+    !useWaveSpeed &&
+    (job.provider === 'atlascloud' || job.pollUrl.includes('atlascloud.ai'))
 
-  const r = useAtlas
-    ? await pollAtlasCloudVideoOnce(job.pollUrl, job.apiKey, jobId, job.model)
-    : await pollOpenRouterVideoOnce(job.pollUrl, job.apiKey, jobId, job.model)
+  const r = useWaveSpeed
+    ? await pollWaveSpeedVideoOnce(job.pollUrl, job.apiKey, jobId, job.model)
+    : useAtlas
+      ? await pollAtlasCloudVideoOnce(job.pollUrl, job.apiKey, jobId, job.model)
+      : await pollOpenRouterVideoOnce(job.pollUrl, job.apiKey, jobId, job.model)
 
   if (r.status === 'completed') {
     removeVideoGenerationJob(jobId)

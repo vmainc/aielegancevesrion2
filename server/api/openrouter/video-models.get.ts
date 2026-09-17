@@ -1,6 +1,11 @@
-import { enrichSeedance25ResolutionsForAtlas, isOpenRouterSeedance25Listing } from '~/lib/atlas-cloud-video'
+import { enrichSeedance25ResolutionsForHd } from '~/lib/wavespeed-video'
+import { isOpenRouterSeedance25Listing } from '~/lib/atlas-cloud-video'
 import { modelSupportsNativeNegativePrompt } from '~/lib/video-negative-prompt'
-import { resolveAtlasCloudApiKey, resolveOpenRouterApiKey } from '~/server/utils/server-env'
+import {
+  resolveAtlasCloudApiKey,
+  resolveOpenRouterApiKey,
+  resolveWaveSpeedApiKey
+} from '~/server/utils/server-env'
 
 /** Hidden from the video model picker — still reachable via API if needed elsewhere. */
 const EXCLUDED_OPENROUTER_VIDEO_MODEL_IDS = new Set([
@@ -177,7 +182,7 @@ async function loadVideoCatalogById (): Promise<Map<string, VideoCatalogEntry>> 
   return map
 }
 
-/** OpenRouter catalog + optional Atlas 1080p enrichment for Seedance 2.5. */
+/** OpenRouter catalog + optional WaveSpeed/Atlas 1080p enrichment for Seedance 2.5. */
 function withVideoCatalog (
   config: ReturnType<typeof useRuntimeConfig>,
   payload: {
@@ -187,25 +192,31 @@ function withVideoCatalog (
     error?: string
   }
 ) {
+  const waveSpeedConfigured = Boolean(resolveWaveSpeedApiKey(config))
   const atlasConfigured = Boolean(resolveAtlasCloudApiKey(config))
+  const hdConfigured = waveSpeedConfigured || atlasConfigured
   const models = payload.models.map((row) => {
-    const supportedResolutions = enrichSeedance25ResolutionsForAtlas(
+    const supportedResolutions = enrichSeedance25ResolutionsForHd(
       row.id,
       row.supportedResolutions ? [...row.supportedResolutions] : undefined,
-      atlasConfigured
+      hdConfigured
     )
     if (!supportedResolutions) return row
     const next: VideoModelRow = { ...row, supportedResolutions }
-    if (atlasConfigured && isOpenRouterSeedance25Listing(row.id)) {
+    if (hdConfigured && isOpenRouterSeedance25Listing(row.id)) {
+      const via = waveSpeedConfigured
+        ? 'WaveSpeed Turbo (1080p)'
+        : 'Atlas Cloud (1080p)'
       next.description =
-        'Seedance 2.5 via OpenRouter (720p) or Atlas Cloud (1080p) — text/image-to-video with start/end frames; clips up to 30s.'
+        `Seedance 2.5 via OpenRouter (720p) or ${via} — text/image-to-video with start/end frames; clips up to 30s.`
     }
     return next
   })
   return {
     ...payload,
     models,
-    atlasCloudConfigured: atlasConfigured
+    atlasCloudConfigured: atlasConfigured,
+    waveSpeedConfigured
   }
 }
 

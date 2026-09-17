@@ -32,6 +32,15 @@ export function resolveAtlasCloudApiKey(config: { atlascloudApiKey?: string }): 
   return s || undefined
 }
 
+export function resolveWaveSpeedApiKey(config: { wavespeedApiKey?: string }): string | undefined {
+  const v =
+    (config.wavespeedApiKey && String(config.wavespeedApiKey).trim()) ||
+    process.env.NUXT_WAVESPEED_API_KEY ||
+    process.env.WAVESPEED_API_KEY
+  const s = v ? String(v).trim() : ''
+  return s || undefined
+}
+
 export function resolvePocketBaseAdmin(config: {
   pocketbaseAdminEmail?: string
   pocketbaseAdminPassword?: string

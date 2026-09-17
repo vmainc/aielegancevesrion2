@@ -1,4 +1,4 @@
-import { resolveAtlasCloudApiKey, resolveOpenRouterApiKey, resolvePocketBaseAdmin } from '~/server/utils/server-env'
+import { resolveAtlasCloudApiKey, resolveOpenRouterApiKey, resolvePocketBaseAdmin, resolveWaveSpeedApiKey } from '~/server/utils/server-env'
 
 /**
  * No secrets exposed — booleans only. Use after deploy to verify env reaches Node.
@@ -8,10 +8,12 @@ export default defineEventHandler((event) => {
   const admin = resolvePocketBaseAdmin(config)
   const openrouter = resolveOpenRouterApiKey(config)
   const atlascloud = resolveAtlasCloudApiKey(config)
+  const wavespeed = resolveWaveSpeedApiKey(config)
 
   return {
     openrouterApiKeySet: !!openrouter,
     atlascloudApiKeySet: !!atlascloud,
+    wavespeedApiKeySet: !!wavespeed,
     pocketbaseAdminEmailSet: !!admin.email,
     pocketbaseAdminPasswordSet: !!admin.password,
     pocketbaseInternalUrlSet: !!admin.internalUrl,

@@ -92,7 +92,11 @@ POCKETBASE_ADMIN_PASSWORD=your-admin-password
 # https://openrouter.ai/keys
 OPENROUTER_API_KEY=your-openrouter-api-key
 
-# Optional: Atlas Cloud API key for Seedance 2.5 native 1080p (720p stays on OpenRouter)
+# Optional: WaveSpeed API key for Seedance 2.5 native 1080p (preferred; ~$0.22/s)
+# https://wavespeed.ai
+WAVESPEED_API_KEY=your-wavespeed-api-key
+
+# Optional: Atlas Cloud API key for Seedance 2.5 1080p fallback
 # https://www.atlascloud.ai/console/api-keys
 ATLASCLOUD_API_KEY=your-atlas-cloud-api-key
 ```
