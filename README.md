@@ -29,6 +29,7 @@ Workflow paths adapt by mode: **import** (existing script), **idea** (concept-fi
 ### Standalone tools
 
 - **Video generation** — OpenRouter video models
+- **Image generation** — OpenRouter Images API (Generate → Images)
 - **Music generation** — AI music via OpenRouter
 - **Script Wizard** — treatment and breakdown from an idea
 - **Storyboard builder** — quick scene/shot scaffolding

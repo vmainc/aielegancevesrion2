@@ -70,6 +70,13 @@ export const STUDIO_GUIDE_STATIC_DESTINATIONS: StudioGuideDestination[] = [
     kind: 'static'
   },
   {
+    id: 'image-generation',
+    label: 'Generate images',
+    description: 'Create characters, locations, props, storyboards, and concept art.',
+    path: '/tools/image-generation',
+    kind: 'static'
+  },
+  {
     id: 'video-generation',
     label: 'Generate video',
     description: 'Create clips with AI video models.',

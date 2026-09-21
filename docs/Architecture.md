@@ -92,14 +92,18 @@ Pure TypeScript used on **client and server**. Critical modules:
 | `character-visual-description.ts` | Format cast lines for image/video models |
 | `project-guide.ts` | Guide chat types; client-side message storage (transitional) |
 | `project-workflow.ts` | Workflow path resolution |
+| `normalize-image-model.ts` | OpenRouter Images API model normalization + request building |
+| `image-generation-prompt.ts` | Film-controls → final_prompt |
 
 **Rule:** Prompt and continuity logic lives in `lib/`, not duplicated in Vue components or API handlers.
 
 ### 3. Server (`server/api/`, `server/utils/`)
 
 - **CRUD** for projects, scenes, shots, characters, assets
-- **AI orchestration** — script import, shot generation jobs, continuity check, guide replies, video generation
-- **Mappers** — `creative-project-map`, `creative-character-map`, `creative-shot-map`, `project-asset-map` translate PocketBase records ↔ TypeScript types
+- **AI orchestration** — script import, shot generation jobs, continuity check, guide replies, video generation, **Generate → Images** (`/api/generate/images`)
+- **Mappers** — `creative-project-map`, `creative-character-map`, `creative-shot-map`, `project-asset-map`, `image-generation-map` translate PocketBase records ↔ TypeScript types
+
+See [ImageGeneration.md](./ImageGeneration.md) for the Images API architecture.
 
 Long-running work uses **job registries** (e.g. `generate-shots-job-registry`, `video-generation-job-registry`, `script-import-job-registry`) polled by the client.
 

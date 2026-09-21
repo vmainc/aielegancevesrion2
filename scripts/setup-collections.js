@@ -1161,6 +1161,113 @@ async function createCollections(adminEmail, adminPassword) {
       console.log('⚠️  Could not ensure project_members:', e.message || e, '\n');
     }
 
+    // Generate → Images history
+    console.log('🖼️  Ensuring "image_generations" collection...');
+    try {
+      await pb.collections.getFirstListItem('name="image_generations"');
+      console.log('⚠️  "image_generations" already exists, skipping...\n');
+    } catch (_missing) {
+      try {
+        const creativeProjectsId = await getCollectionIdByName(pb, 'creative_projects');
+        await createCollectionThenRules(pb, {
+          name: 'image_generations',
+          type: 'base',
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          fields: [
+            {
+              name: 'owned_by',
+              type: 'relation',
+              required: true,
+              options: {
+                collectionId: usersCollectionId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['email']
+              }
+            },
+            {
+              name: 'project',
+              type: 'relation',
+              required: false,
+              options: {
+                collectionId: creativeProjectsId,
+                cascadeDelete: false,
+                minSelect: null,
+                maxSelect: 1,
+                displayFields: ['name']
+              }
+            },
+            { name: 'prompt', type: 'text', required: true, options: { max: 20000 } },
+            { name: 'final_prompt', type: 'text', required: false, options: { max: 20000 } },
+            { name: 'model', type: 'text', required: true, options: { max: 200 } },
+            { name: 'provider', type: 'text', required: false, options: { max: 120 } },
+            {
+              name: 'status',
+              type: 'select',
+              required: true,
+              options: {
+                maxSelect: 1,
+                values: [
+                  { value: 'queued' },
+                  { value: 'generating' },
+                  { value: 'complete' },
+                  { value: 'failed' }
+                ]
+              }
+            },
+            { name: 'aspect_ratio', type: 'text', required: false, options: { max: 32 } },
+            { name: 'resolution', type: 'text', required: false, options: { max: 64 } },
+            { name: 'image_count', type: 'number', required: false, options: { min: 0, max: 16 } },
+            {
+              name: 'category',
+              type: 'select',
+              required: false,
+              options: {
+                maxSelect: 1,
+                values: [
+                  { value: 'characters' },
+                  { value: 'locations' },
+                  { value: 'storyboards' },
+                  { value: 'props' },
+                  { value: 'concept_art' },
+                  { value: 'other' }
+                ]
+              }
+            },
+            { name: 'generation_settings', type: 'json', required: false },
+            { name: 'film_controls', type: 'json', required: false },
+            { name: 'reference_image_count', type: 'number', required: false, options: { min: 0, max: 16 } },
+            { name: 'cost', type: 'number', required: false },
+            { name: 'currency', type: 'text', required: false, options: { max: 8 } },
+            { name: 'usage', type: 'json', required: false },
+            { name: 'error_message', type: 'text', required: false, options: { max: 2000 } },
+            { name: 'duration_ms', type: 'number', required: false },
+            { name: 'favorite', type: 'bool', required: false },
+            { name: 'asset_ids', type: 'json', required: false },
+            {
+              name: 'output_images',
+              type: 'file',
+              required: false,
+              options: {
+                maxSelect: 10,
+                maxSize: 26214400,
+                mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+                thumbs: ['200x200']
+              }
+            }
+          ]
+        });
+        console.log('✅ "image_generations" created\n');
+      } catch (e) {
+        console.log('⚠️  Could not create image_generations:', e.message || e, '\n');
+      }
+    }
+
     console.log('🎉 All collections have been set up successfully!');
     console.log('\nCollections created:');
     console.log('  ✓ creative_projects / creative_scenes / creative_characters - Script import workspace (if created this run)');
@@ -1171,6 +1278,7 @@ async function createCollections(adminEmail, adminPassword) {
     console.log('  ✓ guide_messages / creative_decisions - Project Guide chat + decision log (if created this run)');
     console.log('  ✓ project_timelines - Per-project timeline documents (if created this run)');
     console.log('  ✓ project_members - Shared project access for team members (if created this run)');
+    console.log('  ✓ image_generations - Generate → Images history (if created this run)');
     console.log('  ✓ users - Created automatically by PocketBase');
     console.log('\n✨ You can now use the application!');
 

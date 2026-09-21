@@ -11,7 +11,8 @@ export const GENERATION_PATH = {
   VIDEO_GENERATION: 'video_generation',
   PROJECT_VIDEO_PANEL: 'project_video_panel',
   GENERATE_CHARACTER_API: 'generate_character_api',
-  VIDEO_REPAIR: 'video_repair'
+  VIDEO_REPAIR: 'video_repair',
+  IMAGE_GENERATION: 'image_generation'
 } as const
 
 export type GenerationPath = typeof GENERATION_PATH[keyof typeof GENERATION_PATH]

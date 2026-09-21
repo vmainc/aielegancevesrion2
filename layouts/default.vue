@@ -47,8 +47,15 @@
                     class="absolute right-0 top-full mt-2 min-w-[12rem] bg-studio-slate border border-gray-200 rounded-lg shadow-lg z-50 py-1"
                   >
                     <NuxtLink
-                      to="/tools/video-generation"
+                      to="/tools/image-generation"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors rounded-t-lg"
+                      @click="closeGenerateDropdown"
+                    >
+                      Images
+                    </NuxtLink>
+                    <NuxtLink
+                      to="/tools/video-generation"
+                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                       @click="closeGenerateDropdown"
                     >
                       Video
@@ -365,6 +372,13 @@
                   <div class="block px-4 py-3.5 text-gray-900 font-medium bg-gray-50 border-b border-gray-200">
                     Generate
                   </div>
+                  <NuxtLink
+                    to="/tools/image-generation"
+                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
+                    @click="closeMobileMenu"
+                  >
+                    Images
+                  </NuxtLink>
                   <NuxtLink
                     to="/tools/video-generation"
                     class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"

@@ -299,6 +299,7 @@
             :on-frame-preview-img-error="onFramePreviewImgError"
             :on-trigger-storyboard-upload="triggerStoryboardUpload"
             :on-generate-frame="generateFrame"
+            :on-open-image-studio="openImageStudioForFrame"
             :on-clear-storyboard-frame="clearStoryboardFrame"
             :on-generate-video="openVideoGenerationForBoard"
             :on-fix-shot="openFixShotForBoard"
@@ -416,6 +417,7 @@ import {
   navigateToVideoGenerationFromPanel,
   type VideoGenerationPrefill
 } from '~/lib/video-generation-prefill'
+import { navigateToImageGenerationFromShot } from '~/lib/image-generation-prefill'
 import { navigateToFixShot } from '~/lib/video-repair/navigate'
 import {
   mergeProductionBibleGenerationOptions,
@@ -856,6 +858,31 @@ async function generateAllFrames () {
     generatingAllFrames.value = false
     imageGenId.value = null
   }
+}
+
+async function openImageStudioForFrame (
+  shot: CreativeShot,
+  role: StoryboardFrameRole = 'start'
+) {
+  const pid = projectId.value
+  const sceneId = selectedSceneId.value
+  if (!pid || !isCloudProjectId(pid) || !sceneId) {
+    toast.showToast('Save this project to the cloud before opening the Images studio.', 'info')
+    return
+  }
+  const basePrompt = (shot.imagePrompt || shot.description || '').trim()
+  if (!basePrompt) {
+    toast.showToast('Add a production prompt or story beat first.', 'info')
+    return
+  }
+  await navigateToImageGenerationFromShot({
+    projectId: pid,
+    sceneId,
+    shot,
+    frameRole: role,
+    aspectRatio: project.value?.aspectRatio || '16:9',
+    returnTo: `/projects/${pid}/storyboard`
+  })
 }
 
 async function generateFrame (

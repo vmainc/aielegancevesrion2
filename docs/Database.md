@@ -17,6 +17,7 @@ users
   │                          └── project_assets
   │
   └── creative_scripts (Script Wizard library, optional project link)
+  └── image_generations (Generate → Images history; optional project link)
 ```
 
 **Cascade deletes:** Deleting a `creative_projects` row cascades to its scenes, characters, shots, and assets.
@@ -28,6 +29,28 @@ users
 ### `users` (built-in)
 
 Authentication via email/password. Optional `name`. All creative rows reference `owned_by` → `users`.
+
+---
+
+### `image_generations`
+
+Generate → Images history. See [ImageGeneration.md](./ImageGeneration.md).
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `owned_by` | relation → users | Required |
+| `project` | relation → creative_projects | Optional |
+| `prompt` / `final_prompt` | text | User text vs model-sent prompt |
+| `model` / `provider` | text | OpenRouter slug + provider label |
+| `status` | select | `queued`, `generating`, `complete`, `failed` |
+| `aspect_ratio` / `resolution` | text | Selected generation options |
+| `image_count` | number | Output count |
+| `category` | select | characters, locations, storyboards, props, concept_art, other |
+| `generation_settings` / `film_controls` / `usage` | json | Settings + OpenRouter usage |
+| `cost` / `currency` | number / text | Provider cost when available |
+| `output_images` | file (multi) | Persisted image files |
+| `asset_ids` | json | Linked `project_assets` ids |
+| `error_message` / `duration_ms` / `favorite` | text / number / bool | Diagnostics |
 
 ---
 

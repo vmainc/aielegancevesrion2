@@ -31,9 +31,12 @@ VITE_POCKETBASE_URL=http://127.0.0.1:8090
 POCKETBASE_ADMIN_EMAIL=your-admin-email@example.com
 POCKETBASE_ADMIN_PASSWORD=your-admin-password
 
-# OpenRouter API Key (required for AI models and Speech to Text)
+# OpenRouter API Key (required for AI models, Generate → Images, Speech to Text)
 # Get your API key from https://openrouter.ai
 OPENROUTER_API_KEY=your-openrouter-api-key
+
+# Optional default for Generate → Images (full OpenRouter slug, e.g. google/gemini-2.5-flash-image)
+# OPENROUTER_DEFAULT_IMAGE_MODEL=google/gemini-2.5-flash-image
 
 # Atlas Cloud — optional fallback for Seedance 2.5 native 1080p
 # https://www.atlascloud.ai/console/api-keys

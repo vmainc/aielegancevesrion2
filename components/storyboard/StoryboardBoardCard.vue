@@ -73,6 +73,7 @@
         :on-frame-preview-img-error="onFramePreviewImgError"
         :on-trigger-storyboard-upload="onTriggerStoryboardUpload"
         :on-generate-frame="onGenerateFrame"
+        :on-open-image-studio="onOpenImageStudio"
         :on-clear-storyboard-frame="onClearStoryboardFrame"
       />
       <StoryboardPanelFrame
@@ -92,6 +93,7 @@
         :on-frame-preview-img-error="onFramePreviewImgError"
         :on-trigger-storyboard-upload="onTriggerStoryboardUpload"
         :on-generate-frame="onGenerateFrame"
+        :on-open-image-studio="onOpenImageStudio"
         :on-clear-storyboard-frame="onClearStoryboardFrame"
       />
     </div>
@@ -118,6 +120,15 @@
           @click="onGenerateFrame(shot, role)"
         >
           {{ imageGenId === frameSlotKey(shot, role) ? 'Generating…' : `Regen ${role}` }}
+        </button>
+        <button
+          type="button"
+          class="px-2 py-0.5 text-[10px] font-medium rounded border border-primary/50 text-primary hover:bg-primary/10 disabled:opacity-45"
+          :disabled="isSlotBusy(shot, role) || generatingAllFrames || !canGenerateFrame(shot, role)"
+          title="Open Generate → Images"
+          @click="onOpenImageStudio(shot, role)"
+        >
+          Images…
         </button>
       </template>
       <span class="text-[11px] text-gray-500 ml-auto hidden sm:inline">
@@ -395,6 +406,7 @@ defineProps<{
   onFramePreviewImgError: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onTriggerStoryboardUpload: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onGenerateFrame: (shot: CreativeShot, role: StoryboardFrameRole) => void
+  onOpenImageStudio: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onClearStoryboardFrame: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onGenerateVideo: (shot: CreativeShot) => void
   onFixShot: (shot: CreativeShot) => void

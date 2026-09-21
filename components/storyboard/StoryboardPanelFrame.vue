@@ -69,6 +69,20 @@
           >
             Generate
           </button>
+          <button
+            type="button"
+            class="px-2 py-0.5 text-[10px] font-medium rounded border border-primary/50 text-primary hover:bg-primary/10 disabled:opacity-45"
+            :disabled="
+              imageGenId === slotKey(shot, role) ||
+              frameUploadingId === slotKey(shot, role) ||
+              generatingAllFrames ||
+              !canGenerate(shot, role)
+            "
+            title="Open Generate → Images with this shot’s prompt and film controls"
+            @click="onOpenImageStudio(shot, role)"
+          >
+            Images…
+          </button>
         </div>
       </template>
     </div>
@@ -107,6 +121,7 @@ const props = defineProps<{
   onFramePreviewImgError: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onTriggerStoryboardUpload: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onGenerateFrame: (shot: CreativeShot, role: StoryboardFrameRole) => void
+  onOpenImageStudio: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onClearStoryboardFrame: (shot: CreativeShot, role: StoryboardFrameRole) => void
 }>()
 

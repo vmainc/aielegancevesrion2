@@ -483,6 +483,102 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
       console.log('⚠️  bible_entities not found. Skipping status migration...\n');
     }
 
+    // image_generations — Generate → Images history (existing installs)
+    console.log('🖼️  Ensuring "image_generations" collection...');
+    try {
+      await pb.collections.getFirstListItem('name="image_generations"');
+      console.log('  ✓ image_generations already exists\n');
+    } catch (_missing) {
+      try {
+        const usersCol = await pb.collections.getFirstListItem('name="users"');
+        let creativeProjectsId = null;
+        try {
+          const cp = await pb.collections.getFirstListItem('name="creative_projects"');
+          creativeProjectsId = cp.id;
+        } catch {
+          /* optional */
+        }
+        const fields = [
+          {
+            name: 'owned_by',
+            type: 'relation',
+            required: true,
+            collectionId: usersCol.id,
+            cascadeDelete: false,
+            maxSelect: 1,
+            displayFields: ['email']
+          },
+          { name: 'prompt', type: 'text', required: true, max: 20000 },
+          { name: 'final_prompt', type: 'text', required: false, max: 20000 },
+          { name: 'model', type: 'text', required: true, max: 200 },
+          { name: 'provider', type: 'text', required: false, max: 120 },
+          {
+            name: 'status',
+            type: 'select',
+            required: true,
+            maxSelect: 1,
+            values: ['queued', 'generating', 'complete', 'failed']
+          },
+          { name: 'aspect_ratio', type: 'text', required: false, max: 32 },
+          { name: 'resolution', type: 'text', required: false, max: 64 },
+          { name: 'image_count', type: 'number', required: false, min: 0, max: 16 },
+          {
+            name: 'category',
+            type: 'select',
+            required: false,
+            maxSelect: 1,
+            values: ['characters', 'locations', 'storyboards', 'props', 'concept_art', 'other']
+          },
+          { name: 'generation_settings', type: 'json', required: false },
+          { name: 'film_controls', type: 'json', required: false },
+          { name: 'reference_image_count', type: 'number', required: false, min: 0, max: 16 },
+          { name: 'cost', type: 'number', required: false },
+          { name: 'currency', type: 'text', required: false, max: 8 },
+          { name: 'usage', type: 'json', required: false },
+          { name: 'error_message', type: 'text', required: false, max: 2000 },
+          { name: 'duration_ms', type: 'number', required: false },
+          { name: 'favorite', type: 'bool', required: false },
+          { name: 'asset_ids', type: 'json', required: false },
+          {
+            name: 'output_images',
+            type: 'file',
+            required: false,
+            maxSelect: 10,
+            maxSize: 26214400,
+            mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+            thumbs: ['200x200']
+          }
+        ];
+        if (creativeProjectsId) {
+          fields.splice(1, 0, {
+            name: 'project',
+            type: 'relation',
+            required: false,
+            collectionId: creativeProjectsId,
+            cascadeDelete: false,
+            maxSelect: 1,
+            displayFields: ['name']
+          });
+        }
+        const col = await pb.collections.create({
+          name: 'image_generations',
+          type: 'base',
+          fields
+        });
+        await new Promise((r) => setTimeout(r, 600));
+        await pb.collections.update(col.id, {
+          listRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          viewRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          createRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          updateRule: '@request.auth.id != "" && owned_by = @request.auth.id',
+          deleteRule: '@request.auth.id != "" && owned_by = @request.auth.id'
+        });
+        console.log('  ✅ image_generations created\n');
+      } catch (e) {
+        console.log('  ⚠️  Could not create image_generations:', e.message || e, '\n');
+      }
+    }
+
     console.log('🎉 Field addition complete!');
     console.log('\nYour collections now have all required fields.');
     console.log('You can verify this in the PocketBase admin UI by checking the collection schemas.');

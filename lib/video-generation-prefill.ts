@@ -41,9 +41,14 @@ export async function navigateToVideoGenerationFromPanel (opts: {
   shotId: string
   prefill?: VideoGenerationPrefill
 }): Promise<void> {
-  if (opts.prefill?.prompt?.trim()) {
+  if (
+    opts.prefill?.prompt?.trim() ||
+    opts.prefill?.startFrameUrl?.trim() ||
+    opts.prefill?.endFrameUrl?.trim()
+  ) {
     stashVideoGenerationPanelPrefill({
       ...opts.prefill,
+      prompt: opts.prefill.prompt?.trim() || ' ',
       projectId: opts.projectId,
       sceneId: opts.sceneId,
       shotId: opts.shotId,

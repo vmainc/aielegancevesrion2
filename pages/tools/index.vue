@@ -25,6 +25,11 @@
 <script setup>
 const cards = [
   {
+    to: '/tools/image-generation',
+    title: 'Image generation',
+    blurb: 'Create characters, locations, props, storyboards, and concept art with OpenRouter image models.',
+  },
+  {
     to: '/tools/video-generation',
     title: 'Video generation',
     blurb: 'Generate AI video clips with OpenRouter — upload a starting frame, pick models, save to projects.',

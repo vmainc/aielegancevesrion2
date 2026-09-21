@@ -878,7 +878,9 @@ const prefillState = useVideoGenerationPrefillState()
 
 function stashedPanelPrefill (): VideoGenerationPrefill | null {
   const fromState = prefillState.value
-  if (fromState?.prompt?.trim()) return fromState
+  if (fromState?.prompt?.trim() || fromState?.startFrameUrl?.trim() || fromState?.endFrameUrl?.trim()) {
+    return fromState
+  }
   return null
 }
 
@@ -1659,7 +1661,10 @@ async function fetchPanelPrefillFromApi (): Promise<boolean> {
 function tryApplyStashedPrefill (): boolean {
   if (prefillApplied.value || !import.meta.client) return false
   const payload = stashedPanelPrefill()
-  if (!payload?.prompt?.trim()) return false
+  if (!payload) return false
+  if (!payload.prompt?.trim() && !payload.startFrameUrl?.trim() && !payload.endFrameUrl?.trim()) {
+    return false
+  }
   applyVideoGenerationPrefill(payload)
   prefillApplied.value = true
   clearVideoGenerationPanelPrefill()
