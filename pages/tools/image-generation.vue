@@ -73,7 +73,15 @@
             <label for="img-gen-prompt" class="text-sm font-semibold text-gray-900">
               Describe the image
             </label>
-            <span class="text-xs text-gray-500 tabular-nums">{{ prompt.length }}</span>
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-gray-500 tabular-nums">{{ prompt.length }}</span>
+              <PromptEnhanceButton
+                v-model="prompt"
+                context="image"
+                :project-id="projectId || undefined"
+                :disabled="generating"
+              />
+            </div>
           </div>
           <textarea
             id="img-gen-prompt"
