@@ -4,7 +4,8 @@ import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-t
 import { pbRecordToImageGeneration } from '~/server/utils/image-generation-map'
 import {
   isPocketBaseMissingCollectionError,
-  pocketBaseErrorStatus
+  pocketBaseErrorStatus,
+  formatPocketBaseRecordError
 } from '~/server/utils/pb-missing-collection-error'
 import { stagedGeneratedImagePublicPath } from '~/server/utils/image-generation-store'
 import type { ImageGenerationCategory } from '~/types/image-generation'
@@ -34,10 +35,23 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const list = await pb.collection('image_generations').getList(page, perPage, {
-      filter: filters.join(' && '),
-      sort: '-created'
-    })
+    let list
+    try {
+      list = await pb.collection('image_generations').getList(page, perPage, {
+        filter: filters.join(' && '),
+        sort: '-created'
+      })
+    } catch (sortErr: unknown) {
+      // PocketBase 0.23+ needs explicit autodate `created` fields; fall back if missing.
+      if (pocketBaseErrorStatus(sortErr) === 400) {
+        list = await pb.collection('image_generations').getList(page, perPage, {
+          filter: filters.join(' && '),
+          sort: '-id'
+        })
+      } else {
+        throw sortErr
+      }
+    }
 
     const items = list.items.map((row) => {
       const record = row as unknown as Record<string, unknown>
@@ -74,7 +88,14 @@ export default defineEventHandler(async (event) => {
       }
     }
     if (pocketBaseErrorStatus(e) === 400) {
-      throw createError({ statusCode: 400, message: 'Invalid history filter' })
+      console.warn('[image-generations] history list failed', {
+        message: formatPocketBaseRecordError(e),
+        filter: filters.join(' && ')
+      })
+      throw createError({
+        statusCode: 400,
+        message: 'Could not load generation history. Try again or run npm run add-fields.'
+      })
     }
     throw e
   }

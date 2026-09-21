@@ -1259,7 +1259,9 @@ async function createCollections(adminEmail, adminPassword) {
                 mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
                 thumbs: ['200x200']
               }
-            }
+            },
+            { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
+            { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true }
           ]
         });
         console.log('✅ "image_generations" created\n');

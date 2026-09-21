@@ -486,8 +486,51 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
     // image_generations — Generate → Images history (existing installs)
     console.log('🖼️  Ensuring "image_generations" collection...');
     try {
-      await pb.collections.getFirstListItem('name="image_generations"');
-      console.log('  ✓ image_generations already exists\n');
+      const col = await pb.collections.getFirstListItem('name="image_generations"');
+      const currentSchema = col.fields || col.schema || [];
+      const fieldsToAdd = [];
+      if (!fieldExists(col, 'created')) {
+        fieldsToAdd.push({
+          name: 'created',
+          type: 'autodate',
+          onCreate: true,
+          onUpdate: false
+        });
+        console.log('  ➕ Will add: created (autodate)');
+      }
+      if (!fieldExists(col, 'updated')) {
+        fieldsToAdd.push({
+          name: 'updated',
+          type: 'autodate',
+          onCreate: true,
+          onUpdate: true
+        });
+        console.log('  ➕ Will add: updated (autodate)');
+      }
+      if (!fieldExists(col, 'project')) {
+        try {
+          const cp = await pb.collections.getFirstListItem('name="creative_projects"');
+          fieldsToAdd.push({
+            name: 'project',
+            type: 'relation',
+            required: false,
+            collectionId: cp.id,
+            cascadeDelete: false,
+            maxSelect: 1,
+            displayFields: ['name']
+          });
+          console.log('  ➕ Will add: project (relation)');
+        } catch {
+          console.log('  ⚠️  creative_projects missing — skip project relation');
+        }
+      }
+      if (fieldsToAdd.length) {
+        const updatedFields = [...currentSchema.map(flattenField), ...fieldsToAdd.map(flattenField)];
+        await pb.collections.update(col.id, { fields: updatedFields });
+        console.log('  ✅ image_generations fields updated\n');
+      } else {
+        console.log('  ✓ image_generations already exists\n');
+      }
     } catch (_missing) {
       try {
         const usersCol = await pb.collections.getFirstListItem('name="users"');
@@ -547,7 +590,9 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
             maxSize: 26214400,
             mimeTypes: ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
             thumbs: ['200x200']
-          }
+          },
+          { name: 'created', type: 'autodate', onCreate: true, onUpdate: false },
+          { name: 'updated', type: 'autodate', onCreate: true, onUpdate: true }
         ];
         if (creativeProjectsId) {
           fields.splice(1, 0, {
