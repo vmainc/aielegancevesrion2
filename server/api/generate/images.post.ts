@@ -331,7 +331,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const { prompt, finalPrompt } = buildImageFinalPrompt(input.prompt, input.filmControls)
+  const { prompt, finalPrompt } = buildImageFinalPrompt(input.prompt, input.filmControls, {
+    category: input.category
+  })
 
   const internalPb = String(config.pocketbaseInternalUrl || '').trim()
   const publicPb = String(config.public?.pocketbaseUrl || '').trim()

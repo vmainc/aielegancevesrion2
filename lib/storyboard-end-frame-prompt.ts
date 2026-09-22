@@ -42,7 +42,8 @@ export function buildStoryboardEndFramePrompt (
     '- Same cast, wardrobe, lighting language, and location as the start / reference still.',
     '- Advance pose, position, and composition to the logical end of the beat (e.g. landing after a leap, settled reaction, completed camera move, arrived framing).',
     '- Do NOT redraw the opening pose. Do NOT invent a new scene, new characters, or a different wardrobe.',
-    '- Single still only; no collage, split screen, timeline strip, or motion-blur streaks.'
+    '- Single still only; no collage, split screen, timeline strip, or motion-blur streaks.',
+    '- NO on-image text: no comic captions, speech bubbles, subtitles, or lettering — dialogue is spoken in video/audio later.'
   ].join('\n')
 
   if (!base) return block

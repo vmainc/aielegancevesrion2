@@ -23,10 +23,10 @@ const CONTEXT_HINTS: Record<string, string> = {
     'Director bible field: cinematic vocabulary, concise and actionable.',
   continuity:
     'Continuity memory: keep facts explicit, consistent, and scannable.',
-  story:
-    'Cinematic shot description for storyboard / shot list.',
   shot_image:
-    'Single-frame image prompt for a storyboard shot.',
+    'Single-frame image prompt for a storyboard shot. Photoreal live-action still — never comic captions, speech bubbles, subtitles, or any on-image text (dialogue is spoken later in video).',
+  story:
+    'Cinematic shot description for storyboard / shot list. Visual action and framing only — no comic captions or on-image dialogue text.',
   shot_video:
     'Motion/video prompt for a storyboard shot. No background music or score unless the user explicitly requests it.',
   soundscape:

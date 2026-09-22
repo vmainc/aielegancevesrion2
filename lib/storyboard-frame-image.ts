@@ -2,8 +2,15 @@
 
 import { blobToDataUrl, maybeCompressImageBlob } from '~/lib/image-blob-client'
 
+/**
+ * Hard ban on comic-style lettering. Captions/bubbles bake into the still and then
+ * get image-to-video’d — dialogue must be spoken in audio, never painted on the frame.
+ */
+export const STORYBOARD_NO_ON_IMAGE_TEXT_DIRECTIVE =
+  'NO ON-IMAGE TEXT: photoreal live-action still only — never comic captions, speech bubbles, thought bubbles, subtitles, lower-thirds, title cards, sound-effect lettering (POW/BAM), watermarks, or any readable words/letters/numbers in the frame. If someone is speaking, show mouth shape, expression, and gesture only — do not paint dialogue onto the image (speech is added later in video/audio).'
+
 export const SINGLE_STORYBOARD_FRAME_DIRECTIVE =
-  'ONE IMAGE ONLY: a single cinematic storyboard still for this panel — not a comic strip, not a diptych, not split screen, not stacked panels, not before/after, not a collage of multiple scenes.'
+  `ONE IMAGE ONLY: a single cinematic storyboard still for this panel — not a comic strip, not a diptych, not split screen, not stacked panels, not before/after, not a collage of multiple scenes. ${STORYBOARD_NO_ON_IMAGE_TEXT_DIRECTIVE}`
 
 export type ProjectAspectRatio = '16:9' | '9:16' | '1:1'
 

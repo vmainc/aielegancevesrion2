@@ -134,7 +134,8 @@ export function buildPanelActionEmphasis (
     seq,
     `"${title}" · ${shotType}${camera ? ` · camera: ${camera}` : ''}`,
     beat || title,
-    'Visually distinct COMPOSITION from every other panel: unique action, pose, eyeline, and framing only — never change character face, species, body proportions, fur/materials, or wardrobe. Same set architecture every panel; never clone the same camera layout. Photoreal practical location, not a virtual set.'
+    'Visually distinct COMPOSITION from every other panel: unique action, pose, eyeline, and framing only — never change character face, species, body proportions, fur/materials, or wardrobe. Same set architecture every panel; never clone the same camera layout. Photoreal practical location, not a virtual set.',
+    'If this beat includes spoken dialogue, treat it as performance only (mouth, expression, gesture) — never draw captions, speech bubbles, or readable words in the frame.'
   ]
     .filter(Boolean)
     .join('\n')

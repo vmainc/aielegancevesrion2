@@ -35,6 +35,7 @@ describe('buildStoryboardEndFramePrompt', () => {
     expect(out).toMatch(/LAST frame/i)
     expect(out).toContain('landing after a leap')
     expect(out).toContain("DOG's Energetic Leap")
+    expect(out).toMatch(/NO on-image text/i)
   })
 
   it('does not double-append end frame blocks', () => {

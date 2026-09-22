@@ -31,7 +31,7 @@ export const ANIMAL_ONLY_NEGATIVE_PROMPT =
   'no humans, no people, no human faces, no human hands, no human bodies, no man, no woman, no child, no crowd, no realistic human silhouettes, no human furniture occupants, only the specified animal characters from the cast bible'
 
 export const STANDARD_STORYBOARD_NEGATIVES =
-  'no watermark, no logo, no text overlay, no caption, no split screen, no diptych, no comic panels, no stacked scenes, no collage, no duplicate panels, blurry, deformed, extra limbs, wrong species, inconsistent character design, different art style than established'
+  'no watermark, no logo, no text overlay, no caption, no comic caption, no speech bubble, no thought bubble, no subtitle, no lower third, no title card, no sound-effect lettering, no readable text, no written words, no letters on screen, no dialogue text, no manga text, no comic book lettering, no split screen, no diptych, no comic panels, no stacked scenes, no collage, no duplicate panels, blurry, deformed, extra limbs, wrong species, inconsistent character design, different art style than established'
 
 /** True when the cast reads as non-human characters (e.g. animal story). */
 export function isAnimalOnlyCast (cast: CastMemberForContinuity[]): boolean {
@@ -224,7 +224,7 @@ export function expandShortImagePrompt (opts: {
     env ? `SETTING (locked across scene): ${env}` : '',
     style ? `VISUAL STYLE & LIGHTING (project-wide, do not change between panels): ${style}` : '',
     opts.characterLock,
-    'Composition: single clear storyboard frame, readable silhouettes, consistent color palette and practical lighting with prior panels in this scene.'
+    'Composition: single clear storyboard frame, readable silhouettes, consistent color palette and practical lighting with prior panels in this scene. No comic captions, speech bubbles, or on-image text.'
   ]
     .filter(Boolean)
     .join('\n\n')

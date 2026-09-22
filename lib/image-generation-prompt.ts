@@ -6,7 +6,8 @@ import type { FilmControls } from '~/types/image-generation'
  */
 export function buildImageFinalPrompt (
   userPrompt: string,
-  filmControls?: FilmControls | null
+  filmControls?: FilmControls | null,
+  options?: { category?: string | null }
 ): { prompt: string; finalPrompt: string } {
   const prompt = (userPrompt || '').trim()
   if (!prompt) {
@@ -26,11 +27,18 @@ export function buildImageFinalPrompt (
   if (lighting) parts.push(`Lighting: ${lighting}.`)
   if (style) parts.push(`Visual style: ${style}.`)
 
-  if (!parts.length) {
+  const category = (options?.category || '').trim()
+  const storyboardNoText =
+    category === 'storyboards'
+      ? 'NO ON-IMAGE TEXT: never comic captions, speech bubbles, subtitles, or readable words in the frame — dialogue is spoken later in video/audio.'
+      : ''
+
+  if (!parts.length && !storyboardNoText) {
     return { prompt, finalPrompt: prompt }
   }
 
-  const finalPrompt = `${prompt}\n\nFilmmaking direction: ${parts.join(' ')}`.trim()
+  const direction = [...parts, storyboardNoText].filter(Boolean).join(' ')
+  const finalPrompt = `${prompt}\n\nFilmmaking direction: ${direction}`.trim()
   return { prompt, finalPrompt }
 }
 
