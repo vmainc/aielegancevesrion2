@@ -69,7 +69,10 @@ export function useImageGeneration () {
   }
 
   function mediaSrc (url: string): string {
-    return appendPlaybackAccessToken(url, getAuthToken())
+    const u = (url || '').trim()
+    // Token only on client so SSR HTML matches the first paint (avoids hydration mismatch).
+    if (!import.meta.client) return u
+    return appendPlaybackAccessToken(u, getAuthToken())
   }
 
   async function loadModels () {

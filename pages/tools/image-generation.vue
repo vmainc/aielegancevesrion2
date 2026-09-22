@@ -30,33 +30,35 @@
       </NuxtLink>
     </div>
 
-    <div
-      v-if="projects.length"
-      class="mb-6 flex flex-wrap items-center gap-3"
-    >
-      <label for="img-gen-project" class="text-sm font-medium text-gray-700">Project</label>
-      <select
-        id="img-gen-project"
-        v-model="projectId"
-        class="min-w-[12rem] rounded-lg border border-gray-300 bg-studio-slate px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/40"
+    <ClientOnly>
+      <div
+        v-if="projects.length"
+        class="mb-6 flex flex-wrap items-center gap-3"
       >
-        <option value="">No project</option>
-        <option v-for="p in projects" :key="p.id" :value="p.id">
-          {{ p.name }}
-        </option>
-      </select>
-      <label for="img-gen-category" class="text-sm font-medium text-gray-700 sr-only sm:not-sr-only">Asset type</label>
-      <select
-        id="img-gen-category"
-        v-model="category"
-        class="rounded-lg border border-gray-300 bg-studio-slate px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/40"
-        aria-label="Asset type"
-      >
-        <option v-for="c in categoryOptions" :key="c.id" :value="c.id">
-          {{ c.label }}
-        </option>
-      </select>
-    </div>
+        <label for="img-gen-project" class="text-sm font-medium text-gray-700">Project</label>
+        <select
+          id="img-gen-project"
+          v-model="projectId"
+          class="min-w-[12rem] rounded-lg border border-gray-300 bg-studio-slate px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/40"
+        >
+          <option value="">No project</option>
+          <option v-for="p in projects" :key="p.id" :value="p.id">
+            {{ p.name }}
+          </option>
+        </select>
+        <label for="img-gen-category" class="text-sm font-medium text-gray-700 sr-only sm:not-sr-only">Asset type</label>
+        <select
+          id="img-gen-category"
+          v-model="category"
+          class="rounded-lg border border-gray-300 bg-studio-slate px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-primary/40"
+          aria-label="Asset type"
+        >
+          <option v-for="c in categoryOptions" :key="c.id" :value="c.id">
+            {{ c.label }}
+          </option>
+        </select>
+      </div>
+    </ClientOnly>
 
     <p
       v-if="modelsNotice"
@@ -771,6 +773,7 @@ const {
 } = useImageGeneration()
 
 const { projects, hydrate, loadServerProjects, isCloudProjectId } = useCreativeProject()
+const { initAuth } = useAuth()
 const route = useRoute()
 const toast = useToast()
 
@@ -910,11 +913,13 @@ function shortModel (id: string): string {
 function formatDate (iso: string): string {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleString(undefined, {
+    // Fixed locale/timeZone so SSR and client render identical strings.
+    return new Date(iso).toLocaleString('en-US', {
       month: 'short',
       day: 'numeric',
       hour: 'numeric',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'UTC'
     })
   } catch {
     return iso
@@ -926,6 +931,7 @@ watch(projectId, () => {
 })
 
 onMounted(async () => {
+  await initAuth()
   hydrate()
   await loadServerProjects().catch(() => {})
 

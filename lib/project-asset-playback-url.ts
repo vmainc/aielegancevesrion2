@@ -21,6 +21,11 @@ export function isRepairVideoResultPath (url: string): boolean {
   return /^\/api\/repair\/video\/result\/[^/]+$/.test(playbackPathOnly(url))
 }
 
+/** Generated image stage/PB media (`GET /api/generate/images/media/:id/:index`). */
+export function isGeneratedImageMediaPath (url: string): boolean {
+  return /^\/api\/generate\/images\/media\/[^/]+\/\d+$/.test(playbackPathOnly(url))
+}
+
 function playbackPathOnly (url: string): string {
   let path = url.trim()
   if (/^https?:\/\//i.test(path)) {
@@ -69,8 +74,14 @@ export function appendPlaybackAccessToken (url: string, token: string | null | u
   const u = url.trim()
   if (!u || !token?.trim()) return u
   if (/[?&]access_token=/.test(u)) return u
-  // `<video src>` cannot send Authorization — token must be in the query string.
-  if (!isProjectAssetMediaPath(u) && !isRepairVideoResultPath(u)) return u
+  // `<img>`/`<video src>` cannot send Authorization — token must be in the query string.
+  if (
+    !isProjectAssetMediaPath(u) &&
+    !isRepairVideoResultPath(u) &&
+    !isGeneratedImageMediaPath(u)
+  ) {
+    return u
+  }
   const join = u.includes('?') ? '&' : '?'
   return `${u}${join}access_token=${encodeURIComponent(token.trim())}`
 }
