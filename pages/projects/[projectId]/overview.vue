@@ -176,7 +176,7 @@
         </div>
         <button
           type="button"
-          class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
+          class="px-4 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 rounded-lg text-sm font-semibold transition-colors disabled:opacity-50"
           :disabled="!canAnalyzeSavedIdea || conceptBootstrapRunning"
           @click="analyzeSavedIdea"
         >
@@ -466,7 +466,7 @@
                 </div>
                 <button
                   type="button"
-                  class="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors"
+                  class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 text-sm font-semibold rounded-lg transition-colors"
                   :disabled="applyingModel === r.model"
                   @click="useThisConcept(r)"
                 >

@@ -122,7 +122,7 @@
       >
       <button
         type="button"
-        class="px-4 py-2.5 bg-gray-900 hover:bg-gray-800 text-white font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        class="px-4 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         :disabled="!canUseOwnPrompt"
         @click="useOwnPrompt"
       >
@@ -224,7 +224,7 @@
             </div>
             <button
               type="button"
-              class="px-4 py-2 bg-gray-900 hover:bg-gray-800 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              class="px-4 py-2 bg-primary hover:bg-primary/90 text-gray-950 text-sm font-semibold rounded-lg transition-colors disabled:opacity-50"
               :disabled="applyingModel === r.model"
               @click="onApply(r)"
             >
