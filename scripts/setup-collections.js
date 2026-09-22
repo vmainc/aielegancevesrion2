@@ -1235,6 +1235,9 @@ async function createCollections(adminEmail, adminPassword) {
                   { value: 'storyboards' },
                   { value: 'props' },
                   { value: 'concept_art' },
+                  { value: 'logos' },
+                  { value: 'titles' },
+                  { value: 'graphics' },
                   { value: 'other' }
                 ]
               }

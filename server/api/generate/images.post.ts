@@ -3,6 +3,7 @@ import { buildImageFinalPrompt } from '~/lib/image-generation-prompt'
 import {
   EMPTY_FILM_CONTROLS,
   IMAGE_GENERATION_ALLOWED_MIME,
+  IMAGE_GENERATION_CATEGORY_IDS,
   IMAGE_GENERATION_MAX_REFERENCE_BYTES,
   IMAGE_GENERATION_MAX_REFERENCES
 } from '~/lib/image-generation-defaults'
@@ -24,14 +25,7 @@ import { resolveReferenceImageUrlForServerFetch } from '~/server/utils/resolve-p
 import { fetchReferenceImageAsDataUrl } from '~/server/utils/reference-image-data-url'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
 
-const CATEGORIES = new Set<ImageGenerationCategory>([
-  'characters',
-  'locations',
-  'storyboards',
-  'props',
-  'concept_art',
-  'other'
-])
+const CATEGORIES = new Set<ImageGenerationCategory>(IMAGE_GENERATION_CATEGORY_IDS)
 
 function parseCategory (raw: unknown): ImageGenerationCategory {
   const s = typeof raw === 'string' ? raw.trim() : ''

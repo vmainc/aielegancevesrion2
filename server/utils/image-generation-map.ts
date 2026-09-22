@@ -5,16 +5,10 @@ import type {
   ImageGenerationStatus
 } from '~/types/image-generation'
 import { stagedGeneratedImagePublicPath } from '~/server/utils/image-generation-store'
+import { IMAGE_GENERATION_CATEGORY_IDS } from '~/lib/image-generation-defaults'
 
 const STATUSES = new Set<ImageGenerationStatus>(['queued', 'generating', 'complete', 'failed'])
-const CATEGORIES = new Set<ImageGenerationCategory>([
-  'characters',
-  'locations',
-  'storyboards',
-  'props',
-  'concept_art',
-  'other'
-])
+const CATEGORIES = new Set<ImageGenerationCategory>(IMAGE_GENERATION_CATEGORY_IDS)
 
 function asString (v: unknown): string {
   return typeof v === 'string' ? v : v == null ? '' : String(v)

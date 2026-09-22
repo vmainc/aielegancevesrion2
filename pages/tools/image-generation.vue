@@ -5,7 +5,7 @@
         Generate Images
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Create characters, locations, props, storyboards, concept art, and other visual assets for your film.
+        Create characters, locations, props, storyboards, logos, titles, graphics, and other visual assets for your film.
       </p>
     </header>
 

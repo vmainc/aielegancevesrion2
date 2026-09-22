@@ -45,7 +45,7 @@ Generate → Images history. See [ImageGeneration.md](./ImageGeneration.md).
 | `status` | select | `queued`, `generating`, `complete`, `failed` |
 | `aspect_ratio` / `resolution` | text | Selected generation options |
 | `image_count` | number | Output count |
-| `category` | select | characters, locations, storyboards, props, concept_art, other |
+| `category` | select | characters, locations, storyboards, props, concept_art, logos, titles, graphics, other |
 | `generation_settings` / `film_controls` / `usage` | json | Settings + OpenRouter usage |
 | `cost` / `currency` | number / text | Provider cost when available |
 | `output_images` | file (multi) | Persisted image files |

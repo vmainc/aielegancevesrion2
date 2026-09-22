@@ -28,16 +28,26 @@ export function buildImageFinalPrompt (
   if (style) parts.push(`Visual style: ${style}.`)
 
   const category = (options?.category || '').trim()
-  const storyboardNoText =
-    category === 'storyboards'
-      ? 'NO ON-IMAGE TEXT: never comic captions, speech bubbles, subtitles, or readable words in the frame — dialogue is spoken later in video/audio.'
-      : ''
+  let categoryNote = ''
+  if (category === 'storyboards') {
+    categoryNote =
+      'NO ON-IMAGE TEXT: never comic captions, speech bubbles, subtitles, or readable words in the frame — dialogue is spoken later in video/audio.'
+  } else if (category === 'logos') {
+    categoryNote =
+      'LOGO DESIGN: produce a clean logo mark — intentional typography and/or symbol on a simple background. Readable lettering is desired; avoid photoreal scenes or random watermarks.'
+  } else if (category === 'titles') {
+    categoryNote =
+      'TITLE TREATMENT: cinematic title card or main-title typography — clear readable lettering as the focus. Prefer designed type over busy photographic backgrounds unless the prompt asks for a full poster.'
+  } else if (category === 'graphics') {
+    categoryNote =
+      'GRAPHIC DESIGN ASSET: poster, key art, icon, or motion-graphics still — clean composition; typography allowed when it serves the design.'
+  }
 
-  if (!parts.length && !storyboardNoText) {
+  if (!parts.length && !categoryNote) {
     return { prompt, finalPrompt: prompt }
   }
 
-  const direction = [...parts, storyboardNoText].filter(Boolean).join(' ')
+  const direction = [...parts, categoryNote].filter(Boolean).join(' ')
   const finalPrompt = `${prompt}\n\nFilmmaking direction: ${direction}`.trim()
   return { prompt, finalPrompt }
 }

@@ -531,6 +531,42 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
       } else {
         console.log('  ✓ image_generations already exists\n');
       }
+
+      // Ensure category select includes logos / titles / graphics
+      {
+        const refreshed = await pb.collections.getOne(col.id);
+        const schema = refreshed.fields || refreshed.schema || [];
+        const categoryField = schema.find((f) => f?.name === 'category');
+        if (categoryField) {
+          const values = categoryField.values || categoryField.options?.values || [];
+          const flat = values.map((v) => (typeof v === 'object' && v && 'value' in v ? v.value : v));
+          const needed = [
+            'characters',
+            'locations',
+            'storyboards',
+            'props',
+            'concept_art',
+            'logos',
+            'titles',
+            'graphics',
+            'other'
+          ];
+          const missing = needed.filter((v) => !flat.includes(v));
+          if (missing.length) {
+            const nextValues = [...new Set([...flat, ...needed])];
+            const updatedFields = schema.map((f) => {
+              if (f?.name !== 'category') return flattenField(f);
+              return flattenField({
+                ...f,
+                values: nextValues,
+                options: { ...(f.options || {}), maxSelect: 1, values: nextValues }
+              });
+            });
+            await pb.collections.update(col.id, { fields: updatedFields });
+            console.log(`  ➕ Updated image_generations.category values (+${missing.join(', ')})\n`);
+          }
+        }
+      }
     } catch (_missing) {
       try {
         const usersCol = await pb.collections.getFirstListItem('name="users"');
@@ -570,7 +606,17 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
             type: 'select',
             required: false,
             maxSelect: 1,
-            values: ['characters', 'locations', 'storyboards', 'props', 'concept_art', 'other']
+            values: [
+              'characters',
+              'locations',
+              'storyboards',
+              'props',
+              'concept_art',
+              'logos',
+              'titles',
+              'graphics',
+              'other'
+            ]
           },
           { name: 'generation_settings', type: 'json', required: false },
           { name: 'film_controls', type: 'json', required: false },

@@ -109,6 +109,9 @@ export function parseImageGenerationQuery (
     'storyboards',
     'props',
     'concept_art',
+    'logos',
+    'titles',
+    'graphics',
     'other'
   ])
   return {

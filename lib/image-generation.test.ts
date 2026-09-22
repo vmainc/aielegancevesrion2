@@ -32,6 +32,12 @@ describe('buildImageFinalPrompt', () => {
     expect(r.finalPrompt).toContain('Visual style: Cinematic.')
   })
 
+  it('appends logo typography guidance for logos category', () => {
+    const r = buildImageFinalPrompt('film studio mark', null, { category: 'logos' })
+    expect(r.finalPrompt).toContain('LOGO DESIGN')
+    expect(r.finalPrompt).toContain('film studio mark')
+  })
+
   it('hasActiveFilmControls detects selections', () => {
     expect(hasActiveFilmControls(null)).toBe(false)
     expect(hasActiveFilmControls({ shotSize: 'Wide' })).toBe(true)

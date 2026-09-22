@@ -46,6 +46,18 @@ export const IMAGE_MODEL_BADGE_OVERRIDES: Record<string, ImageModelBadge[]> = {
 /** USD/image at or below this (when pricing is known) earns LOW COST from metadata. */
 export const IMAGE_MODEL_LOW_COST_USD = 0.02
 
+export const IMAGE_GENERATION_CATEGORY_IDS = [
+  'characters',
+  'locations',
+  'storyboards',
+  'props',
+  'concept_art',
+  'logos',
+  'titles',
+  'graphics',
+  'other'
+] as const satisfies readonly ImageGenerationCategory[]
+
 export const IMAGE_GENERATION_CATEGORIES: Array<{
   id: ImageGenerationCategory | 'all'
   label: string
@@ -56,6 +68,9 @@ export const IMAGE_GENERATION_CATEGORIES: Array<{
   { id: 'storyboards', label: 'Storyboards' },
   { id: 'props', label: 'Props' },
   { id: 'concept_art', label: 'Concept Art' },
+  { id: 'logos', label: 'Logos' },
+  { id: 'titles', label: 'Titles' },
+  { id: 'graphics', label: 'Graphics' },
   { id: 'other', label: 'Other' }
 ]
 

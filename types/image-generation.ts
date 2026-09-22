@@ -51,6 +51,9 @@ export type ImageGenerationCategory =
   | 'storyboards'
   | 'props'
   | 'concept_art'
+  | 'logos'
+  | 'titles'
+  | 'graphics'
   | 'other'
 
 export type ImageGenerationStatus = 'queued' | 'generating' | 'complete' | 'failed'

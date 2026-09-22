@@ -8,16 +8,10 @@ import {
   formatPocketBaseRecordError
 } from '~/server/utils/pb-missing-collection-error'
 import { stagedGeneratedImagePublicPath } from '~/server/utils/image-generation-store'
+import { IMAGE_GENERATION_CATEGORY_IDS } from '~/lib/image-generation-defaults'
 import type { ImageGenerationCategory } from '~/types/image-generation'
 
-const CATEGORIES = new Set<ImageGenerationCategory>([
-  'characters',
-  'locations',
-  'storyboards',
-  'props',
-  'concept_art',
-  'other'
-])
+const CATEGORIES = new Set<ImageGenerationCategory>(IMAGE_GENERATION_CATEGORY_IDS)
 
 export default defineEventHandler(async (event) => {
   const userId = await getPocketBaseUserIdFromRequest(event)
