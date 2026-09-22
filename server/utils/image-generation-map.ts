@@ -57,26 +57,30 @@ export function pbRecordToImageGeneration (
   const files = parseFileList(record.output_images)
   const imageUrls: string[] = []
 
-  if (options?.pbFilesBase && files.length) {
+  const imageCountRaw =
+    typeof record.image_count === 'number'
+      ? record.image_count
+      : typeof record.image_count === 'string'
+        ? Number(record.image_count)
+        : NaN
+  const stagedCount = Number.isFinite(imageCountRaw)
+    ? imageCountRaw
+    : files.length
+
+  // Always expose app media proxy URLs for <img> (Bearer / access_token).
+  // Never hand browsers raw PocketBase file URLs — those 401 without a PB file token.
+  if (id && parseStatus(record.status) === 'complete') {
+    const n = Math.min(16, Math.max(files.length, stagedCount, 0))
+    for (let i = 0; i < n; i++) {
+      imageUrls.push(stagedGeneratedImagePublicPath(id, i))
+    }
+  } else if (options?.pbFilesBase && files.length) {
     for (const f of files) {
       try {
         imageUrls.push(options.pbFilesBase(record, f))
       } catch {
         /* skip */
       }
-    }
-  }
-
-  // Prefer stable app media URLs when staged indices are recorded.
-  const stagedCount =
-    typeof record.image_count === 'number'
-      ? record.image_count
-      : typeof record.image_count === 'string'
-        ? Number(record.image_count)
-        : files.length || imageUrls.length
-  if (!imageUrls.length && id && stagedCount > 0 && record.status === 'complete') {
-    for (let i = 0; i < Math.min(16, stagedCount); i++) {
-      imageUrls.push(stagedGeneratedImagePublicPath(id, i))
     }
   }
 
