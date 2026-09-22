@@ -429,14 +429,14 @@
             >
               <button
                 type="button"
-                class="block w-full focus:outline-none focus:ring-2 focus:ring-primary/50"
-                :aria-label="`Open image ${i + 1} details`"
-                @click="detail = latest"
+                class="block w-full cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-primary/50"
+                :aria-label="`Enlarge image ${i + 1}`"
+                @click="openGenerationLightbox(latest, i)"
               >
                 <img
                   :src="mediaSrc(url)"
                   :alt="latest.prompt?.slice(0, 120) || 'Generated image'"
-                  class="w-full h-auto object-contain max-h-[70vh] mx-auto"
+                  class="w-full h-auto object-contain max-h-[70vh] mx-auto pointer-events-none"
                 >
               </button>
             </div>
@@ -553,14 +553,14 @@
           <button
             type="button"
             class="group w-full text-left rounded-xl border border-gray-200 bg-studio-slate overflow-hidden hover:border-primary/40 focus:outline-none focus:ring-2 focus:ring-primary/40"
-            @click="detail = item"
+            @click="openHistoryItem(item)"
           >
-            <div class="aspect-video bg-gray-100 relative">
+            <div class="aspect-video bg-gray-100 relative cursor-zoom-in">
               <img
                 v-if="item.imageUrls?.[0] && item.status === 'complete'"
                 :src="mediaSrc(item.imageUrls[0])"
                 alt=""
-                class="w-full h-full object-cover"
+                class="w-full h-full object-cover pointer-events-none"
               >
               <div
                 v-else
@@ -608,11 +608,18 @@
           </div>
           <div class="p-4 sm:p-6 space-y-4">
             <div v-if="detail.imageUrls?.[0]" class="rounded-lg overflow-hidden border border-gray-200">
-              <img
-                :src="mediaSrc(detail.imageUrls[0])"
-                :alt="detail.prompt?.slice(0, 120) || 'Generated image'"
-                class="w-full h-auto"
+              <button
+                type="button"
+                class="block w-full cursor-zoom-in focus:outline-none focus:ring-2 focus:ring-primary/50"
+                aria-label="Enlarge image"
+                @click="openGenerationLightbox(detail, 0)"
               >
+                <img
+                  :src="mediaSrc(detail.imageUrls[0])"
+                  :alt="detail.prompt?.slice(0, 120) || 'Generated image'"
+                  class="w-full h-auto pointer-events-none"
+                >
+              </button>
             </div>
             <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 text-sm">
               <div class="sm:col-span-2">
@@ -697,6 +704,12 @@
       </div>
     </Teleport>
 
+    <ImageLightbox
+      v-model:open="lightboxOpen"
+      :items="lightboxItems"
+      :start-index="lightboxIndex"
+    />
+
     <!-- Mobile sticky CTA -->
     <div class="lg:hidden fixed bottom-0 inset-x-0 z-40 border-t border-gray-200 bg-studio-charcoal/95 backdrop-blur px-4 py-3 safe-pb">
       <button
@@ -727,7 +740,8 @@ import {
 } from '~/lib/image-generation-prefill'
 import { stashVideoGenerationPanelPrefill } from '~/lib/video-generation-prefill'
 import { projectAssetMediaPath } from '~/lib/project-asset-playback-url'
-import type { ImageGenerationCategory } from '~/types/image-generation'
+import type { ImageGenerationCategory, ImageGenerationRecord } from '~/types/image-generation'
+import type { ImageLightboxItem } from '~/components/ImageLightbox.vue'
 
 const {
   prompt,
@@ -923,6 +937,27 @@ function formatDate (iso: string): string {
     })
   } catch {
     return iso
+  }
+}
+
+const lightboxOpen = ref(false)
+const lightboxIndex = ref(0)
+const lightboxItems = ref<ImageLightboxItem[]>([])
+
+function openGenerationLightbox (gen: ImageGenerationRecord | null | undefined, startIndex = 0) {
+  if (!gen?.imageUrls?.length) return
+  lightboxItems.value = gen.imageUrls.map((url, i) => ({
+    src: mediaSrc(url),
+    title: gen.prompt?.slice(0, 80) || `Image ${i + 1}`
+  }))
+  lightboxIndex.value = Math.min(Math.max(0, startIndex), lightboxItems.value.length - 1)
+  lightboxOpen.value = true
+}
+
+function openHistoryItem (item: ImageGenerationRecord) {
+  detail.value = item
+  if (item.status === 'complete' && item.imageUrls?.length) {
+    openGenerationLightbox(item, 0)
   }
 }
 

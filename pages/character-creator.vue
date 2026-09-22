@@ -224,11 +224,18 @@
               </div>
             </template>
             <template v-else-if="slotByModel[id]?.status === 'done' && imageSrc(slotByModel[id]!.url)">
-              <img
-                :src="imageSrc(slotByModel[id]!.url)"
-                :alt="modelLabel(id)"
-                class="w-full h-auto object-cover max-h-[480px]"
+              <button
+                type="button"
+                class="w-full h-full flex items-center justify-center cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                :aria-label="`Enlarge ${modelLabel(id)}`"
+                @click="openResultLightbox(id)"
               >
+                <img
+                  :src="imageSrc(slotByModel[id]!.url)"
+                  :alt="modelLabel(id)"
+                  class="w-full h-auto object-cover max-h-[480px] pointer-events-none"
+                >
+              </button>
             </template>
             <template v-else-if="slotByModel[id]?.status === 'error'">
               <p class="text-red-700 text-sm px-4 py-6 text-center">
@@ -265,6 +272,12 @@
         </article>
       </div>
     </section>
+
+    <ImageLightbox
+      v-model:open="lightboxOpen"
+      :items="lightboxItems"
+      :start-index="lightboxIndex"
+    />
 
     <Teleport to="body">
       <div
@@ -392,6 +405,7 @@ import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-
 import type { CharacterLibraryEntry } from '~/types/character-creator'
 import type { CreativeProject } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
+import type { ImageLightboxItem } from '~/components/ImageLightbox.vue'
 
 const LIBRARY_STORAGE_KEY = 'aielegance-character-library'
 const PB_ID = /^[a-z0-9]{15}$/
@@ -564,6 +578,30 @@ onMounted(() => {
 function imageSrc (url: unknown): string {
   if (typeof url !== 'string') return ''
   return url.startsWith('data:') || url.startsWith('http') ? url : ''
+}
+
+const lightboxOpen = ref(false)
+const lightboxIndex = ref(0)
+
+const lightboxItems = computed((): ImageLightboxItem[] => {
+  const items: ImageLightboxItem[] = []
+  for (const id of selectedModelIds.value) {
+    const slot = slotByModel.value[id]
+    const src = slot?.status === 'done' ? imageSrc(slot.url) : ''
+    if (!src) continue
+    items.push({ src, title: modelLabel(id) })
+  }
+  return items
+})
+
+function openResultLightbox (modelId: string) {
+  const items = lightboxItems.value
+  const idx = items.findIndex((it) => {
+    const slot = slotByModel.value[modelId]
+    return slot?.status === 'done' && imageSrc(slot.url) === it.src
+  })
+  lightboxIndex.value = idx >= 0 ? idx : 0
+  lightboxOpen.value = true
 }
 
 function clearReferenceImage () {
