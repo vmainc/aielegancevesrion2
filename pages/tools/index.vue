@@ -45,6 +45,11 @@ const cards = [
     blurb: 'Compose score beds and themes with Google Lyria and save them to projects.',
   },
   {
+    to: '/tools/voiceover-generation',
+    title: 'Voiceover',
+    blurb: 'Generate spoken narration or dialogue with TTS — separate from music score.',
+  },
+  {
     to: '/tools/script-wizard',
     title: 'Script Wizard',
     blurb: 'Standalone script workspace: upload, analyze, and reuse scripts across projects.',

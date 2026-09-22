@@ -6,6 +6,10 @@ import {
   readMusicGenerationResult
 } from '~/server/utils/music-generation-store'
 import {
+  parseVoiceoverResultIdFromPath,
+  readVoiceoverGenerationResult
+} from '~/server/utils/voiceover-generation-store'
+import {
   formatPocketBaseRecordError,
   isPocketBaseMissingCollectionError,
   pocketBaseErrorStatus
@@ -53,9 +57,13 @@ export default defineEventHandler(async (event) => {
   const openRouterKey = resolveOpenRouterApiKey(config)
 
   const musicResultId = parseMusicResultIdFromPath(sourceUrl)
+  const voiceoverResultId = parseVoiceoverResultIdFromPath(sourceUrl)
   const metadataSource =
     metadata && typeof metadata.source === 'string' ? metadata.source.trim() : ''
   const isMusicAsset = metadataSource === 'music_generation' || Boolean(musicResultId)
+  const isVoiceoverAsset =
+    metadataSource === 'voiceover_generation' || Boolean(voiceoverResultId)
+  const isAudioAsset = isMusicAsset || isVoiceoverAsset
 
   let buffer: Buffer
   let suggestedName: string
@@ -67,11 +75,21 @@ export default defineEventHandler(async (event) => {
     }
     buffer = staged.data
     suggestedName = `music_${musicResultId.slice(0, 8)}.mp3`
+  } else if (voiceoverResultId) {
+    const staged = await readVoiceoverGenerationResult(voiceoverResultId)
+    if (!staged) {
+      throw createError({
+        statusCode: 404,
+        message: 'Generated voiceover not found or expired — generate again.'
+      })
+    }
+    buffer = staged.data
+    suggestedName = `voiceover_${voiceoverResultId.slice(0, 8)}.mp3`
   } else {
     const mediaKind =
       kind === 'storyboard' || kind === 'character'
         ? ('image' as const)
-        : isMusicAsset
+        : isAudioAsset
           ? ('audio' as const)
           : ('video' as const)
 
@@ -87,7 +105,7 @@ export default defineEventHandler(async (event) => {
 
   const safeFilename =
     suggestedName.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 180) ||
-    (isMusicAsset ? 'music.mp3' : 'video.mp4')
+    (isVoiceoverAsset ? 'voiceover.mp3' : isMusicAsset ? 'music.mp3' : 'video.mp4')
 
   const formData = new FormData()
   formData.append('owned_by', access.ownerId)

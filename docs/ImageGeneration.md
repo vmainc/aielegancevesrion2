@@ -7,7 +7,7 @@ Production image generation via OpenRouter’s dedicated **Images API**, integra
 | Path | Role |
 |------|------|
 | `/tools/image-generation` | Generate → **Images** workspace |
-| Generate nav | Images, Video, Fix Shot, Music, Character |
+| Generate nav | Images, Video, Fix Shot, Music, Voiceover, Character |
 | Tools index | Image generation card |
 
 Optional query: `?projectId=` or `?project=` to associate generations with a project.

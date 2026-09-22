@@ -98,6 +98,13 @@ export const STUDIO_GUIDE_STATIC_DESTINATIONS: StudioGuideDestination[] = [
     kind: 'static'
   },
   {
+    id: 'voiceover-generation',
+    label: 'Generate voiceover',
+    description: 'Spoken narration or dialogue with TTS (not music).',
+    path: '/tools/voiceover-generation',
+    kind: 'static'
+  },
+  {
     id: 'character-creator',
     label: 'Create a character',
     description: 'Design a character look and save it to assets.',

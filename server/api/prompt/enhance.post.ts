@@ -27,6 +27,8 @@ const CONTEXT_HINTS: Record<string, string> = {
     'Single-frame image prompt for a storyboard shot. Photoreal live-action still — never comic captions, speech bubbles, subtitles, or any on-image text (dialogue is spoken later in video).',
   story:
     'Cinematic shot description for storyboard / shot list. Visual action and framing only — no comic captions or on-image dialogue text.',
+  voiceover:
+    'Spoken voiceover or dialogue script for text-to-speech: clear readable lines the voice will say aloud. Not a music or song prompt. Keep stage directions out of the spoken text unless the user wants them said.',
   shot_video:
     'Motion/video prompt for a storyboard shot. No background music or score unless the user explicitly requests it.',
   soundscape:
