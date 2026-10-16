@@ -7,8 +7,8 @@
       Cast voice & performance references
     </h2>
     <p class="text-sm text-gray-600 mb-6">
-      Upload short speaking clips (~10 seconds) or small video clips for mannerisms and on-camera delivery.
-      These are reference samples only and do not replace your original dialogue.
+      Voice notes are sent with every video of this character as timbre only. They are not spoken aloud.
+      Uploaded clips stay here as your reference. The video model does not hear those files.
     </p>
 
     <ul class="space-y-5">

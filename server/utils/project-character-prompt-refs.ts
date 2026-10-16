@@ -1,3 +1,4 @@
+import { normalizeCostumes } from '~/lib/costume-lock'
 import type { CastMemberForContinuity } from '~/lib/storyboard-continuity-prompts'
 import type PocketBase from 'pocketbase'
 
@@ -75,7 +76,8 @@ export async function loadCastMembersForContinuity (
       role_description: String(row.role_description || ''),
       appearance_description: String(row.appearance_description || ''),
       signature_details: String(row.signature_details || ''),
-      avoid_description: String(row.avoid_description || '')
+      avoid_description: String(row.avoid_description || ''),
+      costumes: normalizeCostumes(row.costumes)
     }
   })
 
@@ -99,6 +101,7 @@ export async function loadCastMembersForContinuity (
       appearanceDescription: c.appearance_description || undefined,
       signatureDetails: c.signature_details || undefined,
       avoidDescription: c.avoid_description || undefined,
+      costumes: c.costumes,
       portraitNotes: extra?.notes,
       portraitPromptUsed: extra?.promptUsed
     }

@@ -21,6 +21,7 @@ export async function openRouterGenerateVideo (options: {
   durationSeconds?: number
   firstFrameImageUrl?: string
   lastFrameImageUrl?: string
+  inputReferenceImageUrls?: string[]
   generateAudio?: boolean
   negativePrompt?: string
 }): Promise<OpenRouterGenerateVideoResult> {

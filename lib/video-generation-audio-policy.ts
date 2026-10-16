@@ -72,11 +72,60 @@ export function applyVideoGenerationPromptPolicy (
   return `${base}\n\n${audioPolicyBlock(opts)}`
 }
 
+export type CharacterVoiceLock = {
+  name: string
+  /** Timbre notes from the character. Never placed inside the spoken quote. */
+  voiceDescription?: string
+}
+
 export type SpokenDialogueLineOptions = {
   /** Character name who delivers the line. */
   speakerName?: string
   /** Delivery tone, e.g. urgent, whispered, calm. */
   tone?: string
+}
+
+const VOICE_LOCK_MARKER = 'VOICE LOCK (timbre only'
+
+export function promptAlreadyHasVoiceLock (prompt: string): boolean {
+  return prompt.includes(VOICE_LOCK_MARKER)
+}
+
+/** Timbre block. Descriptions are stripped of quotes so they cannot be spoken as lines. */
+export function buildVoiceLockBlock (locks: CharacterVoiceLock[]): string {
+  const lines: string[] = []
+  const seen = new Set<string>()
+  for (const lock of locks) {
+    const name = (lock.name || '').trim()
+    let voice = (lock.voiceDescription || '')
+      .replace(/["“”]/g, '')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!name || !voice) continue
+    const key = name.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (voice.length > 400) voice = `${voice.slice(0, 400).trimEnd()}…`
+    lines.push(`${name}: ${voice}`)
+  }
+  if (!lines.length) return ''
+  return [
+    `${VOICE_LOCK_MARKER}, never spoken aloud, never written on screen):`,
+    ...lines
+  ].join('\n')
+}
+
+/** Insert the voice lock ahead of spoken dialogue. Idempotent. */
+export function applyVoiceLock (prompt: string, locks: CharacterVoiceLock[]): string {
+  const block = buildVoiceLockBlock(locks)
+  const base = prompt.trim()
+  if (!block || promptAlreadyHasVoiceLock(base)) return base
+  const marker = 'SPOKEN DIALOGUE (must be clearly audible'
+  const idx = base.indexOf(marker)
+  if (idx >= 0) {
+    return `${base.slice(0, idx).trim()}\n\n${block}\n\n${base.slice(idx).trim()}`
+  }
+  return base ? `${base}\n\n${block}` : block
 }
 
 /** Append an explicit line for the model to speak (shown in UI + sent to API). */
@@ -94,15 +143,12 @@ export function appendSpokenDialogueLine (
   if (speaker) {
     parts.push(`Speaker: ${speaker}`)
   }
-  if (tone) {
-    parts.push(`Tone / delivery: ${tone}`)
+  const toneWord = tone.trim().toLowerCase()
+  if (toneWord && toneWord !== 'neutral') {
+    parts.push(`Delivery only, never spoken aloud: ${toneWord}`)
   }
   if (speaker) {
-    parts.push(
-      tone
-        ? `${speaker} says this line aloud in a ${tone.toLowerCase()} tone: "${line}"`
-        : `${speaker} says this line aloud: "${line}"`
-    )
+    parts.push(`${speaker} says this line aloud: "${line}"`)
   } else {
     parts.push(`Line (spoken aloud): "${line}"`)
   }
@@ -130,8 +176,10 @@ export function resolveVideoGenerationUserPrompt (opts: {
   dialogueTone?: string
   ambientSoundPrompt?: string
   includeAmbientSound?: boolean
+  /** Cast timbre notes for people in this shot. */
+  voiceLocks?: CharacterVoiceLock[]
 }): string {
-  let out = opts.prompt.trim()
+  let out = applyVoiceLock(opts.prompt.trim(), opts.voiceLocks || [])
   if (opts.includeSpokenDialogue && opts.dialogueLine?.trim()) {
     out = appendSpokenDialogueLine(out, opts.dialogueLine, {
       speakerName: opts.dialogueSpeakerName,

@@ -56,6 +56,8 @@ export default defineEventHandler(async (event) => {
       ? raw.filter((u): u is string => typeof u === 'string').map(u => u.trim()).filter(Boolean)
       : []
   const setReferenceImageUrls = readUrlList(body?.setReferenceImageUrls ?? body?.set_reference_image_urls)
+  const propReferenceImageUrls = readUrlList(body?.propReferenceImageUrls ?? body?.prop_reference_image_urls)
+  const costumeReferenceImageUrls = readUrlList(body?.costumeReferenceImageUrls ?? body?.costume_reference_image_urls)
   const continuityReferenceImageUrls = readUrlList(
     body?.continuityReferenceImageUrls ?? body?.continuity_reference_image_urls
   )
@@ -118,6 +120,8 @@ export default defineEventHandler(async (event) => {
         .slice(0, 4)
     )
     const resolvedSetRefs = await resolveList(setReferenceImageUrls.slice(0, 2))
+    const resolvedPropRefs = await resolveList(propReferenceImageUrls.slice(0, 2))
+    const resolvedCostumeRefs = await resolveList(costumeReferenceImageUrls.slice(0, 2))
     const resolvedContinuityRefs = await resolveList(continuityReferenceImageUrls.slice(0, 2))
 
     let lastErr: unknown = null
@@ -131,6 +135,8 @@ export default defineEventHandler(async (event) => {
           referenceImageUrl: resolvedCharacterRefs[0],
           referenceImageUrls: resolvedCharacterRefs.length ? resolvedCharacterRefs : undefined,
           setReferenceImageUrls: resolvedSetRefs.length ? resolvedSetRefs : undefined,
+          propReferenceImageUrls: resolvedPropRefs.length ? resolvedPropRefs : undefined,
+          costumeReferenceImageUrls: resolvedCostumeRefs.length ? resolvedCostumeRefs : undefined,
           continuityReferenceImageUrls: resolvedContinuityRefs.length ? resolvedContinuityRefs : undefined,
           aspectRatio,
           purpose

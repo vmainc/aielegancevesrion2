@@ -240,6 +240,9 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
           options: { max: 2000 }
         }));
       }
+      if (!fieldExists(col, 'costumes')) {
+        charFieldsToAdd.push({ name: 'costumes', type: 'json', required: false });
+      }
       if (charFieldsToAdd.length) {
         await pb.collections.update(col.id, {
           fields: [...currentSchema, ...charFieldsToAdd]

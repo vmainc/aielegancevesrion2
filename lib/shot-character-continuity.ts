@@ -46,6 +46,10 @@ export interface ProjectCharacterRef {
   signatureDetails?: string
   /** Per-character avoid list for STRICT EXCLUSIONS. */
   avoidDescription?: string
+  /** Everyday outfit, then scene changes. */
+  costumes?: import('~/lib/costume-lock').CharacterCostume[]
+  /** costume id → plate URL for the clothes lock. */
+  costumePlates?: Record<string, string>
 }
 
 export function projectCharacterRefToCastMember (c: ProjectCharacterRef) {
@@ -55,9 +59,11 @@ export function projectCharacterRefToCastMember (c: ProjectCharacterRef) {
     appearanceDescription: c.appearanceDescription,
     signatureDetails: c.signatureDetails,
     avoidDescription: c.avoidDescription,
+    voiceDescription: c.voiceDescription,
     portraitUrl: c.portraitUrl,
     portraitNotes: c.portraitNotes,
-    portraitPromptUsed: c.portraitPromptUsed
+    portraitPromptUsed: c.portraitPromptUsed,
+    costumes: c.costumes
   }
 }
 
@@ -177,7 +183,7 @@ export interface ProductionPromptContext {
   continuityMemory?: string
   targetLength?: ProjectTargetLength
   aspectRatio?: string
-  scene?: { heading: string; summary?: string }
+  scene?: { id?: string; heading: string; summary?: string }
   shot: Pick<
     CreativeShot,
     'title' | 'description' | 'imagePrompt' | 'videoPrompt' | 'shotType' | 'cameraMove'
@@ -209,6 +215,7 @@ export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): s
     director: ctx.director,
     continuityMemory: ctx.continuityMemory,
     aspectRatio: ctx.aspectRatio,
+    sceneId: ctx.scene?.id,
     sceneTitle: ctx.scene?.heading,
     sceneSummary: ctx.scene?.summary,
     cast: ctx.cast.map(c => projectCharacterRefToCastMember(c)),
@@ -253,6 +260,7 @@ export function buildStoryboardFramePrompt (
     director: ctx.director,
     continuityMemory: ctx.continuityMemory,
     aspectRatio: ctx.aspectRatio,
+    sceneId: ctx.scene?.id,
     sceneTitle: ctx.scene?.heading,
     sceneSummary: ctx.scene?.summary,
     cast: (ctx.cast.length ? ctx.cast : matches).map(c => projectCharacterRefToCastMember(c)),

@@ -30,6 +30,7 @@ export interface GenerateShotsContext {
   aspectRatio: string
   goal: string
   tone: string
+  sceneId?: string
   sceneTitle: string
   sceneSummary: string
   sceneScript: string
@@ -272,6 +273,8 @@ Rules:
 - Same character = SAME design in every panel; close-ups must match wide shots.
 - CAST NAMES IN ALL CAPS: In every image_prompt and video_prompt, refer to cast members only with their ALL CAPS token from CHARACTERS (e.g. DOG, CAT). These are proper character names — not generic animals. Never write lowercase "dog" or "cat" when you mean the cast character.
 - Vary shot scale on purpose (establish, medium, close-up, insert) but keep location architecture and set dressing identical unless the slugline changes location. Photoreal lived-in space; new coverage every panel.
+- When SET DRESSING lists objects, those exact objects stay in the location. Use their locked names. Do not redesign the TV, table, computer, or any other listed object.
+- When COSTUME LOCK names an outfit, copy those clothes exactly. Do not invent a different jacket, dress, or uniform. Face and body stay the character design.
 - Interpret summary and script; imperfect formatting is OK.`
 
   const setLockBlock = (ctx.setLockBlock || '').trim()

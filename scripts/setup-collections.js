@@ -367,7 +367,8 @@ async function createCollections(adminEmail, adminPassword) {
             type: 'text',
             required: false,
             options: { max: 2000 }
-          }
+          },
+          { name: 'costumes', type: 'json', required: false }
         ]
       });
       console.log('✅ "creative_characters" created\n');

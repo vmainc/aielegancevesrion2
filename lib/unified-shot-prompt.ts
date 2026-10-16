@@ -32,11 +32,27 @@ import type { CreativeShot } from '~/types/creative-shot'
 import type { ProductionBibleResolvedContext } from '~/types/production-bible-context'
 import { formatProductionBiblePromptBlock } from '~/lib/format-production-bible-prompt-block'
 import { buildSetLockPromptBlock, SET_LOCK_NEGATIVES, type SetLock } from '~/lib/set-lock'
+import {
+  ensurePropLocksInPrompt,
+  hasLockedProps,
+  PROP_LOCK_NEGATIVES,
+  propsNamedInText,
+  type LockedProp
+} from '~/lib/prop-lock'
+import {
+  buildCostumeLockPromptBlock,
+  COSTUME_LOCK_NEGATIVES,
+  ensureCostumeLockInPrompt,
+  resolveCostumeForScene,
+  type CharacterCostume
+} from '~/lib/costume-lock'
+import { applyVoiceLock } from '~/lib/video-generation-audio-policy'
 
 export interface UnifiedShotPromptContext {
   director?: ProjectDirector | null
   continuityMemory?: string
   aspectRatio?: string
+  sceneId?: string
   sceneTitle?: string
   sceneSummary?: string
   /** 0-based panel index in the current scene sequence (for distinct compositions). */
@@ -47,9 +63,11 @@ export interface UnifiedShotPromptContext {
     appearanceDescription?: string
     signatureDetails?: string
     avoidDescription?: string
+    voiceDescription?: string
     portraitUrl?: string | null
     portraitNotes?: string
     portraitPromptUsed?: string
+    costumes?: CharacterCostume[]
   }>
   /** Read-only Production Bible slice (PASS 9). Appended when present; never persisted. */
   productionBible?: ProductionBibleResolvedContext | null
@@ -63,6 +81,90 @@ const UNIFIED_MARKERS =
 export function promptLooksUnified (text: string): boolean {
   const t = text.trim()
   return t.length >= 280 && UNIFIED_MARKERS.test(t)
+}
+
+export function namedPropsForShot (
+  shot: { title?: string; description?: string },
+  setLock?: SetLock | null
+): LockedProp[] {
+  const dressing = setLock?.dressing || []
+  const action = [shot.title, shot.description].filter(Boolean).join('\n')
+  return propsNamedInText(
+    action,
+    setLock?.props || [],
+    dressing.map((p) => p.entityId)
+  )
+}
+
+function withPropLocks (
+  prompt: string,
+  shot: { title?: string; description?: string },
+  setLock?: SetLock | null
+): string {
+  return ensurePropLocksInPrompt(prompt, {
+    dressing: setLock?.dressing,
+    named: namedPropsForShot(shot, setLock)
+  })
+}
+
+function castWearsLockedCostume (ctx: UnifiedShotPromptContext): boolean {
+  return ctx.cast.some((member) =>
+    Boolean(resolveCostumeForScene(member.costumes, ctx.sceneId)?.description.trim())
+  )
+}
+
+function costumeLockBlockForShot (
+  shot: { title?: string; description?: string; imagePrompt?: string; videoPrompt?: string },
+  ctx: UnifiedShotPromptContext
+): string {
+  const beat = {
+    title: shot.title,
+    description: shot.description,
+    image_prompt: shot.imagePrompt,
+    video_prompt: shot.videoPrompt
+  }
+  let inShot = castMembersInShot(beat, ctx.cast)
+  // Same small-cast rule as frame plates: if the beat never names anyone, still lock the outfits.
+  if (!inShot.length && ctx.cast.length > 0 && ctx.cast.length <= 6) {
+    inShot = ctx.cast
+  }
+  const entries = inShot.flatMap((member) => {
+    const costume = resolveCostumeForScene(member.costumes, ctx.sceneId)
+    if (!costume?.description.trim()) return []
+    return [{
+      characterName: member.name,
+      lookName: costume.name,
+      description: costume.description
+    }]
+  })
+  return buildCostumeLockPromptBlock(entries)
+}
+
+function applyCostumeLock (
+  prompt: string,
+  shot: { title?: string; description?: string; imagePrompt?: string; videoPrompt?: string },
+  ctx: UnifiedShotPromptContext
+): string {
+  return ensureCostumeLockInPrompt(prompt, costumeLockBlockForShot(shot, ctx))
+}
+
+function lockPrompt (
+  prompt: string,
+  shot: { title?: string; description?: string; imagePrompt?: string; videoPrompt?: string },
+  ctx: UnifiedShotPromptContext
+): string {
+  return applyCostumeLock(withPropLocks(prompt, shot, ctx.setLock), shot, ctx)
+}
+
+function continuityNegativeExtra (
+  shot: { title?: string; description?: string; imagePrompt?: string; videoPrompt?: string },
+  ctx: UnifiedShotPromptContext
+): string {
+  const named = namedPropsForShot(shot, ctx.setLock)
+  const parts: string[] = []
+  if (hasLockedProps(ctx.setLock?.dressing, named)) parts.push(PROP_LOCK_NEGATIVES)
+  if (costumeLockBlockForShot(shot, ctx)) parts.push(COSTUME_LOCK_NEGATIVES)
+  return parts.join(', ')
 }
 
 function dedupeJoinBlocks (...blocks: (string | undefined)[]): string {
@@ -119,8 +221,10 @@ export function buildMotionPromptForShot (shot: Pick<CreativeShot, 'title' | 'de
 /** Lead image models with the unique beat for this panel; consistency blocks follow. */
 export function buildPanelActionEmphasis (
   shot: Pick<CreativeShot, 'title' | 'description' | 'shotType' | 'cameraMove'>,
-  panelIndex?: number
+  panelIndex?: number,
+  options?: { wardrobeFromCostume?: boolean }
 ): string {
+  const wardrobeFromCostume = Boolean(options?.wardrobeFromCostume)
   const title = (shot.title || 'Shot').trim()
   const beat = (shot.description || '').trim()
   const shotType = (shot.shotType || 'medium').trim()
@@ -134,7 +238,9 @@ export function buildPanelActionEmphasis (
     seq,
     `"${title}" · ${shotType}${camera ? ` · camera: ${camera}` : ''}`,
     beat || title,
-    'Visually distinct COMPOSITION from every other panel: unique action, pose, eyeline, and framing only — never change character face, species, body proportions, fur/materials, or wardrobe. Same set architecture every panel; never clone the same camera layout. Photoreal practical location, not a virtual set.',
+    wardrobeFromCostume
+      ? 'Visually distinct COMPOSITION from every other panel: unique action, pose, eyeline, and framing only — never change character face, species, body proportions, or fur/materials. Clothes come only from COSTUME LOCK. Same set architecture every panel; never clone the same camera layout. Photoreal practical location, not a virtual set.'
+      : 'Visually distinct COMPOSITION from every other panel: unique action, pose, eyeline, and framing only — never change character face, species, body proportions, fur/materials, or wardrobe. Same set architecture every panel; never clone the same camera layout. Photoreal practical location, not a virtual set.',
     'If this beat includes spoken dialogue, treat it as performance only (mouth, expression, gesture) — never draw captions, speech bubbles, or readable words in the frame.'
   ]
     .filter(Boolean)
@@ -164,11 +270,12 @@ export function buildUnifiedProductionPrompt (
     cast
   )
 
+  const wardrobeFromCostume = castWearsLockedCostume(ctx)
   const directorBible = buildDirectorBibleBlock(ctx.director ?? undefined)
   const mem = (ctx.continuityMemory || '').trim()
   const bibleBlock = formatProductionBiblePromptBlock(ctx.productionBible)
-  const fullCastBible = buildCastBibleParagraph(cast)
-  const characterLock = buildCharacterLockForShot(inShot, animalOnly)
+  const fullCastBible = buildCastBibleParagraph(cast, ctx.sceneId)
+  const characterLock = buildCharacterLockForShot(inShot, animalOnly, ctx.sceneId)
   const { w, h } = parseProjectAspectRatio(ctx.aspectRatio || '16:9')
   const aspectLine = `Frame aspect ratio: ${w}:${h}.`
 
@@ -179,7 +286,7 @@ export function buildUnifiedProductionPrompt (
   const sceneBlock = setLockBlock
     || (sceneLines.length ? ['SETTING (locked across this scene):', ...sceneLines].join('\n') : '')
 
-  const panelEmphasis = buildPanelActionEmphasis(shotCanon, ctx.panelIndex)
+  const panelEmphasis = buildPanelActionEmphasis(shotCanon, ctx.panelIndex, { wardrobeFromCostume })
   const castInPanelLine = inShot.length
     ? `Cast in this panel: ${inShot.map(c => formatCastNameForPrompt(c.name)).join(', ')}.`
     : 'Cast in this panel: none (establishing / environment only).'
@@ -190,7 +297,7 @@ export function buildUnifiedProductionPrompt (
     buildProjectNegativePrompt({
       cast,
       inShot,
-      extra: SET_LOCK_NEGATIVES
+      extra: [SET_LOCK_NEGATIVES, continuityNegativeExtra(shotCanon, ctx)].filter(Boolean).join(', ')
     })
   )
   const negBlock = formatNegativePromptForImageModel(negative)
@@ -204,7 +311,9 @@ export function buildUnifiedProductionPrompt (
     mem ? `CONTINUITY MEMORY (do not contradict):\n${mem.slice(0, 2500)}` : '',
     bibleBlock,
     sceneBlock,
-    fullCastBible ? `FULL CAST BIBLE (same designs every panel — do not change faces/wardrobe):\n${fullCastBible}` : '',
+    fullCastBible
+      ? `FULL CAST BIBLE (same designs every panel — do not change faces${wardrobeFromCostume ? '; clothes follow COSTUME LOCK' : '/wardrobe'}):\n${fullCastBible}`
+      : '',
     characterLock,
     animalOnly
       ? 'ANIMAL-ONLY STORY: only the named animal/creature cast — never humans or human silhouettes.'
@@ -212,7 +321,7 @@ export function buildUnifiedProductionPrompt (
     negBlock
   ]
 
-  return trimPromptForImageModel(dedupeJoinBlocks(...parts))
+  return trimPromptForImageModel(lockPrompt(dedupeJoinBlocks(...parts), shotCanon, ctx))
 }
 
 /** Frame API: use unified prompt as-is when complete; otherwise build it once. */
@@ -222,12 +331,14 @@ export function resolveFrameGenerationPrompt (
 ): string {
   const shotCanon = canonicalizeShotCastNames(shot, ctx.cast)
   const manual = mergeLegacyShotPromptsToUnified(shotCanon)
-  const panelLead = buildPanelActionEmphasis(shotCanon, ctx.panelIndex)
+  const panelLead = buildPanelActionEmphasis(shotCanon, ctx.panelIndex, {
+    wardrobeFromCostume: castWearsLockedCostume(ctx)
+  })
   if (promptLooksUnified(manual)) {
-    if (/PRIMARY ACTION — THIS PANEL ONLY/i.test(manual)) {
-      return trimPromptForImageModel(manual)
-    }
-    return trimPromptForImageModel(`${panelLead}\n\n${manual}`)
+    const base = /PRIMARY ACTION — THIS PANEL ONLY/i.test(manual)
+      ? manual
+      : `${panelLead}\n\n${manual}`
+    return trimPromptForImageModel(lockPrompt(base, shotCanon, ctx))
   }
   return buildUnifiedProductionPrompt(shotCanon, ctx)
 }
@@ -238,15 +349,27 @@ export function resolveShotVideoGenerationPrompt (
   ctx: UnifiedShotPromptContext
 ): string {
   const production = promptLooksUnified(shot.imagePrompt)
-    ? shot.imagePrompt.trim()
+    ? lockPrompt(shot.imagePrompt.trim(), shot, ctx)
     : buildUnifiedProductionPrompt(shot, ctx)
   const motion = buildMotionPromptForShot(shot)
-  return trimPromptForImageModel(
-    dedupeJoinBlocks(
-      production,
-      '---',
-      motion
-    )
+  const inShot = castMembersInShot(
+    {
+      title: shot.title,
+      description: shot.description,
+      image_prompt: shot.imagePrompt,
+      video_prompt: shot.videoPrompt
+    },
+    ctx.cast
+  )
+  return applyVoiceLock(
+    trimPromptForImageModel(
+      dedupeJoinBlocks(
+        production,
+        '---',
+        motion
+      )
+    ),
+    inShot
   )
 }
 
@@ -255,21 +378,21 @@ export const resolveVideoGenerationPrompt = resolveShotVideoGenerationPrompt
 
 function mergedShotNegativePrompt (
   shotCanon: CreativeShot,
-  cast: UnifiedShotPromptContext['cast']
+  ctx: UnifiedShotPromptContext
 ): string {
   return mergeNegativePromptParts(
     shotCanon.negativePrompt,
     buildProjectNegativePrompt({
-      cast,
+      cast: ctx.cast,
       inShot: castMembersInShot(
         {
           title: shotCanon.title,
           description: shotCanon.description,
           image_prompt: shotCanon.imagePrompt
         },
-        cast
+        ctx.cast
       ),
-      extra: SET_LOCK_NEGATIVES
+      extra: [SET_LOCK_NEGATIVES, continuityNegativeExtra(shotCanon, ctx)].filter(Boolean).join(', ')
     })
   )
 }
@@ -283,11 +406,11 @@ export function applyUnifiedPromptsToShot (
 ): Pick<CreativeShot, 'imagePrompt' | 'videoPrompt' | 'negativePrompt'> {
   const cast = ctx.cast
   const shotCanon = canonicalizeShotCastNames(shot, cast)
-  const negative = mergedShotNegativePrompt(shotCanon, cast)
+  const negative = mergedShotNegativePrompt(shotCanon, ctx)
 
   if (promptLooksUnified(shotCanon.imagePrompt)) {
     return {
-      imagePrompt: shotCanon.imagePrompt.trim(),
+      imagePrompt: trimPromptForImageModel(lockPrompt(shotCanon.imagePrompt.trim(), shotCanon, ctx)),
       videoPrompt: buildMotionPromptForShot(shotCanon),
       negativePrompt: negative
     }

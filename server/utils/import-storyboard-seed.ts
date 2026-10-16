@@ -6,8 +6,10 @@ import {
 } from '~/lib/project-duration-budget'
 import { parseDurationFromConceptNotes } from '~/lib/format-stored-concept'
 import { parseDirectorField } from '~/server/utils/creative-project-map'
+import { buildSetLockPromptBlock } from '~/lib/set-lock'
 import { generateShotsWithAi } from '~/server/utils/generate-shots-ai'
 import { enrichGeneratedShotsForContinuity } from '~/server/utils/enrich-generated-shots'
+import { loadSetLockInputs, setLockForHeading } from '~/server/utils/load-scene-set-lock'
 import { replaceSceneShots } from '~/server/utils/persist-scene-shots'
 import { resolveOpenRouterApiKey } from '~/server/utils/server-env'
 
@@ -79,6 +81,7 @@ export async function seedStoryboardsAfterScriptImport (params: {
   }))
 
   let panelsUsed = 0
+  const setInputs = await loadSetLockInputs(pb, projectId)
 
   async function seedOne (
     scene: StoryboardSeedScene,
@@ -100,11 +103,13 @@ export async function seedStoryboardsAfterScriptImport (params: {
       const sceneShotCap = sceneCap
         ? { minShots: Math.min(sceneCap.minShots, maxShots), maxShots }
         : { minShots: 1, maxShots }
+      const setLock = setLockForHeading(scene.heading || '', setInputs)
       const shotsCtx = {
         projectName: String(project.name || 'Project'),
         aspectRatio: String(project.aspect_ratio || '16:9'),
         goal: String(project.goal || 'film'),
         tone: String(project.tone || 'cinematic'),
+        sceneId: scene.id,
         sceneTitle: scene.heading || 'Scene',
         sceneSummary: summary,
         sceneScript: body,
@@ -112,7 +117,9 @@ export async function seedStoryboardsAfterScriptImport (params: {
         director,
         continuityMemory,
         durationBudget: budget,
-        sceneShotCap
+        sceneShotCap,
+        setLock,
+        setLockBlock: buildSetLockPromptBlock(setLock, scene.heading || '')
       }
       const rawShots = await generateShotsWithAi(shotsCtx)
       console.log('[import-storyboard-seed] continuity check skipped (import speed path)', {

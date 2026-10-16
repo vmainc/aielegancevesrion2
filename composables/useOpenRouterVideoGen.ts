@@ -24,6 +24,8 @@ export type OpenRouterVideoGenerateInput = {
   frameImageUrl?: string
   /** Ending still — OpenRouter `last_frame` (Veo, Kling, Seedance, Wan 2.7, etc.). */
   lastFrameImageUrl?: string
+  /** Mid-timeline stills — OpenRouter `input_references` + prompt beat guidance. */
+  guideFrameUrls?: string[]
   supportedDurations?: number[]
   supportedResolutions?: string[]
   /** Rare opt-in: OpenRouter model-synthesized audio. Default false. */
@@ -68,6 +70,11 @@ export async function generateOpenRouterVideo (
 
   const frameImageUrl = await ensureVideoStartFrameUrl(input.frameImageUrl)
   const lastFrameImageUrl = await ensureVideoStartFrameUrl(input.lastFrameImageUrl)
+  const guideFrameUrls: string[] = []
+  for (const raw of (input.guideFrameUrls || []).slice(0, 4)) {
+    const staged = await ensureVideoStartFrameUrl(raw)
+    if (staged) guideFrameUrls.push(staged)
+  }
 
   const wantsAudio =
     input.generateAudio === true ||
@@ -86,6 +93,7 @@ export async function generateOpenRouterVideo (
       durationSeconds,
       frameImageUrl,
       lastFrameImageUrl,
+      ...(guideFrameUrls.length ? { guideFrameUrls } : {}),
       generateAudio: wantsAudio,
       includeSpokenDialogue: input.includeSpokenDialogue === true,
       includeAmbientSound: input.includeAmbientSound === true,

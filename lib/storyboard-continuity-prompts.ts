@@ -5,6 +5,7 @@ import {
   formatCastNameForPrompt
 } from '~/lib/cast-name-convention'
 import { formatCastLineForProductionPrompt, castMemberToVisualInput } from '~/lib/character-visual-description'
+import { resolveCostumeForScene } from '~/lib/costume-lock'
 import type { ProjectDirector } from '~/types/creative-project'
 
 export interface CastMemberForContinuity {
@@ -16,9 +17,12 @@ export interface CastMemberForContinuity {
   signatureDetails?: string
   /** Per-character avoid list merged into STRICT EXCLUSIONS. */
   avoidDescription?: string
+  /** Timbre notes. Video prompts only — never part of the spoken line. */
+  voiceDescription?: string
   portraitUrl?: string | null
   portraitNotes?: string
   portraitPromptUsed?: string
+  costumes?: import('~/lib/costume-lock').CharacterCostume[]
 }
 
 const ANIMAL_SIGNAL =
@@ -96,10 +100,23 @@ export function buildDirectorBibleBlock (director: ProjectDirector | null | unde
   return ['DIRECTOR BIBLE (mandatory — apply to every frame):', ...lines].join('\n')
 }
 
-export function buildCastBibleParagraph (cast: CastMemberForContinuity[]): string {
+function memberWearsLockedCostume (
+  member: CastMemberForContinuity,
+  sceneId?: string
+): boolean {
+  return Boolean(resolveCostumeForScene(member.costumes, sceneId)?.description.trim())
+}
+
+export function buildCastBibleParagraph (
+  cast: CastMemberForContinuity[],
+  sceneId?: string
+): string {
   if (!cast.length) return ''
   return cast
-    .map(c => formatCastLineForProductionPrompt(castMemberToVisualInput(c)))
+    .map(c => formatCastLineForProductionPrompt(castMemberToVisualInput({
+      ...c,
+      wardrobeLocked: memberWearsLockedCostume(c, sceneId)
+    })))
     .join('\n')
 }
 
@@ -188,16 +205,23 @@ export function castMembersInShot (
 
 export function buildCharacterLockForShot (
   inShot: CastMemberForContinuity[],
-  animalOnly: boolean
+  animalOnly: boolean,
+  sceneId?: string
 ): string {
   if (!inShot.length) return ''
+  const wardrobeLocked = inShot.some((c) => memberWearsLockedCostume(c, sceneId))
   const lines = inShot.map(c => {
-    const line = formatCastLineForProductionPrompt(castMemberToVisualInput(c))
+    const line = formatCastLineForProductionPrompt(castMemberToVisualInput({
+      ...c,
+      wardrobeLocked: memberWearsLockedCostume(c, sceneId)
+    }))
     return `- ${line}`
   })
   const speciesRule = animalOnly
     ? 'Render ONLY these animal/creature characters — never add human figures or human anatomy.'
-    : 'Do not redesign any named character; match face, body, materials, colors, and proportions exactly.'
+    : wardrobeLocked
+      ? 'Do not redesign any named character; match face, body, materials, and proportions exactly. Clothes follow COSTUME LOCK.'
+      : 'Do not redesign any named character; match face, body, materials, colors, and proportions exactly.'
   return ['CHARACTER LOCK (mandatory — identical design in every panel):', ...lines, speciesRule].join('\n')
 }
 

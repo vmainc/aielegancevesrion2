@@ -16,6 +16,7 @@ import {
   BIBLE_ASSET_ENTITY_METADATA_KEY,
   resolveBibleEntityRelatedAssets
 } from '~/lib/bible-cast-asset-bridge'
+import { DRESSED_WITH_RELATIONSHIP } from '~/lib/prop-lock'
 import {
   type BibleRelationship
 } from '~/types/bible-relationship'
@@ -663,6 +664,134 @@ async function onDeleteFact (f: BibleFact) {
   }
 }
 
+async function placePropOnLocation (input: {
+  locationId: string
+  propId: string
+  placement: string
+}): Promise<boolean> {
+  const locationId = input.locationId.trim()
+  const propId = input.propId.trim()
+  if (!locationId || !propId) {
+    toast.error('Choose a location and an object')
+    return false
+  }
+  const existing = relationships.value.find((r) =>
+    r.relationshipType === DRESSED_WITH_RELATIONSHIP &&
+    r.fromType === 'bible_entity' &&
+    r.fromId === locationId &&
+    r.toType === 'bible_entity' &&
+    r.toId === propId &&
+    r.status !== 'retired' &&
+    r.status !== 'contradicted'
+  )
+  if (existing) {
+    const updated = await bible.updateRelationship(existing.id, {
+      role: input.placement.trim(),
+      status: 'active'
+    })
+    relationships.value = relationships.value.map((r) => (r.id === updated.id ? updated : r))
+    toast.success('Placement updated')
+    return true
+  }
+  const created = await bible.createRelationship({
+    fromType: 'bible_entity',
+    fromId: locationId,
+    toType: 'bible_entity',
+    toId: propId,
+    relationshipType: DRESSED_WITH_RELATIONSHIP,
+    role: input.placement.trim(),
+    status: 'active'
+  })
+  relationships.value = [created, ...relationships.value]
+  toast.success('Object locked to this location')
+  return true
+}
+
+async function onPlaceProp (input: {
+  locationId: string
+  propId: string
+  placement: string
+}): Promise<boolean> {
+  mutating.value = true
+  try {
+    return await placePropOnLocation(input)
+  } catch (e: unknown) {
+    toast.error(bible.formatApiFetchError(e) || 'Could not place this object')
+    return false
+  } finally {
+    mutating.value = false
+  }
+}
+
+async function onCreatePropForLocation (input: {
+  locationId: string
+  name: string
+  placement: string
+}): Promise<boolean> {
+  const name = input.name.trim()
+  if (!name) {
+    toast.error('Name the object')
+    return false
+  }
+  mutating.value = true
+  try {
+    const entity = await bible.createEntity({
+      type: 'prop',
+      name,
+      summary: '',
+      description: '',
+      status: 'active'
+    })
+    entities.value = [...entities.value, entity]
+    try {
+      await placePropOnLocation({
+        locationId: input.locationId,
+        propId: entity.id,
+        placement: input.placement
+      })
+      return true
+    } catch (e: unknown) {
+      toast.error(bible.formatApiFetchError(e) || 'Object was created, but could not be placed on this location')
+      return false
+    }
+  } catch (e: unknown) {
+    toast.error(bible.formatApiFetchError(e) || 'Could not create this object')
+    return false
+  } finally {
+    mutating.value = false
+  }
+}
+
+async function onUpdateDressingPlacement (relationshipId: string, placement: string): Promise<boolean> {
+  mutating.value = true
+  try {
+    const updated = await bible.updateRelationship(relationshipId, { role: placement.trim() })
+    relationships.value = relationships.value.map((r) => (r.id === updated.id ? updated : r))
+    return true
+  } catch (e: unknown) {
+    toast.error(bible.formatApiFetchError(e) || 'Could not save placement')
+    return false
+  } finally {
+    mutating.value = false
+  }
+}
+
+async function onRemoveDressing (relationshipId: string): Promise<boolean> {
+  if (!globalThis.confirm('Take this object off the set? The prop stays in the bible.')) return false
+  mutating.value = true
+  try {
+    await bible.deleteRelationship(relationshipId)
+    relationships.value = relationships.value.filter((r) => r.id !== relationshipId)
+    toast.success('Removed from this location')
+    return true
+  } catch (e: unknown) {
+    toast.error(bible.formatApiFetchError(e) || 'Could not remove this object')
+    return false
+  } finally {
+    mutating.value = false
+  }
+}
+
 async function onCreateRelationship () {
   const id = selectedId.value
   if (!id) return
@@ -1152,6 +1281,10 @@ function castLinkConfidenceClass (confidence?: string): string {
               :on-delete-rel="onDeleteRel"
               :start-edit-rel="startEditRel"
               :on-refresh-assets="refreshProjectAssets"
+              :on-place-prop="onPlaceProp"
+              :on-create-prop-for-location="onCreatePropForLocation"
+              :on-update-dressing-placement="onUpdateDressingPlacement"
+              :on-remove-dressing="onRemoveDressing"
             />
           </div>
         </div>

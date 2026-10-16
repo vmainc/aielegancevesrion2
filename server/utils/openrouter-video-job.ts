@@ -117,6 +117,11 @@ export async function startOpenRouterVideoJob (options: {
   firstFrameImageUrl?: string
   /** Ending still — OpenRouter `frame_type: 'last_frame'` when the model supports it. */
   lastFrameImageUrl?: string
+  /**
+   * Mid-timeline stills — OpenRouter `input_references` (guidance, not locked frames).
+   * Used with start/end `frame_images` so models can track beats between anchors.
+   */
+  inputReferenceImageUrls?: string[]
   /** When true, sets OpenRouter `generate_audio: true`. Defaults to false. */
   generateAudio?: boolean
   /** Merged shot + cast exclusions — sent natively when the model supports it, else appended to prompt. */
@@ -182,6 +187,27 @@ export async function startOpenRouterVideoJob (options: {
   }
   if (frameImages.length) {
     body.frame_images = frameImages
+  }
+
+  const refUrls = (options.inputReferenceImageUrls || [])
+    .map(u => (typeof u === 'string' ? u.trim() : ''))
+    .filter(Boolean)
+    .slice(0, 4)
+  if (refUrls.length) {
+    const inputReferences: Array<{
+      type: 'image_url'
+      image_url: { url: string }
+    }> = []
+    for (const url of refUrls) {
+      const dataUrl = await fetchImageAsDataUrlForVideo(url, 6_000_000)
+      inputReferences.push({
+        type: 'image_url',
+        image_url: { url: dataUrl }
+      })
+    }
+    if (inputReferences.length) {
+      body.input_references = inputReferences
+    }
   }
 
   body.generate_audio = options.generateAudio === true

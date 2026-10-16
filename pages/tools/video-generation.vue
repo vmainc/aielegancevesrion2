@@ -5,7 +5,7 @@
         Video generation
       </h1>
       <p class="mt-2 text-gray-600 text-sm sm:text-base max-w-2xl">
-        Pick model, format, and project first — prompt options adapt to what your model supports.
+        Set up model and format, then write the shot — prompt options adapt to what your model supports.
       </p>
       <p
         v-if="loadingPanelPrefill"
@@ -166,35 +166,63 @@
         </section>
       </div>
 
-      <form v-else class="space-y-8 mb-10" @submit.prevent="onSubmit">
-        <!-- 1. Model, format & project (collapsible) -->
-        <details
-          class="rounded-xl border border-gray-200 bg-studio-slate overflow-hidden group"
-          open
+      <form v-else class="space-y-8 mb-10" @submit.prevent="onFormSubmit">
+        <nav
+          class="flex items-center gap-2 sm:gap-3"
+          aria-label="Video generation steps"
         >
-          <summary
-            class="list-none [&::-webkit-details-marker]:hidden cursor-pointer select-none px-5 py-4 sm:px-6 flex items-start justify-between gap-3 hover:bg-gray-50/80 border-b border-transparent group-open:border-gray-200"
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 min-w-0 rounded-lg px-2.5 py-1.5 text-sm transition-colors"
+            :class="formStep === 'setup'
+              ? 'bg-primary/15 text-gray-900 font-semibold'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'"
+            :aria-current="formStep === 'setup' ? 'step' : undefined"
+            @click="goToSetupStep"
           >
-            <div class="flex items-start gap-2.5 min-w-0 flex-1">
-              <span
-                class="text-gray-400 text-xs shrink-0 mt-0.5 transition-transform group-open:rotate-90"
-                aria-hidden="true"
-              >▶</span>
-              <div class="min-w-0">
-                <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-                  Model, format & project
-                </h2>
-                <p class="text-xs text-gray-500 mt-1 group-open:hidden truncate">
-                  {{ setupAccordionSummary }}
-                </p>
-                <p class="text-xs text-gray-500 mt-1 hidden group-open:block">
-                  Pick model and clip format first — prompt options below adapt to what your model supports.
-                </p>
-              </div>
-            </div>
-          </summary>
+            <span
+              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+              :class="formStep === 'setup'
+                ? 'bg-primary text-gray-950'
+                : 'bg-gray-200 text-gray-700'"
+            >1</span>
+            <span class="truncate">Setup</span>
+          </button>
+          <span class="text-gray-300" aria-hidden="true">→</span>
+          <button
+            type="button"
+            class="inline-flex items-center gap-2 min-w-0 rounded-lg px-2.5 py-1.5 text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+            :class="formStep === 'prompt'
+              ? 'bg-primary/15 text-gray-900 font-semibold'
+              : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900'"
+            :aria-current="formStep === 'prompt' ? 'step' : undefined"
+            :disabled="!canContinueToPrompt"
+            @click="goToPromptStep"
+          >
+            <span
+              class="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+              :class="formStep === 'prompt'
+                ? 'bg-primary text-gray-950'
+                : 'bg-gray-200 text-gray-700'"
+            >2</span>
+            <span class="truncate">Prompt</span>
+          </button>
+        </nav>
 
-          <div class="px-5 py-5 sm:px-6 sm:py-6 space-y-5 border-t border-gray-100">
+        <!-- Step 1: Model, format & project -->
+        <section
+          v-if="formStep === 'setup'"
+          class="rounded-xl border border-gray-200 bg-studio-slate p-5 sm:p-6 space-y-5"
+        >
+          <div>
+            <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+              Model, format & project
+            </h2>
+            <p class="text-xs text-gray-500 mt-1">
+              Pick model and clip format first — then you’ll write the shot on the next step.
+            </p>
+          </div>
+
           <div>
             <label for="vg-model" class="block text-sm font-medium text-gray-700 mb-1.5">Video model</label>
             <select
@@ -356,17 +384,52 @@
             <NuxtLink to="/login" class="text-primary font-medium underline">Sign in</NuxtLink>
             to attach clips to a project.
           </p>
-          </div>
-        </details>
 
-        <!-- 2. Prompt & generation settings (after model) -->
+          <div
+            v-if="setupStepError"
+            class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2"
+          >
+            {{ setupStepError }}
+          </div>
+
+          <div class="pt-1">
+            <button
+              type="submit"
+              class="px-6 py-3 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="!canContinueToPrompt"
+            >
+              Continue to prompt
+            </button>
+          </div>
+        </section>
+
+        <!-- Step 2: Prompt & generation settings -->
         <section
-          v-if="hasModelSelected"
+          v-else-if="formStep === 'prompt' && hasModelSelected"
           class="rounded-xl border border-gray-200 bg-gray-50/80 p-5 sm:p-6 space-y-4"
         >
-          <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
-            Shot description
-          </h2>
+          <div class="flex flex-wrap items-start justify-between gap-3">
+            <div class="min-w-0">
+              <h2 class="text-sm font-semibold text-gray-900 uppercase tracking-wide">
+                Shot description
+              </h2>
+              <p class="text-xs text-gray-500 mt-1">
+                Describe the shot, frames, and audio. Setup is locked in until you edit it.
+              </p>
+            </div>
+            <button
+              type="button"
+              class="shrink-0 text-sm font-medium text-gray-700 hover:text-primary underline-offset-2 hover:underline"
+              @click="goToSetupStep"
+            >
+              Edit setup
+            </button>
+          </div>
+
+          <div class="rounded-lg border border-gray-200 bg-studio-slate px-3.5 py-2.5 text-xs text-gray-600">
+            <span class="font-medium text-gray-800">Setup:</span>
+            {{ setupAccordionSummary }}
+          </div>
 
           <div
             v-if="showCharacterPicker"
@@ -408,13 +471,19 @@
               <label for="vg-prompt" class="text-sm font-medium text-gray-700">Prompt</label>
               <PromptEnhanceButton v-model="prompt" context="video" />
             </div>
-            <textarea
-              id="vg-prompt"
+            <CharacterAwarePromptInput
               v-model="prompt"
-              rows="4"
-              class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+              input-id="vg-prompt"
+              :characters="promptMentionCharacters"
+              :rows="4"
               placeholder="Motion, camera, lighting, mood — no background music"
             />
+            <p
+              v-if="projectCharacterRefs.length"
+              class="mt-1.5 text-[11px] text-gray-500"
+            >
+              Hover a cast name in the prompt to preview their reference plate.
+            </p>
             <p
               v-if="productionBibleDebugLine"
               class="mt-1.5 text-xs text-gray-500"
@@ -442,9 +511,9 @@
               {{ negativeDeliveryHint }}
             </p>
           </div>
-          <VideoStartFramePicker
-            v-model:frame-image-url="startFrameUrl"
-            role="start"
+          <VideoKeyframeTimeline
+            v-model:keyframes="timelineKeyframes"
+            :duration-seconds="durationSeconds"
             :prompt="prompt"
             :aspect-ratio="aspectRatio"
             :bible-project-id="startFrameBibleProjectId"
@@ -452,28 +521,10 @@
             :bible-shot-id="panelPrefill?.shotId"
             :bible-character-ids="effectiveCharacterIds"
             :reference-image-urls="castPlateReferenceUrls"
+            :supports-end-frame="anySelectedSupportsEndFrame"
+            :end-frame-compatibility-warn="endFrameCompatibilityWarn"
+            :end-frame-compatibility-hint="endFrameCompatibilityHint"
           />
-          <VideoStartFramePicker
-            v-if="anySelectedSupportsEndFrame"
-            v-model:frame-image-url="endFrameUrl"
-            role="end"
-            :prompt="prompt"
-            :aspect-ratio="aspectRatio"
-            :bible-project-id="startFrameBibleProjectId"
-            :bible-scene-id="panelPrefill?.sceneId"
-            :bible-shot-id="panelPrefill?.shotId"
-            :bible-character-ids="effectiveCharacterIds"
-            :reference-image-urls="castPlateReferenceUrls"
-          />
-          <p
-            v-if="anySelectedSupportsEndFrame && endFrameCompatibilityHint"
-            class="text-xs rounded-lg px-3 py-2"
-            :class="endFrameCompatibilityWarn
-              ? 'text-amber-900 bg-amber-50 border border-amber-200'
-              : 'text-gray-500'"
-          >
-            {{ endFrameCompatibilityHint }}
-          </p>
 
           <div v-if="anySelectedSupportsAudio" class="rounded-lg border border-gray-200 bg-studio-slate px-4 py-3 space-y-3">
             <label class="inline-flex items-start gap-2 text-sm text-gray-800 cursor-pointer">
@@ -514,6 +565,12 @@
                   </select>
                   <p v-if="!dialogueSpeakerOptions.length" class="mt-1 text-xs text-amber-800">
                     Select characters in this shot above so we can name who speaks.
+                  </p>
+                  <p v-else-if="speakerVoiceNote" class="mt-1 text-xs text-gray-500">
+                    Voice lock: {{ speakerVoiceNote }}
+                  </p>
+                  <p v-else class="mt-1 text-xs text-amber-800">
+                    No voice notes on this character. Add them on the character page or this take will invent a voice.
                   </p>
                 </div>
                 <div>
@@ -627,33 +684,33 @@
               class="text-primary hover:underline"
             >Browse models on OpenRouter</a>.
           </p>
+
+          <div v-if="formError" class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+            {{ formError }}
+          </div>
+
+          <div class="flex flex-wrap items-center gap-3 pt-1">
+            <button
+              type="submit"
+              class="px-6 py-3 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="!canSubmit"
+            >
+              {{ generating
+                ? `Generating ${resolution}… ${doneCount}/${selectedModelIdsList.length}`
+                : `Generate ${resolution} video` }}
+            </button>
+            <button
+              type="button"
+              class="px-4 py-2.5 text-sm font-medium text-gray-700 hover:text-gray-900"
+              @click="goToSetupStep"
+            >
+              ← Back to setup
+            </button>
+          </div>
         </section>
-
-        <p
-          v-else
-          class="rounded-xl border border-dashed border-gray-300 bg-gray-50/80 px-5 py-8 text-center text-sm text-gray-600"
-        >
-          Select a video model above to configure your prompt and frames.
-        </p>
-
-        <div v-if="formError" class="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
-          {{ formError }}
-        </div>
-
-        <div>
-          <button
-            type="submit"
-            class="px-6 py-3 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm sm:text-base transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!canSubmit"
-          >
-            {{ generating
-              ? `Generating ${resolution}… ${doneCount}/${selectedModelIdsList.length}`
-              : `Generate ${resolution} video` }}
-          </button>
-        </div>
       </form>
 
-      <section v-if="uiPhase === 'form' && hasAnySlot" class="space-y-4">
+      <section v-if="uiPhase === 'form' && formStep === 'prompt' && hasAnySlot" class="space-y-4">
         <h2 class="text-lg font-semibold text-gray-900">Results</h2>
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
           <article
@@ -703,7 +760,7 @@
         </div>
       </section>
 
-      <section v-else-if="uiPhase === 'form'" class="space-y-4">
+      <section v-else-if="uiPhase === 'form' && formStep === 'prompt'" class="space-y-4">
         <h2 class="text-lg font-semibold text-gray-900">Results</h2>
         <div
           class="rounded-xl border border-dashed border-gray-300 bg-gray-50/80 px-6 py-12 text-center text-sm text-gray-500"
@@ -810,6 +867,14 @@ import {
   saveVideoToProjectLibrary
 } from '~/composables/useOpenRouterVideoGen'
 import { resolveVideoGenerationUserPrompt } from '~/lib/video-generation-audio-policy'
+import {
+  appendKeyframeTimelineGuidance,
+  deriveStartEndFromTimeline,
+  middleTimelineKeyframeUrls,
+  rescaleTimelineKeyframes,
+  seedTimelineFromStartEnd,
+  type VideoTimelineKeyframe
+} from '~/lib/video-keyframe-timeline'
 import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import {
   defaultAspectRatioFromPrefs,
@@ -866,6 +931,7 @@ type Slot = {
 }
 
 type UiPhase = 'form' | 'generating' | 'complete'
+type FormStep = 'setup' | 'prompt'
 
 const route = useRoute()
 const router = useRouter()
@@ -913,16 +979,23 @@ const models = computed(() => data.value?.models ?? [])
 
 const prompt = ref(boot?.prompt?.trim() ?? '')
 const negativePrompt = ref(boot?.negativePrompt?.trim() ?? '')
-const startFrameUrl = ref<string | null>(
-  boot?.startFrameUrl
-    ? appendPlaybackAccessToken(boot.startFrameUrl.trim(), getAuthToken())
-    : null
+const timelineKeyframes = ref<VideoTimelineKeyframe[]>(
+  seedTimelineFromStartEnd({
+    durationSeconds: boot?.durationSeconds
+      ? (parseVideoGenerationDurationSeconds(boot.durationSeconds) || defaultDurationFromPrefs())
+      : defaultDurationFromPrefs(),
+    startFrameUrl: boot?.startFrameUrl
+      ? appendPlaybackAccessToken(boot.startFrameUrl.trim(), getAuthToken())
+      : null,
+    endFrameUrl: boot?.endFrameUrl
+      ? appendPlaybackAccessToken(boot.endFrameUrl.trim(), getAuthToken())
+      : null
+  })
 )
-const endFrameUrl = ref<string | null>(
-  boot?.endFrameUrl
-    ? appendPlaybackAccessToken(boot.endFrameUrl.trim(), getAuthToken())
-    : null
-)
+
+const startFrameUrl = computed(() => deriveStartEndFromTimeline(timelineKeyframes.value).startFrameUrl)
+const endFrameUrl = computed(() => deriveStartEndFromTimeline(timelineKeyframes.value).endFrameUrl)
+const guideFrameUrls = computed(() => middleTimelineKeyframeUrls(timelineKeyframes.value))
 const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(
   defaultAspectRatioFromPrefs(boot?.aspectRatio)
 )
@@ -1014,6 +1087,8 @@ const pinnedProjectId = ref(
 )
 const slotByModel = reactive<Record<string, Slot>>({})
 const uiPhase = ref<UiPhase>('form')
+const formStep = ref<FormStep>('setup')
+const setupStepError = ref('')
 const selectedKeepModelId = ref('')
 const keepingClip = ref(false)
 const discardingRun = ref(false)
@@ -1100,6 +1175,16 @@ const characterTypeaheadOptions = computed<CharacterTypeaheadOption[]>(() =>
   }))
 )
 
+/** Cast plates for prompt-name hover previews. */
+const promptMentionCharacters = computed(() =>
+  projectCharacterRefs.value.map(c => ({
+    id: c.id,
+    name: c.name,
+    portraitUrl: c.portraitUrl,
+    plateUrls: c.plateUrls || []
+  }))
+)
+
 const characterTypeaheadHint = computed(() => {
   if (selectedCharacterIds.value.length) {
     return `${selectedCharacterSummary.value}. Type to add more — full cast stays hidden until you search.`
@@ -1154,6 +1239,22 @@ const dialogueSpeakerName = computed(() => {
     || projectCharacterRefs.value.find(c => c.id === id)?.name
     || ''
 })
+
+const speakerVoiceNote = computed(() => {
+  const id = dialogueSpeakerId.value
+  if (!id) return ''
+  return (projectCharacterRefs.value.find(c => c.id === id)?.voiceDescription || '').trim()
+})
+
+function voiceLocksForShot () {
+  const ids = new Set(effectiveCharacterIds.value)
+  const pool = ids.size
+    ? projectCharacterRefs.value.filter(c => ids.has(c.id))
+    : dialogueSpeakerOptions.value
+  return pool
+    .filter(c => (c.voiceDescription || '').trim())
+    .map(c => ({ name: c.name, voiceDescription: c.voiceDescription || '' }))
+}
 
 function syncDialogueSpeakerSelection () {
   const options = dialogueSpeakerOptions.value
@@ -1387,6 +1488,52 @@ const compareModelOptions = computed(() =>
 
 const hasModelSelected = computed(() => Boolean(primaryModelId.value))
 
+const canContinueToPrompt = computed(() => {
+  if (!hasModelSelected.value) return false
+  if (isAuthenticated.value && saveToProject.value) {
+    const pid = selectedProjectId.value.trim()
+    if (!pid || !pbProjects.value.some(p => p.id === pid)) return false
+  }
+  return true
+})
+
+function goToSetupStep () {
+  setupStepError.value = ''
+  formStep.value = 'setup'
+}
+
+function goToPromptStep () {
+  setupStepError.value = ''
+  if (!hasModelSelected.value) {
+    setupStepError.value = 'Select a video model to continue.'
+    formStep.value = 'setup'
+    return
+  }
+  if (isAuthenticated.value && saveToProject.value) {
+    const pid = selectedProjectId.value.trim()
+    if (!pid || !pbProjects.value.some(p => p.id === pid)) {
+      setupStepError.value = 'Choose a project to save into, or uncheck save to project.'
+      formStep.value = 'setup'
+      return
+    }
+  }
+  formStep.value = 'prompt'
+}
+
+function onFormSubmit () {
+  if (formStep.value === 'setup') {
+    goToPromptStep()
+    return
+  }
+  return onSubmit()
+}
+
+watch(primaryModelId, (id) => {
+  if (!id && formStep.value === 'prompt') {
+    formStep.value = 'setup'
+  }
+})
+
 const setupAccordionSummary = computed(() => {
   const parts: string[] = []
   parts.push(primaryModel.value?.name || 'No model selected')
@@ -1520,9 +1667,15 @@ watch(primaryModelId, (id) => {
     includeSpokenDialogue.value = false
     includeAmbientSound.value = false
   }
-  if (!modelSupportsLastFrame(m)) {
-    endFrameUrl.value = null
-  }
+})
+
+watch(durationSeconds, (next, prev) => {
+  if (prev == null || Number(next) === Number(prev)) return
+  timelineKeyframes.value = rescaleTimelineKeyframes(
+    timelineKeyframes.value,
+    Number(prev),
+    Number(next)
+  )
 })
 
 function openCreateProjectModal () {
@@ -1577,14 +1730,15 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   panelPrefill.value = p
   prompt.value = p.prompt.trim()
   negativePrompt.value = (p.negativePrompt || '').trim()
-  if (p.startFrameUrl) {
-    startFrameUrl.value = appendPlaybackAccessToken(p.startFrameUrl.trim(), getAuthToken())
-  }
-  if (p.endFrameUrl) {
-    endFrameUrl.value = appendPlaybackAccessToken(p.endFrameUrl.trim(), getAuthToken())
-  } else {
-    endFrameUrl.value = null
-  }
+  timelineKeyframes.value = seedTimelineFromStartEnd({
+    durationSeconds: durationSeconds.value,
+    startFrameUrl: p.startFrameUrl
+      ? appendPlaybackAccessToken(p.startFrameUrl.trim(), getAuthToken())
+      : null,
+    endFrameUrl: p.endFrameUrl
+      ? appendPlaybackAccessToken(p.endFrameUrl.trim(), getAuthToken())
+      : null
+  })
   if (p.aspectRatio) aspectRatio.value = p.aspectRatio
   if (typeof p.durationSeconds === 'number') {
     const dur = parseVideoGenerationDurationSeconds(p.durationSeconds)
@@ -1604,8 +1758,9 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   void loadPanelSceneContext()
   const label = (p.shotTitle || '').trim()
   prefillBanner.value = label
-    ? `Opened from project storyboard — “${label}”. Prompt and frames are prefilled; confirm model and project above.`
-    : 'Opened from a project panel — prompt and frames are prefilled; confirm model and project above.'
+    ? `Opened from project storyboard — “${label}”. Prompt and frames are prefilled; confirm setup, then continue to the prompt.`
+    : 'Opened from a project panel — prompt and frames are prefilled; confirm setup, then continue to the prompt.'
+  formStep.value = 'setup'
 }
 
 function stripPanelQueryFromRoute () {
@@ -1674,17 +1829,17 @@ function tryApplyStashedPrefill (): boolean {
 
 onMounted(async () => {
   await initAuth()
-  if (prefillApplied.value && panelPrefill.value?.startFrameUrl?.trim()) {
-    startFrameUrl.value = appendPlaybackAccessToken(
-      panelPrefill.value.startFrameUrl.trim(),
-      getAuthToken()
-    )
-  }
-  if (prefillApplied.value && panelPrefill.value?.endFrameUrl?.trim()) {
-    endFrameUrl.value = appendPlaybackAccessToken(
-      panelPrefill.value.endFrameUrl.trim(),
-      getAuthToken()
-    )
+  if (prefillApplied.value && panelPrefill.value) {
+    const pre = panelPrefill.value
+    timelineKeyframes.value = seedTimelineFromStartEnd({
+      durationSeconds: durationSeconds.value,
+      startFrameUrl: pre.startFrameUrl?.trim()
+        ? appendPlaybackAccessToken(pre.startFrameUrl.trim(), getAuthToken())
+        : null,
+      endFrameUrl: pre.endFrameUrl?.trim()
+        ? appendPlaybackAccessToken(pre.endFrameUrl.trim(), getAuthToken())
+        : null
+    })
   }
   if (!tryApplyStashedPrefill() && hasPanelDeepLink.value) {
     await fetchPanelPrefillFromApi()
@@ -1823,21 +1978,21 @@ const endFrameCompatibilityWarn = computed(() =>
 const endFrameCompatibilityHint = computed(() => {
   if (!anySelectedSupportsEndFrame.value) return ''
   if (!endFrameUrl.value) {
-    return 'Optional: add an ending frame for models that support Start + end frame.'
+    return 'Tip: fill the end beat for models that support Start + end frame locking.'
   }
   if (!selectedModelIdsList.value.length) {
-    return 'Ending frame is set — choose a model that supports it.'
+    return 'End beat is set — choose a model that supports last-frame lock.'
   }
   if (!selectedLastFrameModels.value.length) {
     const names = selectedNonLastFrameModels.value.map(m => m.name).join(', ')
-    return `Ending frame won’t be sent — ${names || 'the selected model(s)'} only support a starting frame.`
+    return `End beat won’t lock as a last frame — ${names || 'the selected model(s)'} only support a starting frame. It still guides the prompt.`
   }
   if (selectedNonLastFrameModels.value.length) {
     const ok = selectedLastFrameModels.value.map(m => m.name).join(', ')
     const skip = selectedNonLastFrameModels.value.map(m => m.name).join(', ')
-    return `Ending frame will be used for ${ok}. Skipped for ${skip}.`
+    return `End beat locks last frame for ${ok}. Prompt-only for ${skip}.`
   }
-  return 'Ending frame will be sent to the selected model(s).'
+  return 'End beat will lock the last frame on the selected model(s).'
 })
 
 const generatedAudioModelWarning = computed(() => {
@@ -1884,19 +2039,26 @@ const negativeDeliveryHint = computed(() => {
 })
 
 function resolvedGenerationPrompt (): string {
-  return resolveVideoGenerationUserPrompt({
+  const withAudio = resolveVideoGenerationUserPrompt({
     prompt: prompt.value,
     dialogueLine: dialogueLine.value,
     includeSpokenDialogue: includeSpokenDialogue.value,
     dialogueSpeakerName: dialogueSpeakerName.value,
     dialogueTone: dialogueTone.value,
+    voiceLocks: voiceLocksForShot(),
     ambientSoundPrompt: ambientSoundPrompt.value,
     includeAmbientSound: includeAmbientSound.value
   })
+  return appendKeyframeTimelineGuidance(
+    withAudio,
+    timelineKeyframes.value,
+    durationSeconds.value
+  )
 }
 
 const canSubmit = computed(() =>
   uiPhase.value === 'form' &&
+  formStep.value === 'prompt' &&
   !generating.value &&
   !loadingPanelPrefill.value &&
   hasModelSelected.value &&
@@ -1975,6 +2137,7 @@ async function runOneModel (modelId: string) {
         modelSupportsLastFrame(model) && endFrameUrl.value
           ? endFrameUrl.value
           : undefined,
+      guideFrameUrls: guideFrameUrls.value.length ? guideFrameUrls.value : undefined,
       supportedDurations: model?.supportedDurations,
       supportedResolutions: model?.supportedResolutions,
       generateAudio: wantsGeneratedAudio.value,
@@ -2102,7 +2265,8 @@ async function discardRunAndRetry () {
     const ids = successfulResults.value.map(r => r.assetId).filter(Boolean) as string[]
     await deleteRunAssets(ids)
     resetGenerationRun()
-    toast.showToast('Clips discarded. Adjust settings and generate again.', 'info')
+    formStep.value = 'prompt'
+    toast.showToast('Clips discarded. Adjust your prompt and generate again.', 'info')
   } finally {
     discardingRun.value = false
   }

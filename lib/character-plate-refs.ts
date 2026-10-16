@@ -1,6 +1,6 @@
 import { isCharacterPortraitAsset } from '~/lib/character-voice-assets'
+import { isCostumePlateAsset } from '~/lib/costume-lock'
 import {
-  CHARACTER_TURNAROUND_VIEWS,
   characterPlateRank,
   expressionLabelFromPlateMeta,
   parseCharacterTurnaroundView,
@@ -43,9 +43,17 @@ function sortPlates (a: RankedPlate, b: RankedPlate): number {
   return (b.ts || '').localeCompare(a.ts || '')
 }
 
+/** Featured portrait that is not a turnaround view — the face lock (headshot). */
+function isIdentityFacePlate (plate: RankedPlate): boolean {
+  return plate.featured && !plate.view
+}
+
+/** Face first, then profiles, then the back. A 4-plate cap drops the back before the face. */
+const GENERATION_VIEW_ORDER: CharacterTurnaroundViewId[] = ['front', 'left', 'right', 'back']
+
 /**
- * Prefer one plate per turnaround view (front/back/left/right), front as primary.
- * Falls back to ranked freeform plates when views are missing.
+ * Featured headshot is the identity plate and is always included first.
+ * Then one plate per turnaround view. Unlabeled extras fill only leftover slots.
  */
 function bundleFromPlates (plates: RankedPlate[], maxPlates: number): CharacterPlateBundle | null {
   if (!plates.length) return null
@@ -66,10 +74,13 @@ function bundleFromPlates (plates: RankedPlate[], maxPlates: number): CharacterP
     urls.push(url)
   }
 
-  for (const v of CHARACTER_TURNAROUND_VIEWS) {
-    const plate = byView.get(v.id)
-    if (plate) pushUrl(plate.url)
+  const identity = sorted.find(isIdentityFacePlate)
+  if (identity) pushUrl(identity.url)
+
+  for (const viewId of GENERATION_VIEW_ORDER) {
     if (urls.length >= maxPlates) break
+    const plate = byView.get(viewId)
+    if (plate) pushUrl(plate.url)
   }
 
   if (urls.length < maxPlates) {
@@ -82,13 +93,29 @@ function bundleFromPlates (plates: RankedPlate[], maxPlates: number): CharacterP
   if (!urls.length && !sorted[0]!.notes && !sorted[0]!.promptUsed) return null
 
   const front = byView.get('front')
-  const primary = front || sorted[0]!
+  const primary = identity || front || sorted[0]!
   return {
-    url: (front?.url || urls[0] || primary.url || '').trim(),
+    url: (primary.url || urls[0] || '').trim(),
     notes: primary.notes,
     promptUsed: primary.promptUsed,
     plateUrls: urls
   }
+}
+
+/** Instruction sent with bible plates so the image model copies the face. */
+export function characterPlateIdentityNote (count: number): string {
+  if (count <= 0) return ''
+  const which = count === 1
+    ? 'The attached portrait is the production bible plate'
+    : `The attached ${count} portraits are the production bible plates`
+  return [
+    `CHARACTER PLATES (identity lock): ${which}.`,
+    'The first plate is the face. Copy that person: same face, age, hair, and facial hair. Do not recast or redesign them.',
+    'Later plates lock the body. Clothing comes from the costume lock when one is set.',
+    'If a plate is a scene still, keep the other people, the table, and the room. Do not erase them.',
+    'If any written description disagrees with the plates, the plates win for the face and body. When COSTUME LOCK is present, that block wins for the clothes.',
+    'Set and continuity images never change the face.'
+  ].join(' ')
 }
 
 /**
@@ -107,7 +134,7 @@ export function buildCharacterPlateMap (
     const meta = (a.metadata && typeof a.metadata === 'object')
       ? (a.metadata as Record<string, unknown>)
       : {}
-    if (!isCharacterPortraitAsset(meta)) continue
+    if (!isCharacterPortraitAsset(meta) || isCostumePlateAsset(meta)) continue
     const cid = typeof meta.character_id === 'string' ? meta.character_id.trim() : ''
     const cname = typeof meta.character_name === 'string' ? normalizeName(meta.character_name) : ''
     const url = resolveUrl(a).trim()

@@ -221,7 +221,7 @@
                   v-if="featuredImage"
                   class="absolute bottom-0 inset-x-0 px-2 py-1.5 text-[10px] tracking-[0.2em] uppercase text-center bg-black/65 text-stone-100"
                 >
-                  Front · Main
+                  {{ featuredImageCaption }}
                 </span>
               </div>
             </div>
@@ -234,7 +234,7 @@
               <div class="mb-3">
                 <h2 class="lookbook-label !mb-1">Turnaround plates</h2>
                 <p class="text-[10px] text-stone-500 tracking-wide">
-                  Upload Front, Back, Left, and Right. Front is the main character image for generation.
+                  A featured headshot locks the face for generation. Front, Back, Left, and Right lock the body. With no featured headshot, Front is the face.
                 </p>
               </div>
 
@@ -263,7 +263,7 @@
                     <div class="absolute inset-x-0 bottom-0 p-1.5 space-y-1">
                       <p class="text-[10px] font-semibold tracking-[0.18em] uppercase text-stone-100 text-center">
                         {{ slot.view.label }}
-                        <span v-if="slot.view.id === 'front'" class="text-primary"> · Main</span>
+                        <span v-if="slot.view.id === 'front' && !hasFeaturedHeadshot" class="text-primary"> · Main</span>
                       </p>
                       <div class="flex gap-1">
                         <label
@@ -310,14 +310,24 @@
             >
               <div>
                 <h2 class="lookbook-label">Wardrobe &amp; look</h2>
+                <ul v-if="lockedCostumeLines.length" class="space-y-1.5">
+                  <li
+                    v-for="line in lockedCostumeLines"
+                    :key="line.id"
+                    class="text-xs text-stone-300 leading-snug"
+                  >
+                    <span class="font-semibold text-stone-100">{{ line.name }}.</span>
+                    {{ line.description }}
+                  </li>
+                </ul>
                 <p
-                  v-if="form.appearanceDescription.trim()"
+                  v-else-if="form.appearanceDescription.trim()"
                   class="text-xs text-stone-300 leading-relaxed whitespace-pre-wrap"
                 >
                   {{ form.appearanceDescription }}
                 </p>
                 <p v-else class="text-xs text-stone-500 italic">
-                  No locked appearance yet — edit below so every frame stays consistent.
+                  No locked costume yet — edit below so the outfit stays the same in every frame.
                 </p>
               </div>
 
@@ -337,7 +347,7 @@
                   </li>
                 </ul>
                 <p v-else class="text-xs text-stone-500 italic">
-                  Props, accessories, and recurring details go here.
+                  Personal accessories and recurring details. Room objects — TVs, tables, computers — lock on the location as set dressing.
                 </p>
               </div>
 
@@ -420,14 +430,101 @@
               @commit="saveField"
             />
             <ProfileField
-              label="Appearance & wardrobe (visual anchor)"
-              hint="Locked physical look so every generated image matches."
+              label="Face & body (visual anchor)"
+              hint="Age, hair, build, and marks. The outfit is locked separately below and wins over any clothes mentioned here."
               :model-value="form.appearanceDescription"
-              placeholder="e.g. Late 20s, sun-weathered, blonde braid. Utility shirt, leather belt, scuffed boots."
-              :rows="5"
+              placeholder="e.g. Late 20s, sun-weathered, blonde braid, scar through the left brow."
+              :rows="4"
               @update:model-value="(v) => { form.appearanceDescription = v }"
               @commit="saveField"
             />
+            <div class="rounded-xl border border-gray-200 bg-gray-50 p-4 space-y-4">
+              <div>
+                <h3 class="text-sm font-semibold text-gray-900">Locked costumes</h3>
+                <p class="text-xs text-gray-500 mt-1">
+                  The first outfit is worn in every scene. Add a second or third look only when the clothes change, and choose which scenes use it.
+                </p>
+              </div>
+              <div
+                v-for="(costume, index) in form.costumes"
+                :key="costume.id"
+                class="rounded-lg border border-gray-200 bg-studio-slate p-3 space-y-2"
+              >
+                <div class="flex flex-wrap items-center gap-2">
+                  <input
+                    v-model="costume.name"
+                    type="text"
+                    class="flex-1 min-w-[8rem] rounded border border-gray-300 px-2 py-1.5 text-sm"
+                    :placeholder="index === 0 ? 'Everyday' : 'Gala'"
+                    @blur="saveField"
+                  >
+                  <span class="text-[10px] font-semibold uppercase tracking-wide text-gray-500">
+                    {{ index === 0 ? 'Default' : 'Change' }}
+                  </span>
+                  <button
+                    v-if="index > 0"
+                    type="button"
+                    class="text-xs text-red-600"
+                    @click="removeCostume(index)"
+                  >
+                    Remove
+                  </button>
+                </div>
+                <textarea
+                  v-model="costume.description"
+                  rows="3"
+                  class="w-full rounded border border-gray-300 px-2 py-1.5 text-sm resize-y"
+                  placeholder="Navy wool coat, grey trousers, scuffed brown boots. Same clothes every time this look is worn."
+                  @blur="saveField"
+                />
+                <div class="flex flex-wrap items-center gap-2">
+                  <img
+                    v-if="costumePlateUrl(costume.id)"
+                    :src="costumePlateUrl(costume.id)"
+                    alt=""
+                    class="h-16 w-12 rounded object-cover border border-gray-300 bg-gray-100"
+                  >
+                  <label
+                    class="inline-flex items-center px-2.5 py-1 text-xs font-semibold rounded border border-gray-300 cursor-pointer hover:border-primary"
+                    :class="costumeUploadingId === costume.id ? 'opacity-50 pointer-events-none' : ''"
+                  >
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp,image/gif"
+                      class="sr-only"
+                      @change="onCostumePlate($event, costume.id)"
+                    >
+                    {{ costumeUploadingId === costume.id ? 'Uploading…' : (costumePlateUrl(costume.id) ? 'Replace plate' : 'Add plate') }}
+                  </label>
+                  <span class="text-[11px] text-gray-500">Plate locks the clothes, not the face.</span>
+                </div>
+                <div v-if="index > 0 && projectScenes.length" class="flex flex-wrap gap-1.5">
+                  <label
+                    v-for="scene in projectScenes"
+                    :key="scene.id"
+                    class="inline-flex items-center gap-1 rounded border border-gray-200 px-2 py-1 text-[11px] text-gray-700"
+                  >
+                    <input
+                      type="checkbox"
+                      :checked="costume.sceneIds.includes(scene.id)"
+                      @change="toggleCostumeScene(index, scene.id)"
+                    >
+                    {{ scene.heading || 'Untitled scene' }}
+                  </label>
+                </div>
+                <p v-else-if="index > 0" class="text-[11px] text-gray-500">
+                  No scenes yet. This look can be assigned once the script has scenes.
+                </p>
+              </div>
+              <button
+                v-if="form.costumes.length < maxCostumes"
+                type="button"
+                class="text-xs font-semibold text-primary"
+                @click="addCostume"
+              >
+                Add another outfit
+              </button>
+            </div>
             <ProfileField
               label="Personality & mannerisms"
               hint="Attitude, speech rhythm, gestures — also feeds the trait tags in the lookbook header."
@@ -576,6 +673,16 @@ import {
   validateCharacterReferenceClipFile
 } from '~/lib/upload-character-voice-sample'
 import { visualBriefForCharacterCreator } from '~/lib/character-visual-description'
+import {
+  DEFAULT_COSTUME_ID,
+  MAX_CHARACTER_COSTUMES,
+  costumePlateMetadata,
+  emptyCostume,
+  isCostumePlateAsset,
+  newCostumeId,
+  normalizeCostumes,
+  type CharacterCostume
+} from '~/lib/costume-lock'
 import { castBibleConfidenceLabel, resolveCastCharacterToBibleEntity } from '~/lib/bible-cast-bridge'
 import { countAssetsForCastCharacter } from '~/lib/bible-cast-asset-bridge'
 import type { BibleEntity } from '~/types/bible-entity'
@@ -651,7 +758,8 @@ const form = reactive({
   personality: '',
   voiceDescription: '',
   signatureDetails: '',
-  avoidDescription: ''
+  avoidDescription: '',
+  costumes: [emptyCostume(DEFAULT_COSTUME_ID, 'Everyday')] as CharacterCostume[]
 })
 
 type SaveStatus = 'idle' | 'unsaved' | 'saving' | 'saved' | 'error'
@@ -668,7 +776,8 @@ const isDirty = computed(() => {
     form.personality !== (c.personality || '') ||
     form.voiceDescription !== (c.voiceDescription || '') ||
     form.signatureDetails !== (c.signatureDetails || '') ||
-    form.avoidDescription !== (c.avoidDescription || '')
+    form.avoidDescription !== (c.avoidDescription || '') ||
+    JSON.stringify(normalizeCostumes(form.costumes)) !== JSON.stringify(normalizeCostumes(c.costumes))
   )
 })
 
@@ -727,6 +836,116 @@ const roleShort = computed(() => {
   return first.slice(0, 48) + (first.length > 48 ? '…' : '')
 })
 
+const maxCostumes = MAX_CHARACTER_COSTUMES
+const projectScenes = ref<Array<{ id: string; heading: string }>>([])
+const costumeUploadingId = ref('')
+
+const lockedCostumeLines = computed(() =>
+  normalizeCostumes(form.costumes)
+    .filter((c) => c.description.trim())
+    .map((c) => ({ id: c.id, name: c.name || 'Everyday', description: c.description }))
+)
+
+function costumePlateUrl (costumeId: string): string {
+  const cid = effectiveCharacterId.value
+  for (const asset of assets.value) {
+    const meta = (asset.metadata && typeof asset.metadata === 'object')
+      ? asset.metadata as Record<string, unknown>
+      : {}
+    if (!isCostumePlateAsset(meta)) continue
+    if (meta.character_id !== cid) continue
+    if (meta.costume_id !== costumeId) continue
+    if (!asset.fileUrl && !asset.id) continue
+    return imageUrl(asset)
+  }
+  return ''
+}
+
+function addCostume () {
+  if (form.costumes.length >= MAX_CHARACTER_COSTUMES) return
+  if (!form.costumes.length) {
+    form.costumes.push(emptyCostume(DEFAULT_COSTUME_ID, 'Everyday'))
+  }
+  form.costumes.push(emptyCostume(newCostumeId(), form.costumes.length === 1 ? 'Change' : 'Change 2'))
+  void saveField()
+}
+
+function removeCostume (index: number) {
+  if (index <= 0) return
+  form.costumes.splice(index, 1)
+  void saveField()
+}
+
+function toggleCostumeScene (index: number, sceneId: string) {
+  const costume = form.costumes[index]
+  if (!costume || index === 0) return
+  const has = costume.sceneIds.includes(sceneId)
+  for (const row of form.costumes) {
+    row.sceneIds = row.sceneIds.filter((id) => id !== sceneId)
+  }
+  if (!has) costume.sceneIds = [...costume.sceneIds, sceneId]
+  void saveField()
+}
+
+async function loadProjectScenes (token: string) {
+  const pid = projectId.value
+  if (!PB_ID.test(pid)) return
+  try {
+    const res = await $fetch<{ scenes: Array<{ id: string; heading: string }> }>(
+      `/api/projects/${pid}/scenes`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    projectScenes.value = res.scenes || []
+  } catch {
+    projectScenes.value = []
+  }
+}
+
+async function onCostumePlate (ev: Event, costumeId: string) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  if (!file) return
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Sign in to upload a costume plate.', 'warning')
+    return
+  }
+  costumeUploadingId.value = costumeId
+  try {
+    if (synthetic.value) {
+      const createdId = await createBackingCharacter(token, form.name.trim() || 'Character')
+      if (!createdId) return
+    }
+    await saveField()
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Choose an image file (JPEG, PNG, WebP, or GIF).')
+    }
+    const uploadFile = await prepareImageFileForUpload(file)
+    const fd = new FormData()
+    fd.append('file', uploadFile)
+    fd.append('kind', 'character')
+    fd.append('title', `${form.name || 'Character'} — ${form.costumes.find((c) => c.id === costumeId)?.name || 'costume'}`.slice(0, 500))
+    fd.append('notes', 'Locked costume plate: match these clothes. Do not copy this face if a character plate is also attached.')
+    fd.append('metadata', JSON.stringify(costumePlateMetadata({
+      characterId: effectiveCharacterId.value,
+      characterName: form.name,
+      costumeId
+    })))
+    await $fetch(`/api/projects/${projectId.value}/assets/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${token}` },
+      body: fd
+    })
+    await load()
+    toast.showToast('Costume plate saved. Frames will match these clothes.', 'success')
+  } catch (e: unknown) {
+    toast.showToast(formatApiFetchError(e, 'Could not upload costume plate'), 'error')
+  } finally {
+    costumeUploadingId.value = ''
+  }
+}
+
 const signatureBullets = computed(() => {
   const raw = form.signatureDetails.trim()
   if (!raw) return [] as string[]
@@ -761,6 +980,10 @@ function syncForm (c: CreativeCharacter) {
   form.voiceDescription = c.voiceDescription || ''
   form.signatureDetails = c.signatureDetails || ''
   form.avoidDescription = c.avoidDescription || ''
+  const savedCostumes = normalizeCostumes(c.costumes)
+  form.costumes = savedCostumes.length
+    ? savedCostumes
+    : [emptyCostume(DEFAULT_COSTUME_ID, 'Everyday')]
 }
 
 function imageUrl (a: ProjectAsset): string {
@@ -790,6 +1013,7 @@ const galleryImages = computed<GalleryImage[]>(() => {
     if (!a.fileUrl) continue
     const meta = (a.metadata && typeof a.metadata === 'object') ? a.metadata : {}
     if (!isCharacterPortraitAsset(meta as Record<string, unknown>)) continue
+    if (isCostumePlateAsset(meta as Record<string, unknown>)) continue
     out.push({
       assetId: a.id,
       url: imageUrl(a),
@@ -831,9 +1055,22 @@ const extraPlates = computed(() =>
 )
 
 const featuredImage = computed(() => {
+  const marked = galleryImages.value.find((g) => g.featured)
+  if (marked) return marked
   const front = turnaroundSlots.value.find((s) => s.view.id === 'front')?.image
   if (front) return front
-  return galleryImages.value.find((g) => g.featured) || galleryImages.value[0] || null
+  return galleryImages.value[0] || null
+})
+const hasFeaturedHeadshot = computed(() => {
+  const img = featuredImage.value
+  if (!img?.featured) return false
+  return parseCharacterTurnaroundView(img.expressionLabel) == null
+})
+const featuredImageCaption = computed(() => {
+  const img = featuredImage.value
+  if (!img) return ''
+  const label = (img.expressionLabel || '').trim()
+  return label ? `${label} · Main` : 'Main'
 })
 const featuredImageUrl = computed(() => featuredImage.value?.url || '')
 const lockedPortraitPrompt = computed(() => featuredImage.value?.promptUsed || '')
@@ -914,6 +1151,7 @@ async function load () {
       name: res.character.name || ''
     })
     void loadBibleEntityLink(token)
+    void loadProjectScenes(token)
   } catch (e: unknown) {
     loadError.value = formatApiFetchError(e, 'Could not load character')
   } finally {
@@ -971,7 +1209,8 @@ async function saveField () {
     personality: form.personality,
     voiceDescription: form.voiceDescription,
     signatureDetails: form.signatureDetails,
-    avoidDescription: form.avoidDescription
+    avoidDescription: form.avoidDescription,
+    costumes: normalizeCostumes(form.costumes)
   }
   if (
     payload.name === (c.name || '') &&
@@ -980,7 +1219,8 @@ async function saveField () {
     payload.personality === (c.personality || '') &&
     payload.voiceDescription === (c.voiceDescription || '') &&
     payload.signatureDetails === (c.signatureDetails || '') &&
-    payload.avoidDescription === (c.avoidDescription || '')
+    payload.avoidDescription === (c.avoidDescription || '') &&
+    JSON.stringify(payload.costumes) === JSON.stringify(normalizeCostumes(c.costumes))
   ) {
     saveStatus.value = lastSavedAt.value ? 'saved' : 'idle'
     return

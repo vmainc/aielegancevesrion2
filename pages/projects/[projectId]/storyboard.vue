@@ -393,6 +393,7 @@ import {
 import {
   buildMotionPromptForShot,
   mergeLegacyShotPromptsToUnified,
+  namedPropsForShot,
   resolveFrameGenerationPrompt
 } from '~/lib/unified-shot-prompt'
 import { prepareImageFileForUpload } from '~/lib/image-blob-client'
@@ -429,6 +430,8 @@ import {
   mergeGenerationObservabilityIntoMetadata
 } from '~/lib/generation-observability'
 import type { ProductionBibleResolvedContext } from '~/types/production-bible-context'
+import { selectCostumePlateUrls } from '~/lib/costume-lock'
+import { selectPropPlateUrls } from '~/lib/prop-lock'
 import { resolveSetLock, type SetLock } from '~/lib/set-lock'
 import {
   fetchImageAsDataUrl,
@@ -608,6 +611,8 @@ function priorStoryboardFrameInScene (shot: CreativeShot): string | null {
 function frameGenerationRefs (shot: CreativeShot, role: StoryboardFrameRole): {
   characterUrls: string[]
   setUrls: string[]
+  propUrls: string[]
+  costumeUrls: string[]
   continuityUrls: string[]
 } {
   const castInScope = resolveCharactersForFrameGeneration(
@@ -622,14 +627,31 @@ function frameGenerationRefs (shot: CreativeShot, role: StoryboardFrameRole): {
   const setUrls = (sceneSetLock.value?.plateUrls || []).filter(
     (u) => u && !continuityUrls.includes(u)
   )
-  const reserved = Math.min(3, continuityUrls.length + Math.min(1, setUrls.length))
+  const costumeUrls = selectCostumePlateUrls(
+    castInScope,
+    selectedSceneId.value || undefined,
+    2
+  ).filter((u) => u && !continuityUrls.includes(u) && !setUrls.includes(u))
+  const named = namedPropsForShot(shot, sceneSetLock.value)
+  const propCap = continuityUrls.length ? 1 : 2
+  const propUrls = selectPropPlateUrls(
+    sceneSetLock.value?.dressing || [],
+    named,
+    propCap
+  ).filter((u) => u && !continuityUrls.includes(u) && !setUrls.includes(u))
+  const reserved = Math.min(
+    3,
+    continuityUrls.length + Math.min(1, setUrls.length) + Math.min(1, propUrls.length) + Math.min(1, costumeUrls.length)
+  )
   const plateBudget = Math.max(1, 4 - reserved)
   const characterUrls = collectCharacterPortraitUrls(castInScope, plateBudget).filter(
-    (u) => !continuityUrls.includes(u) && !setUrls.includes(u)
+    (u) => !continuityUrls.includes(u) && !setUrls.includes(u) && !propUrls.includes(u) && !costumeUrls.includes(u)
   )
   return {
     characterUrls: characterUrls.slice(0, 4),
     setUrls: setUrls.slice(0, 1),
+    propUrls: propUrls.slice(0, propCap),
+    costumeUrls: costumeUrls.slice(0, 2),
     continuityUrls: continuityUrls.slice(0, 2)
   }
 }
@@ -772,6 +794,7 @@ function unifiedPromptContext () {
     director: project.value?.director,
     continuityMemory: project.value?.continuityMemory,
     aspectRatio: project.value?.aspectRatio,
+    sceneId: selectedSceneId.value || undefined,
     sceneTitle: activeScene.value?.heading,
     sceneSummary: activeScene.value?.summary,
     cast: characterRefs.value.map(c => projectCharacterRefToCastMember(c)),
@@ -779,16 +802,18 @@ function unifiedPromptContext () {
   }
 }
 
-async function ensureSceneSetLock () {
+async function ensureSceneSetLock (force = false) {
   const key = `${selectedSceneId.value || ''}|${activeScene.value?.heading || ''}`
-  if (sceneSetLockKey.value === key) return sceneSetLock.value
-  const [ents, assets] = await Promise.all([
+  if (!force && sceneSetLockKey.value === key) return sceneSetLock.value
+  const [ents, assets, relationships] = await Promise.all([
     productionBible.loadEntities().catch(() => []),
-    productionBible.loadProjectAssets().catch(() => [])
+    productionBible.loadProjectAssets().catch(() => []),
+    productionBible.loadRelationships().catch(() => [])
   ])
   sceneSetLock.value = resolveSetLock({
     sceneHeading: activeScene.value?.heading,
     entities: ents,
+    relationships,
     assets,
     playbackUrl: (a) => assetPlaybackUrl(a)
   })
@@ -899,7 +924,7 @@ async function generateFrame (
   const slotKey = frameSlotKey(shot, role)
   const matches = shotCharacterMatches(shot)
   const panelIndex = shots.value.findIndex(s => s.id === shot.id)
-  await ensureSceneSetLock()
+  await ensureSceneSetLock(true)
   const productionBibleCtx = await loadBibleContextForFrame(shot)
   frameBibleDebug[shot.id] = productionBibleGenerationDebugLabel(productionBibleCtx)
   let prompt = resolveFrameGenerationPrompt(shot, {
@@ -914,7 +939,7 @@ async function generateFrame (
   }
   const refs = frameGenerationRefs(shot, role)
   const referenceImageUrls = refs.characterUrls
-  if (!referenceImageUrls.length && !refs.setUrls.length && !quiet) {
+  if (!referenceImageUrls.length && !refs.setUrls.length && !refs.propUrls.length && !refs.costumeUrls.length && !quiet) {
     const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim() && !(c.plateUrls || []).length)
     if (missingPortraits.length) {
       toast.showToast(
@@ -939,6 +964,8 @@ async function generateFrame (
         referenceImageUrls,
         referenceImageUrl: referenceImageUrls[0],
         setReferenceImageUrls: refs.setUrls,
+        propReferenceImageUrls: refs.propUrls,
+        costumeReferenceImageUrls: refs.costumeUrls,
         continuityReferenceImageUrls: refs.continuityUrls,
         aspectRatio: project.value?.aspectRatio || '16:9'
       }

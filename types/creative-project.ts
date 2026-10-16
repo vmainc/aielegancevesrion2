@@ -1,3 +1,5 @@
+import type { CharacterCostume } from '~/lib/costume-lock'
+
 export type ProjectAspectRatio = '16:9' | '9:16' | '1:1'
 
 export type ProjectGoal = 'film' | 'social' | 'commercial' | 'other'
@@ -38,6 +40,8 @@ export interface CreativeCharacter {
   signatureDetails?: string
   /** Per-character negative / avoid list — things that must never appear for this role. */
   avoidDescription?: string
+  /** Everyday outfit first, then up to two scene changes. */
+  costumes?: CharacterCostume[]
 }
 
 export interface CreativeProject {

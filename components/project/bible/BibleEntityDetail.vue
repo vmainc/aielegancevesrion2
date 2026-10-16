@@ -188,6 +188,7 @@
           <p class="text-[12px] text-gray-600 leading-relaxed mb-3">
             Lock the <span class="font-medium text-gray-800">place</span> — architecture, materials, layout.
             Camera, lens, and blocking should still change so it photographs like a real location, not a copied still.
+            TVs, tables, and computers belong in set dressing below.
           </p>
           <div class="flex flex-wrap gap-2 mb-3">
             <img
@@ -214,6 +215,200 @@
           <p class="text-[11px] text-gray-500">
             Save the architecture notes below, then generate storyboard frames. The plate is a map of the room — not a camera to copy.
           </p>
+        </section>
+        <section
+          v-if="selectedEntity.type === 'location'"
+          class="mb-4 rounded-lg border border-primary/25 bg-primary/5 px-3 py-3"
+        >
+          <h3 class="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
+            Set dressing
+          </h3>
+          <p class="text-[12px] text-gray-600 leading-relaxed mb-3">
+            Objects that live in this room. Every shot here keeps the same ones.
+            Open a prop to lock its look and add a plate.
+            Leave mugs, papers, and background clutter unlocked.
+          </p>
+          <ul v-if="locationDressing.length" class="space-y-2 mb-3">
+            <li
+              v-for="row in locationDressing"
+              :key="row.relationshipId"
+              class="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-studio-slate px-2 py-2"
+            >
+              <span class="text-sm font-medium text-gray-900 min-w-[8rem]">{{ row.otherName }}</span>
+              <input
+                :value="row.placement"
+                type="text"
+                placeholder="Placement, e.g. north wall"
+                class="flex-1 min-w-[10rem] rounded border border-gray-300 px-2 py-1 text-xs"
+                :disabled="mutating"
+                @change="onPlacementChange(row.relationshipId, $event)"
+              >
+              <button
+                type="button"
+                class="text-xs text-red-600 disabled:opacity-50"
+                :disabled="mutating"
+                @click="onRemoveDressing(row.relationshipId)"
+              >
+                Remove
+              </button>
+            </li>
+          </ul>
+          <p v-else class="text-[12px] text-gray-500 mb-3">No locked objects in this room yet.</p>
+          <div class="flex flex-wrap items-end gap-2 mb-2">
+            <label class="block text-xs flex-1 min-w-[12rem]">
+              <span class="text-gray-600">Existing object</span>
+              <select
+                v-model="dressingPickId"
+                class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm bg-studio-slate"
+              >
+                <option value="">Choose a prop…</option>
+                <option v-for="p in propsAvailableForLocation" :key="p.id" :value="p.id">
+                  {{ p.name }}
+                </option>
+              </select>
+            </label>
+            <label class="block text-xs flex-1 min-w-[10rem]">
+              <span class="text-gray-600">Placement</span>
+              <input
+                v-model="dressingPlacement"
+                type="text"
+                placeholder="Center of the table"
+                class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              >
+            </label>
+            <button
+              type="button"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-gray-950 disabled:opacity-50"
+              :disabled="mutating || !dressingPickId"
+              @click="addExistingProp"
+            >
+              Add to this set
+            </button>
+          </div>
+          <div class="flex flex-wrap items-end gap-2">
+            <label class="block text-xs flex-1 min-w-[12rem]">
+              <span class="text-gray-600">New object</span>
+              <input
+                v-model="newPropName"
+                type="text"
+                placeholder="Wall TV"
+                class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              >
+            </label>
+            <label class="block text-xs flex-1 min-w-[10rem]">
+              <span class="text-gray-600">Placement</span>
+              <input
+                v-model="newPropPlacement"
+                type="text"
+                placeholder="North wall"
+                class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              >
+            </label>
+            <button
+              type="button"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-primary text-primary disabled:opacity-50"
+              :disabled="mutating || !newPropName.trim()"
+              @click="createPropHere"
+            >
+              Create and add
+            </button>
+          </div>
+        </section>
+        <section
+          v-if="selectedEntity.type === 'prop'"
+          class="mb-4 rounded-lg border border-primary/25 bg-primary/5 px-3 py-3"
+        >
+          <h3 class="text-xs font-semibold text-primary uppercase tracking-wide mb-1">
+            Prop lock
+          </h3>
+          <p class="text-[12px] text-gray-600 leading-relaxed mb-3">
+            Lock this object — shape, materials, color, condition.
+            The angle can change, and someone can pick it up.
+          </p>
+          <div class="flex flex-wrap gap-2 mb-3">
+            <img
+              v-for="plate in propPlates"
+              :key="plate.id"
+              :src="assetPlaybackUrl(plate)"
+              :alt="plate.title || 'Prop plate'"
+              class="h-20 w-20 rounded-md object-cover border border-gray-300 bg-gray-100"
+            >
+            <label
+              class="h-20 w-20 rounded-md border border-dashed border-primary/50 bg-studio-slate flex flex-col items-center justify-center text-[11px] text-primary font-medium cursor-pointer hover:bg-primary/10 text-center px-1"
+              :class="propPlateUploading ? 'opacity-50 pointer-events-none' : ''"
+            >
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                class="sr-only"
+                :disabled="propPlateUploading || mutating"
+                @change="onPropPlateFile"
+              >
+              {{ propPlateUploading ? 'Uploading…' : 'Add plate' }}
+            </label>
+          </div>
+          <h4 class="text-[11px] font-semibold text-gray-700 uppercase tracking-wide mb-2">
+            Where it lives
+          </h4>
+          <ul v-if="propHomes.length" class="space-y-2 mb-3">
+            <li
+              v-for="row in propHomes"
+              :key="row.relationshipId"
+              class="flex flex-wrap items-center gap-2 rounded-md border border-gray-200 bg-studio-slate px-2 py-2"
+            >
+              <span class="text-sm font-medium text-gray-900 min-w-[8rem]">{{ row.otherName }}</span>
+              <input
+                :value="row.placement"
+                type="text"
+                placeholder="Placement in this room"
+                class="flex-1 min-w-[10rem] rounded border border-gray-300 px-2 py-1 text-xs"
+                :disabled="mutating"
+                @change="onPlacementChange(row.relationshipId, $event)"
+              >
+              <button
+                type="button"
+                class="text-xs text-red-600 disabled:opacity-50"
+                :disabled="mutating"
+                @click="onRemoveDressing(row.relationshipId)"
+              >
+                Remove
+              </button>
+            </li>
+          </ul>
+          <p v-else class="text-[12px] text-gray-500 mb-3">
+            Not placed in a location yet. A shot can still lock it when the action names it.
+          </p>
+          <div class="flex flex-wrap items-end gap-2">
+            <label class="block text-xs flex-1 min-w-[12rem]">
+              <span class="text-gray-600">Location</span>
+              <select
+                v-model="homeLocationId"
+                class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm bg-studio-slate"
+              >
+                <option value="">Choose a location…</option>
+                <option v-for="loc in locationsAvailableForProp" :key="loc.id" :value="loc.id">
+                  {{ loc.name }}
+                </option>
+              </select>
+            </label>
+            <label class="block text-xs flex-1 min-w-[10rem]">
+              <span class="text-gray-600">Placement</span>
+              <input
+                v-model="homePlacement"
+                type="text"
+                placeholder="On the desk"
+                class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm"
+              >
+            </label>
+            <button
+              type="button"
+              class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-gray-950 disabled:opacity-50"
+              :disabled="mutating || !homeLocationId"
+              @click="placePropInLocation"
+            >
+              Place in location
+            </button>
+          </div>
         </section>
         <div class="grid gap-3 sm:grid-cols-2">
           <label class="block text-sm">
@@ -247,20 +442,20 @@
             >
           </label>
           <label class="block text-sm sm:col-span-2">
-            <span class="text-gray-600 text-xs">{{ selectedEntity.type === 'location' ? 'Look (one-line)' : 'Summary' }}</span>
+            <span class="text-gray-600 text-xs">{{ selectedEntity.type === 'location' || selectedEntity.type === 'prop' ? 'Look (one-line)' : 'Summary' }}</span>
             <textarea
               v-model="entityForm.summary"
               rows="2"
-              :placeholder="selectedEntity.type === 'location' ? 'e.g. 1950s diner, always the same room' : ''"
+              :placeholder="summaryPlaceholder"
               class="mt-0.5 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y"
             />
           </label>
           <label class="block text-sm sm:col-span-2">
-            <span class="text-gray-600 text-xs">{{ selectedEntity.type === 'location' ? 'Locked architecture (materials, layout, landmarks)' : 'Description' }}</span>
+            <span class="text-gray-600 text-xs">{{ descriptionLabel }}</span>
             <textarea
               v-model="entityForm.description"
               rows="4"
-              :placeholder="selectedEntity.type === 'location' ? 'Checkerboard tile, chrome stool line, cracked red vinyl booths, neon OPEN in the window. Same walls and furniture every shot.' : ''"
+              :placeholder="descriptionPlaceholder"
               class="mt-0.5 w-full rounded-lg border border-gray-300 px-3 py-2 text-sm resize-y"
             />
           </label>
@@ -607,7 +802,9 @@ import {
 } from '~/lib/bible-cast-asset-bridge'
 import { formatAssetProvenanceLine } from '~/lib/generation-observability'
 import { projectAssetPlaybackSrc } from '~/lib/project-asset-playback-url'
+import { dressingEdges, isPropPlateAsset } from '~/lib/prop-lock'
 import { isSetPlateAsset } from '~/lib/set-lock'
+import { uploadPropPlate } from '~/lib/upload-prop-plate'
 import { uploadSetPlate } from '~/lib/upload-set-plate'
 import {
   BIBLE_ENDPOINT_TYPES,
@@ -696,17 +893,181 @@ const props = defineProps<{
   onDeleteRel: (rel: BibleRelationship) => void
   startEditRel: (rel: BibleRelationship) => void
   onRefreshAssets?: () => void | Promise<void>
+  onPlaceProp: (input: { locationId: string; propId: string; placement: string }) => Promise<boolean>
+  onCreatePropForLocation: (input: { locationId: string; name: string; placement: string }) => Promise<boolean>
+  onUpdateDressingPlacement: (relationshipId: string, placement: string) => Promise<boolean>
+  onRemoveDressing: (relationshipId: string) => Promise<boolean>
 }>()
 
 const { getAuthToken } = useAuth()
 const toast = useToast()
 const setPlateUploading = ref(false)
+const propPlateUploading = ref(false)
+const dressingPickId = ref('')
+const dressingPlacement = ref('')
+const newPropName = ref('')
+const newPropPlacement = ref('')
+const homeLocationId = ref('')
+const homePlacement = ref('')
+
+const summaryPlaceholder = computed(() => {
+  if (props.selectedEntity?.type === 'location') return 'e.g. 1950s diner, always the same room'
+  if (props.selectedEntity?.type === 'prop') return 'e.g. 65-inch matte black TV on a low oak stand'
+  return ''
+})
+
+const descriptionLabel = computed(() => {
+  if (props.selectedEntity?.type === 'location') return 'Locked architecture (materials, layout, landmarks)'
+  if (props.selectedEntity?.type === 'prop') return 'Locked object (shape, materials, color, condition)'
+  return 'Description'
+})
+
+const descriptionPlaceholder = computed(() => {
+  if (props.selectedEntity?.type === 'location') {
+    return 'Checkerboard tile, chrome stool line, neon OPEN in the window. Same walls every shot.'
+  }
+  if (props.selectedEntity?.type === 'prop') {
+    return 'Thin black bezel, no logo, two slim legs. Same set every time it appears.'
+  }
+  return ''
+})
+
+function isPlaceable (status: string): boolean {
+  return status !== 'retired' && status !== 'contradicted'
+}
+
+const dressingRows = computed(() => {
+  const id = props.selectedId
+  const entity = props.selectedEntity
+  if (!id || !entity) return []
+  return dressingEdges(props.entityRelationships)
+    .filter((edge) => entity.type === 'location' ? edge.locationId === id : edge.propId === id)
+    .map((edge) => {
+      const otherId = entity.type === 'location' ? edge.propId : edge.locationId
+      const other = props.entities.find((e) => e.id === otherId)
+      return {
+        ...edge,
+        otherId,
+        otherName: other?.name || 'Untitled'
+      }
+    })
+})
+
+const locationDressing = computed(() =>
+  props.selectedEntity?.type === 'location' ? dressingRows.value : []
+)
+
+const propHomes = computed(() =>
+  props.selectedEntity?.type === 'prop' ? dressingRows.value : []
+)
+
+const propsAvailableForLocation = computed(() => {
+  const taken = new Set(locationDressing.value.map((row) => row.propId))
+  return props.entities.filter((e) => e.type === 'prop' && isPlaceable(e.status) && !taken.has(e.id))
+})
+
+const locationsAvailableForProp = computed(() => {
+  const taken = new Set(propHomes.value.map((row) => row.locationId))
+  return props.entities.filter((e) => e.type === 'location' && isPlaceable(e.status) && !taken.has(e.id))
+})
+
+watch(() => props.selectedId, () => {
+  dressingPickId.value = ''
+  dressingPlacement.value = ''
+  newPropName.value = ''
+  newPropPlacement.value = ''
+  homeLocationId.value = ''
+  homePlacement.value = ''
+})
+
+async function addExistingProp () {
+  const locationId = props.selectedId
+  if (!locationId || !dressingPickId.value) return
+  const ok = await props.onPlaceProp({
+    locationId,
+    propId: dressingPickId.value,
+    placement: dressingPlacement.value
+  })
+  if (ok) {
+    dressingPickId.value = ''
+    dressingPlacement.value = ''
+  }
+}
+
+async function createPropHere () {
+  const locationId = props.selectedId
+  if (!locationId || !newPropName.value.trim()) return
+  const ok = await props.onCreatePropForLocation({
+    locationId,
+    name: newPropName.value,
+    placement: newPropPlacement.value
+  })
+  if (ok) {
+    newPropName.value = ''
+    newPropPlacement.value = ''
+  }
+}
+
+async function placePropInLocation () {
+  const propId = props.selectedId
+  if (!propId || !homeLocationId.value) return
+  const ok = await props.onPlaceProp({
+    locationId: homeLocationId.value,
+    propId,
+    placement: homePlacement.value
+  })
+  if (ok) {
+    homeLocationId.value = ''
+    homePlacement.value = ''
+  }
+}
+
+function onPlacementChange (relationshipId: string, ev: Event) {
+  const value = (ev.target as HTMLInputElement).value
+  void props.onUpdateDressingPlacement(relationshipId, value)
+}
 
 const setPlates = computed(() =>
   props.entityRelatedAssets
     .map((row) => row.asset)
     .filter((a) => isSetPlateAsset(a) && a.fileUrl)
 )
+
+const propPlates = computed(() =>
+  props.entityRelatedAssets
+    .map((row) => row.asset)
+    .filter((a) => isPropPlateAsset(a) && a.fileUrl)
+)
+
+async function onPropPlateFile (ev: Event) {
+  const input = ev.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ''
+  const entity = props.selectedEntity
+  if (!file || !entity) return
+  const token = getAuthToken()
+  if (!token) {
+    toast.showToast('Sign in to upload a prop plate.', 'warning')
+    return
+  }
+  propPlateUploading.value = true
+  try {
+    await uploadPropPlate({
+      projectId: props.projectId,
+      entityId: entity.id,
+      propName: entityForm.value.name || entity.name,
+      file,
+      token
+    })
+    toast.showToast('Prop plate saved. Frames will match this object, not this angle.', 'success')
+    await props.onRefreshAssets?.()
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : 'Could not upload prop plate'
+    toast.showToast(msg, 'error')
+  } finally {
+    propPlateUploading.value = false
+  }
+}
 
 async function onSetPlateFile (ev: Event) {
   const input = ev.target as HTMLInputElement

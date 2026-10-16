@@ -1,7 +1,14 @@
 import { extractLocationFromSceneHeading } from '~/lib/bible-scene-location'
 import { normalizeBibleEntityNameKey } from '~/lib/bible-seed-normalize'
 import { BIBLE_ASSET_ENTITY_METADATA_KEY, readAssetBridgeFields } from '~/lib/bible-cast-asset-bridge'
+import {
+  buildDressingPromptSection,
+  dressingForLocation,
+  projectPropLocks,
+  type LockedProp
+} from '~/lib/prop-lock'
 import type { BibleEntity } from '~/types/bible-entity'
+import type { BibleRelationship } from '~/types/bible-relationship'
 import type { ProjectAsset } from '~/types/project-asset'
 
 export const SET_PLATE_SOURCE = 'set_plate'
@@ -23,6 +30,10 @@ export interface SetLock {
   architecture: string
   summary: string
   plateUrls: string[]
+  /** Objects that live in this location. */
+  dressing: LockedProp[]
+  /** Every active prop in the project, for shots that name a traveling object. */
+  props: LockedProp[]
 }
 
 export function isSetPlateAsset (asset: ProjectAsset): boolean {
@@ -79,27 +90,35 @@ export function matchLocationEntity (
 export function resolveSetLock (opts: {
   sceneHeading?: string
   entities?: Array<Pick<BibleEntity, 'id' | 'type' | 'name' | 'summary' | 'description' | 'status' | 'aliases'>>
+  relationships?: Array<Pick<BibleRelationship, 'id' | 'fromType' | 'fromId' | 'toType' | 'toId' | 'relationshipType' | 'role' | 'status'>>
   assets?: ProjectAsset[]
   playbackUrl?: (asset: ProjectAsset) => string
 }): SetLock | null {
   const heading = (opts.sceneHeading || '').trim()
   const locName = extractLocationFromSceneHeading(heading)
-  const entity = opts.entities?.length
-    ? matchLocationEntity(heading, opts.entities)
+  const entities = opts.entities || []
+  const entity = entities.length
+    ? matchLocationEntity(heading, entities)
     : null
   const architecture = (entity?.description || '').trim()
   const summary = (entity?.summary || '').trim()
   const plateUrls = entity?.id && opts.assets?.length
     ? setPlateUrlsForEntity(entity.id, opts.assets, opts.playbackUrl)
     : []
+  const props = projectPropLocks(entities, opts.assets, opts.playbackUrl)
+  const dressing = entity?.id
+    ? dressingForLocation(entity.id, entities, opts.relationships || [], opts.assets, opts.playbackUrl)
+    : []
   const name = (entity?.name || locName || '').trim()
-  if (!name && !architecture && !plateUrls.length) return null
+  if (!name && !architecture && !plateUrls.length && !dressing.length && !props.length) return null
   return {
     name: name || 'Location',
     entityId: entity?.id,
     architecture,
     summary,
-    plateUrls
+    plateUrls,
+    dressing,
+    props
   }
 }
 
@@ -121,7 +140,8 @@ export function buildSetLockPromptBlock (
     lock?.plateUrls.length
       ? 'An establishing set plate is attached as a vision reference — match the PLACE, not the plate’s camera.'
       : '',
-    SET_LOCK_PHOTOREAL_RULES
+    SET_LOCK_PHOTOREAL_RULES,
+    buildDressingPromptSection(lock?.dressing)
   ].filter(Boolean)
   return lines.join('\n')
 }

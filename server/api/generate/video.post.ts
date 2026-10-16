@@ -87,6 +87,16 @@ export default defineEventHandler(async (event) => {
         ? body.last_frame_image_url.trim()
         : ''
 
+  const rawGuideFrames = Array.isArray(body?.guideFrameUrls)
+    ? body.guideFrameUrls
+    : Array.isArray(body?.inputReferenceImageUrls)
+      ? body.inputReferenceImageUrls
+      : []
+  const guideFrameUrls = rawGuideFrames
+    .filter((u: unknown): u is string => typeof u === 'string' && Boolean(u.trim()))
+    .map((u: string) => u.trim())
+    .slice(0, 4)
+
   /** Blocking mode (holds connection ~minutes) — for local dev only; production uses async + polling. */
   const syncBlocking = body?.sync === true || body?.sync === 'true'
 
@@ -108,6 +118,13 @@ export default defineEventHandler(async (event) => {
       statusCode: 400,
       message:
         'Ending frame image is too large to send inline. Remove it and generate or upload the frame again (we compress it automatically).'
+    })
+  }
+  if (guideFrameUrls.some(u => u.startsWith('data:'))) {
+    throw createError({
+      statusCode: 400,
+      message:
+        'A timeline guide frame is too large to send inline. Remove it and generate or upload the frame again (we compress it automatically).'
     })
   }
 
@@ -173,6 +190,11 @@ export default defineEventHandler(async (event) => {
   const resolvedLastFrame = lastFrameImageUrl
     ? await resolveReferenceImageUrlForServerFetch(lastFrameImageUrl, resolveOpts)
     : ''
+  const resolvedGuideFrames: string[] = []
+  for (const url of guideFrameUrls) {
+    const resolved = await resolveReferenceImageUrlForServerFetch(url, resolveOpts)
+    if (resolved) resolvedGuideFrames.push(resolved)
+  }
 
   let durationSeconds: number
   if (useWaveSpeed || useAtlas) {
@@ -310,6 +332,7 @@ export default defineEventHandler(async (event) => {
       durationSeconds,
       firstFrameImageUrl: resolvedFrame || undefined,
       lastFrameImageUrl: resolvedLastFrame || undefined,
+      inputReferenceImageUrls: resolvedGuideFrames.length ? resolvedGuideFrames : undefined,
       generateAudio,
       negativePrompt: negativePrompt || undefined
     }

@@ -7,11 +7,15 @@ export interface CharacterVisualPromptInput {
   appearanceDescription?: string
   /** Recurring props, accessories, or tics appended to the cast line. */
   signatureDetails?: string
+  /** Never-show list. Signature lines that match it are dropped before prompting. */
+  avoidDescription?: string
   portraitUrl?: string | null
   /** Asset notes (Character Creator saves the visual prompt here). */
   portraitNotes?: string
   /** Asset metadata.prompt_used from portrait generation. */
   portraitPromptUsed?: string
+  /** When set, clothes come from the costume lock. Face plates must not supply wardrobe. */
+  wardrobeLocked?: boolean
 }
 
 /** Map cast-member or character-ref shapes into visual prompt input. */
@@ -21,19 +25,70 @@ export function castMemberToVisualInput (c: {
   traitsRoleVisual?: string
   appearanceDescription?: string
   signatureDetails?: string
+  avoidDescription?: string
   portraitUrl?: string | null
   portraitNotes?: string
   portraitPromptUsed?: string
+  wardrobeLocked?: boolean
 }): CharacterVisualPromptInput {
   return {
     name: c.name,
     roleDescription: (c.roleDescription ?? c.traitsRoleVisual ?? '').trim() || undefined,
     appearanceDescription: (c.appearanceDescription || '').trim() || undefined,
     signatureDetails: (c.signatureDetails || '').trim() || undefined,
+    avoidDescription: (c.avoidDescription || '').trim() || undefined,
     portraitUrl: c.portraitUrl,
     portraitNotes: c.portraitNotes,
-    portraitPromptUsed: c.portraitPromptUsed
+    portraitPromptUsed: c.portraitPromptUsed,
+    wardrobeLocked: c.wardrobeLocked
   }
+}
+
+function collectBanItems (avoid: string, appearance: string): string[] {
+  const items: string[] = []
+  const push = (raw: string) => {
+    const t = raw
+      .trim()
+      .toLowerCase()
+      .replace(/^(no|never|without)\s+/, '')
+      .replace(/[.:]+$/g, '')
+      .trim()
+    if (t.length >= 3) items.push(t)
+  }
+  for (const part of avoid.split(/[\n,;]+/)) push(part)
+  for (const match of appearance.matchAll(/\b(?:no|never|without)\s+([a-z][a-z0-9' -]{2,48})/gi)) {
+    push(match[1] || '')
+  }
+  return items
+}
+
+function lineContradictsBan (line: string, items: string[]): boolean {
+  const lineWords = new Set(
+    line.toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length > 3)
+  )
+  for (const item of items) {
+    const words = item.split(/[^a-z0-9]+/).filter((w) => w.length > 3)
+    if (!words.length) continue
+    const hit = words.filter((w) => lineWords.has(w)).length
+    if (words.length === 1) {
+      if (hit === 1) return true
+      continue
+    }
+    if (hit >= 2 && hit >= Math.ceil(words.length * 0.6)) return true
+  }
+  return false
+}
+
+/** Drop key-item lines that repeat something appearance or never-show already bans. */
+export function signatureLinesThatAgree (
+  signature: string,
+  avoid: string,
+  appearance: string
+): string {
+  const items = collectBanItems(avoid, appearance)
+  const lines = signature.split(/\n+/).map((l) => l.trim()).filter(Boolean)
+  if (!items.length) return lines.join('\n')
+  return lines.filter((line) => !lineContradictsBan(line, items)).join('\n')
 }
 
 const STORY_HEAVY =
@@ -70,7 +125,11 @@ export function resolveCharacterVisualDescription (input: CharacterVisualPromptI
   const role = (input.roleDescription || '').trim()
   const notes = (input.portraitNotes || '').trim()
   const promptUsed = (input.portraitPromptUsed || '').trim()
-  const signature = (input.signatureDetails || '').trim()
+  const signature = signatureLinesThatAgree(
+    input.signatureDetails || '',
+    input.avoidDescription || '',
+    input.appearanceDescription || ''
+  )
   const hasPortrait = Boolean((input.portraitUrl || '').trim())
 
   const withSignature = (base: string): string => {
@@ -82,7 +141,12 @@ export function resolveCharacterVisualDescription (input: CharacterVisualPromptI
   // Explicit appearance anchor from character profile — highest priority for continuity.
   if (appearance) {
     let base = appearance
-    if (hasPortrait && !/reference portrait|attached reference/i.test(base)) {
+    if (input.wardrobeLocked) {
+      base = `${base} Ignore any clothing in this description. Lock face, hair, age, and body only.`
+      if (hasPortrait) {
+        base = `${base} Match the attached character plate(s) for face and body. Do not copy clothes from those plates.`
+      }
+    } else if (hasPortrait && !/reference portrait|attached reference/i.test(base)) {
       base = `${base} Match the attached reference plate(s) exactly for face, proportions, and wardrobe.`
     }
     return withSignature(base)

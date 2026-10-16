@@ -4,6 +4,7 @@ import { buildFullVideoGenerationPrompt } from '~/lib/shot-character-continuity'
 import type { ProjectCharacterRef } from '~/lib/shot-character-continuity'
 import { projectCharacterRefToCastMember } from '~/lib/shot-character-continuity'
 import { buildCharacterPlateMap } from '~/lib/character-plate-refs'
+import { costumePlateUrlsById, normalizeCostumes } from '~/lib/costume-lock'
 import {
   resolveVideoNegativePromptForShot,
   stripStrictExclusionsFromPrompt
@@ -40,7 +41,8 @@ async function loadProjectCharacterRefs (
       appearanceDescription: String(row.appearance_description || ''),
       signatureDetails: String(row.signature_details || ''),
       avoidDescription: String(row.avoid_description || ''),
-      voiceDescription: String(row.voice_description || '')
+      voiceDescription: String(row.voice_description || ''),
+      costumes: normalizeCostumes(row.costumes)
     }
   })
 
@@ -62,6 +64,12 @@ async function loadProjectCharacterRefs (
       signatureDetails: c.signatureDetails || undefined,
       avoidDescription: c.avoidDescription || undefined,
       voiceDescription: c.voiceDescription || undefined,
+      costumes: c.costumes,
+      costumePlates: costumePlateUrlsById(
+        assets,
+        c.id,
+        (a) => (a.id ? projectAssetMediaPath(projectId, a.id) : (a.fileUrl || '').trim())
+      ),
       portraitUrl: hit?.url || null,
       plateUrls: hit?.plateUrls || [],
       portraitNotes: hit?.notes,
@@ -213,6 +221,7 @@ export async function buildVideoPanelPrefill (input: {
     aspectRatio: project.aspectRatio as ProjectAspectRatio,
     targetLength: project.targetLength,
     scene: {
+      id: sceneId,
       heading: String(sceneRow.heading || ''),
       summary: String(sceneRow.summary || '')
     },

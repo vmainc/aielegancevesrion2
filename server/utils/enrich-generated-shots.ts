@@ -65,6 +65,7 @@ export function enrichGeneratedShotsForContinuity (
     director: ctx.director,
     continuityMemory: ctx.continuityMemory || '',
     aspectRatio: ctx.aspectRatio,
+    sceneId: ctx.sceneId,
     sceneTitle: ctx.sceneTitle,
     sceneSummary: ctx.sceneSummary,
     cast,

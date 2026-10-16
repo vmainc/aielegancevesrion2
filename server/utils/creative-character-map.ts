@@ -1,3 +1,4 @@
+import { normalizeCostumes } from '~/lib/costume-lock'
 import type { CreativeCharacter } from '~/types/creative-project'
 
 export function pbRecordToCreativeCharacter (raw: Record<string, unknown>): CreativeCharacter {
@@ -12,7 +13,8 @@ export function pbRecordToCreativeCharacter (raw: Record<string, unknown>): Crea
     appearanceDescription: String(raw.appearance_description || ''),
     personality: String(raw.personality || ''),
     signatureDetails: String(raw.signature_details || ''),
-    avoidDescription: String(raw.avoid_description || '')
+    avoidDescription: String(raw.avoid_description || ''),
+    costumes: normalizeCostumes(raw.costumes)
   }
 }
 

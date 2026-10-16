@@ -1,5 +1,6 @@
 import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { buildCharacterPlateMap } from '~/lib/character-plate-refs'
+import { costumePlateUrlsById } from '~/lib/costume-lock'
 import type { ProjectCharacterRef } from '~/lib/shot-character-continuity'
 import type { CreativeCharacter } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
@@ -32,14 +33,12 @@ export function useProjectCharacterRefs (projectId: Ref<string> | ComputedRef<st
         $fetch<{ items: ProjectAsset[] }>(`/api/projects/${pid}/assets?kind=character`, { headers })
       ])
       const characters = charRes.characters || []
-      const plates = buildCharacterPlateMap(
-        characters,
-        assetRes.items || [],
-        (a) =>
-          a.projectId && a.id && PB_ID.test(a.projectId)
-            ? appendPlaybackAccessToken(projectAssetMediaPath(a.projectId, a.id), token)
-            : (a.fileUrl || '').trim()
-      )
+      const playback = (a: ProjectAsset) =>
+        a.projectId && a.id && PB_ID.test(a.projectId)
+          ? appendPlaybackAccessToken(projectAssetMediaPath(a.projectId, a.id), token)
+          : (a.fileUrl || '').trim()
+      const assetItems = assetRes.items || []
+      const plates = buildCharacterPlateMap(characters, assetItems, playback)
       refs.value = characters.map(c => {
         const p = plates.get(c.id)
         return {
@@ -53,7 +52,9 @@ export function useProjectCharacterRefs (projectId: Ref<string> | ComputedRef<st
           voiceDescription: c.voiceDescription || '',
           appearanceDescription: c.appearanceDescription || '',
           signatureDetails: c.signatureDetails || '',
-          avoidDescription: c.avoidDescription || ''
+          avoidDescription: c.avoidDescription || '',
+          costumes: c.costumes || [],
+          costumePlates: costumePlateUrlsById(assetItems, c.id, playback)
         }
       })
     } catch (e: unknown) {

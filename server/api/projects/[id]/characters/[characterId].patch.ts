@@ -5,6 +5,7 @@ import {
   projectIdOnCharacterRow
 } from '~/server/utils/creative-character-map'
 import { formatPocketBaseRecordError } from '~/server/utils/pb-missing-collection-error'
+import { normalizeCostumes } from '~/lib/costume-lock'
 import { syncProjectToBibleSafe } from '~/server/utils/sync-project-to-bible'
 
 function clampPct (v: unknown): number | null | undefined {
@@ -39,6 +40,7 @@ export default defineEventHandler(async (event) => {
     personality?: string
     signatureDetails?: string
     avoidDescription?: string
+    costumes?: unknown
   }>(event).catch(() => ({}))
 
   const patch: Record<string, unknown> = {}
@@ -82,6 +84,10 @@ export default defineEventHandler(async (event) => {
 
   if (body && typeof body.avoidDescription === 'string') {
     patch.avoid_description = body.avoidDescription.trim().slice(0, 2000)
+  }
+
+  if (body && Array.isArray(body.costumes)) {
+    patch.costumes = normalizeCostumes(body.costumes)
   }
 
   if (!Object.keys(patch).length) {

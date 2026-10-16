@@ -81,5 +81,7 @@ describe('set lock', () => {
       assets
     })
     expect(lock?.plateUrls).toEqual(['https://example.com/hero.jpg'])
+    expect(lock?.dressing).toEqual([])
+    expect(lock?.props).toEqual([])
   })
 })

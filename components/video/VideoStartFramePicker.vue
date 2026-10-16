@@ -154,8 +154,10 @@ const props = withDefaults(
     aspectRatio?: string
     /** v-model: staged `/api/generate/video/start-frame/…` URL or remote still URL. */
     frameImageUrl?: string | null
-    /** Start (first) vs end (last) frame labels/toasts. Staging pipeline is shared. */
-    role?: 'start' | 'end'
+    /** Start / end / mid-beat labels. Staging pipeline is shared. */
+    role?: 'start' | 'end' | 'beat'
+    /** Optional label override (e.g. timeline beat title). */
+    titleOverride?: string
     /** When set, Production Bible context is appended to the generate prompt (fail-open). */
     bibleProjectId?: string
     bibleSceneId?: string
@@ -172,6 +174,7 @@ const props = withDefaults(
     aspectRatio: '16:9',
     frameImageUrl: null,
     role: 'start',
+    titleOverride: '',
     bibleCharacterIds: () => [],
     referenceImageUrls: () => []
   }
@@ -192,36 +195,58 @@ const frameMode = ref<'upload' | 'generate'>('upload')
 const bibleDebugLine = ref('')
 
 const isEndFrame = computed(() => props.role === 'end')
-const titleLabel = computed(() => (isEndFrame.value ? 'Ending frame' : 'Starting frame'))
+const isBeatFrame = computed(() => props.role === 'beat')
+const titleLabel = computed(() => {
+  if (props.titleOverride?.trim()) return props.titleOverride.trim()
+  if (isEndFrame.value) return 'Ending frame'
+  if (isBeatFrame.value) return 'Beat still'
+  return 'Starting frame'
+})
 const helpText = computed(() =>
   isEndFrame.value
     ? 'Upload or generate where the clip should land. Models that support last-frame control (Veo, Kling, Seedance, Wan 2.7) interpolate from start toward this image.'
-    : 'Upload a still (default) or generate one from your prompt. Video models use this as the first frame (image-to-video).'
+    : isBeatFrame.value
+      ? 'Upload or generate a still for this moment on the timeline. Mid beats guide motion between start and end.'
+      : 'Upload a still (default) or generate one from your prompt. Video models use this as the first frame (image-to-video).'
 )
 const compactHelpText = computed(() =>
   isEndFrame.value
     ? 'Optional ending still — where the scene should finish.'
-    : 'Upload a still or generate from your prompt when no storyboard frame is set.'
+    : isBeatFrame.value
+      ? 'Still for this beat — guides the shot between anchors.'
+      : 'Upload a still or generate from your prompt when no storyboard frame is set.'
 )
 const generateButtonLabel = computed(() =>
-  isEndFrame.value ? 'Generate ending frame' : 'Generate starting frame'
+  isEndFrame.value
+    ? 'Generate ending frame'
+    : isBeatFrame.value
+      ? 'Generate beat still'
+      : 'Generate starting frame'
 )
 const imageModelSelectId = computed(() => {
   const role = isEndFrame.value ? 'end' : 'start'
   return props.compact ? `vg-frame-image-model-${role}-compact` : `vg-frame-image-model-${role}`
 })
 const attachedToast = computed(() =>
-  isEndFrame.value ? 'Ending frame attached.' : 'Starting frame attached.'
+  isEndFrame.value
+    ? 'Ending frame attached.'
+    : isBeatFrame.value
+      ? 'Beat still attached.'
+      : 'Starting frame attached.'
 )
 const readyToast = computed(() =>
   isEndFrame.value
     ? 'Ending frame ready — generate video when ready.'
-    : 'Starting frame ready — generate video when ready.'
+    : isBeatFrame.value
+      ? 'Beat still ready — generate video when ready.'
+      : 'Starting frame ready — generate video when ready.'
 )
 const oversizedToast = computed(() =>
   isEndFrame.value
     ? 'Previous ending frame was too large — generate or upload again.'
-    : 'Previous starting frame was too large — generate or upload again.'
+    : isBeatFrame.value
+      ? 'Previous beat still was too large — generate or upload again.'
+      : 'Previous starting frame was too large — generate or upload again.'
 )
 
 const bibleProjectRef = computed(() => props.bibleProjectId || '')
@@ -292,6 +317,8 @@ async function generateFrame () {
     let promptForApi = p
     if (isEndFrame.value) {
       promptForApi = `${p}\n\nComposition note: create a final still that shows where this shot ends — resolved action, resting pose, or landing composition suitable as the last video frame.`
+    } else if (isBeatFrame.value) {
+      promptForApi = `${p}\n\nComposition note: create a mid-shot still for this timeline beat — clear story moment between the start and end of the clip.`
     }
     if (props.bibleProjectId && PB_ID.test(props.bibleProjectId)) {
       const ctx = await productionBible.loadContextForPrompt(

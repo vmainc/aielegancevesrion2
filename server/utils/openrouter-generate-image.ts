@@ -8,6 +8,9 @@ import {
   resolveOpenRouterImageSlug
 } from '~/server/utils/openrouter-image-models'
 import { fetchReferenceImageAsDataUrl } from '~/server/utils/reference-image-data-url'
+import { characterPlateIdentityNote } from '~/lib/character-plate-refs'
+import { buildCostumePlateReferenceNote } from '~/lib/costume-lock'
+import { buildPropPlateReferenceNote } from '~/lib/prop-lock'
 import { buildSetLockReferenceNote } from '~/lib/set-lock'
 
 export interface OpenRouterGenerateImageResult {
@@ -28,6 +31,10 @@ export async function openRouterGenerateImage (options: {
   referenceImageUrls?: string[]
   /** Establishing set plates — match place, not camera. */
   setReferenceImageUrls?: string[]
+  /** Prop plates — match the object, not the photo's angle. */
+  propReferenceImageUrls?: string[]
+  /** Costume plates — clothes only, not the face. */
+  costumeReferenceImageUrls?: string[]
   /** Prior storyboard stills — same place + cast, new coverage. */
   continuityReferenceImageUrls?: string[]
   aspectRatio?: string
@@ -67,33 +74,41 @@ export async function openRouterGenerateImage (options: {
     (options.referenceImageUrl || '').trim()
   ].filter((u, i, arr) => arr.indexOf(u) === i)
   const setRefs = (options.setReferenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean)
+  const propRefs = (options.propReferenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean)
+  const costumeRefs = (options.costumeReferenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean)
   const continuityRefs = (options.continuityReferenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean)
-  const refList = [...characterRefs, ...setRefs, ...continuityRefs]
+  const refList = [...characterRefs, ...costumeRefs, ...setRefs, ...propRefs, ...continuityRefs]
     .filter((u, i, arr) => arr.indexOf(u) === i)
     .slice(0, 4)
 
   if (refList.length) {
     const perImageBudget = refList.length > 1 ? 2_200_000 : 4_000_000
     const imageParts: Array<{ type: 'image_url'; image_url: { url: string } }> = []
+    const attachedUrls: string[] = []
     for (const refUrl of refList) {
       try {
         const dataUrl = await fetchReferenceImageAsDataUrl(refUrl, perImageBudget)
         imageParts.push({ type: 'image_url', image_url: { url: dataUrl } })
+        attachedUrls.push(refUrl)
       } catch {
         /* skip broken ref */
       }
     }
     if (imageParts.length) {
+      const attached = new Set(attachedUrls)
+      const attachedCharacterCount = characterRefs.filter((u) => attached.has(u)).length
       const notes: string[] = []
-      if (characterRefs.length) {
-        notes.push(
-          characterRefs.length === 1
-            ? 'CHARACTER PLATE: use the attached portrait as the exact character design (face, proportions, materials, colors). Match it closely; do not redesign the character.'
-            : `CHARACTER PLATES: use the attached ${characterRefs.length} portraits as locked character designs. Match face, species, body, materials, colors, and style exactly. Do not invent new looks.`
-        )
-      }
-      const setNote = buildSetLockReferenceNote(setRefs.length > 0, continuityRefs.length > 0)
+      const identityNote = characterPlateIdentityNote(attachedCharacterCount)
+      const setNote = buildSetLockReferenceNote(
+        setRefs.some((u) => attached.has(u)),
+        continuityRefs.some((u) => attached.has(u))
+      )
+      const propNote = buildPropPlateReferenceNote(propRefs.filter((u) => attached.has(u)).length)
+      const costumeNote = buildCostumePlateReferenceNote(costumeRefs.filter((u) => attached.has(u)).length)
       if (setNote) notes.push(setNote)
+      if (propNote) notes.push(propNote)
+      if (costumeNote) notes.push(costumeNote)
+      if (identityNote) notes.push(identityNote)
       const refNote = notes.join(' ')
       userContent = [{ type: 'text', text: `${prompt}\n\n${refNote}` }, ...imageParts]
     } else {
