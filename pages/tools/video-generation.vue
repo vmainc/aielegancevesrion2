@@ -471,7 +471,7 @@
               <label for="vg-prompt" class="text-sm font-medium text-gray-700">Prompt</label>
               <PromptEnhanceButton v-model="prompt" context="video" />
             </div>
-            <CharacterAwarePromptInput
+            <VideoCharacterAwarePromptInput
               v-model="prompt"
               input-id="vg-prompt"
               :characters="promptMentionCharacters"

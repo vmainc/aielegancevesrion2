@@ -1,141 +1,84 @@
 <template>
   <div class="rounded-lg border border-gray-200 bg-gray-50/80 p-4 space-y-4">
-    <div class="flex flex-wrap items-start justify-between gap-2">
-      <div class="min-w-0">
-        <p class="text-xs font-medium text-gray-700">
-          Shot timeline
-          <span class="font-normal text-gray-500">(optional)</span>
-        </p>
-        <p class="text-[11px] text-gray-500 mt-0.5 leading-snug">
-          Drop stills along the clip so generation hits each beat. First and last images lock start/end frames;
-          middle beats guide motion between them.
-        </p>
-      </div>
-      <button
-        type="button"
-        class="shrink-0 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 bg-studio-slate text-gray-800 hover:bg-gray-50 disabled:opacity-40"
-        :disabled="keyframes.length >= maxKeyframes"
-        @click="addBeat"
-      >
-        + Add beat
-      </button>
+    <div class="min-w-0">
+      <p class="text-xs font-medium text-gray-700">
+        Start &amp; end frames
+        <span class="font-normal text-gray-500">(optional)</span>
+      </p>
+      <p class="text-[11px] text-gray-500 mt-0.5 leading-snug">
+        Start (and end, when supported) lock the clip as image-to-video.
+        Write the motion in the Prompt above — not in per-beat notes.
+      </p>
     </div>
 
-    <!-- Track -->
-    <div class="space-y-2">
-      <div
-        ref="trackEl"
-        class="relative h-16 rounded-lg border border-gray-200 bg-studio-slate cursor-crosshair select-none"
-        role="listbox"
-        aria-label="Keyframe timeline"
-        @click="onTrackClick"
-      >
-        <div
-          class="absolute inset-x-3 top-1/2 h-0.5 -translate-y-1/2 bg-gray-200 rounded-full"
-          aria-hidden="true"
-        />
-        <button
-          v-for="kf in sortedKeyframes"
-          :key="kf.id"
-          type="button"
-          role="option"
-          class="absolute top-1/2 -translate-x-1/2 -translate-y-1/2 group focus:outline-none focus-visible:ring-2 focus-visible:ring-primary rounded-md"
-          :style="{ left: `${percentFor(kf.atSeconds)}%` }"
-          :aria-selected="selectedId === kf.id"
-          :title="formatKeyframeTimeLabel(kf.atSeconds, durationSeconds)"
-          @click.stop="selectedId = kf.id"
-        >
-          <span
-            class="block w-11 h-11 rounded-md overflow-hidden border-2 bg-gray-100 shadow-sm transition-transform group-hover:scale-105"
-            :class="selectedId === kf.id
-              ? 'border-primary ring-2 ring-primary/30'
-              : hasImage(kf) ? 'border-gray-300' : 'border-dashed border-gray-400'"
-          >
-            <img
-              v-if="hasImage(kf)"
-              :src="kf.imageUrl!"
-              alt=""
-              class="w-full h-full object-cover"
-            >
-            <span
-              v-else
-              class="flex h-full w-full items-center justify-center text-[10px] font-semibold text-gray-500"
-            >+</span>
-          </span>
-        </button>
-      </div>
-      <div class="flex justify-between text-[10px] font-medium text-gray-500 px-0.5">
-        <span>0s</span>
-        <span>{{ durationSeconds }}s</span>
-      </div>
-    </div>
-
-    <!-- Selected beat editor -->
     <div
-      v-if="selected"
-      class="rounded-lg border border-gray-200 bg-studio-slate p-3 space-y-3"
+      class="grid gap-3"
+      :class="supportsEndFrame ? 'sm:grid-cols-2' : 'grid-cols-1'"
     >
-      <div class="flex flex-wrap items-center justify-between gap-2">
-        <p class="text-xs font-semibold text-gray-800">
-          {{ formatKeyframeTimeLabel(selected.atSeconds, durationSeconds) }}
-        </p>
-        <div class="flex items-center gap-2">
-          <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-600">
-            At
-            <input
-              :value="selected.atSeconds"
-              type="number"
-              min="0"
-              :max="durationSeconds"
-              step="0.5"
-              class="w-16 px-1.5 py-1 rounded border border-gray-300 bg-studio-slate text-gray-900 text-xs"
-              @change="onTimeChange"
-            >
-            s
-          </label>
-          <button
-            v-if="keyframes.length > 2"
-            type="button"
-            class="text-[11px] font-medium text-gray-600 hover:text-red-700"
-            @click="removeSelected"
-          >
-            Remove beat
-          </button>
-        </div>
+      <div
+        class="rounded-lg border bg-studio-slate p-3 space-y-2"
+        :class="selectedId === startKeyframe?.id
+          ? 'border-primary ring-1 ring-primary/25'
+          : 'border-gray-200'"
+      >
+        <button
+          type="button"
+          class="text-left w-full"
+          @click="selectKeyframe(startKeyframe?.id)"
+        >
+          <p class="text-[11px] font-semibold text-gray-800">
+            Start · 0s
+          </p>
+        </button>
+        <VideoStartFramePicker
+          v-if="startKeyframe"
+          :key="startKeyframe.id"
+          :frame-image-url="startKeyframe.imageUrl || null"
+          role="start"
+          title-override="Start · 0s"
+          compact
+          :prompt="frameGeneratePromptFor(startKeyframe)"
+          :aspect-ratio="aspectRatio"
+          :bible-project-id="bibleProjectId"
+          :bible-scene-id="bibleSceneId"
+          :bible-shot-id="bibleShotId"
+          :bible-character-ids="bibleCharacterIds"
+          :reference-image-urls="referenceImageUrls"
+          @update:frame-image-url="url => onFrameUrl(startKeyframe!.id, url)"
+        />
       </div>
 
-      <VideoStartFramePicker
-        :key="selected.id"
-        :frame-image-url="selected.imageUrl || null"
-        :role="pickerRole"
-        :title-override="pickerTitle"
-        compact
-        :prompt="frameGeneratePrompt"
-        :aspect-ratio="aspectRatio"
-        :bible-project-id="bibleProjectId"
-        :bible-scene-id="bibleSceneId"
-        :bible-shot-id="bibleShotId"
-        :bible-character-ids="bibleCharacterIds"
-        :reference-image-urls="referenceImageUrls"
-        @update:frame-image-url="onFrameUrl"
-      />
-
-      <div>
-        <label
-          :for="`vg-kf-note-${selected.id}`"
-          class="block text-[11px] font-medium text-gray-600 mb-1"
+      <div
+        v-if="supportsEndFrame && endKeyframe"
+        class="rounded-lg border bg-studio-slate p-3 space-y-2"
+        :class="selectedId === endKeyframe.id
+          ? 'border-primary ring-1 ring-primary/25'
+          : 'border-gray-200'"
+      >
+        <button
+          type="button"
+          class="text-left w-full"
+          @click="selectKeyframe(endKeyframe.id)"
         >
-          Beat note
-        </label>
-        <input
-          :id="`vg-kf-note-${selected.id}`"
-          :value="selected.note || ''"
-          type="text"
-          maxlength="240"
-          class="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-xs focus:outline-none focus:border-primary"
-          placeholder="e.g. camera pushes in as she turns toward the door"
-          @input="onNoteInput"
-        >
+          <p class="text-[11px] font-semibold text-gray-800">
+            End · {{ durationSeconds }}s
+          </p>
+        </button>
+        <VideoStartFramePicker
+          :key="endKeyframe.id"
+          :frame-image-url="endKeyframe.imageUrl || null"
+          role="end"
+          :title-override="`End · ${durationSeconds}s`"
+          compact
+          :prompt="frameGeneratePromptFor(endKeyframe)"
+          :aspect-ratio="aspectRatio"
+          :bible-project-id="bibleProjectId"
+          :bible-scene-id="bibleSceneId"
+          :bible-shot-id="bibleShotId"
+          :bible-character-ids="bibleCharacterIds"
+          :reference-image-urls="referenceImageUrls"
+          @update:frame-image-url="url => onFrameUrl(endKeyframe.id, url)"
+        />
       </div>
     </div>
 
@@ -143,7 +86,7 @@
       v-if="supportsEndFrame === false"
       class="text-[11px] text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2"
     >
-      This model only locks the starting frame. Later beats still guide the prompt (and mid stills as references when supported).
+      This model only locks the starting frame. End frame is unavailable.
     </p>
     <p
       v-else-if="endFrameCompatibilityWarn"
@@ -151,6 +94,78 @@
     >
       {{ endFrameCompatibilityHint }}
     </p>
+
+    <div class="border-t border-gray-200 pt-4 space-y-3">
+      <div class="flex flex-wrap items-start justify-between gap-2">
+        <div class="min-w-0">
+          <p class="text-xs font-medium text-gray-700">
+            Mid beats
+            <span class="font-normal text-gray-500">(optional)</span>
+          </p>
+          <p class="text-[11px] text-gray-500 mt-0.5 leading-snug">
+            Text cues only — timing notes appended to the prompt.
+            They do not insert extra stills into the render (most models only take start/end images).
+          </p>
+        </div>
+        <button
+          type="button"
+          class="shrink-0 px-2.5 py-1.5 text-xs font-semibold rounded-lg border border-gray-300 bg-studio-slate text-gray-800 hover:bg-gray-50 disabled:opacity-40"
+          :disabled="keyframes.length >= maxKeyframes"
+          @click="addBeat"
+        >
+          + Add beat
+        </button>
+      </div>
+
+      <p
+        v-if="!midKeyframes.length"
+        class="text-[11px] text-gray-500"
+      >
+        No mid beats. Add one if you want a timed cue between start and end.
+      </p>
+
+      <ul
+        v-else
+        class="space-y-2"
+      >
+        <li
+          v-for="kf in midKeyframes"
+          :key="kf.id"
+          class="rounded-lg border border-gray-200 bg-studio-slate p-3 space-y-2"
+        >
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="inline-flex items-center gap-1.5 text-[11px] text-gray-600">
+              At
+              <input
+                :value="kf.atSeconds"
+                type="number"
+                min="0.5"
+                :max="Math.max(0.5, durationSeconds - 0.5)"
+                step="0.5"
+                class="w-16 px-1.5 py-1 rounded border border-gray-300 bg-studio-slate text-gray-900 text-xs"
+                @change="onMidTimeChange(kf.id, $event)"
+              >
+              s
+            </label>
+            <button
+              type="button"
+              class="text-[11px] font-medium text-gray-600 hover:text-red-700"
+              @click="removeBeat(kf.id)"
+            >
+              Remove
+            </button>
+          </div>
+          <input
+            :value="kf.note || ''"
+            type="text"
+            maxlength="240"
+            class="w-full px-2.5 py-1.5 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-xs focus:outline-none focus:border-primary"
+            placeholder="e.g. he turns from the doorway toward the screen"
+            @input="onNoteInput(kf.id, $event)"
+          >
+        </li>
+      </ul>
+    </div>
   </div>
 </template>
 
@@ -195,13 +210,29 @@ const emit = defineEmits<{
   'update:keyframes': [value: VideoTimelineKeyframe[]]
 }>()
 
-const trackEl = ref<HTMLElement | null>(null)
 const selectedId = ref<string | null>(null)
 
 const sortedKeyframes = computed(() => sortTimelineKeyframes(props.keyframes))
 
-const selected = computed(() =>
-  sortedKeyframes.value.find(k => k.id === selectedId.value) || sortedKeyframes.value[0] || null
+const startKeyframe = computed(() =>
+  sortedKeyframes.value.find(k => k.atSeconds <= 0.05) || sortedKeyframes.value[0] || null
+)
+
+const endKeyframe = computed(() => {
+  const dur = props.durationSeconds
+  return (
+    sortedKeyframes.value.find(k => Math.abs(k.atSeconds - dur) < 0.05) ||
+    sortedKeyframes.value[sortedKeyframes.value.length - 1] ||
+    null
+  )
+})
+
+const midKeyframes = computed(() =>
+  sortedKeyframes.value.filter((k) => {
+    if (startKeyframe.value && k.id === startKeyframe.value.id) return false
+    if (endKeyframe.value && k.id === endKeyframe.value.id) return false
+    return true
+  })
 )
 
 watch(
@@ -212,46 +243,44 @@ watch(
       return
     }
     if (!selectedId.value || !list.some(k => k.id === selectedId.value)) {
-      selectedId.value = list[0].id
+      selectedId.value = startKeyframe.value?.id || list[0].id
     }
   },
   { immediate: true }
 )
 
-const pickerRole = computed<'start' | 'end' | 'beat'>(() => {
-  const s = selected.value
-  if (!s) return 'start'
-  if (s.atSeconds <= 0.05) return 'start'
-  if (Math.abs(s.atSeconds - props.durationSeconds) < 0.05) return 'end'
-  return 'beat'
-})
+/** Mid beats must stay text-only — strip stray images from older sessions. */
+watch(
+  () => props.keyframes,
+  (frames) => {
+    const dur = props.durationSeconds
+    let dirty = false
+    const next = frames.map((f) => {
+      const isStart = f.atSeconds <= 0.05
+      const isEnd = Math.abs(f.atSeconds - dur) < 0.05
+      if (!isStart && !isEnd && (f.imageUrl || '').trim()) {
+        dirty = true
+        return { ...f, imageUrl: null }
+      }
+      return f
+    })
+    if (dirty) emit('update:keyframes', sortTimelineKeyframes(next))
+  },
+  { immediate: true, deep: true }
+)
 
-const pickerTitle = computed(() => {
-  const s = selected.value
-  if (!s) return ''
-  return formatKeyframeTimeLabel(s.atSeconds, props.durationSeconds)
-})
+function selectKeyframe (id: string | undefined) {
+  if (id) selectedId.value = id
+}
 
-const frameGeneratePrompt = computed(() => {
+function frameGeneratePromptFor (kf: VideoTimelineKeyframe): string {
   const base = props.prompt.trim()
-  const s = selected.value
-  if (!s) return base
-  const note = (s.note || '').trim()
-  const label = formatKeyframeTimeLabel(s.atSeconds, props.durationSeconds)
+  const note = (kf.note || '').trim()
+  const label = formatKeyframeTimeLabel(kf.atSeconds, props.durationSeconds)
   const beat = note
     ? `Keyframe at ${label}: ${note}`
     : `Keyframe still at ${label} in this shot — clear story beat for image-to-video.`
   return base ? `${base}\n\n${beat}` : beat
-})
-
-function hasImage (kf: VideoTimelineKeyframe): boolean {
-  return Boolean((kf.imageUrl || '').trim())
-}
-
-function percentFor (at: number): number {
-  const dur = Math.max(1, props.durationSeconds)
-  const pct = (at / dur) * 100
-  return Math.max(4, Math.min(96, pct))
 }
 
 function commit (next: VideoTimelineKeyframe[]) {
@@ -260,48 +289,33 @@ function commit (next: VideoTimelineKeyframe[]) {
 
 function addBeat () {
   if (props.keyframes.length >= props.maxKeyframes) return
-  const next = addTimelineKeyframe(props.keyframes, props.durationSeconds)
+  const next = addTimelineKeyframe(props.keyframes, props.durationSeconds).map((f) => {
+    const isStart = f.atSeconds <= 0.05
+    const isEnd = Math.abs(f.atSeconds - props.durationSeconds) < 0.05
+    if (!isStart && !isEnd) return { ...f, imageUrl: null }
+    return f
+  })
   const added = next.find(k => !props.keyframes.some(p => p.id === k.id))
   commit(next)
   if (added) selectedId.value = added.id
 }
 
-function removeSelected () {
-  const id = selected.value?.id
-  if (!id) return
+function removeBeat (id: string) {
   commit(removeTimelineKeyframe(props.keyframes, id))
 }
 
-function onFrameUrl (url: string | null) {
-  const id = selected.value?.id
-  if (!id) return
+function onFrameUrl (id: string, url: string | null) {
   commit(updateTimelineKeyframe(props.keyframes, id, { imageUrl: url }, props.durationSeconds))
 }
 
-function onNoteInput (event: Event) {
-  const id = selected.value?.id
-  if (!id) return
+function onNoteInput (id: string, event: Event) {
   const note = (event.target as HTMLInputElement).value
   commit(updateTimelineKeyframe(props.keyframes, id, { note }, props.durationSeconds))
 }
 
-function onTimeChange (event: Event) {
-  const id = selected.value?.id
-  if (!id) return
+function onMidTimeChange (id: string, event: Event) {
   const raw = Number((event.target as HTMLInputElement).value)
-  commit(updateTimelineKeyframe(props.keyframes, id, { atSeconds: raw }, props.durationSeconds))
-}
-
-function onTrackClick (event: MouseEvent) {
-  const el = trackEl.value
-  if (!el || props.keyframes.length >= props.maxKeyframes) return
-  const rect = el.getBoundingClientRect()
-  const x = event.clientX - rect.left
-  const ratio = Math.max(0, Math.min(1, x / rect.width))
-  const at = ratio * props.durationSeconds
-  const next = addTimelineKeyframe(props.keyframes, props.durationSeconds, at)
-  const added = next.find(k => !props.keyframes.some(p => p.id === k.id))
-  commit(next)
-  if (added) selectedId.value = added.id
+  const clamped = Math.max(0.5, Math.min(props.durationSeconds - 0.5, raw))
+  commit(updateTimelineKeyframe(props.keyframes, id, { atSeconds: clamped }, props.durationSeconds))
 }
 </script>

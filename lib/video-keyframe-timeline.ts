@@ -75,23 +75,41 @@ export function deriveStartEndFromTimeline (frames: VideoTimelineKeyframe[]): {
   startFrameUrl: string | null
   endFrameUrl: string | null
 } {
-  const withImages = sortTimelineKeyframes(frames).filter(f => (f.imageUrl || '').trim())
-  if (!withImages.length) {
+  const sorted = sortTimelineKeyframes(frames)
+  if (!sorted.length) {
     return { startFrameUrl: null, endFrameUrl: null }
   }
-  const start = withImages[0].imageUrl!.trim()
-  const end = withImages[withImages.length - 1].imageUrl!.trim()
+  const dur = Math.max(
+    ...sorted.map(f => f.atSeconds),
+    1
+  )
+  const startSlot = sorted.find(f => f.atSeconds <= 0.05) || sorted[0]
+  const endSlot =
+    sorted.find(f => Math.abs(f.atSeconds - dur) < 0.05) ||
+    sorted[sorted.length - 1]
+  const start = (startSlot?.imageUrl || '').trim() || null
+  const end = (endSlot?.imageUrl || '').trim() || null
   return {
     startFrameUrl: start,
-    endFrameUrl: end !== start ? end : null
+    endFrameUrl: end && end !== start ? end : null
   }
 }
 
-/** Mid keyframes (not first/last image anchors) — guidance refs + prompt beats. */
+/**
+ * Mid keyframe image URLs — retained for callers, but the UI no longer attaches
+ * mid stills (most models only lock start/end). Prefer empty in new sessions.
+ */
 export function middleTimelineKeyframeUrls (frames: VideoTimelineKeyframe[]): string[] {
-  const withImages = sortTimelineKeyframes(frames).filter(f => (f.imageUrl || '').trim())
-  if (withImages.length <= 2) return []
-  return withImages.slice(1, -1).map(f => f.imageUrl!.trim()).filter(Boolean)
+  const sorted = sortTimelineKeyframes(frames)
+  if (sorted.length <= 2) return []
+  const dur = Math.max(...sorted.map(f => f.atSeconds), 1)
+  return sorted
+    .filter((f) => {
+      if (f.atSeconds <= 0.05) return false
+      if (Math.abs(f.atSeconds - dur) < 0.05) return false
+      return Boolean((f.imageUrl || '').trim())
+    })
+    .map(f => f.imageUrl!.trim())
 }
 
 export function formatKeyframeTimeLabel (atSeconds: number, durationSeconds: number): string {
@@ -105,7 +123,8 @@ export function formatKeyframeTimeLabel (atSeconds: number, durationSeconds: num
 
 /**
  * Append timed beat guidance so models stay on track between start/end frames.
- * Image-bearing beats are noted as visual anchors; notes are included when present.
+ * Start/end stills are real image locks when the model supports them.
+ * Mid beats are text cues only — never claim a mid still is attached to the render.
  */
 export function appendKeyframeTimelineGuidance (
   prompt: string,
@@ -113,20 +132,35 @@ export function appendKeyframeTimelineGuidance (
   durationSeconds: number
 ): string {
   const base = prompt.trim()
-  const sorted = sortTimelineKeyframes(frames).filter(
-    f => (f.imageUrl || '').trim() || (f.note || '').trim()
-  )
-  if (sorted.length < 1) return base
-
   const dur = Math.max(1, Math.floor(Number(durationSeconds) || 1))
-  const lines = sorted.map((f) => {
+  const sorted = sortTimelineKeyframes(frames)
+  const lines: string[] = []
+
+  for (const f of sorted) {
     const t = clampKeyframeSeconds(f.atSeconds, dur)
+    const isStart = t <= 0.05
+    const isEnd = Math.abs(t - dur) < 0.05
+    const note = (f.note || '').trim()
+    const hasImage = Boolean((f.imageUrl || '').trim())
     const label = formatKeyframeTimeLabel(t, dur)
-    const parts: string[] = []
-    if ((f.imageUrl || '').trim()) parts.push('match the attached still for this beat')
-    if ((f.note || '').trim()) parts.push(f.note!.trim())
-    return `- ${label}: ${parts.join(' — ') || 'hold composition continuity'}`
-  })
+
+    if (isStart || isEnd) {
+      if (!hasImage && !note) continue
+      const parts: string[] = []
+      if (hasImage) {
+        parts.push(isStart ? 'hold the start-frame still' : 'land on the end-frame still')
+      }
+      if (note) parts.push(note)
+      lines.push(`- ${label}: ${parts.join(' — ')}`)
+      continue
+    }
+
+    // Mid beats: text only
+    if (!note) continue
+    lines.push(`- ${label}: ${note}`)
+  }
+
+  if (!lines.length) return base
 
   const block = [
     'SHOT TIMELINE (hit these beats in order; interpolate smoothly between them — do not jump-cut):',
