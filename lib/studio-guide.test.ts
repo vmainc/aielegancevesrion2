@@ -8,6 +8,8 @@ import {
   formatStudioGuideBriefAsConceptNotes,
   parseStudioGuideProjectBrief,
   studioGuideBriefIsReady,
+  studioGuideChatsStorageKey,
+  studioGuideLegacyStorageKey,
   titleFromStudioGuideMessages,
   upsertStudioGuideChat
 } from '../lib/studio-guide'
@@ -33,6 +35,9 @@ describe('validateStudioGuidePath', () => {
     )
     expect(validateStudioGuidePath(`/projects/${PROJECT_B}/storyboard`, ALLOWED)).toBe(
       `/projects/${PROJECT_B}/storyboard`
+    )
+    expect(validateStudioGuidePath(`/projects/${PROJECT_A}/locations`, ALLOWED)).toBe(
+      `/projects/${PROJECT_A}/locations`
     )
   })
 
@@ -257,5 +262,18 @@ describe('studio guide chat sessions', () => {
     store = deleteStudioGuideChat(store, b.id)
     expect(store.activeChatId).toBe(a.id)
     expect(store.chats.map(c => c.id)).toEqual([a.id])
+  })
+})
+
+describe('studioGuideChatsStorageKey', () => {
+  it('scopes chats per user id and uses anon when logged out', () => {
+    expect(studioGuideChatsStorageKey('abc123xyzabc123')).toBe(
+      'aielegance-studio-guide-chats:u:abc123xyzabc123'
+    )
+    expect(studioGuideChatsStorageKey(null)).toBe('aielegance-studio-guide-chats:anon')
+    expect(studioGuideChatsStorageKey('')).toBe('aielegance-studio-guide-chats:anon')
+    expect(studioGuideLegacyStorageKey('abc123xyzabc123')).toBe(
+      'aielegance-studio-guide:u:abc123xyzabc123'
+    )
   })
 })

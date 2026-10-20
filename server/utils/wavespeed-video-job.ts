@@ -3,9 +3,8 @@ import { parseVideoStartFrameRef, VIDEO_START_FRAME_PATH_PREFIX } from '~/lib/vi
 import {
   WAVESPEED_GENERATE_URL,
   WAVESPEED_PREDICTION_RESULT_URL,
-  WAVESPEED_SEEDANCE_25_I2V_TURBO,
-  WAVESPEED_SEEDANCE_25_T2V_TURBO,
   parseWaveSpeedPrediction,
+  waveSpeedSeedanceModelPaths,
   snapWaveSpeedSeedanceDuration,
   waveSpeedPredictionIsTerminalFailure,
   waveSpeedPredictionIsTerminalSuccess,
@@ -15,6 +14,7 @@ import {
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import { normalizeProviderOrigin } from '~/server/utils/video-repair-public-url'
 import { getVideoRepairPublicBaseUrl } from '~/server/utils/video-repair-config'
+import { planVideoCharacterReferences, type CharacterReferenceImage } from '~/lib/video-character-references'
 
 type WaveEnvelope = Record<string, unknown>
 
@@ -82,6 +82,28 @@ export function resolveWaveSpeedPublicImageUrl (
     return `${siteOrigin}${VIDEO_START_FRAME_PATH_PREFIX}${stagedId}`
   }
 
+  if (u.startsWith('/api/projects/') || u.startsWith('/api/generate/')) {
+    if (!siteOrigin) {
+      throw createError({
+        statusCode: 500,
+        message:
+          'WaveSpeed needs a public site URL for project images. Set VIDEO_REPAIR_PUBLIC_BASE_URL=https://aifilmstud.io on the server.'
+      })
+    }
+    return `${siteOrigin}${u.startsWith('/') ? u : `/${u}`}`
+  }
+
+  if (u.startsWith('/api/projects/') || u.startsWith('/api/generate/')) {
+    if (!siteOrigin) {
+      throw createError({
+        statusCode: 500,
+        message:
+          'WaveSpeed needs a public site URL for project images. Set VIDEO_REPAIR_PUBLIC_BASE_URL=https://aifilmstud.io on the server.'
+      })
+    }
+    return `${siteOrigin}${u}`
+  }
+
   if (u.startsWith('/pb/') || u.startsWith('/api/files/')) {
     if (!pubPb) {
       throw createError({
@@ -137,6 +159,8 @@ export interface WaveSpeedVideoStartResult {
 
 export async function startWaveSpeedVideoJob (options: {
   prompt: string
+  /** OpenRouter picker id (`bytedance/seedance-2.5`, `2.0`, `2.0-fast`, `2.0-mini`). */
+  modelId?: string
   apiKey: string
   aspectRatio?: string
   resolution?: string
@@ -144,6 +168,9 @@ export async function startWaveSpeedVideoJob (options: {
   firstFrameImageUrl?: string
   lastFrameImageUrl?: string
   generateAudio?: boolean
+  /** Lookbook headshots. Sent as WaveSpeed reference_images with the start and end frames. */
+  characterReferenceImageUrls?: string[]
+  characterReferences?: CharacterReferenceImage[]
   publicPocketbaseUrl?: string
   sitePublicBaseUrl?: string
 }): Promise<WaveSpeedVideoStartResult> {
@@ -154,8 +181,18 @@ export async function startWaveSpeedVideoJob (options: {
 
   const firstFrameRaw = options.firstFrameImageUrl?.trim() || ''
   const lastFrameRaw = options.lastFrameImageUrl?.trim() || ''
-  const useI2v = Boolean(firstFrameRaw || lastFrameRaw)
-  const modelPath = useI2v ? WAVESPEED_SEEDANCE_25_I2V_TURBO : WAVESPEED_SEEDANCE_25_T2V_TURBO
+  const visual = planVideoCharacterReferences({
+    prompt,
+    model: 'bytedance/seedance-2.5',
+    firstFrameUrl: firstFrameRaw,
+    lastFrameUrl: lastFrameRaw,
+    characterReferenceUrls: options.characterReferenceImageUrls,
+    characterReferences: options.characterReferences
+  })
+  const useReferences = visual.mode === 'references'
+  const useI2v = !useReferences && Boolean(firstFrameRaw || lastFrameRaw)
+  const paths = waveSpeedSeedanceModelPaths(options.modelId || 'bytedance/seedance-2.5')
+  const modelPath = useI2v ? paths.imageToVideo : paths.textToVideo
 
   const urlOpts = {
     publicPocketbaseUrl: options.publicPocketbaseUrl,
@@ -163,13 +200,21 @@ export async function startWaveSpeedVideoJob (options: {
   }
 
   const body: Record<string, unknown> = {
-    prompt,
-    duration: snapWaveSpeedSeedanceDuration(options.durationSeconds ?? 5),
+    prompt: (useReferences ? visual.prompt : prompt).slice(0, 8000),
+    duration: Math.min(
+      paths.maxDuration,
+      snapWaveSpeedSeedanceDuration(options.durationSeconds ?? 5)
+    ),
     resolution: waveSpeedSeedanceResolution(options.resolution),
     generate_audio: options.generateAudio !== false
   }
 
-  if (useI2v) {
+  if (useReferences && visual.mode === 'references') {
+    body.aspect_ratio = waveSpeedSeedanceAspectRatio(options.aspectRatio)
+    body.reference_images = visual.referenceUrls.map((url) =>
+      resolveWaveSpeedPublicImageUrl(url, urlOpts)
+    )
+  } else if (useI2v) {
     const image = resolveWaveSpeedPublicImageUrl(firstFrameRaw || lastFrameRaw, urlOpts)
     body.image = image
     if (firstFrameRaw && lastFrameRaw) {
@@ -299,6 +344,8 @@ export async function waveSpeedGenerateVideo (options: {
   firstFrameImageUrl?: string
   lastFrameImageUrl?: string
   generateAudio?: boolean
+  characterReferenceImageUrls?: string[]
+  characterReferences?: CharacterReferenceImage[]
   publicPocketbaseUrl?: string
   sitePublicBaseUrl?: string
 }): Promise<{ jobId: string; videoUrl: string; model: string; status: string }> {

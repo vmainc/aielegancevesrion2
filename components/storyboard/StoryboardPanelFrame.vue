@@ -8,7 +8,10 @@
         : ''
     ]"
   >
-    <p class="absolute top-1.5 left-1.5 z-20 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-gray-950/80 text-gray-200 pointer-events-none">
+    <p
+      v-if="panelImageSrc(shot, role)"
+      class="absolute top-1.5 left-1.5 z-20 w-fit max-w-[calc(100%-4rem)] truncate px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide rounded bg-gray-950/80 text-gray-200 pointer-events-none"
+    >
       {{ roleLabel }}
     </p>
     <button

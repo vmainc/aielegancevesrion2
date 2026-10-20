@@ -24,6 +24,9 @@ export type OpenRouterVideoGenerateInput = {
   frameImageUrl?: string
   /** Ending still — OpenRouter `last_frame` (Veo, Kling, Seedance, Wan 2.7, etc.). */
   lastFrameImageUrl?: string
+  /** Lookbook headshots for the selected cast. Seedance receives these as identity references. */
+  referenceImageUrls?: string[]
+  characterReferences?: Array<{ name: string; description: string; imageUrl: string }>
   supportedDurations?: number[]
   supportedResolutions?: string[]
   /** Rare opt-in: OpenRouter model-synthesized audio. Default false. */
@@ -86,6 +89,15 @@ export async function generateOpenRouterVideo (
       durationSeconds,
       frameImageUrl,
       lastFrameImageUrl,
+      referenceImageUrls: (input.referenceImageUrls || []).map((u) => u.trim()).filter(Boolean).slice(0, 6),
+      characterReferences: (input.characterReferences || [])
+        .map((c) => ({
+          name: (c.name || '').trim(),
+          description: (c.description || '').trim().slice(0, 1200),
+          imageUrl: (c.imageUrl || '').trim()
+        }))
+        .filter((c) => c.imageUrl)
+        .slice(0, 6),
       generateAudio: wantsAudio,
       includeSpokenDialogue: input.includeSpokenDialogue === true,
       includeAmbientSound: input.includeAmbientSound === true,

@@ -39,6 +39,21 @@ describe('set lock', () => {
     expect(hit?.name).toBe('Red Booth Diner')
   })
 
+  it('prefers a sub-place over the parent building', () => {
+    const hit = matchLocationEntity('INT. PENTAGON - WAR ROOM - CONTINUOUS', [
+      loc({ id: 'ext', name: 'Pentagon' }),
+      loc({ id: 'wr', name: 'War Room', aliases: ['Pentagon War Room'] })
+    ])
+    expect(hit?.id).toBe('wr')
+  })
+
+  it('falls back to the parent place when the sub-place is not in the bible', () => {
+    const hit = matchLocationEntity('INT. THE OBJECT - HOLDING ROOM - MOMENTS LATER', [
+      loc({ id: 'obj', name: 'The Object' })
+    ])
+    expect(hit?.name).toBe('The Object')
+  })
+
   it('builds a lock that keeps architecture but forbids copying camera', () => {
     const lock = resolveSetLock({
       sceneHeading: 'INT. RED BOOTH DINER - NIGHT',

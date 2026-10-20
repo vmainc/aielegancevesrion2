@@ -88,8 +88,8 @@ export async function openRouterGenerateImage (options: {
       if (characterRefs.length) {
         notes.push(
           characterRefs.length === 1
-            ? 'CHARACTER PLATE: use the attached portrait as the exact character design (face, proportions, materials, colors). Match it closely; do not redesign the character.'
-            : `CHARACTER PLATES: use the attached ${characterRefs.length} portraits as locked character designs. Match face, species, body, materials, colors, and style exactly. Do not invent new looks.`
+            ? 'CHARACTER HEADSHOT LOCK: the attached portrait is the exact face identity. Match eyes, nose, mouth, bone structure, hairline, and facial hair exactly (clean-shaven vs beard/mustache — do not invent or remove a beard). Then match body, materials, and colors. Do not redesign the character.'
+            : `CHARACTER HEADSHOT LOCK: the first attached portraits are lookbook headshots for each person. For every character, lock face identity first — eyes, nose, mouth, bone structure, hairline, and facial hair (clean-shaven vs beard/mustache). Do not invent or remove a beard. Keep each character distinct; do not blend faces.`
         )
       }
       const setNote = buildSetLockReferenceNote(setRefs.length > 0, continuityRefs.length > 0)

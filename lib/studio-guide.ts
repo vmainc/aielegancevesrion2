@@ -84,13 +84,6 @@ export const STUDIO_GUIDE_STATIC_DESTINATIONS: StudioGuideDestination[] = [
     kind: 'static'
   },
   {
-    id: 'fix-shot',
-    label: 'Fix Shot',
-    description: 'Repair an existing clip without regenerating the whole shot.',
-    path: '/tools/fix-shot',
-    kind: 'static'
-  },
-  {
     id: 'music-generation',
     label: 'Generate music',
     description: 'Create soundtrack and music cues.',
@@ -154,6 +147,7 @@ export const STUDIO_GUIDE_PROJECT_SUFFIXES = [
   '/overview',
   '/home',
   '/characters',
+  '/locations',
   '/director',
   '/scenes',
   '/storyboard',
@@ -195,6 +189,12 @@ export const STUDIO_GUIDE_PROJECT_DESTINATIONS: Array<{
     suffix: '/characters'
   },
   {
+    id: 'project-locations',
+    label: 'Locations',
+    description: 'Set bible — upload or generate establishing plates for each place.',
+    suffix: '/locations'
+  },
+  {
     id: 'project-director',
     label: 'Director',
     description: 'Visual tone and director bible.',
@@ -211,12 +211,33 @@ export const STUDIO_GUIDE_PROJECT_DESTINATIONS: Array<{
     label: 'Storyboard',
     description: 'Panels, start/end frames, and Generate video when both frames are ready.',
     suffix: '/storyboard'
+  },
+  {
+    id: 'project-video',
+    label: 'Generated Videos',
+    description: 'All clips saved to this project — drag to reorder.',
+    suffix: '/video'
   }
 ]
 
 export const STUDIO_GUIDE_STORAGE_KEY = 'aielegance-studio-guide'
 /** Multi-chat store (ChatGPT-style). Migrates from legacy single-thread key. */
 export const STUDIO_GUIDE_CHATS_STORAGE_KEY = 'aielegance-studio-guide-chats'
+
+/** Per-user localStorage key so chats never leak across accounts on a shared browser. */
+export function studioGuideChatsStorageKey (userId: string | null | undefined): string {
+  const id = (userId || '').trim()
+  return id
+    ? `${STUDIO_GUIDE_CHATS_STORAGE_KEY}:u:${id}`
+    : `${STUDIO_GUIDE_CHATS_STORAGE_KEY}:anon`
+}
+
+export function studioGuideLegacyStorageKey (userId: string | null | undefined): string {
+  const id = (userId || '').trim()
+  return id
+    ? `${STUDIO_GUIDE_STORAGE_KEY}:u:${id}`
+    : `${STUDIO_GUIDE_STORAGE_KEY}:anon`
+}
 
 export type StudioGuideChat = {
   id: string
@@ -465,11 +486,63 @@ function parseChat (raw: unknown): StudioGuideChat | null {
   return { id: o.id, title, messages, createdAt, updatedAt }
 }
 
+function parseChatStoreRaw (raw: string | null): StudioGuideChatStore | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object') return null
+    const o = parsed as Record<string, unknown>
+    const chats = Array.isArray(o.chats)
+      ? o.chats.map(parseChat).filter((c): c is StudioGuideChat => !!c)
+      : []
+    const activeChatId =
+      typeof o.activeChatId === 'string' && chats.some(c => c.id === o.activeChatId)
+        ? o.activeChatId
+        : chats[0]?.id || null
+    return { version: 1, activeChatId, chats }
+  } catch {
+    return null
+  }
+}
+
+/**
+ * One-time move of the pre-user-scoped global keys into this user's bucket.
+ * Only runs when the user-scoped store is empty so later logins never inherit
+ * another account's history.
+ */
+function migrateGlobalStudioGuideStoreIfNeeded (userId: string | null | undefined): void {
+  if (typeof localStorage === 'undefined') return
+  const id = (userId || '').trim()
+  if (!id) return
+  const userKey = studioGuideChatsStorageKey(id)
+  if (localStorage.getItem(userKey)) return
+
+  const globalChats = localStorage.getItem(STUDIO_GUIDE_CHATS_STORAGE_KEY)
+  const globalLegacy = localStorage.getItem(STUDIO_GUIDE_STORAGE_KEY)
+  if (!globalChats && !globalLegacy) return
+
+  try {
+    if (globalChats) localStorage.setItem(userKey, globalChats)
+    if (globalLegacy) {
+      localStorage.setItem(studioGuideLegacyStorageKey(id), globalLegacy)
+    }
+    localStorage.removeItem(STUDIO_GUIDE_CHATS_STORAGE_KEY)
+    localStorage.removeItem(STUDIO_GUIDE_STORAGE_KEY)
+  } catch {
+    /* quota / private mode */
+  }
+}
+
 /** Legacy single-thread message array. */
-export function loadStudioGuideMessages (): StudioGuideChatMessage[] {
+export function loadStudioGuideMessages (
+  userId?: string | null
+): StudioGuideChatMessage[] {
   if (typeof localStorage === 'undefined') return []
   try {
-    const raw = localStorage.getItem(STUDIO_GUIDE_STORAGE_KEY)
+    const raw =
+      localStorage.getItem(studioGuideLegacyStorageKey(userId)) ||
+      // Fallback only when no user yet (anon); never read global into another user.
+      (!(userId || '').trim() ? localStorage.getItem(STUDIO_GUIDE_STORAGE_KEY) : null)
     if (!raw) return []
     const parsed = JSON.parse(raw) as unknown
     if (!Array.isArray(parsed)) return []
@@ -479,39 +552,36 @@ export function loadStudioGuideMessages (): StudioGuideChatMessage[] {
   }
 }
 
-export function saveStudioGuideMessages (messages: StudioGuideChatMessage[]): void {
+export function saveStudioGuideMessages (
+  messages: StudioGuideChatMessage[],
+  userId?: string | null
+): void {
   if (typeof localStorage === 'undefined') return
   try {
-    localStorage.setItem(STUDIO_GUIDE_STORAGE_KEY, JSON.stringify(messages.slice(-80)))
+    localStorage.setItem(
+      studioGuideLegacyStorageKey(userId),
+      JSON.stringify(messages.slice(-80))
+    )
   } catch {
     /* quota / private mode */
   }
 }
 
-export function loadStudioGuideChatStore (): StudioGuideChatStore {
+export function loadStudioGuideChatStore (
+  userId?: string | null
+): StudioGuideChatStore {
   if (typeof localStorage === 'undefined') return emptyStudioGuideChatStore()
+  migrateGlobalStudioGuideStoreIfNeeded(userId)
+
   try {
-    const raw = localStorage.getItem(STUDIO_GUIDE_CHATS_STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw) as unknown
-      if (parsed && typeof parsed === 'object') {
-        const o = parsed as Record<string, unknown>
-        const chats = Array.isArray(o.chats)
-          ? o.chats.map(parseChat).filter((c): c is StudioGuideChat => !!c)
-          : []
-        let activeChatId =
-          typeof o.activeChatId === 'string' && chats.some(c => c.id === o.activeChatId)
-            ? o.activeChatId
-            : chats[0]?.id || null
-        return { version: 1, activeChatId, chats }
-      }
-    }
+    const scoped = parseChatStoreRaw(localStorage.getItem(studioGuideChatsStorageKey(userId)))
+    if (scoped) return scoped
   } catch {
     /* fall through to migrate */
   }
 
-  // Migrate legacy single thread into one chat.
-  const legacy = loadStudioGuideMessages()
+  // Migrate legacy single thread into one chat (user-scoped).
+  const legacy = loadStudioGuideMessages(userId)
   if (legacy.length) {
     const now = new Date().toISOString()
     const chat: StudioGuideChat = {
@@ -526,14 +596,17 @@ export function loadStudioGuideChatStore (): StudioGuideChatStore {
       activeChatId: chat.id,
       chats: [chat]
     }
-    saveStudioGuideChatStore(store)
+    saveStudioGuideChatStore(store, userId)
     return store
   }
 
   return emptyStudioGuideChatStore()
 }
 
-export function saveStudioGuideChatStore (store: StudioGuideChatStore): void {
+export function saveStudioGuideChatStore (
+  store: StudioGuideChatStore,
+  userId?: string | null
+): void {
   if (typeof localStorage === 'undefined') return
   try {
     const chats = store.chats
@@ -549,12 +622,12 @@ export function saveStudioGuideChatStore (store: StudioGuideChatStore): void {
         ? store.activeChatId
         : chats[0]?.id || null
     localStorage.setItem(
-      STUDIO_GUIDE_CHATS_STORAGE_KEY,
+      studioGuideChatsStorageKey(userId),
       JSON.stringify({ version: 1, activeChatId, chats } satisfies StudioGuideChatStore)
     )
     // Keep legacy key in sync with active chat for older code paths.
     const active = chats.find(c => c.id === activeChatId)
-    saveStudioGuideMessages(active?.messages || [])
+    saveStudioGuideMessages(active?.messages || [], userId)
   } catch {
     /* quota / private mode */
   }

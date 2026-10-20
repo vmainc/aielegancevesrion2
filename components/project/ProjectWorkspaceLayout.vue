@@ -158,8 +158,10 @@ const sectionLabels: Record<string, string> = {
   overview: 'Story',
   director: 'Director',
   characters: 'Characters',
+  locations: 'Locations',
   scenes: 'Scenes',
   storyboard: 'Storyboard',
+  video: 'Generated Videos',
   bible: 'Production Bible',
   review: 'Review Dashboard',
   adapt: 'Adapt to Film'
@@ -188,8 +190,9 @@ const isActive = (path: string) => activeSectionPath.value === path
 const activeSectionPath = computed(() => {
   const tail = route.path.split('/').pop() || ''
   if (allSections.value.some(s => s.path === tail)) return tail
-  // Character detail and other nested routes still highlight Characters
+  // Character / location detail and other nested routes still highlight their step
   if (route.path.includes('/characters')) return 'characters'
+  if (route.path.includes('/locations')) return 'locations'
   // Project Guide page remains reachable (floating companion) but is not in the sidebar
   if (tail === 'guide') return ''
   return 'home'

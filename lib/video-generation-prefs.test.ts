@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  contiguousClipDurationRange,
   parseVideoGenerationDurationSeconds,
   parseVideoGenerationResolution,
   snapVideoResolutionToModel,
@@ -37,11 +38,26 @@ describe('videoToolDurationOptions', () => {
 })
 
 describe('parseVideoGenerationDurationSeconds', () => {
-  it('accepts 15 and 30', () => {
+  it('accepts any whole second from 4 through 30', () => {
+    expect(parseVideoGenerationDurationSeconds(8)).toBe(8)
+    expect(parseVideoGenerationDurationSeconds(17)).toBe(17)
+    expect(parseVideoGenerationDurationSeconds(23)).toBe(23)
     expect(parseVideoGenerationDurationSeconds(15)).toBe(15)
-    expect(parseVideoGenerationDurationSeconds('15')).toBe(15)
     expect(parseVideoGenerationDurationSeconds(30)).toBe(30)
-    expect(parseVideoGenerationDurationSeconds(12)).toBeUndefined()
+    expect(parseVideoGenerationDurationSeconds(1)).toBeUndefined()
+    expect(parseVideoGenerationDurationSeconds(3)).toBeUndefined()
+    expect(parseVideoGenerationDurationSeconds(31)).toBeUndefined()
+  })
+})
+
+describe('contiguousClipDurationRange', () => {
+  it('exposes Seedance 2.5 as 4–30', () => {
+    const supported = Array.from({ length: 27 }, (_, i) => i + 4)
+    expect(contiguousClipDurationRange(supported)).toEqual({ min: 4, max: 30 })
+  })
+
+  it('stays off when a model only lists a few lengths', () => {
+    expect(contiguousClipDurationRange([5, 10, 15])).toBeNull()
   })
 })
 

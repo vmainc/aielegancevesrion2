@@ -163,9 +163,13 @@ const props = withDefaults(
     bibleCharacterIds?: string[]
     /**
      * Cast isolation plates to attach when generating a seed frame
-     * (featured + turnarounds from Assets → Characters / cast lookbook).
+     * (headshot + turnarounds from Assets → Characters / cast lookbook).
      */
     referenceImageUrls?: string[]
+    /** Location / set plates — separate channel so they do not crowd out face locks. */
+    setReferenceImageUrls?: string[]
+    /** Optional CHARACTER CONTINUITY text block appended when generating the seed frame. */
+    castContinuityBlock?: string
   }>(),
   {
     compact: false,
@@ -173,7 +177,9 @@ const props = withDefaults(
     frameImageUrl: null,
     role: 'start',
     bibleCharacterIds: () => [],
-    referenceImageUrls: () => []
+    referenceImageUrls: () => [],
+    setReferenceImageUrls: () => [],
+    castContinuityBlock: ''
   }
 )
 
@@ -304,6 +310,21 @@ async function generateFrame () {
       bibleDebugLine.value = productionBibleGenerationDebugLabel(ctx)
       promptForApi = appendProductionBibleToPrompt(promptForApi, ctx)
     }
+    const continuity = (props.castContinuityBlock || '').trim()
+    if (continuity && !/CHARACTER CONTINUITY/i.test(promptForApi)) {
+      promptForApi = `${promptForApi}\n\n${continuity}`
+    }
+    if (props.referenceImageUrls?.length) {
+      promptForApi = `${promptForApi}\n\nHEADSHOT IDENTITY LOCK: Attached character images are lookbook identity plates (headshot first). Match each face exactly — including facial hair (clean-shaven vs beard). Do not invent a beard or change the face from the headshot.`
+    }
+    const characterRefs = (props.referenceImageUrls || [])
+      .map((u) => u.trim())
+      .filter(Boolean)
+      .slice(0, 4)
+    const setRefs = (props.setReferenceImageUrls || [])
+      .map((u) => u.trim())
+      .filter(Boolean)
+      .slice(0, 2)
     const res = await $fetch<{ urls?: unknown[]; videoStartFrame?: boolean }>('/api/generate/image', {
       method: 'POST',
       headers: pocketBaseBearerHeaders(getAuthToken()),
@@ -312,12 +333,13 @@ async function generateFrame () {
         model: imageModelId.value,
         aspectRatio: props.aspectRatio || '16:9',
         purpose: 'video_start_frame',
-        ...(props.referenceImageUrls?.length
+        ...(characterRefs.length
           ? {
-              referenceImageUrls: props.referenceImageUrls.slice(0, 4),
-              referenceImageUrl: props.referenceImageUrls[0]
+              referenceImageUrls: characterRefs,
+              referenceImageUrl: characterRefs[0]
             }
-          : {})
+          : {}),
+        ...(setRefs.length ? { setReferenceImageUrls: setRefs } : {})
       }
     })
     const url = firstImageUrlFromGenerateResponse(res.urls || [])

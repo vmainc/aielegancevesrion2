@@ -3,6 +3,7 @@ import {
   ATLAS_CLOUD_GENERATE_VIDEO_URL,
   ATLAS_CLOUD_PREDICTION_URL,
   ATLAS_SEEDANCE_25_I2V,
+  ATLAS_SEEDANCE_25_R2V,
   atlasCloudHttpOk,
   atlasPredictionIsTerminalFailure,
   atlasPredictionIsTerminalSuccess,
@@ -14,6 +15,7 @@ import {
 } from '~/lib/atlas-cloud-video'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import { fetchImageAsDataUrlForVideo } from '~/server/utils/openrouter-video-job'
+import { planVideoCharacterReferences, type CharacterReferenceImage } from '~/lib/video-character-references'
 
 type AtlasEnvelope = Record<string, unknown>
 
@@ -60,6 +62,8 @@ export async function startAtlasCloudVideoJob (options: {
   firstFrameImageUrl?: string
   lastFrameImageUrl?: string
   generateAudio?: boolean
+  characterReferenceImageUrls?: string[]
+  characterReferences?: CharacterReferenceImage[]
 }): Promise<AtlasCloudVideoStartResult> {
   const prompt = options.prompt.trim().slice(0, 8000)
   if (!prompt) {
@@ -68,11 +72,21 @@ export async function startAtlasCloudVideoJob (options: {
 
   const firstFrame = options.firstFrameImageUrl?.trim() || ''
   const lastFrame = options.lastFrameImageUrl?.trim() || ''
-  const atlasModel = resolveAtlasSeedanceModelId({
-    requestedModel: options.model,
-    hasFirstFrame: Boolean(firstFrame),
-    hasLastFrame: Boolean(lastFrame)
+  const visual = planVideoCharacterReferences({
+    prompt,
+    model: options.model,
+    firstFrameUrl: firstFrame,
+    lastFrameUrl: lastFrame,
+    characterReferenceUrls: options.characterReferenceImageUrls,
+    characterReferences: options.characterReferences
   })
+  const atlasModel = visual.mode === 'references'
+    ? ATLAS_SEEDANCE_25_R2V
+    : resolveAtlasSeedanceModelId({
+        requestedModel: options.model,
+        hasFirstFrame: Boolean(firstFrame),
+        hasLastFrame: Boolean(lastFrame)
+      })
 
   if (atlasModel === ATLAS_SEEDANCE_25_I2V && !firstFrame && !lastFrame) {
     throw createError({
@@ -83,7 +97,7 @@ export async function startAtlasCloudVideoJob (options: {
 
   const body: Record<string, unknown> = {
     model: atlasModel,
-    prompt,
+    prompt: visual.prompt.slice(0, 8000),
     duration: snapAtlasSeedanceDuration(options.durationSeconds ?? 5),
     resolution: atlasSeedanceResolution(options.resolution),
     output_format: 'mp4',
@@ -97,7 +111,14 @@ export async function startAtlasCloudVideoJob (options: {
   })
   if (ratio) body.ratio = ratio
 
-  if (atlasModel === ATLAS_SEEDANCE_25_I2V) {
+  if (visual.mode === 'references') {
+    const referenceImages = []
+    for (const url of visual.referenceUrls) {
+      referenceImages.push(await fetchImageAsDataUrlForVideo(url, 8_000_000))
+    }
+    body.reference_images = referenceImages
+    body.ratio = 'adaptive'
+  } else if (atlasModel === ATLAS_SEEDANCE_25_I2V) {
     if (firstFrame) {
       body.image = await fetchImageAsDataUrlForVideo(firstFrame, 8_000_000)
     } else if (lastFrame) {
@@ -227,6 +248,8 @@ export async function atlasCloudGenerateVideo (options: {
   firstFrameImageUrl?: string
   lastFrameImageUrl?: string
   generateAudio?: boolean
+  characterReferenceImageUrls?: string[]
+  characterReferences?: CharacterReferenceImage[]
 }): Promise<{ jobId: string; videoUrl: string; model: string; status: string }> {
   const started = await startAtlasCloudVideoJob(options)
   if (started.status === 'completed' && started.videoUrl) {

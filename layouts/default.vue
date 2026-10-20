@@ -61,13 +61,6 @@
                       Video
                     </NuxtLink>
                     <NuxtLink
-                      to="/tools/fix-shot"
-                      class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
-                      @click="closeGenerateDropdown"
-                    >
-                      Fix Shot
-                    </NuxtLink>
-                    <NuxtLink
                       to="/tools/music-generation"
                       class="block px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-primary transition-colors"
                       @click="closeGenerateDropdown"
@@ -392,13 +385,6 @@
                     @click="closeMobileMenu"
                   >
                     Video
-                  </NuxtLink>
-                  <NuxtLink
-                    to="/tools/fix-shot"
-                    class="block pl-8 pr-4 py-3 text-sm text-gray-600 hover:text-primary hover:bg-gray-50 transition-colors"
-                    @click="closeMobileMenu"
-                  >
-                    Fix Shot
                   </NuxtLink>
                   <NuxtLink
                     to="/tools/music-generation"

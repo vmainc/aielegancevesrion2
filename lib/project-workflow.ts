@@ -16,9 +16,11 @@ const WORKFLOW_PATHS = [
   'home',
   'overview',
   'characters',
+  'locations',
   'director',
   'scenes',
-  'storyboard'
+  'storyboard',
+  'video'
 ] as const
 
 const ADAPT_WORKFLOW_PATHS = [
@@ -26,9 +28,11 @@ const ADAPT_WORKFLOW_PATHS = [
   'home',
   'overview',
   'characters',
+  'locations',
   'director',
   'scenes',
-  'storyboard'
+  'storyboard',
+  'video'
 ] as const
 
 export type WorkflowPath = (typeof WORKFLOW_PATHS)[number] | 'adapt'

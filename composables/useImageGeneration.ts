@@ -39,6 +39,8 @@ export function useImageGeneration () {
   })
   const referenceFiles = ref<File[]>([])
   const referencePreviewUrls = ref<string[]>([])
+  /** Cast / location plate URLs resolved client-side (appended as referenceImageUrls). */
+  const plateReferenceUrls = ref<string[]>([])
   const projectId = ref('')
   const sceneId = ref('')
   const shotId = ref('')
@@ -171,7 +173,10 @@ export function useImageGeneration () {
       formError.value = 'Select an image model.'
       return
     }
-    if (referenceFiles.value.length && !m.supportsReferences) {
+    if (
+      (referenceFiles.value.length || plateReferenceUrls.value.length) &&
+      !m.supportsReferences
+    ) {
       formError.value = 'This model does not support reference images.'
       return
     }
@@ -193,6 +198,10 @@ export function useImageGeneration () {
       fd.append('advanced', JSON.stringify(advanced.value))
       for (const file of referenceFiles.value) {
         fd.append('references', file, file.name)
+      }
+      const plateUrls = plateReferenceUrls.value.map((u) => u.trim()).filter(Boolean)
+      if (plateUrls.length) {
+        fd.append('referenceImageUrls', JSON.stringify(plateUrls.slice(0, 8)))
       }
 
       const data = await $fetch<{
@@ -308,6 +317,7 @@ export function useImageGeneration () {
     modelId?: string
     returnTo?: string
     source?: 'storyboard_panel' | 'standalone' | 'video_tool'
+    locationId?: string
   }) {
     if (prefill.prompt?.trim()) prompt.value = prefill.prompt.trim()
     if (prefill.projectId) projectId.value = prefill.projectId
@@ -343,6 +353,7 @@ export function useImageGeneration () {
     advanced,
     referenceFiles,
     referencePreviewUrls,
+    plateReferenceUrls,
     projectId,
     sceneId,
     shotId,

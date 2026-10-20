@@ -148,16 +148,8 @@
       >
         {{ openingVideoShotId === shot.id ? 'Opening video tool…' : 'Generate video' }}
       </button>
-      <button
-        type="button"
-        class="w-full px-3 py-2 text-sm font-semibold rounded-lg border border-gray-300 text-gray-800 hover:border-primary/50 transition-colors disabled:opacity-45"
-        :disabled="openingFixShotId === shot.id || generatingAllFrames"
-        @click="onFixShot(shot)"
-      >
-        {{ openingFixShotId === shot.id ? 'Opening Fix Shot…' : 'Fix Shot' }}
-      </button>
       <p class="text-[11px] text-gray-500 leading-snug">
-        Start and end frames are ready — generate a new clip, or repair an existing one without regenerating the whole shot.
+        Start and end frames are ready — generate a clip from this board.
       </p>
     </div>
 
@@ -380,7 +372,6 @@ defineProps<{
   deletingBoardId: string | null
   generatingAllFrames: boolean
   openingVideoShotId: string | null
-  openingFixShotId?: string | null
   framePreviewBoxClass: string
   framePreviewLoading: Record<string, boolean>
   framePreviewFailed: Record<string, boolean>
@@ -409,7 +400,6 @@ defineProps<{
   onOpenImageStudio: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onClearStoryboardFrame: (shot: CreativeShot, role: StoryboardFrameRole) => void
   onGenerateVideo: (shot: CreativeShot) => void
-  onFixShot: (shot: CreativeShot) => void
   onBoardDetailsToggle: (event: Event, shot: CreativeShot) => void
   onSaveShot: (shot: CreativeShot) => void
 }>()

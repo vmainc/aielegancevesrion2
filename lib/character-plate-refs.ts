@@ -3,6 +3,7 @@ import {
   CHARACTER_TURNAROUND_VIEWS,
   characterPlateRank,
   expressionLabelFromPlateMeta,
+  isCharacterHeadshotLabel,
   parseCharacterTurnaroundView,
   type CharacterTurnaroundViewId
 } from '~/lib/character-turnaround-views'
@@ -10,11 +11,11 @@ import type { CreativeCharacter } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
 
 export type CharacterPlateBundle = {
-  /** Front (or best) plate — primary identity lock. */
+  /** Headshot when available, else Front — primary face/identity lock. */
   url: string
   notes: string
   promptUsed: string
-  /** Turnaround plates in front → back → left → right order when labeled. */
+  /** Face lock first (headshot), then turnarounds front → back → left → right. */
   plateUrls: string[]
 }
 
@@ -23,6 +24,7 @@ type RankedPlate = {
   notes: string
   promptUsed: string
   featured: boolean
+  isHeadshot: boolean
   ts: string
   rank: number
   view: CharacterTurnaroundViewId | null
@@ -44,7 +46,7 @@ function sortPlates (a: RankedPlate, b: RankedPlate): number {
 }
 
 /**
- * Prefer one plate per turnaround view (front/back/left/right), front as primary.
+ * Prefer headshot (face lock) first, then one plate per turnaround view (front/back/left/right).
  * Falls back to ranked freeform plates when views are missing.
  */
 function bundleFromPlates (plates: RankedPlate[], maxPlates: number): CharacterPlateBundle | null {
@@ -66,10 +68,25 @@ function bundleFromPlates (plates: RankedPlate[], maxPlates: number): CharacterP
     urls.push(url)
   }
 
+  // Labeled headshots first — never let an unlabeled/featured plate steal face lock.
+  for (const p of sorted) {
+    if (!p.isHeadshot) continue
+    pushUrl(p.url)
+    if (urls.length >= maxPlates) break
+  }
+
+  // Other identity stills (featured non-turnaround).
+  for (const p of sorted) {
+    if (p.view !== null || p.isHeadshot) continue
+    if (p.rank > 1) continue
+    pushUrl(p.url)
+    if (urls.length >= maxPlates) break
+  }
+
   for (const v of CHARACTER_TURNAROUND_VIEWS) {
+    if (urls.length >= maxPlates) break
     const plate = byView.get(v.id)
     if (plate) pushUrl(plate.url)
-    if (urls.length >= maxPlates) break
   }
 
   if (urls.length < maxPlates) {
@@ -81,12 +98,13 @@ function bundleFromPlates (plates: RankedPlate[], maxPlates: number): CharacterP
 
   if (!urls.length && !sorted[0]!.notes && !sorted[0]!.promptUsed) return null
 
+  const headshot = sorted.find((p) => p.isHeadshot) || sorted.find((p) => p.view === null && p.rank <= 1)
   const front = byView.get('front')
-  const primary = front || sorted[0]!
+  const primary = headshot || front || sorted[0]!
   return {
-    url: (front?.url || urls[0] || primary.url || '').trim(),
-    notes: primary.notes,
-    promptUsed: primary.promptUsed,
+    url: (headshot?.url || front?.url || urls[0] || primary.url || '').trim(),
+    notes: (headshot || primary).notes,
+    promptUsed: (headshot || primary).promptUsed,
     plateUrls: urls
   }
 }
@@ -98,7 +116,7 @@ export function buildCharacterPlateMap (
   characters: Array<Pick<CreativeCharacter, 'id' | 'name'>>,
   assets: ProjectAsset[],
   resolveUrl: (asset: ProjectAsset) => string,
-  maxPlatesPerCharacter = 4
+  maxPlatesPerCharacter = 5
 ): Map<string, CharacterPlateBundle> {
   const byCharacterId: Record<string, RankedPlate[]> = {}
   const byCharacterName: Record<string, RankedPlate[]> = {}
@@ -121,6 +139,7 @@ export function buildCharacterPlateMap (
       notes,
       promptUsed,
       featured: meta.featured === true,
+      isHeadshot: isCharacterHeadshotLabel(label),
       ts: a.updated || a.created || '',
       rank: characterPlateRank(meta),
       view: parseCharacterTurnaroundView(label)

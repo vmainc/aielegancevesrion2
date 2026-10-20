@@ -68,37 +68,68 @@ function isCharacterFocusedShot (
   return /close-up|close up|portrait|face|eyes|expression|reaction|greeting|dialogue|character|medium shot|two shot|over-the-shoulder|ots\b/.test(t)
 }
 
-/** Characters named in this panel's beat — not everyone listed in the cast bible blocks. */
+/**
+ * The storyboard still lists who is actually in the panel:
+ * `Cast in this panel: NAME, NAME.` or `none`.
+ * Returns null when that line is absent.
+ */
+export function declaredCastNamesInPanel (imagePrompt: string): string[] | null {
+  const m = (imagePrompt || '').match(/Cast in this panel:\s*([^\n]+)/i)
+  if (!m) return null
+  const line = m[1].trim().replace(/\.\s*$/, '')
+  if (/^none\b/i.test(line)) return []
+  return line
+    .split(/,|(?:\s+and\s+)/i)
+    .map((s) => s.replace(/[.)]+$/g, '').trim())
+    .filter((n) => n && !/^none$/i.test(n))
+}
+
+function castNameMatchesDeclared (castName: string, declared: string): boolean {
+  const a = normalizeCharacterNameKey(castName)
+  const b = normalizeCharacterNameKey(declared)
+  if (!a || !b) return false
+  if (a === b) return true
+  return castNameAppearsInText(castName, declared) || castNameAppearsInText(declared, castName)
+}
+
+/**
+ * Characters named in this panel's beat — not the scene summary and not the project cast.
+ * When the still says "Cast in this panel:", that list wins over a loose name search.
+ */
 export function findCharactersInShot (
   shot: Pick<CreativeShot, 'title' | 'description' | 'imagePrompt' | 'videoPrompt' | 'shotType'>,
-  cast: ProjectCharacterRef[],
-  sceneSummary?: string
+  cast: ProjectCharacterRef[]
 ): ProjectCharacterRef[] {
+  const declared = declaredCastNamesInPanel(shot.imagePrompt || '')
+  if (declared) {
+    if (!declared.length) return []
+    const hits: ProjectCharacterRef[] = []
+    const seen = new Set<string>()
+    const sorted = [...cast].sort((a, b) => b.name.length - a.name.length)
+    for (const name of declared) {
+      const match = sorted.find((c) => castNameMatchesDeclared(c.name, name))
+      if (!match) continue
+      const key = normalizeCharacterNameKey(match.name)
+      if (!key || seen.has(key)) continue
+      seen.add(key)
+      hits.push(match)
+    }
+    return hits
+  }
+
   const raw = shotTextForCastMatch(shot)
+  if (!raw.trim()) return []
   const sorted = [...cast].sort((a, b) => b.name.length - a.name.length)
   const hits: ProjectCharacterRef[] = []
   const seen = new Set<string>()
 
-  const tryAdd = (c: ProjectCharacterRef, text: string) => {
+  for (const c of sorted) {
     const key = normalizeCharacterNameKey(c.name)
-    if (!key || seen.has(key)) return
-    if (castNameAppearsInText(c.name, text)) {
+    if (!key || seen.has(key)) continue
+    if (castNameAppearsInText(c.name, raw)) {
       seen.add(key)
       hits.push(c)
     }
-  }
-
-  if (raw.trim()) {
-    for (const c of sorted) tryAdd(c, raw)
-  }
-
-  // Scene summary lists scene-level cast — only use for tiny casts when the beat is silent.
-  if (!hits.length && sceneSummary?.trim() && cast.length <= 6) {
-    for (const c of sorted) tryAdd(c, sceneSummary)
-  }
-
-  if (!hits.length && cast.length > 0 && cast.length <= 6) {
-    return cast
   }
 
   return hits
@@ -107,10 +138,9 @@ export function findCharactersInShot (
 /** Same cast resolution as frame prompts — use for portrait attachment, not only name grep. */
 export function resolveCharactersForFrameGeneration (
   shot: Pick<CreativeShot, 'title' | 'description' | 'imagePrompt' | 'videoPrompt' | 'shotType'>,
-  cast: ProjectCharacterRef[],
-  sceneSummary?: string
+  cast: ProjectCharacterRef[]
 ): ProjectCharacterRef[] {
-  return findCharactersInShot(shot, cast, sceneSummary)
+  return findCharactersInShot(shot, cast)
 }
 
 export function pickPrimaryCharacterPortrait (matches: ProjectCharacterRef[]): string | null {
@@ -127,8 +157,8 @@ function platesForCharacter (c: ProjectCharacterRef): string[] {
 }
 
 /**
- * Cast plate URLs for vision models (featured first per character, then turnarounds).
- * Round-robins so multi-character shots still get one plate each before extras.
+ * Cast plate URLs for vision models (headshot/featured first per character, then turnarounds).
+ * Round-robins so multi-character shots still get one face plate each before extras.
  */
 export function collectCharacterPortraitUrls (
   characters: ProjectCharacterRef[],
@@ -145,7 +175,13 @@ export function collectCharacterPortraitUrls (
   }
 
   const perChar = characters.map(platesForCharacter)
-  let round = 0
+  // Pass 1: one headshot / primary identity plate per character (face lock).
+  for (const plates of perChar) {
+    if (urls.length >= max) break
+    if (plates[0]) add(plates[0])
+  }
+  // Pass 2+: round-robin remaining plates (front / profiles) into leftover slots.
+  let round = 1
   while (urls.length < max) {
     let added = false
     for (const plates of perChar) {
@@ -163,11 +199,15 @@ export function buildContinuityPromptBlock (matches: ProjectCharacterRef[]): str
   if (!matches.length) return ''
   const lines = matches.map((c) => {
     const line = formatCastLineForProductionPrompt(castMemberToVisualInput(c))
-    return `- ${line}`
+    const hasHeadshot = Boolean((c.portraitUrl || '').trim() || (c.plateUrls || [])[0])
+    return hasHeadshot
+      ? `- ${line} — MATCH LOOKBOOK HEADSHOT exactly (facial hair, hairline, age, face shape).`
+      : `- ${line}`
   })
   return [
     'CHARACTER CONTINUITY (mandatory — match these designs exactly in this frame; same face, body, materials, colors, and style as the cast bible):',
     ...lines,
+    'FACE LOCK FROM HEADSHOT: when a lookbook headshot is attached, copy that face identity exactly — including clean-shaven vs beard/mustache. Do not invent facial hair or shave a beard that is in the headshot.',
     'Do not invent a new look for any named character. If multiple characters appear, keep each distinct but faithful to their description.'
   ].join('\n')
 }
@@ -188,8 +228,8 @@ export interface ProductionPromptContext {
 }
 
 /**
- * Full production prompt: director + scene + full cast + this panel’s distinct action.
- * Use for video generation and for the “Final prompt” preview on the Video step.
+ * Motion prompt for a storyboard panel. Start/end frames carry the still;
+ * this text is only the beat the clip should animate.
  */
 export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): string {
   const shotForVideo = {
@@ -214,6 +254,10 @@ export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): s
     cast: ctx.cast.map(c => projectCharacterRefToCastMember(c)),
     productionBible: ctx.productionBible
   })
+  const continuity = buildContinuityPromptBlock(ctx.cast)
+  if (continuity && !/CHARACTER CONTINUITY/i.test(prompt)) {
+    prompt = `${prompt}\n\n${continuity}`
+  }
   if (isMusicVideoTarget(ctx.targetLength)) {
     prompt +=
       '\n\nMusic video: visuals only — sync to the external track during post-production; no dialogue or vocals in the clip.'

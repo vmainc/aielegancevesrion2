@@ -79,6 +79,14 @@ export type SpokenDialogueLineOptions = {
   tone?: string
 }
 
+/** One beat in a sequential spoken exchange (A speaks, then B replies, …). */
+export type SpokenDialogueTurn = {
+  speakerId?: string
+  speakerName?: string
+  line: string
+  tone?: string
+}
+
 /** Append an explicit line for the model to speak (shown in UI + sent to API). */
 export function appendSpokenDialogueLine (
   prompt: string,
@@ -111,6 +119,48 @@ export function appendSpokenDialogueLine (
   return base ? `${base}\n\n${block}` : block
 }
 
+/**
+ * Append sequential spoken turns in order (character A, then character B reply, …).
+ * Empty lines are skipped. Prefer this over a single line when multiple speakers interact.
+ */
+export function appendSpokenDialogueSequence (
+  prompt: string,
+  turns: SpokenDialogueTurn[]
+): string {
+  const base = prompt.trim()
+  const cleaned = turns
+    .map((t) => ({
+      speakerName: (t.speakerName || '').trim(),
+      line: (t.line || '').trim(),
+      tone: (t.tone || '').trim()
+    }))
+    .filter((t) => t.line)
+  if (!cleaned.length) return base
+
+  if (cleaned.length === 1) {
+    return appendSpokenDialogueLine(base, cleaned[0]!.line, {
+      speakerName: cleaned[0]!.speakerName,
+      tone: cleaned[0]!.tone
+    })
+  }
+
+  const parts: string[] = [
+    'SPOKEN DIALOGUE — SEQUENTIAL EXCHANGE (must be clearly audible in the clip, spoken in this order):'
+  ]
+  cleaned.forEach((t, i) => {
+    const n = i + 1
+    const who = t.speakerName || `Speaker ${n}`
+    const toneBit = t.tone ? ` (${t.tone.toLowerCase()})` : ''
+    parts.push(`${n}. ${who}${toneBit}: "${t.line}"`)
+  })
+  parts.push(
+    'Deliver these lines in sequence — each speaker finishes before the next begins. Lip movement should match the active speaker when a face is visible.'
+  )
+  const block = parts.join('\n')
+  if (cleaned.every((t) => base.includes(t.line))) return base
+  return base ? `${base}\n\n${block}` : block
+}
+
 /** Append diegetic ambient / background sound direction. */
 export function appendAmbientSoundPrompt (prompt: string, ambientLine: string): string {
   const base = prompt.trim()
@@ -128,15 +178,29 @@ export function resolveVideoGenerationUserPrompt (opts: {
   includeSpokenDialogue?: boolean
   dialogueSpeakerName?: string
   dialogueTone?: string
+  /** Sequential turns; when present and non-empty, preferred over a single dialogueLine. */
+  dialogueTurns?: SpokenDialogueTurn[]
   ambientSoundPrompt?: string
   includeAmbientSound?: boolean
 }): string {
   let out = opts.prompt.trim()
-  if (opts.includeSpokenDialogue && opts.dialogueLine?.trim()) {
-    out = appendSpokenDialogueLine(out, opts.dialogueLine, {
-      speakerName: opts.dialogueSpeakerName,
-      tone: opts.dialogueTone
-    })
+  if (opts.includeSpokenDialogue) {
+    const turns = (opts.dialogueTurns || [])
+      .map((t) => ({
+        speakerId: t.speakerId,
+        speakerName: (t.speakerName || '').trim(),
+        line: (t.line || '').trim(),
+        tone: (t.tone || '').trim()
+      }))
+      .filter((t) => t.line)
+    if (turns.length) {
+      out = appendSpokenDialogueSequence(out, turns)
+    } else if (opts.dialogueLine?.trim()) {
+      out = appendSpokenDialogueLine(out, opts.dialogueLine, {
+        speakerName: opts.dialogueSpeakerName,
+        tone: opts.dialogueTone
+      })
+    }
   }
   if (opts.includeAmbientSound && opts.ambientSoundPrompt?.trim()) {
     out = appendAmbientSoundPrompt(out, opts.ambientSoundPrompt)

@@ -273,7 +273,6 @@
             :deleting-board-id="deletingBoardId"
             :generating-all-frames="generatingAllFrames"
             :opening-video-shot-id="openingVideoShotId"
-            :opening-fix-shot-id="openingFixShotId"
             :frame-preview-box-class="framePreviewBoxClass"
             :frame-preview-loading="framePreviewLoading"
             :frame-preview-failed="framePreviewFailed"
@@ -302,7 +301,6 @@
             :on-open-image-studio="openImageStudioForFrame"
             :on-clear-storyboard-frame="clearStoryboardFrame"
             :on-generate-video="openVideoGenerationForBoard"
-            :on-fix-shot="openFixShotForBoard"
             :on-board-details-toggle="onBoardDetailsToggle"
             :on-save-shot="saveShot"
           />
@@ -418,7 +416,6 @@ import {
   type VideoGenerationPrefill
 } from '~/lib/video-generation-prefill'
 import { navigateToImageGenerationFromShot } from '~/lib/image-generation-prefill'
-import { navigateToFixShot } from '~/lib/video-repair/navigate'
 import {
   mergeProductionBibleGenerationOptions,
   productionBibleGenerationDebugLabel
@@ -504,7 +501,6 @@ const shotStoryboardFramesMap = computed(() => {
 
 const generatingAllFrames = ref(false)
 const openingVideoShotId = ref<string | null>(null)
-const openingFixShotId = ref<string | null>(null)
 const generateError = ref('')
 const persistenceWarning = ref('')
 const shotsPersisted = ref(true)
@@ -571,7 +567,7 @@ const boardsMissingFrames = computed(() =>
 )
 
 function shotCharacterMatches (shot: CreativeShot) {
-  return findCharactersInShot(shot, characterRefs.value, activeScene.value?.summary)
+  return findCharactersInShot(shot, characterRefs.value)
 }
 
 function characterProfileTo (c: ProjectCharacterRef): string {
@@ -612,8 +608,7 @@ function frameGenerationRefs (shot: CreativeShot, role: StoryboardFrameRole): {
 } {
   const castInScope = resolveCharactersForFrameGeneration(
     shot,
-    characterRefs.value,
-    activeScene.value?.summary
+    characterRefs.value
   )
   const startSrc = role === 'end' ? panelImageSrc(shot, 'start') : null
   const prior = priorStoryboardFrameInScene(shot)
@@ -825,34 +820,70 @@ async function generateAllFrames () {
   generatingAllFrames.value = true
   let ok = 0
   let failed = 0
+  let skippedNoPrompt = 0
+  let lastError = ''
   try {
     // Start frames first across boards, then ends (ends use start as reference).
     for (const shot of needsWork) {
       if (hasDisplayableFrame(shot, 'start')) continue
       try {
-        await generateFrame(shot, 'start', { quiet: true })
-        if (hasDisplayableFrame(shot, 'start')) ok++
-        else failed++
-      } catch {
+        const result = await generateFrame(shot, 'start', { quiet: true })
+        if (result === 'ok' && hasDisplayableFrame(shot, 'start')) ok++
+        else if (result === 'no_prompt') skippedNoPrompt++
+        else {
+          failed++
+          if (result === 'failed' && !lastError) lastError = 'Image generation failed'
+        }
+      } catch (e: unknown) {
         failed++
+        if (!lastError) {
+          lastError =
+            e && typeof e === 'object' && 'data' in e
+              ? String((e as { data?: { message?: string } }).data?.message || '')
+              : e instanceof Error
+                ? e.message
+                : ''
+        }
       }
     }
     for (const shot of shots.value) {
       if (!hasDisplayableFrame(shot, 'start') || hasDisplayableFrame(shot, 'end')) continue
       try {
-        await generateFrame(shot, 'end', { quiet: true })
-        if (hasDisplayableFrame(shot, 'end')) ok++
+        const result = await generateFrame(shot, 'end', { quiet: true })
+        if (result === 'ok' && hasDisplayableFrame(shot, 'end')) ok++
+        else if (result === 'no_prompt') skippedNoPrompt++
         else failed++
-      } catch {
+      } catch (e: unknown) {
         failed++
+        if (!lastError) {
+          lastError =
+            e && typeof e === 'object' && 'data' in e
+              ? String((e as { data?: { message?: string } }).data?.message || '')
+              : e instanceof Error
+                ? e.message
+                : ''
+        }
       }
     }
-    if (ok && !failed) {
+    if (ok && !failed && !skippedNoPrompt) {
       toast.showToast(`Generated ${ok} frame(s) (start + end).`, 'success')
     } else if (ok) {
-      toast.showToast(`Generated ${ok} frame(s); ${failed} failed.`, 'info')
+      toast.showToast(
+        `Generated ${ok} frame(s); ${failed + skippedNoPrompt} skipped or failed.`,
+        'info'
+      )
+    } else if (skippedNoPrompt && !failed) {
+      toast.showToast(
+        'Add a story beat (or keep the scene summary) before generating frames.',
+        'error'
+      )
     } else {
-      toast.showToast('Could not generate frames. Check prompts and try one board at a time.', 'error')
+      toast.showToast(
+        lastError
+          ? `Could not generate frames: ${lastError}`
+          : 'Could not generate frames. Check prompts and try one board at a time.',
+        'error'
+      )
     }
   } finally {
     generatingAllFrames.value = false
@@ -889,30 +920,46 @@ async function generateFrame (
   shot: CreativeShot,
   role: StoryboardFrameRole = 'start',
   opts?: { quiet?: boolean }
-) {
+): Promise<'ok' | 'no_prompt' | 'failed'> {
   const quiet = Boolean(opts?.quiet)
-  const basePrompt = (shot.imagePrompt || shot.description || '').trim()
-  if (!basePrompt) {
+  const storedPrompt = (shot.imagePrompt || '').trim()
+  const beat = (shot.description || '').trim()
+  const title = (shot.title || '').trim()
+  const sceneHeading = (activeScene.value?.heading || '').trim()
+  const sceneSummary = (activeScene.value?.summary || '').trim()
+  // Skeleton boards often have empty beats — scene slug/summary is enough to generate.
+  if (!storedPrompt && !beat && !title && !sceneHeading && !sceneSummary) {
     if (!quiet) toast.showToast('Add a production prompt or story beat first.', 'info')
-    return
+    return 'no_prompt'
   }
+  const shotForGen: CreativeShot =
+    !storedPrompt && !beat && (sceneSummary || sceneHeading)
+      ? {
+          ...shot,
+          description: sceneSummary || sceneHeading
+        }
+      : shot
   const slotKey = frameSlotKey(shot, role)
-  const matches = shotCharacterMatches(shot)
+  const matches = shotCharacterMatches(shotForGen)
   const panelIndex = shots.value.findIndex(s => s.id === shot.id)
   await ensureSceneSetLock()
-  const productionBibleCtx = await loadBibleContextForFrame(shot)
+  const productionBibleCtx = await loadBibleContextForFrame(shotForGen)
   frameBibleDebug[shot.id] = productionBibleGenerationDebugLabel(productionBibleCtx)
-  let prompt = resolveFrameGenerationPrompt(shot, {
+  let prompt = resolveFrameGenerationPrompt(shotForGen, {
     ...unifiedPromptContext(),
     panelIndex: panelIndex >= 0 ? panelIndex : undefined,
     productionBible: productionBibleCtx
   })
-  prompt = applyStoryboardFrameRoleToPrompt(prompt, role, shot)
+  prompt = applyStoryboardFrameRoleToPrompt(prompt, role, shotForGen)
+  if (!prompt.trim()) {
+    if (!quiet) toast.showToast('Could not build a frame prompt for this board.', 'error')
+    return 'no_prompt'
+  }
   frameGenerationProvenance[slotKey] = {
     bibleContext: productionBibleCtx,
     promptForHash: prompt
   }
-  const refs = frameGenerationRefs(shot, role)
+  const refs = frameGenerationRefs(shotForGen, role)
   const referenceImageUrls = refs.characterUrls
   if (!referenceImageUrls.length && !refs.setUrls.length && !quiet) {
     const missingPortraits = characterRefs.value.filter(c => !c.portraitUrl?.trim() && !(c.plateUrls || []).length)
@@ -926,7 +973,7 @@ async function generateFrame (
   const token = getAuthToken()
   if (!token) {
     if (!quiet) toast.showToast('Sign in to generate frames.', 'warning')
-    return
+    return 'failed'
   }
   imageGenId.value = slotKey
   try {
@@ -951,16 +998,17 @@ async function generateFrame (
         if (!quiet) {
           toast.showToast(`${role === 'end' ? 'End' : 'Start'} frame generated and saved.`, 'success')
         }
-      } else {
-        framePreview[slotKey] = url
-        framePreviewFailed[slotKey] = false
-        if (!quiet) {
-          toast.showToast(`Frame generated (save failed): ${saveErr}`, 'warning')
-        }
+        return 'ok'
       }
-    } else if (!quiet) {
-      toast.showToast('No image returned.', 'error')
+      framePreview[slotKey] = url
+      framePreviewFailed[slotKey] = false
+      if (!quiet) {
+        toast.showToast(`Frame generated (save failed): ${saveErr}`, 'warning')
+      }
+      return 'ok'
     }
+    if (!quiet) toast.showToast('No image returned.', 'error')
+    return 'failed'
   } catch (e: unknown) {
     if (!quiet) {
       const msg =
@@ -969,8 +1017,13 @@ async function generateFrame (
           : 'Image generation failed'
       toast.showToast(msg, 'error')
     } else {
-      throw e instanceof Error ? e : new Error('Image generation failed')
+      throw e instanceof Error ? e : new Error(
+        e && typeof e === 'object' && 'data' in e
+          ? String((e as { data?: { message?: string } }).data?.message || 'Image generation failed')
+          : 'Image generation failed'
+      )
     }
+    return 'failed'
   } finally {
     if (!generatingAllFrames.value) imageGenId.value = null
   }
@@ -1015,27 +1068,6 @@ async function openVideoGenerationForBoard (shot: CreativeShot) {
     )
   } finally {
     if (openingVideoShotId.value === shot.id) openingVideoShotId.value = null
-  }
-}
-
-async function openFixShotForBoard (shot: CreativeShot) {
-  const pid = projectId.value
-  const sceneId = selectedSceneId.value
-  if (!pid || !isCloudProjectId(pid) || !sceneId) {
-    toast.showToast('Save this project to the cloud before using Fix Shot.', 'info')
-    return
-  }
-  openingFixShotId.value = shot.id
-  try {
-    await navigateToFixShot({
-      projectId: pid,
-      sceneId,
-      shotId: shot.id
-    })
-  } catch (e: unknown) {
-    toast.showToast(formatApiFetchError(e, 'Could not open Fix Shot.'), 'error')
-  } finally {
-    if (openingFixShotId.value === shot.id) openingFixShotId.value = null
   }
 }
 
