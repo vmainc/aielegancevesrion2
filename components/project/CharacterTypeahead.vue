@@ -65,13 +65,13 @@
         class="px-3 py-2.5 text-xs text-gray-500"
       >
         <template v-if="query.trim()">
-          No cast match for “{{ query.trim() }}”.
+          No {{ entityNoun }} match for “{{ query.trim() }}”.
         </template>
         <template v-else-if="availableCount">
-          Type a name to search {{ availableCount }} cast member{{ availableCount === 1 ? '' : 's' }}.
+          Type a name to search {{ availableCount }} {{ entityNoun }}{{ availableCount === 1 ? '' : 's' }}.
         </template>
         <template v-else>
-          No more cast to add.
+          No more {{ entityNoun }} to add.
         </template>
       </p>
     </div>
@@ -98,11 +98,17 @@ const props = withDefaults(
     placeholder?: string
     hint?: string
     inputId?: string
+    /** Noun used in empty-state copy (“cast”, “location”). */
+    entityNoun?: string
+    /** Cap selection count (1 = single-select). */
+    maxSelected?: number
   }>(),
   {
     placeholder: 'Type a character name…',
     hint: '',
-    inputId: 'character-typeahead'
+    inputId: 'character-typeahead',
+    entityNoun: 'cast',
+    maxSelected: 0
   }
 )
 
@@ -163,10 +169,17 @@ function onInput () {
 
 function add (id: string) {
   if (selectedSet.value.has(id)) return
-  emit('update:modelValue', [...props.modelValue, id])
+  const next =
+    props.maxSelected === 1
+      ? [id]
+      : props.maxSelected > 0 && props.modelValue.length >= props.maxSelected
+        ? props.modelValue
+        : [...props.modelValue, id]
+  if (props.maxSelected > 1 && props.modelValue.length >= props.maxSelected) return
+  emit('update:modelValue', next)
   query.value = ''
   highlightIndex.value = 0
-  menuOpen.value = true
+  menuOpen.value = props.maxSelected !== 1
   nextTick(() => inputEl.value?.focus())
 }
 

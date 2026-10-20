@@ -183,6 +183,20 @@ export const useAuth = () => {
     pb.authStore.clear()
     user.value = null
     authToken.value = null
+    // Clear in-memory Studio Guide chats so the next account never sees them.
+    // localStorage is already keyed per user; do not wipe other users' keys.
+    try {
+      const guideStore = useState('studio-guide-chat-store')
+      const guideHydrated = useState('studio-guide-chat-hydrated')
+      const guideUserId = useState('studio-guide-chat-user-id')
+      const guideDraft = useState('studio-guide-chat-draft')
+      guideStore.value = { version: 1, activeChatId: null, chats: [] }
+      guideHydrated.value = false
+      guideUserId.value = null
+      guideDraft.value = ''
+    } catch {
+      /* useState may be unavailable outside Nuxt setup in rare paths */
+    }
     navigateTo('/login')
   }
 

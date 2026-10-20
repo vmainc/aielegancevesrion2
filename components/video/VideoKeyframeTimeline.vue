@@ -44,6 +44,8 @@
           :bible-shot-id="bibleShotId"
           :bible-character-ids="bibleCharacterIds"
           :reference-image-urls="referenceImageUrls"
+          :set-reference-image-urls="setReferenceImageUrls"
+          :cast-continuity-block="castContinuityBlock"
           @update:frame-image-url="url => onFrameUrl(startKeyframe!.id, url)"
         />
       </div>
@@ -77,6 +79,8 @@
           :bible-shot-id="bibleShotId"
           :bible-character-ids="bibleCharacterIds"
           :reference-image-urls="referenceImageUrls"
+          :set-reference-image-urls="setReferenceImageUrls"
+          :cast-continuity-block="castContinuityBlock"
           @update:frame-image-url="url => onFrameUrl(endKeyframe.id, url)"
         />
       </div>
@@ -190,6 +194,8 @@ const props = withDefaults(
     bibleShotId?: string
     bibleCharacterIds?: string[]
     referenceImageUrls?: string[]
+    setReferenceImageUrls?: string[]
+    castContinuityBlock?: string
     supportsEndFrame?: boolean
     endFrameCompatibilityWarn?: boolean
     endFrameCompatibilityHint?: string
@@ -199,6 +205,8 @@ const props = withDefaults(
     aspectRatio: '16:9',
     bibleCharacterIds: () => [],
     referenceImageUrls: () => [],
+    setReferenceImageUrls: () => [],
+    castContinuityBlock: '',
     supportsEndFrame: true,
     endFrameCompatibilityWarn: false,
     endFrameCompatibilityHint: '',

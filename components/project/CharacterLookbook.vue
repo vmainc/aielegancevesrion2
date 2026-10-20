@@ -74,22 +74,29 @@
               :class="slot.view.id === 'front' ? 'ring-primary' : 'ring-gray-200'"
             >
               <div class="relative aspect-[3/4] bg-gray-100">
-                <img
+                <button
                   v-if="slot.image"
-                  :src="slot.image.url"
-                  :alt="`${form.name} ${slot.view.label}`"
-                  class="absolute inset-0 w-full h-full object-cover"
+                  type="button"
+                  class="absolute inset-0 w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary z-[1]"
+                  :aria-label="`Enlarge ${slot.view.label} plate`"
+                  @click="openLookbookLightbox(slot.image.url)"
                 >
+                  <img
+                    :src="slot.image.url"
+                    :alt="`${form.name} ${slot.view.label}`"
+                    class="absolute inset-0 w-full h-full object-cover pointer-events-none"
+                  >
+                </button>
                 <div
                   v-else
                   class="absolute inset-0 flex items-center justify-center text-[10px] text-gray-400 uppercase tracking-wide"
                 >
                   {{ slot.view.label }}
                 </div>
-                <div class="absolute inset-x-0 bottom-0 p-1 bg-gradient-to-t from-black/80 to-transparent space-y-0.5">
+                <div class="absolute inset-x-0 bottom-0 p-1 bg-gradient-to-t from-black/80 to-transparent space-y-0.5 z-[2]">
                   <p class="text-[9px] font-semibold uppercase tracking-wide text-white text-center">
                     {{ slot.view.label }}
-                    <span v-if="slot.view.id === 'front'" class="text-primary"> · main</span>
+                    <span v-if="slot.view.id === 'front'" class="text-primary"> · facing</span>
                   </p>
                   <div class="flex gap-0.5">
                     <label
@@ -203,23 +210,30 @@
               </dl>
 
               <div class="lookbook-portrait relative aspect-[3/4] overflow-hidden bg-black/50 ring-1 ring-white/15">
-                <img
+                <button
                   v-if="featuredImageUrl"
-                  :src="featuredImageUrl"
-                  :alt="form.name || 'Character'"
-                  class="absolute inset-0 w-full h-full object-cover lookbook-portrait__img"
+                  type="button"
+                  class="absolute inset-0 w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                  :aria-label="`Enlarge headshot for ${form.name || 'character'}`"
+                  @click="openLookbookLightbox(featuredImageUrl)"
                 >
+                  <img
+                    :src="featuredImageUrl"
+                    :alt="form.name || 'Character'"
+                    class="absolute inset-0 w-full h-full object-cover lookbook-portrait__img pointer-events-none"
+                  >
+                </button>
                 <div
                   v-else
                   class="absolute inset-0 flex items-center justify-center text-center px-4"
                 >
                   <p class="text-xs text-stone-400 leading-relaxed">
-                    Upload a Front view to anchor this lookbook.
+                    Upload a headshot to anchor this lookbook.
                   </p>
                 </div>
                 <span
                   v-if="featuredImage"
-                  class="absolute bottom-0 inset-x-0 px-2 py-1.5 text-[10px] tracking-[0.2em] uppercase text-center bg-black/65 text-stone-100"
+                  class="absolute bottom-0 inset-x-0 px-2 py-1.5 text-[10px] tracking-[0.2em] uppercase text-center bg-black/65 text-stone-100 pointer-events-none"
                 >
                   {{ featuredImageCaption }}
                 </span>
@@ -246,12 +260,19 @@
                   :class="slot.view.id === 'front' ? 'ring-2 ring-primary' : 'ring-1 ring-white/15'"
                 >
                   <div class="relative aspect-[3/4] bg-black overflow-hidden">
-                    <img
+                    <button
                       v-if="slot.image"
-                      :src="slot.image.url"
-                      :alt="`${form.name} ${slot.view.label}`"
-                      class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+                      type="button"
+                      class="absolute inset-0 w-full h-full cursor-zoom-in focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary z-[1]"
+                      :aria-label="`Enlarge ${slot.view.label} plate`"
+                      @click="openLookbookLightbox(slot.image.url)"
                     >
+                      <img
+                        :src="slot.image.url"
+                        :alt="`${form.name} ${slot.view.label}`"
+                        class="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03] pointer-events-none"
+                      >
+                    </button>
                     <div
                       v-else
                       class="absolute inset-0 flex flex-col items-center justify-center gap-1 px-3 text-center"
@@ -259,8 +280,8 @@
                       <span class="text-[11px] tracking-[0.2em] uppercase text-stone-400">{{ slot.view.label }}</span>
                       <span class="text-[10px] text-stone-500">{{ slot.view.hint }}</span>
                     </div>
-                    <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-95" />
-                    <div class="absolute inset-x-0 bottom-0 p-1.5 space-y-1">
+                    <div class="absolute inset-0 bg-gradient-to-t from-black/85 via-transparent to-transparent opacity-95 pointer-events-none" />
+                    <div class="absolute inset-x-0 bottom-0 p-1.5 space-y-1 z-[2]">
                       <p class="text-[10px] font-semibold tracking-[0.18em] uppercase text-stone-100 text-center">
                         {{ slot.view.label }}
                         <span v-if="slot.view.id === 'front' && !hasFeaturedHeadshot" class="text-primary"> · Main</span>
@@ -655,15 +676,23 @@
         </template>
       </template>
     </ClientOnly>
+
+    <ImageLightbox
+      v-model:open="lookbookLightboxOpen"
+      :items="lookbookLightboxItems"
+      :start-index="lookbookLightboxIndex"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import ImageLightbox, { type ImageLightboxItem } from '~/components/ImageLightbox.vue'
 import { appendPlaybackAccessToken, projectAssetMediaPath, projectAssetPlaybackSrc } from '~/lib/project-asset-playback-url'
 import { isCharacterPortraitAsset, isCharacterReferenceClipAsset } from '~/lib/character-voice-assets'
 import {
   CHARACTER_TURNAROUND_VIEWS,
   characterTurnaroundLabel,
+  isCharacterHeadshotLabel,
   parseCharacterTurnaroundView,
   type CharacterTurnaroundViewId
 } from '~/lib/character-turnaround-views'
@@ -1000,11 +1029,22 @@ type GalleryImage = {
   promptUsed: string
   expressionLabel: string
   ts: string
+  source: string
+  turnaroundView: string
 }
 
 function expressionLabelFromMeta (meta: Record<string, unknown>): string {
   const v = meta.expression_label ?? meta.emotion
   return typeof v === 'string' ? v.trim() : ''
+}
+
+function metaString (meta: Record<string, unknown>, key: string): string {
+  const v = meta[key]
+  return typeof v === 'string' ? v.trim() : ''
+}
+
+function isGeneratedTurnaround (img: GalleryImage): boolean {
+  return img.source === 'turnaround_generate' || Boolean(img.turnaroundView)
 }
 
 const galleryImages = computed<GalleryImage[]>(() => {
@@ -1019,8 +1059,10 @@ const galleryImages = computed<GalleryImage[]>(() => {
       url: imageUrl(a),
       featured: meta.featured === true,
       promptUsed: typeof meta.prompt_used === 'string' ? meta.prompt_used.trim() : '',
-      expressionLabel: expressionLabelFromMeta(meta as Record<string, unknown>),
-      ts: a.updated || a.created || ''
+      expressionLabel: expressionLabelFromMeta(meta),
+      ts: a.updated || a.created || '',
+      source: metaString(meta, 'source'),
+      turnaroundView: metaString(meta, 'turnaround_view')
     })
   }
   return out.sort((x, y) => {
@@ -1034,11 +1076,14 @@ const turnaroundSlots = computed(() =>
     const matches = galleryImages.value.filter(
       (img) => parseCharacterTurnaroundView(img.expressionLabel) === view.id
     )
-    const image =
-      view.id === 'front'
-        ? matches.find((m) => m.featured) || matches[0] || null
-        : matches.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''))[0] || null
-    return { view, image }
+    const sorted = [...matches].sort((a, b) => {
+      // Prefer AI green-screen turnarounds over original zip sheets tagged Front.
+      const ag = isGeneratedTurnaround(a) ? 1 : 0
+      const bg = isGeneratedTurnaround(b) ? 1 : 0
+      if (ag !== bg) return bg - ag
+      return (b.ts || '').localeCompare(a.ts || '')
+    })
+    return { view, image: sorted[0] || null }
   })
 )
 
@@ -1073,6 +1118,39 @@ const featuredImageCaption = computed(() => {
   return label ? `${label} · Main` : 'Main'
 })
 const featuredImageUrl = computed(() => featuredImage.value?.url || '')
+
+const lookbookLightboxOpen = ref(false)
+const lookbookLightboxIndex = ref(0)
+const lookbookLightboxItems = computed<ImageLightboxItem[]>(() => {
+  const items: ImageLightboxItem[] = []
+  const seen = new Set<string>()
+  const push = (src: string, title: string) => {
+    const u = (src || '').trim()
+    if (!u || seen.has(u)) return
+    seen.add(u)
+    items.push({ src: u, title })
+  }
+  if (featuredImageUrl.value) {
+    push(featuredImageUrl.value, `${form.name || 'Character'} · Headshot`)
+  }
+  for (const slot of turnaroundSlots.value) {
+    if (slot.image?.url) {
+      push(slot.image.url, `${form.name || 'Character'} · ${slot.view.label}`)
+    }
+  }
+  for (const img of galleryImages.value) {
+    push(img.url, `${form.name || 'Character'} · ${img.expressionLabel || 'Plate'}`)
+  }
+  return items
+})
+
+function openLookbookLightbox (src: string) {
+  const items = lookbookLightboxItems.value
+  const idx = items.findIndex((item) => item.src === src)
+  if (idx < 0) return
+  lookbookLightboxIndex.value = idx
+  lookbookLightboxOpen.value = true
+}
 const lockedPortraitPrompt = computed(() => featuredImage.value?.promptUsed || '')
 
 const referenceClips = computed(() => {

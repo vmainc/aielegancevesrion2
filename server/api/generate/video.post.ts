@@ -30,6 +30,7 @@ import { registerVideoGenerationJob } from '~/server/utils/video-generation-job-
 import { getPocketBaseUserIdFromRequest } from '~/server/utils/pocketbase-user-token'
 import { checkRateLimit, rateLimitKey } from '~/server/utils/rate-limit'
 import { getVideoRepairPublicBaseUrl } from '~/server/utils/video-repair-config'
+import type { CharacterReferenceImage } from '~/lib/video-character-references'
 
 type Aspect =
   | '16:9'
@@ -96,6 +97,32 @@ export default defineEventHandler(async (event) => {
     .filter((u: unknown): u is string => typeof u === 'string' && Boolean(u.trim()))
     .map((u: string) => u.trim())
     .slice(0, 4)
+  const referenceImageUrlsRaw = body?.referenceImageUrls ?? body?.reference_image_urls
+  const referenceImageUrls = (Array.isArray(referenceImageUrlsRaw) ? referenceImageUrlsRaw : [])
+    .map((u) => (typeof u === 'string' ? u.trim() : ''))
+    .filter(Boolean)
+    .slice(0, 6)
+
+  const characterReferencesRaw = body?.characterReferences ?? body?.character_references
+  const characterReferencesIn: CharacterReferenceImage[] = []
+  if (Array.isArray(characterReferencesRaw)) {
+    for (const row of characterReferencesRaw) {
+      if (!row || typeof row !== 'object') continue
+      const rec = row as Record<string, unknown>
+      const imageUrl = typeof rec.imageUrl === 'string'
+        ? rec.imageUrl.trim()
+        : typeof rec.image_url === 'string'
+          ? rec.image_url.trim()
+          : ''
+      if (!imageUrl) continue
+      characterReferencesIn.push({
+        name: typeof rec.name === 'string' ? rec.name.trim().slice(0, 120) : '',
+        description: typeof rec.description === 'string' ? rec.description.trim().slice(0, 1200) : '',
+        imageUrl
+      })
+      if (characterReferencesIn.length >= 6) break
+    }
+  }
 
   /** Blocking mode (holds connection ~minutes) — for local dev only; production uses async + polling. */
   const syncBlocking = body?.sync === true || body?.sync === 'true'
@@ -127,6 +154,12 @@ export default defineEventHandler(async (event) => {
         'A timeline guide frame is too large to send inline. Remove it and generate or upload the frame again (we compress it automatically).'
     })
   }
+  if (referenceImageUrls.some((u) => u.startsWith('data:'))) {
+    throw createError({
+      statusCode: 400,
+      message: 'A character reference image is too large to send inline. Re-select the cast and try again.'
+    })
+  }
 
   const config = useRuntimeConfig()
   const waveSpeedKey = resolveWaveSpeedApiKey(config)
@@ -143,13 +176,13 @@ export default defineEventHandler(async (event) => {
   ) {
     resolution = '720p'
   }
-  // Prefer WaveSpeed (cheaper) over Atlas for Seedance 2.5 1080p.
-  const useWaveSpeed = shouldRouteSeedance25ViaWaveSpeed({
+  // Prefer WaveSpeed (cheaper) for all Seedance 2.x when keyed; Atlas is the 1080p fallback.
+  let useWaveSpeed = shouldRouteSeedance25ViaWaveSpeed({
     modelId: model,
     resolution,
     waveSpeedKeyConfigured: Boolean(waveSpeedKey)
   })
-  const useAtlas =
+  let useAtlas =
     !useWaveSpeed &&
     shouldRouteSeedance25ViaAtlas({
       modelId: model,
@@ -195,6 +228,20 @@ export default defineEventHandler(async (event) => {
     const resolved = await resolveReferenceImageUrlForServerFetch(url, resolveOpts)
     if (resolved) resolvedGuideFrames.push(resolved)
   }
+  const resolvedCharacterRefs: string[] = []
+  const resolvedCharacterReferences: CharacterReferenceImage[] = []
+  const labeledUrls = new Set(characterReferencesIn.map((c) => c.imageUrl))
+  for (const ref of characterReferencesIn) {
+    const resolved = await resolveReferenceImageUrlForServerFetch(ref.imageUrl, resolveOpts)
+    if (!resolved) continue
+    resolvedCharacterReferences.push({ ...ref, imageUrl: resolved })
+    resolvedCharacterRefs.push(resolved)
+  }
+  for (const url of referenceImageUrls) {
+    if (labeledUrls.has(url)) continue
+    const resolved = await resolveReferenceImageUrlForServerFetch(url, resolveOpts)
+    if (resolved && !resolvedCharacterRefs.includes(resolved)) resolvedCharacterRefs.push(resolved)
+  }
 
   let durationSeconds: number
   if (useWaveSpeed || useAtlas) {
@@ -229,6 +276,7 @@ export default defineEventHandler(async (event) => {
       // Prefer original client paths for public URL rewriting (staged frames /pb).
       const jobArgs = {
         prompt: promptForJob,
+        modelId: model,
         apiKey: waveSpeedKey,
         aspectRatio,
         resolution,
@@ -236,6 +284,8 @@ export default defineEventHandler(async (event) => {
         firstFrameImageUrl: frameImageUrl || resolvedFrame || undefined,
         lastFrameImageUrl: lastFrameImageUrl || resolvedLastFrame || undefined,
         generateAudio,
+        characterReferenceImageUrls: referenceImageUrls,
+        characterReferences: characterReferencesIn,
         publicPocketbaseUrl: publicPb || undefined,
         sitePublicBaseUrl: getVideoRepairPublicBaseUrl() || undefined
       }
@@ -285,7 +335,9 @@ export default defineEventHandler(async (event) => {
         durationSeconds,
         firstFrameImageUrl: resolvedFrame || undefined,
         lastFrameImageUrl: resolvedLastFrame || undefined,
-        generateAudio
+        generateAudio,
+        characterReferenceImageUrls: resolvedCharacterRefs,
+        characterReferences: resolvedCharacterReferences
       }
       if (syncBlocking) {
         const out = await atlasCloudGenerateVideo(jobArgs)
@@ -334,7 +386,9 @@ export default defineEventHandler(async (event) => {
       lastFrameImageUrl: resolvedLastFrame || undefined,
       inputReferenceImageUrls: resolvedGuideFrames.length ? resolvedGuideFrames : undefined,
       generateAudio,
-      negativePrompt: negativePrompt || undefined
+      negativePrompt: negativePrompt || undefined,
+      characterReferenceImageUrls: resolvedCharacterRefs,
+      characterReferences: resolvedCharacterReferences
     }
 
     if (syncBlocking) {

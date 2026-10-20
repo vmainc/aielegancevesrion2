@@ -78,7 +78,10 @@
               {{ successfulResults.length === 1 ? `Your ${resolution} clip is ready` : `Pick a ${resolution} clip to keep` }}
             </h2>
             <p class="text-sm text-gray-600 mt-1">
-              <template v-if="panelPrefill?.sceneId && panelPrefill?.shotId">
+              <template v-if="isEditingExistingClip">
+                Keep both saves the new clip beside the original. Replace removes the original and keeps this one. Download saves a file without changing the library.
+              </template>
+              <template v-else-if="panelPrefill?.sceneId && panelPrefill?.shotId">
                 Keep saves this clip to your project. Discard removes it so you can adjust settings and try again.
               </template>
               <template v-else>
@@ -136,7 +139,7 @@
             v-if="successfulResults.length"
             type="button"
             class="w-full flex items-center justify-center gap-2.5 px-6 py-4 rounded-xl bg-primary hover:bg-primary/90 text-gray-950 font-bold text-base sm:text-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="!selectedPlaybackUrl || downloadingClip"
+            :disabled="!selectedPlaybackUrl || downloadingClip || keepingClip || replacingClip || discardingRun"
             @click="downloadSelectedClip"
           >
             <svg class="w-6 h-6 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -149,15 +152,24 @@
             <button
               type="button"
               class="px-5 py-2.5 bg-primary hover:bg-primary/90 text-gray-950 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50"
-              :disabled="!successfulResults.length || keepingClip || discardingRun"
+              :disabled="!successfulResults.length || keepingClip || replacingClip || discardingRun"
               @click="keepClipAndContinue"
             >
               {{ keepingClip ? 'Saving…' : keepButtonLabel }}
             </button>
             <button
+              v-if="isEditingExistingClip"
+              type="button"
+              class="px-5 py-2.5 border border-primary/40 bg-primary/10 hover:bg-primary/15 text-gray-900 font-semibold rounded-lg text-sm transition-colors disabled:opacity-50"
+              :disabled="!successfulResults.length || keepingClip || replacingClip || discardingRun"
+              @click="replaceOriginalClip"
+            >
+              {{ replacingClip ? 'Replacing…' : 'Replace original' }}
+            </button>
+            <button
               type="button"
               class="px-5 py-2.5 border border-gray-300 bg-studio-slate hover:bg-gray-50 text-gray-800 font-medium rounded-lg text-sm transition-colors disabled:opacity-50"
-              :disabled="keepingClip || discardingRun"
+              :disabled="keepingClip || replacingClip || discardingRun"
               @click="discardRunAndRetry"
             >
               {{ discardingRun ? 'Removing…' : 'Discard & try again' }}
@@ -262,7 +274,10 @@
             </p>
           </div>
 
-          <details v-if="primaryModelId && compareModelOptions.length" class="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2">
+          <details
+            v-if="showModelCompare && primaryModelId && compareModelOptions.length"
+            class="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2"
+          >
             <summary class="text-sm font-medium text-gray-800 cursor-pointer select-none py-1">
               Compare with another model (optional)
             </summary>
@@ -323,7 +338,18 @@
             </div>
             <div>
               <label for="vg-duration" class="block text-sm font-medium text-gray-700 mb-1.5">Clip length</label>
+              <input
+                v-if="exactDurationRange"
+                id="vg-duration"
+                v-model.number="durationSeconds"
+                type="number"
+                :min="exactDurationRange.min"
+                :max="exactDurationRange.max"
+                step="1"
+                class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
+              >
               <select
+                v-else
                 id="vg-duration"
                 v-model.number="durationSeconds"
                 class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
@@ -376,9 +402,93 @@
                 v-model="saveToProject"
                 type="checkbox"
                 class="rounded border-gray-300 text-primary focus:ring-primary"
+                :disabled="isEditingExistingClip"
               >
               Save clip to project library (Assets → Video)
             </label>
+
+            <div
+              v-if="showSceneShotPicker"
+              class="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-3 space-y-3"
+            >
+              <div>
+                <p class="text-sm font-medium text-gray-800">Storyboard panel</p>
+                <p class="text-xs text-gray-500 mt-0.5">
+                  Pick a scene and shot to load prompt, start/end frames, cast, and duration from the board.
+                </p>
+              </div>
+              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label for="vg-scene" class="block text-xs font-medium text-gray-600 mb-1">Scene</label>
+                  <select
+                    id="vg-scene"
+                    v-model="pickerSceneId"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
+                    :disabled="loadingPickerScenes || !pickerScenes.length"
+                    @change="onPickerSceneChange"
+                  >
+                    <option value="">
+                      {{ loadingPickerScenes ? 'Loading scenes…' : (pickerScenes.length ? 'Select scene…' : 'No scenes yet') }}
+                    </option>
+                    <option
+                      v-for="s in pickerScenes"
+                      :key="s.id"
+                      :value="s.id"
+                    >
+                      {{ s.heading || 'Untitled scene' }}{{ typeof s.shotCount === 'number' ? ` (${s.shotCount})` : '' }}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <label for="vg-shot" class="block text-xs font-medium text-gray-600 mb-1">Shot</label>
+                  <select
+                    id="vg-shot"
+                    v-model="pickerShotId"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary disabled:opacity-50"
+                    :disabled="!pickerSceneId || loadingPickerShots || !pickerShots.length"
+                    @change="onPickerShotChange"
+                  >
+                    <option value="">
+                      {{ !pickerSceneId
+                        ? 'Select a scene first'
+                        : loadingPickerShots
+                          ? 'Loading shots…'
+                          : (pickerShots.length ? 'Select shot…' : 'No shots in this scene') }}
+                    </option>
+                    <option
+                      v-for="sh in pickerShots"
+                      :key="sh.id"
+                      :value="sh.id"
+                    >
+                      {{ sh.title || 'Untitled shot' }}
+                    </option>
+                  </select>
+                </div>
+              </div>
+              <p v-if="loadingPanelPrefill" class="text-xs text-primary animate-pulse">
+                Loading panel prompt and frames…
+              </p>
+              <p v-else-if="pickerError" class="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2">
+                {{ pickerError }}
+              </p>
+              <p
+                v-else-if="panelPrefill?.sceneId && panelPrefill?.shotId && panelPrefill?.startFrameUrl"
+                class="text-xs text-gray-600"
+              >
+                Panel loaded{{ panelPrefill.shotTitle ? ` — “${panelPrefill.shotTitle}”` : '' }}.
+                Adjust prompt or frames below, then generate.
+              </p>
+            </div>
+
+            <div
+              v-else-if="isEditingExistingClip && (panelPrefill?.sceneId || panelPrefill?.shotTitle)"
+              class="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-2.5 text-xs text-gray-600"
+            >
+              Editing saved clip
+              <span v-if="panelPrefill?.shotTitle"> — “{{ panelPrefill.shotTitle }}”</span>
+              <span v-if="panelSceneLabel"> · {{ panelSceneLabel }}</span>
+              . Scene/shot picker is locked so the restored prompt is not overwritten.
+            </div>
           </template>
           <p v-else class="text-sm text-amber-800">
             <NuxtLink to="/login" class="text-primary font-medium underline">Sign in</NuxtLink>
@@ -464,6 +574,41 @@
             <p v-if="refreshingPromptForCast" class="text-xs text-primary animate-pulse">
               Updating prompt for selected cast…
             </p>
+            <p
+              v-if="castSeedFrameLockHint"
+              class="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-2"
+            >
+              {{ castSeedFrameLockHint }}
+            </p>
+          </div>
+
+          <div
+            v-if="showCharacterPicker"
+            class="rounded-lg border border-gray-200 bg-studio-slate px-4 py-3 space-y-2"
+          >
+            <div>
+              <label for="vg-location" class="block text-sm font-medium text-gray-700">
+                Location
+              </label>
+              <p class="text-xs text-gray-500 mt-0.5">
+                Type a place name as listed in the bible (e.g. Trailer, Carl's House). Set plates lock the environment for seed frames.
+              </p>
+            </div>
+            <p v-if="locationRefsLoading" class="text-xs text-gray-500">Loading locations…</p>
+            <p v-else-if="locationRefsError" class="text-xs text-red-600">{{ locationRefsError }}</p>
+            <p v-else-if="!projectLocationRefs.length" class="text-xs text-gray-500">
+              No locations yet — add them on the Locations step or Production Bible.
+            </p>
+            <ProjectCharacterTypeahead
+              v-else
+              v-model="selectedLocationIds"
+              input-id="vg-location"
+              entity-noun="location"
+              :max-selected="1"
+              :options="locationTypeaheadOptions"
+              :hint="locationTypeaheadHint"
+              placeholder="Type a location name…"
+            />
           </div>
 
           <div>
@@ -521,6 +666,8 @@
             :bible-shot-id="panelPrefill?.shotId"
             :bible-character-ids="effectiveCharacterIds"
             :reference-image-urls="castPlateReferenceUrls"
+            :set-reference-image-urls="locationPlateReferenceUrls"
+            :cast-continuity-block="seedFrameCastContinuityBlock"
             :supports-end-frame="anySelectedSupportsEndFrame"
             :end-frame-compatibility-warn="endFrameCompatibilityWarn"
             :end-frame-compatibility-hint="endFrameCompatibilityHint"
@@ -541,69 +688,120 @@
               </span>
             </label>
             <div v-if="includeSpokenDialogue" class="space-y-3">
-              <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div>
-                  <label for="vg-dialogue-speaker" class="block text-sm font-medium text-gray-700 mb-1.5">
-                    Who speaks
-                  </label>
-                  <select
-                    id="vg-dialogue-speaker"
-                    v-model="dialogueSpeakerId"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
-                    :disabled="!dialogueSpeakerOptions.length"
+              <p class="text-xs text-gray-500">
+                Add lines in order — one character speaks, then another can reply. They play sequentially in the clip.
+              </p>
+              <div
+                v-for="(turn, turnIndex) in dialogueTurns"
+                :key="turn.id"
+                class="rounded-lg border border-gray-200 bg-gray-50/80 px-3 py-3 space-y-3"
+              >
+                <div class="flex items-center justify-between gap-2">
+                  <p class="text-xs font-semibold uppercase tracking-wide text-gray-600">
+                    Line {{ turnIndex + 1 }}
+                    <span v-if="turnIndex > 0" class="font-normal normal-case text-gray-500"> · reply / next</span>
+                  </p>
+                  <button
+                    v-if="dialogueTurns.length > 1"
+                    type="button"
+                    class="text-[11px] font-medium text-red-700 hover:underline disabled:opacity-40"
+                    @click="removeDialogueTurn(turn.id)"
                   >
-                    <option value="" disabled>
-                      {{ dialogueSpeakerOptions.length ? 'Select character…' : 'No characters in shot' }}
-                    </option>
-                    <option
-                      v-for="c in dialogueSpeakerOptions"
-                      :key="c.id"
-                      :value="c.id"
+                    Remove
+                  </button>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label
+                      :for="`vg-dialogue-speaker-${turn.id}`"
+                      class="block text-sm font-medium text-gray-700 mb-1.5"
                     >
-                      {{ c.name }}
-                    </option>
-                  </select>
-                  <p v-if="!dialogueSpeakerOptions.length" class="mt-1 text-xs text-amber-800">
-                    Select characters in this shot above so we can name who speaks.
-                  </p>
-                  <p v-else-if="speakerVoiceNote" class="mt-1 text-xs text-gray-500">
-                    Voice lock: {{ speakerVoiceNote }}
-                  </p>
-                  <p v-else class="mt-1 text-xs text-amber-800">
-                    No voice notes on this character. Add them on the character page or this take will invent a voice.
-                  </p>
+                      Who speaks
+                    </label>
+                    <select
+                      :id="`vg-dialogue-speaker-${turn.id}`"
+                      v-model="turn.speakerId"
+                      class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
+                      :disabled="!dialogueSpeakerOptions.length"
+                    >
+                      <option value="" disabled>
+                        {{ dialogueSpeakerOptions.length ? 'Select character…' : 'No characters in shot' }}
+                      </option>
+                      <option
+                        v-for="c in dialogueSpeakerOptions"
+                        :key="c.id"
+                        :value="c.id"
+                      >
+                        {{ c.name }}
+                      </option>
+                    </select>
+                    <p
+                      v-if="turn.speakerId && voiceNoteFor(turn.speakerId)"
+                      class="mt-1 text-xs text-gray-500"
+                    >
+                      Voice lock: {{ voiceNoteFor(turn.speakerId) }}
+                    </p>
+                    <p v-else-if="turn.speakerId" class="mt-1 text-xs text-amber-800">
+                      No voice notes on this character. Add them on the character page or this take will invent a voice.
+                    </p>
+                  </div>
+                  <div>
+                    <label
+                      :for="`vg-dialogue-tone-${turn.id}`"
+                      class="block text-sm font-medium text-gray-700 mb-1.5"
+                    >
+                      Tone
+                    </label>
+                    <select
+                      :id="`vg-dialogue-tone-${turn.id}`"
+                      v-model="turn.tone"
+                      class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
+                    >
+                      <optgroup
+                        v-for="group in dialogueToneGroups"
+                        :key="group.label"
+                        :label="group.label"
+                      >
+                        <option
+                          v-for="t in group.tones"
+                          :key="t.value"
+                          :value="t.value"
+                        >
+                          {{ t.label }}
+                        </option>
+                      </optgroup>
+                    </select>
+                  </div>
                 </div>
                 <div>
-                  <label for="vg-dialogue-tone" class="block text-sm font-medium text-gray-700 mb-1.5">
-                    Tone
-                  </label>
-                  <select
-                    id="vg-dialogue-tone"
-                    v-model="dialogueTone"
-                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary"
+                  <label
+                    :for="`vg-dialogue-${turn.id}`"
+                    class="block text-sm font-medium text-gray-700 mb-1.5"
                   >
-                    <option
-                      v-for="t in dialogueToneOptions"
-                      :key="t.value"
-                      :value="t.value"
-                    >
-                      {{ t.label }}
-                    </option>
-                  </select>
+                    What {{ dialogueSpeakerNameFor(turn.speakerId) || 'they' }} say
+                  </label>
+                  <textarea
+                    :id="`vg-dialogue-${turn.id}`"
+                    v-model="turn.line"
+                    rows="2"
+                    class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
+                    :placeholder="turnIndex === 0
+                      ? 'e.g. We have to leave — now.'
+                      : 'e.g. I know. Follow me.'"
+                  />
                 </div>
               </div>
-              <div>
-                <label for="vg-dialogue" class="block text-sm font-medium text-gray-700 mb-1.5">
-                  What {{ dialogueSpeakerName || 'they' }} say
-                </label>
-                <textarea
-                  id="vg-dialogue"
-                  v-model="dialogueLine"
-                  rows="2"
-                  class="w-full px-3 py-2 rounded-lg border border-gray-300 bg-studio-slate text-gray-900 text-sm focus:outline-none focus:border-primary resize-y"
-                  placeholder='e.g. "We have to leave — now."'
-                />
-              </div>
+              <p v-if="!dialogueSpeakerOptions.length" class="text-xs text-amber-800">
+                Select characters in this shot above so we can name who speaks.
+              </p>
+              <button
+                type="button"
+                class="text-sm font-medium text-primary hover:underline disabled:opacity-40"
+                :disabled="dialogueTurns.length >= 6"
+                @click="addDialogueTurn"
+              >
+                + Add next line
+              </button>
             </div>
 
             <label class="inline-flex items-start gap-2 text-sm text-gray-800 cursor-pointer pt-1 border-t border-gray-100">
@@ -844,12 +1042,12 @@ definePageMeta({
   /** Panel prefill uses useState + API — client-only avoids SSR clearing query. */
   ssr: false,
   key: route =>
-    `video-generation:${route.query.projectId || ''}:${route.query.sceneId || ''}:${route.query.shotId || ''}`
+    `video-generation:${route.query.projectId || ''}:${route.query.sceneId || ''}:${route.query.shotId || ''}:${route.query.editAssetId || ''}`
 })
 
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import { downloadMediaFile, sanitizeDownloadFilename } from '~/lib/download-media-file'
-import { appendPlaybackAccessToken } from '~/lib/project-asset-playback-url'
+import { appendPlaybackAccessToken, projectAssetMediaPath } from '~/lib/project-asset-playback-url'
 import { productionBibleGenerationDebugLabel } from '~/lib/production-bible-generation-context'
 import {
   buildGenerationObservability,
@@ -858,9 +1056,16 @@ import {
 } from '~/lib/generation-observability'
 import {
   clearVideoGenerationPanelPrefill,
-  useVideoGenerationPrefillState,
+  readVideoGenerationPrefill,
   type VideoGenerationPrefill
 } from '~/lib/video-generation-prefill'
+import {
+  buildVideoRegenerationMetadata,
+  isDurableVideoFrameUrl,
+  isVideoEditPrefill,
+  stripPlaybackAccessToken,
+  videoAssetNotesFromPrompt
+} from '~/lib/video-asset-regeneration'
 import {
   generateOpenRouterVideo,
   playbackUrlForProjectVideoAsset,
@@ -873,8 +1078,11 @@ import {
   middleTimelineKeyframeUrls,
   rescaleTimelineKeyframes,
   seedTimelineFromStartEnd,
+  sortTimelineKeyframes,
+  updateTimelineKeyframe,
   type VideoTimelineKeyframe
 } from '~/lib/video-keyframe-timeline'
+import { dialogueToneGroups } from '~/lib/dialogue-tone-options'
 import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import {
   defaultAspectRatioFromPrefs,
@@ -886,20 +1094,32 @@ import {
   readVideoGenerationPrefs,
   videoToolDurationOptions,
   videoToolResolutionOptions,
+  contiguousClipDurationRange,
   writeVideoGenerationPrefs,
   type VideoToolClipSeconds,
   type VideoToolResolution
 } from '~/lib/video-generation-prefs'
 import { normalizeVideoModelToOpenRouter } from '~/lib/atlas-cloud-video'
 import {
+  buildContinuityPromptBlock,
   collectCharacterPortraitUrls,
   findCharactersInShot,
   type ProjectCharacterRef
 } from '~/lib/shot-character-continuity'
+import {
+  castMemberToVisualInput,
+  formatCastLineForProductionPrompt
+} from '~/lib/character-visual-description'
+import { matchLocationEntity } from '~/lib/set-lock'
 import type { CreativeProject, ProjectAspectRatio } from '~/types/creative-project'
 import type { CreativeShot } from '~/types/creative-shot'
 import type { CreativeSceneListItem } from '~/types/creative-scene'
+import type { BibleEntity } from '~/types/bible-entity'
 import { useProjectCharacterRefs } from '~/composables/useProjectCharacterRefs'
+import {
+  useProjectLocationRefs,
+  type ProjectLocationRef
+} from '~/composables/useProjectLocationRefs'
 import type { CharacterTypeaheadOption } from '~/components/project/CharacterTypeahead.vue'
 
 const PB_ID = /^[a-z0-9]{15}$/
@@ -940,14 +1160,8 @@ const { isAuthenticated, getAuthToken, initAuth } = useAuth()
 const authTokenState = useState<string | null>('auth_token')
 const { projects, loadServerProjects, clientReady, registerImportedProject } = useCreativeProject()
 
-const prefillState = useVideoGenerationPrefillState()
-
 function stashedPanelPrefill (): VideoGenerationPrefill | null {
-  const fromState = prefillState.value
-  if (fromState?.prompt?.trim() || fromState?.startFrameUrl?.trim() || fromState?.endFrameUrl?.trim()) {
-    return fromState
-  }
-  return null
+  return readVideoGenerationPrefill()
 }
 
 const boot = import.meta.client ? stashedPanelPrefill() : null
@@ -996,37 +1210,44 @@ const timelineKeyframes = ref<VideoTimelineKeyframe[]>(
 const startFrameUrl = computed(() => deriveStartEndFromTimeline(timelineKeyframes.value).startFrameUrl)
 const endFrameUrl = computed(() => deriveStartEndFromTimeline(timelineKeyframes.value).endFrameUrl)
 const guideFrameUrls = computed(() => middleTimelineKeyframeUrls(timelineKeyframes.value))
+
+function setTimelineAnchorFrame (anchor: 'start' | 'end', url: string | null) {
+  const dur = Number(durationSeconds.value) || 1
+  const frames = sortTimelineKeyframes(timelineKeyframes.value)
+  const target = anchor === 'start'
+    ? frames.find(f => f.atSeconds <= 0.05)
+    : frames.find(f => Math.abs(f.atSeconds - dur) < 0.05)
+  if (!target) return
+  timelineKeyframes.value = updateTimelineKeyframe(timelineKeyframes.value, target.id, { imageUrl: url }, dur)
+}
 const aspectRatio = ref<'16:9' | '9:16' | '1:1'>(
   defaultAspectRatioFromPrefs(boot?.aspectRatio)
 )
-const durationSeconds = ref<VideoToolClipSeconds>(
+const durationSeconds = ref<number>(
   defaultDurationFromPrefs(boot?.durationSeconds)
 )
 const resolution = ref<VideoToolResolution>(defaultResolutionFromPrefs())
 const includeSpokenDialogue = ref(false)
-const dialogueLine = ref('')
-const dialogueSpeakerId = ref('')
-const dialogueTone = ref('neutral')
+type DialogueTurnDraft = {
+  id: string
+  speakerId: string
+  line: string
+  tone: string
+}
+function newDialogueTurn (partial?: Partial<DialogueTurnDraft>): DialogueTurnDraft {
+  return {
+    id: `dlg-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`,
+    speakerId: partial?.speakerId || '',
+    line: partial?.line || '',
+    tone: partial?.tone || 'neutral'
+  }
+}
+const dialogueTurns = ref<DialogueTurnDraft[]>([newDialogueTurn()])
 const includeAmbientSound = ref(false)
 const ambientSoundPrompt = ref('')
 const generatingSoundscape = ref(false)
 
-const dialogueToneOptions = [
-  { value: 'neutral', label: 'Neutral' },
-  { value: 'calm', label: 'Calm' },
-  { value: 'soft', label: 'Soft' },
-  { value: 'whispered', label: 'Whispered' },
-  { value: 'urgent', label: 'Urgent' },
-  { value: 'tense', label: 'Tense' },
-  { value: 'angry', label: 'Angry' },
-  { value: 'fearful', label: 'Fearful' },
-  { value: 'sad', label: 'Sad' },
-  { value: 'excited', label: 'Excited' },
-  { value: 'confident', label: 'Confident' },
-  { value: 'deadpan', label: 'Deadpan' },
-  { value: 'warm', label: 'Warm' },
-  { value: 'cold', label: 'Cold' }
-] as const
+
 
 const ambientSoundPresets = [
   { label: 'Rain & thunder', text: 'Soft rain on surfaces, occasional distant thunder, no music.' },
@@ -1071,6 +1292,8 @@ async function generateSoundscape () {
 }
 const primaryModelId = ref('')
 const compareModelIds = ref<string[]>([])
+/** Hidden for now — keep wiring so we can turn compare back on later. */
+const showModelCompare = false
 const prefsHydrated = ref(false)
 const modelsPrefsHydrated = ref(false)
 const formError = ref('')
@@ -1091,9 +1314,30 @@ const formStep = ref<FormStep>('setup')
 const setupStepError = ref('')
 const selectedKeepModelId = ref('')
 const keepingClip = ref(false)
+const replacingClip = ref(false)
 const discardingRun = ref(false)
 const downloadingClip = ref(false)
 const panelPrefill = ref<VideoGenerationPrefill | null>(boot)
+
+const prefillBanner = ref('')
+/** False until applyVideoGenerationPrefill runs (stash or panel API) so dialogue/location/edit flags hydrate. */
+const prefillApplied = ref(false)
+const loadingPanelPrefill = ref(false)
+
+const pickerSceneId = ref(
+  (typeof route.query.sceneId === 'string' ? route.query.sceneId.trim() : '') ||
+    (boot?.sceneId || '')
+)
+const pickerShotId = ref(
+  (typeof route.query.shotId === 'string' ? route.query.shotId.trim() : '') ||
+    (boot?.shotId || '')
+)
+const pickerScenes = ref<CreativeSceneListItem[]>([])
+const pickerShots = ref<CreativeShot[]>([])
+const loadingPickerScenes = ref(false)
+const loadingPickerShots = ref(false)
+const pickerError = ref('')
+
 const productionBibleDebugLine = computed(() => {
   const ctx = panelPrefill.value?.productionBibleContext
   if (!ctx) return ''
@@ -1112,9 +1356,17 @@ const {
   loading: projectCharactersLoading,
   loadError: projectCharactersError
 } = useProjectCharacterRefs(characterProjectId)
+const {
+  refs: projectLocationRefs,
+  loading: locationRefsLoading,
+  loadError: locationRefsError
+} = useProjectLocationRefs(characterProjectId)
 
 const selectedCharacterIds = ref<string[]>(
   boot?.characterIds?.filter(id => PB_ID.test(id)) ?? []
+)
+const selectedLocationIds = ref<string[]>(
+  boot?.locationId && PB_ID.test(boot.locationId) ? [boot.locationId] : []
 )
 const suppressCastPromptRefresh = ref(false)
 const refreshingPromptForCast = ref(false)
@@ -1130,8 +1382,7 @@ const sceneCharacterIds = computed(() => {
   if (!panelShot.value || !projectCharacterRefs.value.length) return new Set<string>()
   const inShot = findCharactersInShot(
     panelShot.value,
-    projectCharacterRefs.value,
-    panelScene.value?.summary
+    projectCharacterRefs.value
   )
   return new Set(inShot.map(c => c.id))
 })
@@ -1195,18 +1446,134 @@ const characterTypeaheadHint = computed(() => {
   return 'Type a name to add cast. Nothing is pre-selected from large casts.'
 })
 
+/** Locations named in the current prompt or matched from the scene heading. */
+const suggestedLocationIds = computed(() => {
+  const ids = new Set<string>()
+  const locs = projectLocationRefs.value
+  if (!locs.length) return ids
+
+  const heading = (panelScene.value?.heading || '').trim()
+  if (heading) {
+    const hit = matchLocationEntity(
+      heading,
+      locs.map((l) => ({
+        id: l.id,
+        type: 'location' as const,
+        name: l.name,
+        summary: l.summary,
+        description: l.architecture,
+        status: l.status as BibleEntity['status'],
+        aliases: [] as string[]
+      }))
+    )
+    if (hit) ids.add(hit.id)
+  }
+
+  const text = [
+    prompt.value,
+    panelShot.value?.description || '',
+    panelShot.value?.videoPrompt || '',
+    panelScene.value?.summary || ''
+  ].join('\n')
+  if (text.trim()) {
+    const lower = text.toLowerCase()
+    const sorted = [...locs].sort((a, b) => b.name.length - a.name.length)
+    for (const loc of sorted) {
+      const name = loc.name.trim()
+      if (name.length < 2) continue
+      if (lower.includes(name.toLowerCase())) ids.add(loc.id)
+    }
+  }
+  return ids
+})
+
+const locationTypeaheadOptions = computed<CharacterTypeaheadOption[]>(() => {
+  const suggested = suggestedLocationIds.value
+  return projectLocationRefs.value
+    .map((l: ProjectLocationRef) => ({
+      id: l.id,
+      name: l.name,
+      suggested: suggested.has(l.id),
+      badge: suggested.has(l.id)
+        ? (panelScene.value?.heading ? 'In scene' : 'In prompt')
+        : l.plateUrls.length
+          ? `${l.plateUrls.length} plate${l.plateUrls.length === 1 ? '' : 's'}`
+          : undefined
+    }))
+    .sort((a, b) => {
+      if (a.suggested !== b.suggested) return a.suggested ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+})
+
+const locationTypeaheadHint = computed(() => {
+  if (selectedLocationIds.value.length) {
+    return 'Set plates attach for seed frames. Clear to pick a different place.'
+  }
+  if (suggestedLocationIds.value.size) {
+    return 'Focus to see suggested places, or type any bible location name.'
+  }
+  return 'Type a location name as listed in the bible — full list stays hidden until you search.'
+})
+
 const effectiveCharacterIds = computed(() =>
   selectedCharacterIds.value.filter(id => projectCharacterRefs.value.some(c => c.id === id))
 )
 
-/** Cast isolation plates for seed-frame generation (featured + turnarounds). */
+const effectiveLocationId = computed(() => {
+  const id = selectedLocationIds.value[0]
+  if (!id) return ''
+  return projectLocationRefs.value.some((l) => l.id === id) ? id : ''
+})
+
+/** Cast plates only — face lock for seed-frame generation (headshot first). */
 const castPlateReferenceUrls = computed(() => {
   const ids = new Set(effectiveCharacterIds.value)
   if (!ids.size) return []
+  const plateBudget = Math.max(1, 4 - (effectiveLocationId.value ? 1 : 0))
   return collectCharacterPortraitUrls(
     projectCharacterRefs.value.filter(c => ids.has(c.id)),
-    4
+    plateBudget
   )
+})
+
+/** One labeled headshot per selected person, with their cast-bible description. */
+const castVideoReferences = computed(() => {
+  const ids = new Set(effectiveCharacterIds.value)
+  return projectCharacterRefs.value
+    .filter((c) => ids.has(c.id))
+    .map((c) => {
+      const imageUrl = (c.portraitUrl || c.plateUrls?.[0] || '').trim()
+      return {
+        name: c.name,
+        description: formatCastLineForProductionPrompt(castMemberToVisualInput(c)),
+        imageUrl
+      }
+    })
+    .filter((c) => c.imageUrl)
+})
+
+const locationPlateReferenceUrls = computed(() => {
+  const locId = effectiveLocationId.value
+  if (!locId) return []
+  const loc = projectLocationRefs.value.find((l) => l.id === locId)
+  return (loc?.plateUrls || []).slice(0, 1)
+})
+
+const seedFrameCastContinuityBlock = computed(() => {
+  const ids = new Set(effectiveCharacterIds.value)
+  if (!ids.size) return ''
+  return buildContinuityPromptBlock(
+    projectCharacterRefs.value.filter((c) => ids.has(c.id))
+  )
+})
+
+const castSeedFrameLockHint = computed(() => {
+  if (!effectiveCharacterIds.value.length) return ''
+  if (!castPlateReferenceUrls.value.length) {
+    return 'Selected cast has no lookbook headshots — the clip will follow the start and end frames only. Add a Headshot on Characters / Production Bible for face lock.'
+  }
+  return 'Selected lookbook headshots are sent with this clip as character references, along with the start and end frames. Seedance matches those faces instead of inventing new ones.'
 })
 
 const selectedCharacterSummary = computed(() => {
@@ -1232,19 +1599,46 @@ const dialogueSpeakerOptions = computed(() => {
   return projectCharacterOptions.value.filter(c => c.inScene)
 })
 
-const dialogueSpeakerName = computed(() => {
-  const id = dialogueSpeakerId.value
+function dialogueSpeakerNameFor (speakerId: string): string {
+  const id = (speakerId || '').trim()
   if (!id) return ''
   return dialogueSpeakerOptions.value.find(c => c.id === id)?.name
     || projectCharacterRefs.value.find(c => c.id === id)?.name
     || ''
-})
+}
 
-const speakerVoiceNote = computed(() => {
-  const id = dialogueSpeakerId.value
+function resolvedDialogueTurns () {
+  return dialogueTurns.value
+    .map((t) => ({
+      speakerId: t.speakerId.trim(),
+      speakerName: dialogueSpeakerNameFor(t.speakerId),
+      line: t.line.trim(),
+      tone: t.tone.trim()
+    }))
+    .filter((t) => t.line)
+}
+
+function addDialogueTurn () {
+  if (dialogueTurns.value.length >= 6) return
+  const options = dialogueSpeakerOptions.value
+  const used = new Set(dialogueTurns.value.map((t) => t.speakerId).filter(Boolean))
+  const nextSpeaker =
+    options.find((c) => !used.has(c.id))?.id
+    || options[0]?.id
+    || ''
+  dialogueTurns.value.push(newDialogueTurn({ speakerId: nextSpeaker }))
+}
+
+function removeDialogueTurn (id: string) {
+  if (dialogueTurns.value.length <= 1) return
+  dialogueTurns.value = dialogueTurns.value.filter((t) => t.id !== id)
+}
+
+function voiceNoteFor (speakerId: string): string {
+  const id = (speakerId || '').trim()
   if (!id) return ''
   return (projectCharacterRefs.value.find(c => c.id === id)?.voiceDescription || '').trim()
-})
+}
 
 function voiceLocksForShot () {
   const ids = new Set(effectiveCharacterIds.value)
@@ -1259,11 +1653,20 @@ function voiceLocksForShot () {
 function syncDialogueSpeakerSelection () {
   const options = dialogueSpeakerOptions.value
   if (!options.length) {
-    dialogueSpeakerId.value = ''
+    for (const turn of dialogueTurns.value) turn.speakerId = ''
     return
   }
-  if (options.some(c => c.id === dialogueSpeakerId.value)) return
-  dialogueSpeakerId.value = options[0]?.id || ''
+  for (const turn of dialogueTurns.value) {
+    if (options.some((c) => c.id === turn.speakerId)) continue
+    turn.speakerId = options[0]?.id || ''
+  }
+}
+
+function ensureDialogueTurns () {
+  if (!dialogueTurns.value.length) {
+    dialogueTurns.value = [newDialogueTurn()]
+  }
+  syncDialogueSpeakerSelection()
 }
 
 watch(dialogueSpeakerOptions, () => {
@@ -1271,7 +1674,7 @@ watch(dialogueSpeakerOptions, () => {
 }, { deep: true })
 
 watch(includeSpokenDialogue, (on) => {
-  if (on) syncDialogueSpeakerSelection()
+  if (on) ensureDialogueTurns()
 })
 
 let refreshPromptTimer: ReturnType<typeof setTimeout> | null = null
@@ -1304,15 +1707,14 @@ async function loadPanelSceneContext () {
 }
 
 function applySceneDefaultCharacterSelection () {
+  if (isVideoEditPrefill(panelPrefill.value)) return
   if (initialSceneSelectionApplied.value || !panelShot.value || !projectCharacterRefs.value.length) return
-  const inScene = findCharactersInShot(
+  const inShot = findCharactersInShot(
     panelShot.value,
-    projectCharacterRefs.value,
-    panelScene.value?.summary
+    projectCharacterRefs.value
   )
-  if (!inScene.length) return
   suppressCastPromptRefresh.value = true
-  selectedCharacterIds.value = inScene.map(c => c.id)
+  selectedCharacterIds.value = inShot.map(c => c.id)
   suppressCastPromptRefresh.value = false
   initialSceneSelectionApplied.value = true
 }
@@ -1354,6 +1756,8 @@ async function refreshPromptForSelectedCharacters () {
 
 watch(selectedCharacterIds, () => {
   if (suppressCastPromptRefresh.value) return
+  // Editing a saved clip — keep the restored prompt; don't rebuild from storyboard.
+  if (isVideoEditPrefill(panelPrefill.value)) return
   const pre = panelPrefill.value
   if (!pre?.sceneId || !pre?.shotId) return
   if (refreshPromptTimer) clearTimeout(refreshPromptTimer)
@@ -1366,6 +1770,7 @@ watch(projectCharacterRefs, () => {
 
 watch(startFrameBibleProjectId, (pid, prev) => {
   if (pid === prev) return
+  selectedLocationIds.value = []
   if (!pid) {
     selectedCharacterIds.value = []
     panelScene.value = null
@@ -1382,16 +1787,6 @@ watch(startFrameBibleProjectId, (pid, prev) => {
     }
   }
 })
-const prefillBanner = ref(
-  boot?.shotTitle?.trim()
-    ? `Opened from project storyboard — “${boot.shotTitle.trim()}”. Prompt and frames are prefilled; confirm model and project above.`
-    : boot?.prompt?.trim()
-      ? 'Opened from a project panel — prompt and frames are prefilled; confirm model and project above.'
-      : ''
-)
-const prefillApplied = ref(Boolean(boot?.prompt?.trim()))
-const loadingPanelPrefill = ref(false)
-
 const showCreateProject = ref(false)
 const creatingProject = ref(false)
 const createProjectError = ref('')
@@ -1405,8 +1800,10 @@ const pbProjects = computed(() =>
 )
 
 const selectedModelIdsList = computed(() => {
-  const ids = [primaryModelId.value, ...compareModelIds.value].filter(Boolean)
-  return [...new Set(ids)]
+  const ids = showModelCompare
+    ? [primaryModelId.value, ...compareModelIds.value]
+    : [primaryModelId.value]
+  return [...new Set(ids.filter(Boolean))]
 })
 
 const durationOptions = computed(() => {
@@ -1414,7 +1811,17 @@ const durationOptions = computed(() => {
   return videoToolDurationOptions(selected.length ? selected : models.value)
 })
 
+const exactDurationRange = computed(() => {
+  const selected = models.value.filter(m => selectedModelIdsList.value.includes(m.id))
+  const primary = selected.find(m => m.id === primaryModelId.value) || selected[0]
+  return contiguousClipDurationRange(primary?.supportedDurations)
+})
+
 const durationHint = computed(() => {
+  const range = exactDurationRange.value
+  if (range) {
+    return `Any whole second from ${range.min} to ${range.max}. Clips shorter than ${range.min}s are not available on this model.`
+  }
   if (!durationOptions.value.includes(15) && !durationOptions.value.includes(30)) {
     return '15s and 30s need Seedance 2.0 / 2.5 (or another model that lists those lengths).'
   }
@@ -1458,10 +1865,18 @@ const resolutionHint = computed(() => {
 })
 
 watch(
-  durationOptions,
-  (opts) => {
-    if (!opts.includes(durationSeconds.value as VideoToolClipSeconds)) {
-      const next = opts.includes(10) ? 10 : opts[0] || 5
+  [durationOptions, exactDurationRange],
+  () => {
+    const range = exactDurationRange.value
+    if (range) {
+      const n = Math.floor(Number(durationSeconds.value))
+      if (!Number.isFinite(n) || n < range.min) durationSeconds.value = range.min
+      else if (n > range.max) durationSeconds.value = range.max
+      else durationSeconds.value = n
+      return
+    }
+    if (!durationOptions.value.includes(durationSeconds.value as VideoToolClipSeconds)) {
+      const next = durationOptions.value.includes(10) ? 10 : durationOptions.value[0] || 5
       durationSeconds.value = next
     }
   },
@@ -1609,10 +2024,12 @@ function hydrateVideoGenerationPrefs () {
     if (validPrimary) {
       primaryModelId.value = validPrimary
     }
-    if (prefs.compareModelIds?.length) {
+    if (showModelCompare && prefs.compareModelIds?.length) {
       compareModelIds.value = prefs.compareModelIds
         .map(id => normalizeVideoModelToOpenRouter(id))
         .filter(id => id !== primaryModelId.value && models.value.some(m => m.id === id))
+    } else {
+      compareModelIds.value = []
     }
     modelsPrefsHydrated.value = true
   }
@@ -1730,11 +2147,12 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   panelPrefill.value = p
   prompt.value = p.prompt.trim()
   negativePrompt.value = (p.negativePrompt || '').trim()
+  const editingClip = isVideoEditPrefill(p)
   timelineKeyframes.value = seedTimelineFromStartEnd({
     durationSeconds: durationSeconds.value,
     startFrameUrl: p.startFrameUrl
       ? appendPlaybackAccessToken(p.startFrameUrl.trim(), getAuthToken())
-      : null,
+      : editingClip ? null : startFrameUrl.value,
     endFrameUrl: p.endFrameUrl
       ? appendPlaybackAccessToken(p.endFrameUrl.trim(), getAuthToken())
       : null
@@ -1743,6 +2161,13 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   if (typeof p.durationSeconds === 'number') {
     const dur = parseVideoGenerationDurationSeconds(p.durationSeconds)
     if (dur) durationSeconds.value = dur
+  }
+  if (p.resolution) {
+    const res = parseVideoGenerationResolution(p.resolution)
+    if (res) resolution.value = res
+  }
+  if (p.modelId?.trim()) {
+    primaryModelId.value = p.modelId.trim()
   }
   if (p.saveToProject !== undefined) saveToProject.value = p.saveToProject
   if (p.projectId && PB_ID.test(p.projectId)) {
@@ -1754,26 +2179,129 @@ function applyVideoGenerationPrefill (p: VideoGenerationPrefill) {
   suppressCastPromptRefresh.value = true
   selectedCharacterIds.value = (p.characterIds || []).filter(id => PB_ID.test(id))
   suppressCastPromptRefresh.value = false
-  initialSceneSelectionApplied.value = false
-  void loadPanelSceneContext()
+  selectedLocationIds.value = p.locationId && PB_ID.test(p.locationId) ? [p.locationId] : []
+  includeSpokenDialogue.value = p.includeSpokenDialogue === true
+  includeAmbientSound.value = p.includeAmbientSound === true
+  ambientSoundPrompt.value = (p.ambientSoundPrompt || '').trim()
+  if (p.dialogueTurns?.length) {
+    dialogueTurns.value = p.dialogueTurns.map((t) =>
+      newDialogueTurn({
+        speakerId: (t.speakerId || '').trim(),
+        line: (t.line || '').trim(),
+        tone: (t.tone || 'neutral').trim() || 'neutral'
+      })
+    )
+    if (!dialogueTurns.value.length) dialogueTurns.value = [newDialogueTurn()]
+    if (dialogueTurns.value.some((t) => t.line.trim())) {
+      includeSpokenDialogue.value = true
+    }
+  } else if (isVideoEditPrefill(p)) {
+    dialogueTurns.value = [newDialogueTurn()]
+  }
+  if (isVideoEditPrefill(p)) {
+    initialSceneSelectionApplied.value = true
+  } else if (p.sceneId && p.shotId) {
+    // Re-resolve from the shot beat so a full-cast prefill does not stick.
+    initialSceneSelectionApplied.value = false
+  }
+  if (p.sceneId && p.shotId) {
+    void loadPanelSceneContext()
+  }
   const label = (p.shotTitle || '').trim()
-  prefillBanner.value = label
-    ? `Opened from project storyboard — “${label}”. Prompt and frames are prefilled; confirm setup, then continue to the prompt.`
-    : 'Opened from a project panel — prompt and frames are prefilled; confirm setup, then continue to the prompt.'
+  if (isVideoEditPrefill(p)) {
+    prefillBanner.value = p.promptMayBeTruncated
+      ? `Editing a project clip — older saves only kept a short title. Expand the prompt, fix frames/cast, then generate. You’ll choose Keep both or Replace.`
+      : `Editing a project clip — prompt and settings restored. Confirm setup, adjust anything you need, then generate. You’ll choose Keep both or Replace.`
+  } else {
+    prefillBanner.value = label
+      ? `Opened from project storyboard — “${label}”. Prompt and frames are prefilled; confirm setup, then continue to the prompt.`
+      : 'Opened from a project panel — prompt and frames are prefilled; confirm setup, then continue to the prompt.'
+  }
   formStep.value = 'setup'
 }
 
 function stripPanelQueryFromRoute () {
   if (!import.meta.client) return
-  const q = { ...route.query }
-  let changed = false
-  for (const key of ['projectId', 'sceneId', 'shotId'] as const) {
-    if (key in q) {
-      delete q[key]
-      changed = true
+  // Keep projectId / editAssetId / sceneId / shotId — they are part of the page key.
+  // Stripping them remounts the page and wipes the restored Edit form.
+}
+
+async function loadPickerScenes () {
+  pickerScenes.value = []
+  pickerShots.value = []
+  pickerError.value = ''
+  const pid = selectedProjectId.value.trim()
+  if (!PB_ID.test(pid) || !isAuthenticated.value) return
+  const token = getAuthToken()
+  if (!token) return
+  loadingPickerScenes.value = true
+  try {
+    const res = await $fetch<{ scenes: CreativeSceneListItem[] }>(
+      `/api/projects/${pid}/scenes`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    pickerScenes.value = res.scenes || []
+    if (pickerSceneId.value && !pickerScenes.value.some((s) => s.id === pickerSceneId.value)) {
+      pickerSceneId.value = ''
+      pickerShotId.value = ''
     }
+    if (pickerSceneId.value) {
+      await loadPickerShots()
+    }
+  } catch (e: unknown) {
+    pickerError.value = formatApiFetchError(e, 'Could not load scenes')
+  } finally {
+    loadingPickerScenes.value = false
   }
-  if (changed) void router.replace({ path: route.path, query: q })
+}
+
+async function loadPickerShots () {
+  pickerShots.value = []
+  pickerError.value = ''
+  const pid = selectedProjectId.value.trim()
+  const sid = pickerSceneId.value.trim()
+  if (!PB_ID.test(pid) || !sid) return
+  const token = getAuthToken()
+  if (!token) return
+  loadingPickerShots.value = true
+  try {
+    const res = await $fetch<{ shots: CreativeShot[] }>(
+      `/api/projects/${pid}/scenes/${sid}/shots`,
+      { headers: { Authorization: `Bearer ${token}` } }
+    )
+    pickerShots.value = res.shots || []
+    if (pickerShotId.value && !pickerShots.value.some((s) => s.id === pickerShotId.value)) {
+      pickerShotId.value = ''
+    }
+  } catch (e: unknown) {
+    pickerError.value = formatApiFetchError(e, 'Could not load shots')
+  } finally {
+    loadingPickerShots.value = false
+  }
+}
+
+async function onPickerSceneChange () {
+  pickerShotId.value = ''
+  pickerError.value = ''
+  await loadPickerShots()
+}
+
+async function onPickerShotChange () {
+  pickerError.value = ''
+  const pid = selectedProjectId.value.trim()
+  const sid = pickerSceneId.value.trim()
+  const shid = pickerShotId.value.trim()
+  if (!PB_ID.test(pid) || !sid || !shid) return
+
+  // Remount via page key so deep-link + prefill path matches Storyboard → Video.
+  await navigateTo({
+    path: '/tools/video-generation',
+    query: {
+      projectId: pid,
+      sceneId: sid,
+      shotId: shid
+    }
+  })
 }
 
 async function fetchPanelPrefillFromApi (): Promise<boolean> {
@@ -1784,6 +2312,7 @@ async function fetchPanelPrefillFromApi (): Promise<boolean> {
   if (!token) return false
 
   loadingPanelPrefill.value = true
+  pickerError.value = ''
   try {
     const res = await $fetch<VideoGenerationPrefill>(
       `/api/projects/${panelProjectId.value}/video-panel-prefill`,
@@ -1797,15 +2326,19 @@ async function fetchPanelPrefillFromApi (): Promise<boolean> {
     )
     applyVideoGenerationPrefill(res)
     prefillApplied.value = true
+    pickerSceneId.value = panelSceneId.value
+    pickerShotId.value = panelShotId.value
     clearVideoGenerationPanelPrefill()
     stripPanelQueryFromRoute()
     return true
   } catch (e: unknown) {
+    const msg = formatApiFetchError(
+      e,
+      'Could not load panel — generate start and end frames on Storyboard first.'
+    )
+    pickerError.value = msg
     if (!prefillApplied.value) {
-      toast.showToast(
-        formatApiFetchError(e, 'Could not load panel for video generation.'),
-        'error'
-      )
+      toast.showToast(msg, 'error')
     }
     return false
   } finally {
@@ -1815,9 +2348,14 @@ async function fetchPanelPrefillFromApi (): Promise<boolean> {
 
 function tryApplyStashedPrefill (): boolean {
   if (prefillApplied.value || !import.meta.client) return false
-  const payload = stashedPanelPrefill()
+  const payload = stashedPanelPrefill() || boot
   if (!payload) return false
-  if (!payload.prompt?.trim() && !payload.startFrameUrl?.trim() && !payload.endFrameUrl?.trim()) {
+  if (
+    !payload.prompt?.trim() &&
+    !payload.startFrameUrl?.trim() &&
+    !payload.endFrameUrl?.trim() &&
+    !payload.replaceAssetId?.trim()
+  ) {
     return false
   }
   applyVideoGenerationPrefill(payload)
@@ -1912,12 +2450,42 @@ const qualityStatusLine = computed(() => {
   return `This run will generate at ${format}`
 })
 
-const keepButtonLabel = computed(() => {
-  if (panelPrefill.value?.sceneId && panelPrefill.value?.shotId) {
-    return 'Keep clip & view storyboard panel'
+const isEditingExistingClip = computed(() => isVideoEditPrefill(panelPrefill.value))
+
+const showSceneShotPicker = computed(() =>
+  Boolean(
+    isAuthenticated.value &&
+    saveToProject.value &&
+    selectedProjectId.value &&
+    PB_ID.test(selectedProjectId.value) &&
+    !isEditingExistingClip.value
+  )
+)
+
+watch(showSceneShotPicker, (show) => {
+  if (show) void loadPickerScenes()
+}, { immediate: true })
+
+watch(selectedProjectId, (pid, prev) => {
+  if (!showSceneShotPicker.value) return
+  if (prev && pid !== prev) {
+    const routePid =
+      typeof route.query.projectId === 'string' ? route.query.projectId.trim() : ''
+    if (pid.trim() !== routePid) {
+      pickerSceneId.value = ''
+      pickerShotId.value = ''
+      pickerError.value = ''
+    }
   }
-  if (selectedProjectId.value && saveToProject.value) {
-    return 'Keep clip & open project video'
+  void loadPickerScenes()
+})
+
+const keepButtonLabel = computed(() => {
+  if (isEditingExistingClip.value) {
+    return 'Keep both & open videos'
+  }
+  if (selectedProjectId.value && (saveToProject.value || panelPrefill.value?.projectId)) {
+    return 'Keep clip & open dashboard'
   }
   return 'Keep clip'
 })
@@ -2041,10 +2609,8 @@ const negativeDeliveryHint = computed(() => {
 function resolvedGenerationPrompt (): string {
   const withAudio = resolveVideoGenerationUserPrompt({
     prompt: prompt.value,
-    dialogueLine: dialogueLine.value,
     includeSpokenDialogue: includeSpokenDialogue.value,
-    dialogueSpeakerName: dialogueSpeakerName.value,
-    dialogueTone: dialogueTone.value,
+    dialogueTurns: resolvedDialogueTurns(),
     voiceLocks: voiceLocksForShot(),
     ambientSoundPrompt: ambientSoundPrompt.value,
     includeAmbientSound: includeAmbientSound.value
@@ -2056,6 +2622,13 @@ function resolvedGenerationPrompt (): string {
   )
 }
 
+const dialogueTurnsReady = computed(() => {
+  const turns = resolvedDialogueTurns()
+  if (!turns.length) return false
+  if (!dialogueSpeakerOptions.value.length) return true
+  return turns.every((t) => Boolean(t.speakerId))
+})
+
 const canSubmit = computed(() =>
   uiPhase.value === 'form' &&
   formStep.value === 'prompt' &&
@@ -2064,10 +2637,7 @@ const canSubmit = computed(() =>
   hasModelSelected.value &&
   prompt.value.trim().length > 0 &&
   !pending.value &&
-  (!includeSpokenDialogue.value || (
-    dialogueLine.value.trim().length > 0 &&
-    (!dialogueSpeakerOptions.value.length || Boolean(dialogueSpeakerId.value))
-  )) &&
+  (!includeSpokenDialogue.value || dialogueTurnsReady.value) &&
   (!saveToProject.value || (selectedProjectId.value && pbProjects.value.some(p => p.id === selectedProjectId.value)))
 )
 
@@ -2122,6 +2692,44 @@ async function downloadSelectedClip () {
   await downloadClip(kept.playbackUrl, kept)
 }
 
+/** Save seed frames into the project library so Edit can restore them later. */
+async function persistSeedFrameForRegen (opts: {
+  projectId: string
+  frameUrl: string | null | undefined
+  role: 'start' | 'end'
+  headers: Record<string, string>
+}): Promise<string | null> {
+  const raw = (opts.frameUrl || '').trim()
+  if (!raw) return null
+  const cleaned = stripPlaybackAccessToken(raw)
+  if (isDurableVideoFrameUrl(cleaned)) return cleaned
+
+  try {
+    const res = await $fetch<{ asset?: { id?: string } }>(
+      `/api/projects/${opts.projectId}/assets/ingest-from-url`,
+      {
+        method: 'POST',
+        headers: { ...opts.headers, 'Content-Type': 'application/json' },
+        body: {
+          url: cleaned.startsWith('/') ? cleaned : raw,
+          kind: 'other',
+          title: `${clipTitle().slice(0, 80)} — ${opts.role} frame`.slice(0, 500),
+          notes: `Seed ${opts.role} frame saved for video re-edit.`,
+          metadata: {
+            source: 'video_seed_frame',
+            seed_role: opts.role
+          }
+        }
+      }
+    )
+    const id = res.asset?.id
+    if (!id) return null
+    return projectAssetMediaPath(opts.projectId, id)
+  } catch {
+    return isDurableVideoFrameUrl(cleaned) ? cleaned : null
+  }
+}
+
 async function runOneModel (modelId: string) {
   const model = models.value.find(m => m.id === modelId)
   slotByModel[modelId] = { status: 'loading' }
@@ -2138,6 +2746,8 @@ async function runOneModel (modelId: string) {
           ? endFrameUrl.value
           : undefined,
       guideFrameUrls: guideFrameUrls.value.length ? guideFrameUrls.value : undefined,
+      referenceImageUrls: castVideoReferences.value.map((c) => c.imageUrl),
+      characterReferences: castVideoReferences.value,
       supportedDurations: model?.supportedDurations,
       supportedResolutions: model?.supportedResolutions,
       generateAudio: wantsGeneratedAudio.value,
@@ -2151,7 +2761,57 @@ async function runOneModel (modelId: string) {
 
     if (saveToProject.value && selectedProjectId.value && headers) {
       const pre = panelPrefill.value
+      const [persistedStart, persistedEnd] = await Promise.all([
+        persistSeedFrameForRegen({
+          projectId: selectedProjectId.value,
+          frameUrl: startFrameUrl.value,
+          role: 'start',
+          headers
+        }),
+        persistSeedFrameForRegen({
+          projectId: selectedProjectId.value,
+          frameUrl: endFrameUrl.value,
+          role: 'end',
+          headers
+        })
+      ])
+      // Prefer durable project media paths for future Edit restores.
+      if (persistedStart) {
+        setTimelineAnchorFrame('start', appendPlaybackAccessToken(persistedStart, getAuthToken()))
+      }
+      if (persistedEnd) {
+        setTimelineAnchorFrame('end', appendPlaybackAccessToken(persistedEnd, getAuthToken()))
+      }
+      const regen = buildVideoRegenerationMetadata({
+        userPrompt: prompt.value,
+        characterIds: effectiveCharacterIds.value.length
+          ? effectiveCharacterIds.value
+          : pre?.characterIds,
+        startFrameUrl: persistedStart || startFrameUrl.value,
+        endFrameUrl: persistedEnd || endFrameUrl.value,
+        locationId: effectiveLocationId.value || undefined,
+        locationName: (
+          projectLocationRefs.value.find((l) => l.id === effectiveLocationId.value)?.name || ''
+        ),
+        negativePrompt: negativePrompt.value,
+        dialogueTurns: includeSpokenDialogue.value
+          ? resolvedDialogueTurns().map((t) => ({
+              speaker_id: t.speakerId || undefined,
+              speaker_name: (t.speakerName || '').slice(0, 200) || undefined,
+              line: t.line.slice(0, 500),
+              tone: (t.tone || '').slice(0, 80) || undefined
+            }))
+          : undefined,
+        ambientSoundPrompt: ambientSoundPrompt.value,
+        includeSpokenDialogue: includeSpokenDialogue.value,
+        includeAmbientSound: includeAmbientSound.value,
+        aspectRatio: aspectRatio.value,
+        durationSeconds: durationSeconds.value,
+        resolution: resolution.value,
+        modelId
+      })
       const baseMetadata: Record<string, unknown> = {
+        ...regen,
         model_id: modelId,
         source: pre?.source || 'standalone_video_tool',
         aspect_ratio: aspectRatio.value,
@@ -2160,17 +2820,24 @@ async function runOneModel (modelId: string) {
         generate_audio: wantsGeneratedAudio.value,
         include_spoken_dialogue: includeSpokenDialogue.value,
         include_ambient_sound: includeAmbientSound.value,
-        ...(includeSpokenDialogue.value && dialogueLine.value.trim()
+        ...(includeSpokenDialogue.value && resolvedDialogueTurns().length
           ? {
-              dialogue_line: dialogueLine.value.trim().slice(0, 500),
-              ...(dialogueSpeakerId.value
-                ? { dialogue_speaker_id: dialogueSpeakerId.value }
+              dialogue_turns: resolvedDialogueTurns().map((t) => ({
+                speaker_id: t.speakerId || undefined,
+                speaker_name: (t.speakerName || '').slice(0, 200) || undefined,
+                line: t.line.slice(0, 500),
+                tone: (t.tone || '').slice(0, 80) || undefined
+              })),
+              // Keep first-line fields for older readers / filters.
+              dialogue_line: resolvedDialogueTurns().map((t) => {
+                const who = t.speakerName || 'Speaker'
+                return `${who}: ${t.line}`
+              }).join(' / ').slice(0, 2000),
+              ...(resolvedDialogueTurns()[0]?.speakerId
+                ? { dialogue_speaker_id: resolvedDialogueTurns()[0]!.speakerId }
                 : {}),
-              ...(dialogueSpeakerName.value
-                ? { dialogue_speaker_name: dialogueSpeakerName.value.slice(0, 200) }
-                : {}),
-              ...(dialogueTone.value
-                ? { dialogue_tone: dialogueTone.value.slice(0, 80) }
+              ...(resolvedDialogueTurns()[0]?.speakerName
+                ? { dialogue_speaker_name: resolvedDialogueTurns()[0]!.speakerName.slice(0, 200) }
                 : {})
             }
           : {}),
@@ -2181,14 +2848,25 @@ async function runOneModel (modelId: string) {
           ? { negative_prompt: negativePrompt.value.trim().slice(0, 4000) }
           : {}),
         ...(pre?.sceneId ? { scene_id: pre.sceneId } : {}),
-        ...(pre?.shotId ? { shot_id: pre.shotId } : {})
+        ...(pre?.shotId ? { shot_id: pre.shotId } : {}),
+        ...(pre?.replaceAssetId ? { replaced_from_asset_id: pre.replaceAssetId } : {}),
+        ...(effectiveLocationId.value
+          ? {
+              location_id: effectiveLocationId.value,
+              location_name: (
+                projectLocationRefs.value.find((l) => l.id === effectiveLocationId.value)?.name || ''
+              ).slice(0, 200)
+            }
+          : {})
       }
       const metadata = mergeGenerationObservabilityIntoMetadata(
         baseMetadata,
         buildGenerationObservability({
           generationPath: pre?.source === 'project_video_panel'
             ? GENERATION_PATH.PROJECT_VIDEO_PANEL
-            : GENERATION_PATH.VIDEO_GENERATION,
+            : pre?.source === 'project_generated_videos_edit'
+              ? GENERATION_PATH.VIDEO_GENERATION
+              : GENERATION_PATH.VIDEO_GENERATION,
           projectId: selectedProjectId.value,
           sceneId: pre?.sceneId,
           shotId: pre?.shotId,
@@ -2205,9 +2883,11 @@ async function runOneModel (modelId: string) {
         projectId: selectedProjectId.value,
         remoteUrl: videoUrl,
         title: clipTitle(),
-        notes: pre?.source === 'project_video_panel'
-          ? 'Generated from project Storyboard via Video tools.'
-          : 'Generated from Video tools (standalone).',
+        notes: videoAssetNotesFromPrompt(prompt.value) || (
+          pre?.source === 'project_video_panel'
+            ? 'Generated from project Storyboard via Video tools.'
+            : 'Generated from Video tools (standalone).'
+        ),
         metadata,
         headers
       })
@@ -2272,6 +2952,16 @@ async function discardRunAndRetry () {
   }
 }
 
+async function finishEditAndOpenVideos (message: string) {
+  const pid = selectedProjectId.value.trim() || panelPrefill.value?.projectId || ''
+  toast.showToast(message, 'success')
+  if (pid && PB_ID.test(pid)) {
+    await navigateTo(`/projects/${pid}/video`)
+    return
+  }
+  resetGenerationRun()
+}
+
 async function keepClipAndContinue () {
   const pick = selectedKeepModelId.value || successfulResults.value[0]?.modelId
   const kept = successfulResults.value.find(r => r.modelId === pick)
@@ -2284,25 +2974,47 @@ async function keepClipAndContinue () {
       .map(r => r.assetId!)
     await deleteRunAssets(discardIds)
 
-    const pid = selectedProjectId.value.trim()
-    const pre = panelPrefill.value
-    if (pid && pre?.sceneId && pre?.shotId) {
-      toast.showToast('Clip saved to your storyboard.', 'success')
-      await navigateTo({
-        path: `/projects/${pid}/storyboard`,
-        query: { sceneId: pre.sceneId, shotId: pre.shotId }
-      })
+    if (isEditingExistingClip.value) {
+      await finishEditAndOpenVideos('New clip kept beside the original.')
       return
     }
-    if (pid && saveToProject.value) {
+
+    const pid = selectedProjectId.value.trim()
+    if (pid && (saveToProject.value || panelPrefill.value?.projectId)) {
       toast.showToast('Clip saved to your project.', 'success')
-      await navigateTo(`/projects/${pid}/storyboard`)
+      await navigateTo(`/projects/${pid}/home`)
       return
     }
     toast.showToast('Clip kept.', 'success')
     resetGenerationRun()
   } finally {
     keepingClip.value = false
+  }
+}
+
+async function replaceOriginalClip () {
+  const pick = selectedKeepModelId.value || successfulResults.value[0]?.modelId
+  const kept = successfulResults.value.find(r => r.modelId === pick)
+  if (!kept?.playbackUrl) return
+  const originalId = (panelPrefill.value?.replaceAssetId || '').trim()
+  if (!originalId) {
+    toast.showToast('No original clip to replace.', 'error')
+    return
+  }
+
+  replacingClip.value = true
+  try {
+    const discardIds = successfulResults.value
+      .filter(r => r.modelId !== pick && r.assetId)
+      .map(r => r.assetId!)
+    await deleteRunAssets(discardIds)
+    // Delete the edited original after the new clip is already saved.
+    if (kept.assetId !== originalId) {
+      await deleteRunAssets([originalId])
+    }
+    await finishEditAndOpenVideos('Original replaced with the new clip.')
+  } finally {
+    replacingClip.value = false
   }
 }
 
@@ -2317,12 +3029,13 @@ async function onSubmit () {
     return
   }
   if (includeSpokenDialogue.value) {
-    if (!dialogueLine.value.trim()) {
-      formError.value = 'Enter the spoken dialogue line.'
+    const turns = resolvedDialogueTurns()
+    if (!turns.length) {
+      formError.value = 'Enter at least one spoken dialogue line.'
       return
     }
-    if (dialogueSpeakerOptions.value.length && !dialogueSpeakerId.value) {
-      formError.value = 'Choose which character speaks the line.'
+    if (dialogueSpeakerOptions.value.length && turns.some((t) => !t.speakerId)) {
+      formError.value = 'Choose which character speaks each line.'
       return
     }
   }

@@ -1,8 +1,11 @@
 import { createError } from 'h3'
 import type PocketBase from 'pocketbase'
-import { buildFullVideoGenerationPrompt } from '~/lib/shot-character-continuity'
-import type { ProjectCharacterRef } from '~/lib/shot-character-continuity'
-import { projectCharacterRefToCastMember } from '~/lib/shot-character-continuity'
+import {
+  buildFullVideoGenerationPrompt,
+  findCharactersInShot,
+  type ProjectCharacterRef,
+  projectCharacterRefToCastMember
+} from '~/lib/shot-character-continuity'
 import { buildCharacterPlateMap } from '~/lib/character-plate-refs'
 import { costumePlateUrlsById, normalizeCostumes } from '~/lib/costume-lock'
 import {
@@ -12,6 +15,8 @@ import {
 import { mapStoryboardFrameAssetsToShots } from '~/lib/storyboard-panel-assets'
 import { snapToStoryboardClipSeconds } from '~/lib/storyboard-video-duration'
 import { projectAssetMediaPath } from '~/lib/project-asset-playback-url'
+import { resolveSetLock } from '~/lib/set-lock'
+import { pbRecordToBibleEntity } from '~/server/utils/bible-entity-map'
 import { pbRecordToCreativeProject } from '~/server/utils/creative-project-map'
 import { projectIdOnSceneRow } from '~/server/utils/creative-scene-map'
 import { pbRecordToCreativeShot } from '~/server/utils/creative-shot-map'
@@ -194,8 +199,29 @@ export async function buildVideoPanelPrefill (input: {
   if (characterIdsFilter !== undefined) {
     const allowed = new Set(characterIdsFilter.filter(Boolean))
     cast = cast.filter((c) => allowed.has(c.id))
+  } else {
+    // Only people named in this shot. An empty match must not fall back to the project cast.
+    cast = findCharactersInShot(shot, cast)
   }
   const castMembers = cast.map(c => projectCharacterRefToCastMember(c))
+
+  let locationId: string | undefined
+  try {
+    const entityRows = await pb.collection('bible_entities').getFullList({
+      filter: `project="${projectId}"`,
+      batch: 200
+    })
+    const entities = entityRows.map((r) =>
+      pbRecordToBibleEntity(r as Parameters<typeof pbRecordToBibleEntity>[0])
+    )
+    const lock = resolveSetLock({
+      sceneHeading: String(sceneRow.heading || ''),
+      entities
+    })
+    if (lock?.entityId) locationId = lock.entityId
+  } catch {
+    /* bible optional */
+  }
 
   const { context: productionBible } = await resolveProductionBibleForGeneration(pb, projectId, {
     ...mergeProductionBibleGenerationOptions(),
@@ -251,6 +277,7 @@ export async function buildVideoPanelPrefill (input: {
     sceneId,
     shotId,
     characterIds: cast.map((c) => c.id),
+    locationId,
     source: 'project_video_panel',
     productionBibleContext: productionBible ?? undefined
   }

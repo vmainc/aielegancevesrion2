@@ -75,7 +75,9 @@ const canLoadCloud = computed(() =>
 const loadingStats = ref(false)
 const loadError = ref('')
 const characters = ref<CreativeCharacter[]>([])
+const locationNames = ref<string[]>([])
 const sceneRows = ref<CreativeSceneListItem[]>([])
+const videoCount = ref(0)
 
 const totalShots = computed(() =>
   sceneRows.value.reduce((n, s) => n + (s.shotCount || 0), 0)
@@ -125,6 +127,18 @@ const sectionCards = computed(() => {
       preview: characters.value.slice(0, 4).map(c => c.name)
     },
     {
+      path: 'locations',
+      title: 'Locations',
+      stat: canLoadCloud.value
+        ? locationNames.value.length
+          ? `${locationNames.value.length} places`
+          : 'None yet'
+        : '—',
+      statTone: locationNames.value.length ? 'ready' : 'empty',
+      blurb: 'Set bible — upload or generate establishing plates.',
+      preview: locationNames.value.slice(0, 4)
+    },
+    {
       path: 'director',
       title: 'Director',
       stat: directorReady.value ? 'Ready' : 'Setup',
@@ -137,6 +151,17 @@ const sectionCards = computed(() => {
       stat: totalShots.value ? `${totalShots.value} panels` : 'None yet',
       statTone: totalShots.value ? 'ready' : 'empty',
       blurb: 'Panels, start/end frames, and Generate video when both frames are ready.'
+    },
+    {
+      path: 'video',
+      title: 'Generated Videos',
+      stat: canLoadCloud.value
+        ? videoCount.value
+          ? `${videoCount.value} clip${videoCount.value === 1 ? '' : 's'}`
+          : 'None yet'
+        : '—',
+      statTone: videoCount.value ? 'ready' : 'empty',
+      blurb: 'Clips saved to this project. Open to play, reorder, or generate more.'
     }
   ]
 
@@ -146,7 +171,9 @@ const sectionCards = computed(() => {
 async function loadDashboardStats () {
   loadError.value = ''
   characters.value = []
+  locationNames.value = []
   sceneRows.value = []
+  videoCount.value = 0
   if (!canLoadCloud.value) return
 
   const id = projectId.value
@@ -156,12 +183,25 @@ async function loadDashboardStats () {
   loadingStats.value = true
   try {
     const headers = { Authorization: `Bearer ${token}` }
-    const [charRes, sceneRes] = await Promise.all([
+    const [charRes, sceneRes, entityRes, videoRes] = await Promise.all([
       $fetch<{ characters?: CreativeCharacter[] }>(`/api/projects/${id}/characters`, { headers }),
-      $fetch<{ scenes?: CreativeSceneListItem[] }>(`/api/projects/${id}/scenes`, { headers })
+      $fetch<{ scenes?: CreativeSceneListItem[] }>(`/api/projects/${id}/scenes`, { headers }),
+      $fetch<{ entities?: Array<{ type?: string; name?: string; status?: string }> }>(
+        `/api/projects/${id}/bible/entities`,
+        { headers }
+      ).catch(() => ({ entities: [] })),
+      $fetch<{ items?: unknown[] }>(`/api/projects/${id}/assets`, {
+        query: { kind: 'video' },
+        headers
+      }).catch(() => ({ items: [] }))
     ])
     characters.value = charRes.characters ?? []
     sceneRows.value = sceneRes.scenes ?? []
+    locationNames.value = (entityRes.entities || [])
+      .filter((e) => e.type === 'location' && e.status !== 'retired')
+      .map((e) => e.name || '')
+      .filter(Boolean)
+    videoCount.value = videoRes.items?.length ?? 0
   } catch (e: unknown) {
     loadError.value = e instanceof Error ? e.message : 'Could not load project stats'
   } finally {

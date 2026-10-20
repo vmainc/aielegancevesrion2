@@ -1,4 +1,7 @@
-import { extractLocationFromSceneHeading } from '~/lib/bible-scene-location'
+import {
+  extractLocationFromSceneHeading,
+  sceneHeadingLocationParts
+} from '~/lib/bible-scene-location'
 import { normalizeBibleEntityNameKey } from '~/lib/bible-seed-normalize'
 import { BIBLE_ASSET_ENTITY_METADATA_KEY, readAssetBridgeFields } from '~/lib/bible-cast-asset-bridge'
 import {
@@ -65,26 +68,42 @@ export function setPlateUrlsForEntity (
   return [...featured, ...urls].filter((u, i, arr) => arr.indexOf(u) === i)
 }
 
+function entityNameKeys (
+  entity: Pick<BibleEntity, 'name' | 'aliases'>
+): string[] {
+  return [entity.name, ...(entity.aliases || [])]
+    .map((n) => normalizeBibleEntityNameKey(n))
+    .filter(Boolean)
+}
+
+/**
+ * Match a slug to a bible location. A sub-place wins over its parent when both
+ * exist: INT. PENTAGON - WAR ROOM locks War Room, not the exterior Pentagon.
+ */
 export function matchLocationEntity (
   sceneHeading: string,
   entities: Array<Pick<BibleEntity, 'id' | 'type' | 'name' | 'summary' | 'description' | 'status' | 'aliases'>>
 ): (typeof entities)[number] | null {
-  const loc = extractLocationFromSceneHeading(sceneHeading)
-  const needle = normalizeBibleEntityNameKey(loc || sceneHeading)
-  if (!needle) return null
   const locations = entities.filter((e) => e.type === 'location' && e.status !== 'retired')
-  const hit = locations.find((e) => {
-    const names = [e.name, ...(e.aliases || [])]
-    return names.some((n) => normalizeBibleEntityNameKey(n) === needle)
-  })
-  if (hit) return hit
-  return locations.find((e) => {
-    const names = [e.name, ...(e.aliases || [])]
-    return names.some((n) => {
-      const k = normalizeBibleEntityNameKey(n)
-      return k && (needle.includes(k) || k.includes(needle))
-    })
-  }) || null
+  if (!locations.length) return null
+
+  const parts = sceneHeadingLocationParts(sceneHeading)
+  const needles = (parts.length ? [...parts].reverse() : [sceneHeading])
+    .map((p) => normalizeBibleEntityNameKey(p))
+    .filter(Boolean)
+  if (!needles.length) return null
+
+  for (const needle of needles) {
+    const exact = locations.find((e) => entityNameKeys(e).some((k) => k === needle))
+    if (exact) return exact
+  }
+  for (const needle of needles) {
+    const fuzzy = locations.find((e) =>
+      entityNameKeys(e).some((k) => k.length >= 4 && (needle.includes(k) || k.includes(needle)))
+    )
+    if (fuzzy) return fuzzy
+  }
+  return null
 }
 
 export function resolveSetLock (opts: {

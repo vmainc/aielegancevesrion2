@@ -60,6 +60,53 @@
       </div>
     </ClientOnly>
 
+    <ClientOnly>
+      <div
+        v-if="projectId && isCloudProjectId(projectId)"
+        class="mb-6 space-y-4 rounded-xl border border-gray-200 bg-studio-slate p-4"
+      >
+        <div>
+          <label class="block text-sm font-semibold text-gray-900 mb-1.5">
+            Characters
+          </label>
+          <p class="text-xs text-gray-500 mb-2">
+            Choose cast first — their turnaround plates attach as reference images.
+          </p>
+          <ProjectCharacterTypeahead
+            v-model="selectedCharacterIds"
+            :options="characterTypeaheadOptions"
+            input-id="img-gen-characters"
+            entity-noun="cast member"
+            placeholder="Type a character name…"
+            :hint="characterRefsLoading ? 'Loading cast…' : characterHint"
+          />
+        </div>
+        <div>
+          <label class="block text-sm font-semibold text-gray-900 mb-1.5">
+            Location
+          </label>
+          <p class="text-xs text-gray-500 mb-2">
+            Then pick a place — set plates lock the environment without copying camera.
+          </p>
+          <ProjectCharacterTypeahead
+            v-model="selectedLocationIds"
+            :options="locationTypeaheadOptions"
+            input-id="img-gen-location"
+            entity-noun="location"
+            :max-selected="1"
+            placeholder="Type a location name…"
+            :hint="locationRefsLoading ? 'Loading locations…' : locationHint"
+          />
+        </div>
+        <p
+          v-if="plateReferenceUrls.length"
+          class="text-xs text-gray-600"
+        >
+          {{ plateReferenceUrls.length }} plate reference{{ plateReferenceUrls.length === 1 ? '' : 's' }} will send with this generate.
+        </p>
+      </div>
+    </ClientOnly>
+
     <p
       v-if="modelsNotice"
       class="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-700"
@@ -740,6 +787,8 @@ import {
 } from '~/lib/image-generation-prefill'
 import { stashVideoGenerationPanelPrefill } from '~/lib/video-generation-prefill'
 import { projectAssetMediaPath } from '~/lib/project-asset-playback-url'
+import { collectCharacterPortraitUrls } from '~/lib/shot-character-continuity'
+import type { CharacterTypeaheadOption } from '~/components/project/CharacterTypeahead.vue'
 import type { ImageGenerationCategory, ImageGenerationRecord } from '~/types/image-generation'
 import type { ImageLightboxItem } from '~/components/ImageLightbox.vue'
 
@@ -754,6 +803,7 @@ const {
   advancedOpen,
   advanced,
   referencePreviewUrls,
+  plateReferenceUrls,
   projectId,
   sceneId,
   shotId,
@@ -790,6 +840,87 @@ const { projects, hydrate, loadServerProjects, isCloudProjectId } = useCreativeP
 const { initAuth } = useAuth()
 const route = useRoute()
 const toast = useToast()
+
+const selectedCharacterIds = ref<string[]>([])
+const selectedLocationIds = ref<string[]>([])
+const prefillLocationId = ref('')
+
+const { refs: projectCharacterRefs, loading: characterRefsLoading } = useProjectCharacterRefs(projectId)
+const { refs: projectLocationRefs, loading: locationRefsLoading } = useProjectLocationRefs(projectId)
+
+const characterTypeaheadOptions = computed<CharacterTypeaheadOption[]>(() =>
+  projectCharacterRefs.value.map((c) => ({
+    id: c.id,
+    name: c.name,
+    badge: c.plateUrls?.length ? `${c.plateUrls.length} plates` : undefined
+  }))
+)
+
+const locationTypeaheadOptions = computed<CharacterTypeaheadOption[]>(() =>
+  projectLocationRefs.value.map((l) => ({
+    id: l.id,
+    name: l.name,
+    badge: l.plateUrls.length ? `${l.plateUrls.length} plates` : undefined,
+    suggested: category.value === 'locations'
+  }))
+)
+
+const characterHint = computed(() => {
+  if (!projectCharacterRefs.value.length) {
+    return 'No cast yet — add characters on the Characters step.'
+  }
+  if (selectedCharacterIds.value.length) {
+    return 'Type to add more cast. Plates attach automatically.'
+  }
+  return 'Type a name to search cast — full list stays hidden until you search.'
+})
+
+const locationHint = computed(() => {
+  if (!projectLocationRefs.value.length) {
+    return 'No locations yet — add them on the Locations step or Production Bible.'
+  }
+  if (selectedLocationIds.value.length) {
+    return 'Set plates attach as place lock (new camera each time).'
+  }
+  return 'Type a location name to search.'
+})
+
+watch(
+  [selectedCharacterIds, selectedLocationIds, projectCharacterRefs, projectLocationRefs],
+  () => {
+    const urls: string[] = []
+    const cast = projectCharacterRefs.value.filter((c) =>
+      selectedCharacterIds.value.includes(c.id)
+    )
+    urls.push(...collectCharacterPortraitUrls(cast, 6))
+    const locId = selectedLocationIds.value[0]
+    if (locId) {
+      const loc = projectLocationRefs.value.find((l) => l.id === locId)
+      if (loc?.plateUrls?.length) urls.push(...loc.plateUrls.slice(0, 2))
+    }
+    plateReferenceUrls.value = [...new Set(urls.map((u) => u.trim()).filter(Boolean))].slice(0, 8)
+  },
+  { deep: true }
+)
+
+watch(projectId, () => {
+  selectedCharacterIds.value = []
+  selectedLocationIds.value = []
+  plateReferenceUrls.value = []
+})
+
+watch(
+  [prefillLocationId, projectLocationRefs],
+  () => {
+    const id = prefillLocationId.value.trim()
+    if (!id) return
+    if (projectLocationRefs.value.some((l) => l.id === id)) {
+      selectedLocationIds.value = [id]
+      if (category.value === 'other') category.value = 'locations'
+    }
+  },
+  { immediate: true }
+)
 
 const modelSearch = ref('')
 const shotSizes = FILM_CONTROL_SHOT_SIZES
@@ -982,6 +1113,8 @@ onMounted(async () => {
     frameRole: fromStash?.frameRole || fromQuery.frameRole,
     returnTo: fromStash?.returnTo || fromQuery.returnTo
   })
+  prefillLocationId.value =
+    fromStash?.locationId || fromQuery.locationId || ''
 
   const qProject = projectId.value
   if (qProject && isCloudProjectId(qProject)) {

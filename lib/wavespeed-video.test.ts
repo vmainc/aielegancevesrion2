@@ -21,10 +21,27 @@ describe('shouldRouteSeedance25ViaWaveSpeed', () => {
     ).toBe(true)
   })
 
-  it('keeps 720p on OpenRouter', () => {
+  it('routes Seedance 2.5 at 720p through WaveSpeed when keyed', () => {
     expect(
       shouldRouteSeedance25ViaWaveSpeed({
         modelId: 'bytedance/seedance-2.5',
+        resolution: '720p',
+        waveSpeedKeyConfigured: true
+      })
+    ).toBe(true)
+  })
+
+  it('routes other Seedance 2.x listings through WaveSpeed', () => {
+    expect(
+      shouldRouteSeedance25ViaWaveSpeed({
+        modelId: 'bytedance/seedance-2.0',
+        resolution: '720p',
+        waveSpeedKeyConfigured: true
+      })
+    ).toBe(true)
+    expect(
+      shouldRouteSeedance25ViaWaveSpeed({
+        modelId: 'bytedance/seedance-1-5-pro',
         resolution: '720p',
         waveSpeedKeyConfigured: true
       })

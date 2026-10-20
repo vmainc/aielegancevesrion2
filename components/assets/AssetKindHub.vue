@@ -54,13 +54,6 @@
         <AssetKindVideoGroups
           v-if="props.kind === 'video' && videoProjectGroups.length"
           :groups="videoProjectGroups"
-          :deleting-id="deletingId"
-          :scene-groups-for-project="videoSceneGroupsForProject"
-          :video-asset-playback-src="videoAssetPlaybackSrc"
-          :format-date="formatDate"
-          :move-target-projects="moveTargetProjects"
-          :open-move-video="openMoveVideo"
-          :remove-asset="removeAsset"
         />
 
         <AssetKindCharacterGroups

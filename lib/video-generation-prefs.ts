@@ -29,9 +29,30 @@ export function parseVideoGenerationAspectRatio (raw: unknown): VideoGenerationA
   return undefined
 }
 
-export function parseVideoGenerationDurationSeconds (raw: unknown): VideoToolClipSeconds | undefined {
+/**
+ * When a model lists every whole second across a wide span (Seedance 2.5 is 4–30),
+ * the picker can take an exact length instead of the 5/10/15/30 presets.
+ */
+export function contiguousClipDurationRange (
+  supported?: number[] | null
+): { min: number; max: number } | null {
+  if (!supported?.length) return null
+  const uniq = [...new Set(
+    supported
+      .map((n) => Math.floor(Number(n)))
+      .filter((n) => Number.isFinite(n) && n >= 1 && n <= 60)
+  )].sort((a, b) => a - b)
+  if (uniq.length < 8) return null
+  const min = uniq[0]!
+  const max = uniq[uniq.length - 1]!
+  if (max - min + 1 !== uniq.length) return null
+  return { min, max }
+}
+
+export function parseVideoGenerationDurationSeconds (raw: unknown): number | undefined {
   const n = typeof raw === 'number' ? raw : Number(raw)
-  if (n === 5 || n === 10 || n === 15 || n === 30) return n
+  if (!Number.isInteger(n)) return undefined
+  if (n >= 4 && n <= 30) return n
   return undefined
 }
 
@@ -94,7 +115,7 @@ export function defaultAspectRatioFromPrefs (
   return '16:9'
 }
 
-export function defaultDurationFromPrefs (bootDuration?: number): VideoToolClipSeconds {
+export function defaultDurationFromPrefs (bootDuration?: number): number {
   const fromBoot = parseVideoGenerationDurationSeconds(bootDuration)
   if (fromBoot) return fromBoot
   if (typeof localStorage !== 'undefined') {

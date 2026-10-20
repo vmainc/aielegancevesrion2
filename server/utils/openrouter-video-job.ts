@@ -7,6 +7,7 @@ import {
 } from '~/server/utils/openrouter-video-negative'
 import { fetchWithTimeout } from '~/server/utils/fetch-with-timeout'
 import { readVideoStartFrame } from '~/server/utils/video-start-frame-store'
+import { planVideoCharacterReferences, type CharacterReferenceImage } from '~/lib/video-character-references'
 
 type VideoJobResponse = {
   id?: string
@@ -126,13 +127,16 @@ export async function startOpenRouterVideoJob (options: {
   generateAudio?: boolean
   /** Merged shot + cast exclusions — sent natively when the model supports it, else appended to prompt. */
   negativePrompt?: string
+  /** Lookbook headshots for the selected cast, with the name and description for each image. */
+  characterReferenceImageUrls?: string[]
+  characterReferences?: CharacterReferenceImage[]
 }): Promise<OpenRouterVideoStartResult> {
   const negativeRaw = typeof options.negativePrompt === 'string' ? options.negativePrompt.trim() : ''
   let prompt = options.prompt.trim()
   if (negativeRaw) {
     prompt = stripStrictExclusionsFromPrompt(prompt)
   }
-  prompt = prompt.slice(0, 8000)
+  prompt = prompt.slice(0, 7200)
   if (!prompt) {
     throw createError({ statusCode: 400, message: 'Prompt is required' })
   }
@@ -164,29 +168,50 @@ export async function startOpenRouterVideoJob (options: {
     }
   }
 
-  const frameImages: Array<{
-    type: 'image_url'
-    frame_type: 'first_frame' | 'last_frame'
-    image_url: { url: string }
-  }> = []
-  if (options.firstFrameImageUrl) {
-    const dataUrl = await fetchImageAsDataUrlForVideo(options.firstFrameImageUrl, 6_000_000)
-    frameImages.push({
-      type: 'image_url',
-      frame_type: 'first_frame',
-      image_url: { url: dataUrl }
-    })
-  }
-  if (options.lastFrameImageUrl) {
-    const dataUrl = await fetchImageAsDataUrlForVideo(options.lastFrameImageUrl, 6_000_000)
-    frameImages.push({
-      type: 'image_url',
-      frame_type: 'last_frame',
-      image_url: { url: dataUrl }
-    })
-  }
-  if (frameImages.length) {
-    body.frame_images = frameImages
+  const visual = planVideoCharacterReferences({
+    prompt,
+    model,
+    firstFrameUrl: options.firstFrameImageUrl,
+    lastFrameUrl: options.lastFrameImageUrl,
+    characterReferenceUrls: options.characterReferenceImageUrls,
+    characterReferences: options.characterReferences
+  })
+  prompt = visual.prompt.slice(0, 8000)
+  body.prompt = prompt
+
+  if (visual.mode === 'references') {
+    const inputReferences = []
+    for (const url of visual.referenceUrls) {
+      const dataUrl = await fetchImageAsDataUrlForVideo(url, 6_000_000)
+      inputReferences.push({
+        type: 'image_url',
+        image_url: { url: dataUrl }
+      })
+    }
+    if (inputReferences.length) body.input_references = inputReferences
+  } else {
+    const frameImages: Array<{
+      type: 'image_url'
+      frame_type: 'first_frame' | 'last_frame'
+      image_url: { url: string }
+    }> = []
+    if (visual.firstFrameUrl) {
+      const dataUrl = await fetchImageAsDataUrlForVideo(visual.firstFrameUrl, 6_000_000)
+      frameImages.push({
+        type: 'image_url',
+        frame_type: 'first_frame',
+        image_url: { url: dataUrl }
+      })
+    }
+    if (visual.lastFrameUrl) {
+      const dataUrl = await fetchImageAsDataUrlForVideo(visual.lastFrameUrl, 6_000_000)
+      frameImages.push({
+        type: 'image_url',
+        frame_type: 'last_frame',
+        image_url: { url: dataUrl }
+      })
+    }
+    if (frameImages.length) body.frame_images = frameImages
   }
 
   const refUrls = (options.inputReferenceImageUrls || [])

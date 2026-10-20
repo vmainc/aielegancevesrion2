@@ -3,6 +3,7 @@ import { isCostumePlateAsset } from '~/lib/costume-lock'
 import {
   characterPlateRank,
   expressionLabelFromPlateMeta,
+  isCharacterHeadshotLabel,
   parseCharacterTurnaroundView,
   type CharacterTurnaroundViewId
 } from '~/lib/character-turnaround-views'
@@ -10,11 +11,11 @@ import type { CreativeCharacter } from '~/types/creative-project'
 import type { ProjectAsset } from '~/types/project-asset'
 
 export type CharacterPlateBundle = {
-  /** Front (or best) plate — primary identity lock. */
+  /** Headshot when available, else Front — primary face/identity lock. */
   url: string
   notes: string
   promptUsed: string
-  /** Turnaround plates in front → back → left → right order when labeled. */
+  /** Face lock first (headshot), then turnarounds front → back → left → right. */
   plateUrls: string[]
 }
 
@@ -23,6 +24,7 @@ type RankedPlate = {
   notes: string
   promptUsed: string
   featured: boolean
+  isHeadshot: boolean
   ts: string
   rank: number
   view: CharacterTurnaroundViewId | null
@@ -43,9 +45,9 @@ function sortPlates (a: RankedPlate, b: RankedPlate): number {
   return (b.ts || '').localeCompare(a.ts || '')
 }
 
-/** Featured portrait that is not a turnaround view — the face lock (headshot). */
+/** Featured portrait or labeled headshot that is not a turnaround view — the face lock. */
 function isIdentityFacePlate (plate: RankedPlate): boolean {
-  return plate.featured && !plate.view
+  return !plate.view && (plate.featured || plate.isHeadshot)
 }
 
 /** Face first, then profiles, then the back. A 4-plate cap drops the back before the face. */
@@ -148,6 +150,7 @@ export function buildCharacterPlateMap (
       notes,
       promptUsed,
       featured: meta.featured === true,
+      isHeadshot: isCharacterHeadshotLabel(label),
       ts: a.updated || a.created || '',
       rank: characterPlateRank(meta),
       view: parseCharacterTurnaroundView(label)

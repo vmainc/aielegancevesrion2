@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { pollOpenRouterVideoOnce, startOpenRouterVideoJob } from '~/server/utils/openrouter-video-job'
+import type { CharacterReferenceImage } from '~/lib/video-character-references'
 
 export interface OpenRouterGenerateVideoResult {
   jobId: string
@@ -24,6 +25,8 @@ export async function openRouterGenerateVideo (options: {
   inputReferenceImageUrls?: string[]
   generateAudio?: boolean
   negativePrompt?: string
+  characterReferenceImageUrls?: string[]
+  characterReferences?: CharacterReferenceImage[]
 }): Promise<OpenRouterGenerateVideoResult> {
   const started = await startOpenRouterVideoJob(options)
   if (started.status === 'completed' && started.videoUrl) {

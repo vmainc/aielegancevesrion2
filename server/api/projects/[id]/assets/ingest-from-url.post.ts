@@ -9,6 +9,8 @@ import {
   parseVoiceoverResultIdFromPath,
   readVoiceoverGenerationResult
 } from '~/server/utils/voiceover-generation-store'
+import { parseVideoStartFrameRef } from '~/lib/video-start-frame-ref'
+import { readVideoStartFrame } from '~/server/utils/video-start-frame-store'
 import {
   formatPocketBaseRecordError,
   isPocketBaseMissingCollectionError,
@@ -58,6 +60,7 @@ export default defineEventHandler(async (event) => {
 
   const musicResultId = parseMusicResultIdFromPath(sourceUrl)
   const voiceoverResultId = parseVoiceoverResultIdFromPath(sourceUrl)
+  const startFrameId = parseVideoStartFrameRef(sourceUrl)
   const metadataSource =
     metadata && typeof metadata.source === 'string' ? metadata.source.trim() : ''
   const isMusicAsset = metadataSource === 'music_generation' || Boolean(musicResultId)
@@ -85,9 +88,20 @@ export default defineEventHandler(async (event) => {
     }
     buffer = staged.data
     suggestedName = `voiceover_${voiceoverResultId.slice(0, 8)}.mp3`
+  } else if (startFrameId) {
+    const staged = await readVideoStartFrame(startFrameId)
+    if (!staged) {
+      throw createError({
+        statusCode: 404,
+        message: 'Starting frame expired — re-generate or re-upload the frame, then save the clip again.'
+      })
+    }
+    buffer = staged.data
+    const ext = staged.mime.includes('png') ? 'png' : staged.mime.includes('webp') ? 'webp' : 'jpg'
+    suggestedName = `video_seed_${startFrameId.slice(0, 8)}.${ext}`
   } else {
     const mediaKind =
-      kind === 'storyboard' || kind === 'character'
+      kind === 'storyboard' || kind === 'character' || kind === 'other'
         ? ('image' as const)
         : isAudioAsset
           ? ('audio' as const)
@@ -142,12 +156,9 @@ export default defineEventHandler(async (event) => {
     }
     const status = pocketBaseErrorStatus(e)
     const detail = formatPocketBaseRecordError(e)
-    if (status === 400 || status === 401 || status === 403 || status === 404 || status === 413) {
-      throw createError({ statusCode: status, message: detail || 'Could not save asset' })
-    }
     throw createError({
-      statusCode: 500,
-      message: detail || 'Could not save asset right now. Please try again.'
+      statusCode: status >= 400 && status < 600 ? status : 500,
+      message: detail || 'Could not ingest asset'
     })
   }
 })

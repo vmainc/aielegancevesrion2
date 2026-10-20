@@ -26,7 +26,7 @@ import type { CreativeProject } from '~/types/creative-project'
  * Store is useState-backed so both surfaces stay in sync.
  */
 export function useStudioGuideChat () {
-  const { getAuthToken, isAuthenticated } = useAuth()
+  const { getAuthToken, isAuthenticated, getUserId } = useAuth()
   const { projects, loadServerProjects, clientReady, registerImportedProject, withProjectQuery } =
     useCreativeProject()
   const toast = useToast()
@@ -35,6 +35,7 @@ export function useStudioGuideChat () {
     emptyStudioGuideChatStore()
   )
   const hydrated = useState('studio-guide-chat-hydrated', () => false)
+  const hydratedUserId = useState<string | null>('studio-guide-chat-user-id', () => null)
   const draft = useState('studio-guide-chat-draft', () => '')
   const sending = useState('studio-guide-chat-sending', () => false)
   const building = useState('studio-guide-chat-building', () => false)
@@ -58,19 +59,38 @@ export function useStudioGuideChat () {
   )
 
   function persist () {
-    saveStudioGuideChatStore(store.value)
+    saveStudioGuideChatStore(store.value, getUserId())
   }
 
-  function hydrateFromStorage () {
-    if (hydrated.value) return
+  function hydrateFromStorage (force = false) {
     if (!import.meta.client) return
-    store.value = loadStudioGuideChatStore()
+    const userId = getUserId()
+    if (!force && hydrated.value && hydratedUserId.value === userId) return
+
+    store.value = loadStudioGuideChatStore(userId)
     if (!store.value.activeChatId) {
       const chat = createEmptyStudioGuideChat()
       store.value = upsertStudioGuideChat(store.value, chat)
       persist()
     }
+    draft.value = ''
+    hydratedUserId.value = userId
     hydrated.value = true
+  }
+
+  if (import.meta.client) {
+    watch(
+      () => getUserId(),
+      (userId, prev) => {
+        if (userId === prev && hydrated.value) return
+        // Drop in-flight UI when the account changes so the prior user's
+        // messages never linger in memory.
+        sending.value = false
+        building.value = false
+        hydrateFromStorage(true)
+      },
+      { immediate: true }
+    )
   }
 
   function ensureActiveChat (): StudioGuideChat {

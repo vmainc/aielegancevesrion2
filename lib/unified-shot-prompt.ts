@@ -201,18 +201,29 @@ export function mergeLegacyShotPromptsToUnified (shot: CreativeShot): string {
   return dedupeJoinBlocks(...parts)
 }
 
-export function buildMotionPromptForShot (shot: Pick<CreativeShot, 'title' | 'description' | 'cameraMove' | 'videoPrompt'>): string {
+export function buildMotionPromptForShot (
+  shot: Pick<CreativeShot, 'title' | 'description' | 'cameraMove' | 'videoPrompt'> & {
+    shotType?: string
+  }
+): string {
   const vid = (shot.videoPrompt || '').trim()
-  if (vid && !promptLooksUnified(vid) && !/DIRECTOR BIBLE|FULL CAST BIBLE/i.test(vid)) {
+  // A stored motion line is fine. A storyboard still (PRIMARY ACTION / ONE IMAGE ONLY / director bible) is not.
+  if (
+    vid &&
+    !promptLooksUnified(vid) &&
+    !/DIRECTOR BIBLE|FULL CAST BIBLE|PRIMARY ACTION — THIS PANEL ONLY|ONE IMAGE ONLY/i.test(vid)
+  ) {
     return vid
   }
   const motion = (shot.description || '').trim()
   const camera = (shot.cameraMove || 'subtle movement').trim()
   const title = (shot.title || 'Shot').trim()
+  const shotType = (shot.shotType || '').trim()
+  const header = [`VIDEO MOTION — "${title}"`, shotType, `camera: ${camera}`].filter(Boolean).join(' · ')
   return [
-    `VIDEO MOTION — "${title}" · camera: ${camera}`,
+    header,
     motion,
-    'Animate only this beat. Preserve character designs, wardrobe, environment, and lighting from the production prompt still frame.'
+    'Animate only this beat between the start and end frames. Keep faces, wardrobe, set, and lighting locked to those frames. No captions, titles, or on-screen text.'
   ]
     .filter(Boolean)
     .join('\n\n')
@@ -343,14 +354,16 @@ export function resolveFrameGenerationPrompt (
   return buildUnifiedProductionPrompt(shotCanon, ctx)
 }
 
-/** Video from a stored shot: production still + motion beat (no duplicate director/cast blocks). */
+/**
+ * Video from a stored shot: the motion beat only.
+ * Start and end frames already carry the still. Prepending the storyboard
+ * image prompt ("ONE IMAGE ONLY", director bible) gets truncated and tells
+ * the video model to make a single still.
+ */
 export function resolveShotVideoGenerationPrompt (
   shot: CreativeShot,
   ctx: UnifiedShotPromptContext
 ): string {
-  const production = promptLooksUnified(shot.imagePrompt)
-    ? lockPrompt(shot.imagePrompt.trim(), shot, ctx)
-    : buildUnifiedProductionPrompt(shot, ctx)
   const motion = buildMotionPromptForShot(shot)
   const inShot = castMembersInShot(
     {
@@ -361,16 +374,7 @@ export function resolveShotVideoGenerationPrompt (
     },
     ctx.cast
   )
-  return applyVoiceLock(
-    trimPromptForImageModel(
-      dedupeJoinBlocks(
-        production,
-        '---',
-        motion
-      )
-    ),
-    inShot
-  )
+  return applyVoiceLock(motion, inShot)
 }
 
 /** @deprecated Use resolveShotVideoGenerationPrompt — shot-based video assembly. */

@@ -81,19 +81,19 @@
         </div>
         <section
           v-if="selectedEntity"
-          class="mb-4 rounded-lg border border-violet-200 bg-violet-50/70 px-3 py-3"
+          class="mb-4 rounded-lg border border-gray-200 bg-gray-50 px-3 py-3"
         >
           <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <h3 class="text-xs font-semibold text-violet-950 uppercase tracking-wide">
+            <h3 class="text-xs font-semibold text-gray-900 uppercase tracking-wide">
               Related assets
             </h3>
-            <span class="text-[11px] text-violet-800">
+            <span class="text-[11px] text-gray-600">
               {{ entityRelatedAssets.length }} linked
             </span>
           </div>
           <p
             v-if="!entityRelatedAssets.length"
-            class="text-xs text-violet-900/80"
+            class="text-xs text-gray-600"
           >
             No project assets match this entity via Bible metadata or linked cast.
           </p>
@@ -104,7 +104,7 @@
             <li
               v-for="row in entityRelatedAssets"
               :key="row.asset.id"
-              class="rounded-md border border-violet-200/80 bg-studio-slate px-2.5 py-2 text-xs"
+              class="rounded-md border border-gray-200 bg-studio-slate px-2.5 py-2 text-xs"
             >
               <div class="flex flex-wrap items-start justify-between gap-2">
                 <div class="min-w-0">
@@ -113,20 +113,20 @@
                     :href="assetPlaybackUrl(row.asset)"
                     target="_blank"
                     rel="noopener noreferrer"
-                    class="font-medium text-violet-900 hover:underline"
+                    class="font-medium text-gray-900 hover:text-primary hover:underline"
                   >
                     {{ row.asset.title || row.asset.kind }}
                   </a>
-                  <span v-else class="font-medium text-gray-800">
+                  <span v-else class="font-medium text-gray-900">
                     {{ row.asset.title || row.asset.kind }}
                   </span>
-                  <p class="text-[11px] text-gray-500 mt-0.5">
+                  <p class="text-[11px] text-gray-600 mt-0.5">
                     {{ row.asset.kind }}
                     <span v-if="assetSceneShotLabel(row.asset)"> · {{ assetSceneShotLabel(row.asset) }}</span>
                   </p>
                   <p
                     v-if="assetProvenanceLine(row.asset)"
-                    class="text-[11px] text-violet-900/90 mt-1"
+                    class="text-[11px] text-gray-500 mt-1"
                   >
                     {{ assetProvenanceLine(row.asset) }}
                   </p>
@@ -135,7 +135,7 @@
                   <span
                     v-for="source in row.linkSources"
                     :key="source"
-                    class="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-violet-100 text-violet-900"
+                    class="text-[10px] font-semibold uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-800"
                   >
                     {{ assetBibleLinkSourceLabel(source) }}
                   </span>
@@ -145,17 +145,17 @@
           </ul>
           <div
             v-if="selectedEntity.type === 'character' && linkableAssetsForEntity.length"
-            class="mt-3 pt-3 border-t border-violet-200/80"
+            class="mt-3 pt-3 border-t border-gray-200"
           >
-            <p class="text-[11px] text-violet-900/90 mb-2">
-              Optionally set <code class="text-[10px]">{{ BIBLE_ASSET_ENTITY_METADATA_KEY }}</code> on a cast asset (metadata only).
+            <p class="text-[11px] text-gray-600 mb-2">
+              Optionally set <code class="text-[10px] text-gray-800">{{ BIBLE_ASSET_ENTITY_METADATA_KEY }}</code> on a cast asset (metadata only).
             </p>
             <div class="flex flex-wrap items-end gap-2">
               <label class="block text-xs flex-1 min-w-[12rem]">
                 <span class="text-gray-600">Cast asset</span>
                 <select
                   v-model="assetLinkPickId"
-                  class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm bg-studio-slate"
+                  class="mt-0.5 w-full rounded-lg border border-gray-300 px-2 py-1.5 text-sm bg-studio-slate text-gray-900"
                 >
                   <option value="">Choose asset…</option>
                   <option
@@ -169,7 +169,7 @@
               </label>
               <button
                 type="button"
-                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-violet-700 text-white disabled:opacity-50"
+                class="px-3 py-1.5 text-xs font-semibold rounded-lg bg-primary text-gray-950 disabled:opacity-50"
                 :disabled="mutating || !assetLinkPickId"
                 @click="onLinkAssetToBibleEntity"
               >

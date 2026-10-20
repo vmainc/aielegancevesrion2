@@ -20,7 +20,7 @@
         class="flex flex-wrap items-center justify-between gap-2 mb-4"
       >
         <p class="text-xs text-gray-500">
-          Click a portrait square to upload a photo, or add rows by hand. Changes save to your project.
+          Click a portrait to enlarge it. Use Change under the image to replace a photo, or add rows by hand.
         </p>
         <button
           type="button"
@@ -178,6 +178,7 @@
                       :uploading="uploadingPortraitCharacterId === c.id"
                       :disabled="busy"
                       @pick="onPortraitFilePicked"
+                      @preview="onPortraitPreview"
                     />
                   </td>
                   <td class="px-4 sm:px-5 py-3 align-top" colspan="2">
@@ -253,11 +254,12 @@
                       :uploading="uploadingPortraitCharacterId === c.id"
                       :disabled="busy || !!editingId || showAddRow"
                       @pick="onPortraitFilePicked"
+                      @preview="onPortraitPreview"
                     />
                     <NuxtLink
                       v-if="editable && projectIdForCreatorLink && portraitUrlFor(c)"
                       :to="characterFolderTo(c)"
-                      class="inline-flex items-center justify-center text-[10px] text-gray-400 hover:text-primary mt-0.5"
+                      class="inline-flex items-center justify-center text-[10px] text-gray-400 hover:text-primary mt-4"
                       title="Open character image folder"
                     >
                       Assets
@@ -327,10 +329,17 @@
         {{ emptyHint }}
       </p>
     </template>
+
+    <ImageLightbox
+      v-model:open="portraitLightboxOpen"
+      :items="portraitLightboxItems"
+      :start-index="portraitLightboxIndex"
+    />
   </div>
 </template>
 
 <script setup lang="ts">
+import ImageLightbox, { type ImageLightboxItem } from '~/components/ImageLightbox.vue'
 import { visualBriefForCharacterCreator } from '~/lib/character-visual-description'
 import { projectBibleCastPath } from '~/lib/project-bible-paths'
 import type { CreativeCharacter } from '~/types/creative-project'
@@ -460,6 +469,27 @@ const emit = defineEmits<{
 
 function onPortraitFilePicked (c: CreativeCharacter, file: File) {
   emit('upload-portrait', { characterId: c.id, file })
+}
+
+const portraitLightboxOpen = ref(false)
+const portraitLightboxIndex = ref(0)
+
+const portraitLightboxItems = computed<ImageLightboxItem[]>(() =>
+  props.characters
+    .map((c): ImageLightboxItem | null => {
+      const src = portraitUrlFor(c)
+      if (!src) return null
+      return { src, title: c.name }
+    })
+    .filter((item): item is ImageLightboxItem => Boolean(item))
+)
+
+function onPortraitPreview (c: CreativeCharacter) {
+  const items = portraitLightboxItems.value
+  const idx = items.findIndex((item) => item.title === c.name)
+  if (idx < 0) return
+  portraitLightboxIndex.value = idx
+  portraitLightboxOpen.value = true
 }
 
 const editingId = ref<string | null>(null)

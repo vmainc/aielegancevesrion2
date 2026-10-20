@@ -149,9 +149,8 @@ const selectedType = computed(() => {
 function isOpen (type: BibleEntityType): boolean {
   if (manuallyClosed.value.has(type)) return false
   if (manuallyOpened.value.has(type)) return true
-  if (selectedType.value === type) return true
-  const first = props.entitiesByType[0]?.[0]
-  return first === type
+  // Keep closed on load; only open when the user expands or selects an entity.
+  return selectedType.value === type
 }
 
 function toggleType (type: BibleEntityType) {

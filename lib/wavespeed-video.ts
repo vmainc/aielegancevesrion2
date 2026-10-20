@@ -2,7 +2,6 @@
 
 import {
   isOpenRouterSeedance25Listing,
-  isSeedance25ModelId,
   snapAtlasSeedanceDuration
 } from '~/lib/atlas-cloud-video'
 
@@ -38,8 +37,23 @@ export function waveSpeedSeedanceAspectRatio (aspectRatio?: string): string {
   return '16:9'
 }
 
+const WAVESPEED_SEEDANCE_LISTINGS = new Set([
+  'bytedance/seedance-2.5',
+  'bytedance/seedance-2.0',
+  'bytedance/seedance-2.0-fast',
+  'bytedance/seedance-2.0-mini'
+])
+
+/** OpenRouter Seedance ids we send to WaveSpeed (cheaper than OpenRouter per second). */
+export function isWaveSpeedSeedanceListing (modelId: string): boolean {
+  const s = modelId.trim().toLowerCase()
+  if (WAVESPEED_SEEDANCE_LISTINGS.has(s)) return true
+  return s.startsWith('bytedance/seedance-2.5/')
+}
+
 /**
- * OpenRouter Seedance 2.5 is 720p-max. Native 1080p goes through WaveSpeed Turbo when keyed.
+ * All Seedance 2.x listings go through WaveSpeed when keyed.
+ * OpenRouter still hosts them, but WaveSpeed is cheaper (2.5 ~$0.20/s at 720p vs ~$0.23/s).
  */
 export function shouldRouteSeedance25ViaWaveSpeed (opts: {
   modelId: string
@@ -47,8 +61,41 @@ export function shouldRouteSeedance25ViaWaveSpeed (opts: {
   waveSpeedKeyConfigured: boolean
 }): boolean {
   if (!opts.waveSpeedKeyConfigured) return false
-  if (!isSeedance25ModelId(opts.modelId)) return false
-  return String(opts.resolution || '').trim().toLowerCase() === '1080p'
+  return isWaveSpeedSeedanceListing(opts.modelId)
+}
+
+export function waveSpeedSeedanceModelPaths (modelId: string): {
+  textToVideo: string
+  imageToVideo: string
+  maxDuration: number
+} {
+  const s = modelId.trim().toLowerCase()
+  if (s.includes('seedance-2.0-fast')) {
+    return {
+      textToVideo: 'bytedance/seedance-2.0-fast/text-to-video',
+      imageToVideo: 'bytedance/seedance-2.0-fast/image-to-video',
+      maxDuration: 15
+    }
+  }
+  if (s.includes('seedance-2.0-mini')) {
+    return {
+      textToVideo: 'bytedance/seedance-2.0-mini/text-to-video',
+      imageToVideo: 'bytedance/seedance-2.0-mini/image-to-video',
+      maxDuration: 15
+    }
+  }
+  if (s.includes('seedance-2.0')) {
+    return {
+      textToVideo: 'bytedance/seedance-2.0/text-to-video',
+      imageToVideo: 'bytedance/seedance-2.0/image-to-video',
+      maxDuration: 15
+    }
+  }
+  return {
+    textToVideo: WAVESPEED_SEEDANCE_25_T2V_TURBO,
+    imageToVideo: WAVESPEED_SEEDANCE_25_I2V_TURBO,
+    maxDuration: 30
+  }
 }
 
 /** Advertise 1080p on Seedance 2.5 when a HD provider (WaveSpeed / Atlas) is configured. */

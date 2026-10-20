@@ -18,6 +18,8 @@ export type ImageGenerationPrefill = {
   /** After generate, navigate back here (e.g. `/projects/:id/storyboard`). */
   returnTo?: string
   source?: 'storyboard_panel' | 'standalone' | 'video_tool'
+  /** Bible location entity id (Locations step / set plates). */
+  locationId?: string
 }
 
 export function useImageGenerationPrefillState () {
@@ -52,6 +54,7 @@ export function imageGenerationQueryFromPrefill (
   if (prefill.category) q.category = prefill.category
   if (prefill.returnTo) q.returnTo = prefill.returnTo
   if (prefill.source) q.source = prefill.source
+  if (prefill.locationId) q.locationId = prefill.locationId
   return q
 }
 
@@ -115,6 +118,7 @@ export function parseImageGenerationQuery (
     'other'
   ])
   return {
+    prompt: str('prompt') || undefined,
     projectId: str('projectId') || str('project') || undefined,
     sceneId: str('sceneId') || str('scene_id') || undefined,
     shotId: str('shotId') || str('shot_id') || undefined,
@@ -124,6 +128,7 @@ export function parseImageGenerationQuery (
       ? (categoryRaw as ImageGenerationCategory)
       : undefined,
     returnTo: str('returnTo') || str('return_to') || undefined,
+    locationId: str('locationId') || str('location_id') || undefined,
     source:
       str('source') === 'storyboard_panel'
         ? 'storyboard_panel'
