@@ -629,12 +629,35 @@
             >
               Hover a cast name in the prompt to preview their reference plate.
             </p>
-            <p
-              v-if="productionBibleDebugLine"
-              class="mt-1.5 text-xs text-gray-500"
+            <div
+              v-if="showProjectLookControl"
+              class="mt-2 rounded-lg border px-3 py-2.5 text-xs space-y-1.5"
+              :class="applyProjectLook
+                ? 'border-sky-200 bg-sky-50/80 text-sky-950'
+                : 'border-gray-200 bg-gray-50 text-gray-700'"
             >
-              {{ productionBibleDebugLine }}
-            </p>
+              <label class="inline-flex items-start gap-2 cursor-pointer font-medium text-gray-900">
+                <input
+                  v-model="applyProjectLook"
+                  type="checkbox"
+                  class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
+                >
+                Apply project look (Director + cast continuity)
+              </label>
+              <p
+                v-if="projectLookHint.detail"
+                class="font-normal leading-snug text-[11px] text-gray-700"
+              >
+                <span class="font-semibold text-gray-900">{{ projectLookHint.title }}</span>
+                — {{ projectLookHint.detail }}
+              </p>
+              <p
+                v-if="productionBibleDebugLine && applyProjectLook"
+                class="text-[11px] text-gray-600"
+              >
+                {{ productionBibleDebugLine }}
+              </p>
+            </div>
           </div>
           <div v-if="anySelectedSupportsNegative">
             <label for="vg-negative" class="block text-sm font-medium text-gray-700 mb-1.5">
@@ -668,6 +691,7 @@
             :reference-image-urls="castPlateReferenceUrls"
             :set-reference-image-urls="locationPlateReferenceUrls"
             :cast-continuity-block="seedFrameCastContinuityBlock"
+            :apply-project-look="applyProjectLook"
             :supports-end-frame="anySelectedSupportsEndFrame"
             :end-frame-compatibility-warn="endFrameCompatibilityWarn"
             :end-frame-compatibility-hint="endFrameCompatibilityHint"
@@ -1085,6 +1109,7 @@ import {
 import { dialogueToneGroups } from '~/lib/dialogue-tone-options'
 import { writeSessionWorkflow } from '~/lib/project-workflow-mode'
 import {
+  defaultApplyProjectLookFromPrefs,
   defaultAspectRatioFromPrefs,
   defaultDurationFromPrefs,
   defaultResolutionFromPrefs,
@@ -1099,6 +1124,10 @@ import {
   type VideoToolClipSeconds,
   type VideoToolResolution
 } from '~/lib/video-generation-prefs'
+import {
+  buildVideoProjectLookHint,
+  stripProjectLookBlocksFromVideoPrompt
+} from '~/lib/video-project-look'
 import { normalizeVideoModelToOpenRouter } from '~/lib/atlas-cloud-video'
 import {
   buildContinuityPromptBlock,
@@ -1338,11 +1367,38 @@ const loadingPickerScenes = ref(false)
 const loadingPickerShots = ref(false)
 const pickerError = ref('')
 
+const applyProjectLook = ref(defaultApplyProjectLookFromPrefs())
+
 const productionBibleDebugLine = computed(() => {
   const ctx = panelPrefill.value?.productionBibleContext
   if (!ctx) return ''
   return productionBibleGenerationDebugLabel(ctx)
 })
+
+const activeProjectDirector = computed(() => {
+  const pid = startFrameBibleProjectId.value
+  if (!pid) return undefined
+  return pbProjects.value.find((p) => p.id === pid)?.director
+})
+
+const hasStoryboardStartFrame = computed(() => {
+  const fromTimeline = timelineKeyframes.value.some(
+    (k) => k.atSeconds <= 0.05 && Boolean((k.imageUrl || '').trim())
+  )
+  const fromPrefill = Boolean(panelPrefill.value?.startFrameUrl?.trim())
+  return fromTimeline || fromPrefill
+})
+
+const showProjectLookControl = computed(() => Boolean(startFrameBibleProjectId.value))
+
+const projectLookHint = computed(() =>
+  buildVideoProjectLookHint({
+    applyProjectLook: applyProjectLook.value,
+    director: activeProjectDirector.value,
+    hasProductionBibleContext: Boolean(panelPrefill.value?.productionBibleContext),
+    hasStoryboardStartFrame: hasStoryboardStartFrame.value
+  })
+)
 const startFrameBibleProjectId = computed(() => {
   const fromPanel = panelPrefill.value?.projectId?.trim() || ''
   if (fromPanel && PB_ID.test(fromPanel)) return fromPanel
@@ -1561,6 +1617,7 @@ const locationPlateReferenceUrls = computed(() => {
 })
 
 const seedFrameCastContinuityBlock = computed(() => {
+  if (!applyProjectLook.value) return ''
   const ids = new Set(effectiveCharacterIds.value)
   if (!ids.size) return ''
   return buildContinuityPromptBlock(
@@ -1719,6 +1776,18 @@ function applySceneDefaultCharacterSelection () {
   initialSceneSelectionApplied.value = true
 }
 
+function panelPrefillFetchQuery (pre: VideoGenerationPrefill): Record<string, string> {
+  const q: Record<string, string> = {
+    sceneId: pre.sceneId || '',
+    shotId: pre.shotId || '',
+    applyProjectLook: applyProjectLook.value ? '1' : '0'
+  }
+  if (selectedCharacterIds.value.length) {
+    q.characterIds = selectedCharacterIds.value.join(',')
+  }
+  return q
+}
+
 async function refreshPromptForSelectedCharacters () {
   const pre = panelPrefill.value
   const pid = startFrameBibleProjectId.value
@@ -1730,11 +1799,7 @@ async function refreshPromptForSelectedCharacters () {
     const res = await $fetch<VideoGenerationPrefill>(
       `/api/projects/${pid}/video-panel-prefill`,
       {
-        query: {
-          sceneId: pre.sceneId,
-          shotId: pre.shotId,
-          characterIds: selectedCharacterIds.value.join(',')
-        },
+        query: panelPrefillFetchQuery(pre),
         headers
       }
     )
@@ -1763,6 +1828,21 @@ watch(selectedCharacterIds, () => {
   if (refreshPromptTimer) clearTimeout(refreshPromptTimer)
   refreshPromptTimer = setTimeout(() => void refreshPromptForSelectedCharacters(), 400)
 }, { deep: true })
+
+watch(applyProjectLook, (on) => {
+  if (suppressCastPromptRefresh.value) return
+  if (isVideoEditPrefill(panelPrefill.value)) return
+  const pre = panelPrefill.value
+  if (pre?.sceneId && pre?.shotId && PB_ID.test(startFrameBibleProjectId.value)) {
+    void refreshPromptForSelectedCharacters()
+    return
+  }
+  if (!on) {
+    suppressCastPromptRefresh.value = true
+    prompt.value = stripProjectLookBlocksFromVideoPrompt(prompt.value)
+    suppressCastPromptRefresh.value = false
+  }
+})
 
 watch(projectCharacterRefs, () => {
   applySceneDefaultCharacterSelection()
@@ -2046,6 +2126,8 @@ function hydrateVideoGenerationPrefs () {
     const res = parseVideoGenerationResolution(prefs.resolution)
     if (res) resolution.value = res
   }
+  if (prefs.applyProjectLook === false) applyProjectLook.value = false
+  else if (prefs.applyProjectLook === true) applyProjectLook.value = true
 
   if (modelsPrefsHydrated.value && (primaryModelId.value || !models.value.length)) {
     prefsHydrated.value = true
@@ -2067,12 +2149,21 @@ function persistVideoGenerationPrefs () {
         : undefined,
     aspectRatio: aspectRatio.value,
     durationSeconds: durationSeconds.value,
-    resolution: resolution.value
+    resolution: resolution.value,
+    applyProjectLook: applyProjectLook.value
   })
 }
 
 watch(
-  [primaryModelId, compareModelIds, selectedProjectId, aspectRatio, durationSeconds, resolution],
+  [
+    primaryModelId,
+    compareModelIds,
+    selectedProjectId,
+    aspectRatio,
+    durationSeconds,
+    resolution,
+    applyProjectLook
+  ],
   persistVideoGenerationPrefs,
   { deep: true }
 )
@@ -2319,7 +2410,8 @@ async function fetchPanelPrefillFromApi (): Promise<boolean> {
       {
         query: {
           sceneId: panelSceneId.value,
-          shotId: panelShotId.value
+          shotId: panelShotId.value,
+          applyProjectLook: applyProjectLook.value ? '1' : '0'
         },
         headers: { Authorization: `Bearer ${token}` }
       }

@@ -46,6 +46,7 @@
           :reference-image-urls="referenceImageUrls"
           :set-reference-image-urls="setReferenceImageUrls"
           :cast-continuity-block="castContinuityBlock"
+          :apply-project-look="applyProjectLook"
           @update:frame-image-url="url => onFrameUrl(startKeyframe!.id, url)"
         />
       </div>
@@ -81,6 +82,7 @@
           :reference-image-urls="referenceImageUrls"
           :set-reference-image-urls="setReferenceImageUrls"
           :cast-continuity-block="castContinuityBlock"
+          :apply-project-look="applyProjectLook"
           @update:frame-image-url="url => onFrameUrl(endKeyframe.id, url)"
         />
       </div>
@@ -196,6 +198,7 @@ const props = withDefaults(
     referenceImageUrls?: string[]
     setReferenceImageUrls?: string[]
     castContinuityBlock?: string
+    applyProjectLook?: boolean
     supportsEndFrame?: boolean
     endFrameCompatibilityWarn?: boolean
     endFrameCompatibilityHint?: string
@@ -207,6 +210,7 @@ const props = withDefaults(
     referenceImageUrls: () => [],
     setReferenceImageUrls: () => [],
     castContinuityBlock: '',
+    applyProjectLook: true,
     supportsEndFrame: true,
     endFrameCompatibilityWarn: false,
     endFrameCompatibilityHint: '',

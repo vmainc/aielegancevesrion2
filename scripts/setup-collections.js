@@ -938,6 +938,7 @@ async function createCollections(adminEmail, adminPassword) {
             },
             { name: 'content', type: 'text', required: true, options: { max: 12000 } },
             { name: 'suggestions', type: 'json', required: false },
+            { name: 'actions', type: 'json', required: false },
             { name: 'created_at_client', type: 'text', required: false, options: { max: 50 } }
           ]
         });

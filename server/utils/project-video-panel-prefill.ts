@@ -155,8 +155,18 @@ export async function buildVideoPanelPrefill (input: {
   shotId: string
   /** When set, only these cast members are woven into the production prompt. */
   characterIds?: string[]
+  /** When false, omit cast continuity from the motion prompt. */
+  applyProjectLook?: boolean
 }): Promise<VideoGenerationPrefill> {
-  const { pb, userId, projectId, sceneId, shotId, characterIds: characterIdsFilter } = input
+  const {
+    pb,
+    userId,
+    projectId,
+    sceneId,
+    shotId,
+    characterIds: characterIdsFilter,
+    applyProjectLook = true
+  } = input
 
   const projectRow = await pb.collection('creative_projects').getOne(projectId)
   const project = pbRecordToCreativeProject(projectRow as Parameters<typeof pbRecordToCreativeProject>[0])
@@ -253,7 +263,8 @@ export async function buildVideoPanelPrefill (input: {
     },
     shot,
     cast,
-    productionBible
+    productionBible,
+    applyProjectLook
   }).trim()
 
   const prompt = negativePrompt

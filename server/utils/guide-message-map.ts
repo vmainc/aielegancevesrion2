@@ -1,4 +1,4 @@
-import type { GuideChatMessage, GuideSuggestion } from '~/lib/project-guide'
+import type { GuideAction, GuideChatMessage, GuideSuggestion } from '~/lib/project-guide'
 
 export function projectIdOnGuideMessageRow (row: Record<string, unknown>): string {
   const project = row.project
@@ -7,6 +7,24 @@ export function projectIdOnGuideMessageRow (row: Record<string, unknown>): strin
     return String((project as { id: string }).id)
   }
   return ''
+}
+
+function parseActions (raw: unknown): GuideAction[] | undefined {
+  if (!Array.isArray(raw)) return undefined
+  const out: GuideAction[] = []
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue
+    const a = item as GuideAction
+    if (typeof a.id === 'string' && typeof a.label === 'string' && typeof a.path === 'string') {
+      out.push({
+        id: a.id,
+        label: a.label,
+        path: a.path,
+        rationale: typeof a.rationale === 'string' ? a.rationale : undefined
+      })
+    }
+  }
+  return out.length ? out : undefined
 }
 
 function parseSuggestions (raw: unknown): GuideSuggestion[] | undefined {
@@ -46,6 +64,7 @@ export function pbRecordToGuideChatMessage (record: Record<string, unknown>): Gu
     role,
     content,
     suggestions: parseSuggestions(record.suggestions),
+    actions: parseActions(record.actions),
     createdAt
   }
 }
@@ -62,6 +81,7 @@ export function guideChatMessageToPbFields (input: {
     role: input.message.role,
     content: input.message.content.slice(0, 12000),
     suggestions: input.message.suggestions?.length ? input.message.suggestions : null,
+    actions: input.message.actions?.length ? input.message.actions : null,
     created_at_client: input.message.createdAt
   }
 }

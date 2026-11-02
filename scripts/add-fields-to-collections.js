@@ -673,6 +673,24 @@ async function addFieldsToCollections(adminEmail, adminPassword) {
       }
     }
 
+    console.log('💬 Checking "guide_messages" collection...');
+    try {
+      const guideCol = await pb.collections.getFirstListItem('name="guide_messages"');
+      if (!fieldExists(guideCol, 'actions')) {
+        const currentSchema = guideCol.fields || guideCol.schema || [];
+        const nextSchema = [
+          ...currentSchema.map(flattenField),
+          { name: 'actions', type: 'json', required: false }
+        ];
+        await pb.collections.update(guideCol.id, { fields: nextSchema });
+        console.log('  ✅ Added actions (json) to guide_messages\n');
+      } else {
+        console.log('  ✓ guide_messages.actions exists\n');
+      }
+    } catch (e) {
+      console.log('  ⚠️  guide_messages check skipped:', e.message || e, '\n');
+    }
+
     console.log('🎉 Field addition complete!');
     console.log('\nYour collections now have all required fields.');
     console.log('You can verify this in the PocketBase admin UI by checking the collection schemas.');

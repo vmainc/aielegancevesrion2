@@ -1,4 +1,5 @@
 import { createError, getQuery, getRouterParam } from 'h3'
+import { parseApplyProjectLookQuery } from '~/lib/video-project-look'
 import { requireProjectOwner } from '~/server/utils/bible-project-access'
 import { buildVideoPanelPrefill } from '~/server/utils/project-video-panel-prefill'
 
@@ -22,12 +23,15 @@ export default defineEventHandler(async (event) => {
           .filter(Boolean)
       : undefined
 
+  const applyProjectLook = parseApplyProjectLookQuery(query.applyProjectLook)
+
   return buildVideoPanelPrefill({
     pb,
     userId,
     projectId,
     sceneId,
     shotId,
-    characterIds
+    characterIds,
+    applyProjectLook
   })
 })

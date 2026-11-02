@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
     /* default model */
   }
 
-  const system = buildProjectGuideSystemPrompt(ctx)
+  const system = buildProjectGuideSystemPrompt(ctx, projectId)
   const openRouterMessages = [
     { role: 'system', content: system },
     ...trimmed.map(m => ({ role: m.role, content: m.content }))
@@ -143,7 +143,7 @@ export default defineEventHandler(async (event) => {
       continue
     }
 
-    return parseProjectGuideResponse(content, ctx)
+    return parseProjectGuideResponse(content, ctx, projectId)
   }
 
   throwApiError(

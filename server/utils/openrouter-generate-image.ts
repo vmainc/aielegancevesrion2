@@ -1,3 +1,4 @@
+import { CHARACTER_CREATOR_PLATE_OVERRIDE } from '~/lib/character-image-prompt'
 import {
   openRouterImageAspectRatio,
   SINGLE_STORYBOARD_FRAME_DIRECTIVE
@@ -39,7 +40,7 @@ export async function openRouterGenerateImage (options: {
   continuityReferenceImageUrls?: string[]
   aspectRatio?: string
   /** When set, prompt and downstream staging target video image-to-video seed limits. */
-  purpose?: 'video_start_frame'
+  purpose?: 'video_start_frame' | 'character_plate'
 }): Promise<OpenRouterGenerateImageResult> {
   const aspect = openRouterImageAspectRatio(options.aspectRatio)
   const aspectHint =
@@ -48,10 +49,14 @@ export async function openRouterGenerateImage (options: {
       : aspect === '1:1'
         ? 'Output one 1:1 square frame.'
         : 'Output one 16:9 landscape frame.'
-  const prompt = [
+  const leadDirective =
     options.purpose === 'video_start_frame'
       ? VIDEO_SEED_IMAGE_GENERATION_DIRECTIVE
-      : SINGLE_STORYBOARD_FRAME_DIRECTIVE,
+      : options.purpose === 'character_plate'
+        ? CHARACTER_CREATOR_PLATE_OVERRIDE
+        : SINGLE_STORYBOARD_FRAME_DIRECTIVE
+  const prompt = [
+    leadDirective,
     aspectHint,
     options.prompt.trim()
   ]
@@ -71,7 +76,9 @@ export async function openRouterGenerateImage (options: {
   let userContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }> = prompt
   const characterRefs = [
     ...(options.referenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean),
-    (options.referenceImageUrl || '').trim()
+    ...((options.referenceImageUrl || '').trim()
+      ? [(options.referenceImageUrl || '').trim()]
+      : [])
   ].filter((u, i, arr) => arr.indexOf(u) === i)
   const setRefs = (options.setReferenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean)
   const propRefs = (options.propReferenceImageUrls || []).map(u => (u || '').trim()).filter(Boolean)
@@ -85,13 +92,26 @@ export async function openRouterGenerateImage (options: {
     const perImageBudget = refList.length > 1 ? 2_200_000 : 4_000_000
     const imageParts: Array<{ type: 'image_url'; image_url: { url: string } }> = []
     const attachedUrls: string[] = []
+    const refErrors: string[] = []
     for (const refUrl of refList) {
       try {
         const dataUrl = await fetchReferenceImageAsDataUrl(refUrl, perImageBudget)
         imageParts.push({ type: 'image_url', image_url: { url: dataUrl } })
         attachedUrls.push(refUrl)
-      } catch {
-        /* skip broken ref */
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e)
+        refErrors.push(msg.slice(0, 120))
+      }
+    }
+    if (characterRefs.length > 0) {
+      const attachedCharacterCount = characterRefs.filter((u) => attachedUrls.includes(u)).length
+      if (attachedCharacterCount === 0) {
+        throw createError({
+          statusCode: 400,
+          message:
+            'Could not load the character reference portrait for face lock. Re-upload the headshot or sign in again. ' +
+            (refErrors[0] ? `(${refErrors[0]})` : '')
+        })
       }
     }
     if (imageParts.length) {
@@ -111,6 +131,12 @@ export async function openRouterGenerateImage (options: {
       if (identityNote) notes.push(identityNote)
       const refNote = notes.join(' ')
       userContent = [{ type: 'text', text: `${prompt}\n\n${refNote}` }, ...imageParts]
+    } else if (characterRefs.length > 0) {
+      throw createError({
+        statusCode: 400,
+        message:
+          'Character reference images could not be attached — generation was stopped so the face would not drift. Check headshot media and try again.'
+      })
     } else {
       userContent = `${prompt}\n\n(Match the established character design from the project cast bible and the locked set architecture — photoreal practical location, new camera each panel.)`
     }

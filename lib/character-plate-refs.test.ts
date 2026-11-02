@@ -29,7 +29,7 @@ function plate (partial: {
 }
 
 describe('character plate bundle', () => {
-  it('sends the featured headshot first and drops the back before the face', () => {
+  it('sends headshot first and only Front with headshot (not drift-prone side/back refs)', () => {
     const map = buildCharacterPlateMap(
       [{ id: 'char1', name: 'VANDERMUTH' }],
       [
@@ -45,9 +45,7 @@ describe('character plate bundle', () => {
     expect(bundle?.url).toBe('https://example.com/head.jpg')
     expect(bundle?.plateUrls).toEqual([
       'https://example.com/head.jpg',
-      'https://example.com/front.jpg',
-      'https://example.com/left.jpg',
-      'https://example.com/right.jpg'
+      'https://example.com/front.jpg'
     ])
   })
 

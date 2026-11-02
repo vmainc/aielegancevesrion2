@@ -67,10 +67,13 @@ export default defineEventHandler(async (event) => {
       : typeof body?.aspect_ratio === 'string'
         ? body.aspect_ratio.trim()
         : '16:9'
+  const purposeRaw = typeof body?.purpose === 'string' ? body.purpose.trim() : ''
   const purpose =
-    body?.purpose === 'video_start_frame' || body?.purpose === 'video_seed'
+    purposeRaw === 'video_start_frame' || purposeRaw === 'video_seed'
       ? 'video_start_frame' as const
-      : undefined
+      : purposeRaw === 'character_plate'
+        ? 'character_plate' as const
+        : undefined
 
   if (!prompt || typeof prompt !== 'string' || !prompt.trim()) {
     throw createError({
@@ -102,27 +105,37 @@ export default defineEventHandler(async (event) => {
       pocketbaseInternalUrl: internalPb,
       publicPocketbaseUrl: publicPb || undefined
     }
-    const resolveList = async (raws: string[]): Promise<string[]> => {
+    const resolveList = async (raws: string[], label: string): Promise<string[]> => {
       const out: string[] = []
+      const errors: string[] = []
       for (const raw of raws) {
         try {
           const resolved = await resolveReferenceImageUrlForServerFetch(raw, fetchOpts)
           if (resolved) out.push(resolved)
-        } catch {
-          /* skip */
+        } catch (e: unknown) {
+          errors.push(e instanceof Error ? e.message : String(e))
         }
+      }
+      if (raws.length && !out.length && label === 'character') {
+        throw createError({
+          statusCode: 400,
+          message:
+            'Could not load character reference portrait(s) for face lock. Use a saved headshot or pass a data URL. ' +
+            (errors[0] ? errors[0].slice(0, 160) : '')
+        })
       }
       return out
     }
     const resolvedCharacterRefs = await resolveList(
       [...referenceImageUrls, ...(referenceImageUrl ? [referenceImageUrl] : [])]
         .filter((u, i, arr) => arr.indexOf(u) === i)
-        .slice(0, 4)
+        .slice(0, 4),
+      'character'
     )
-    const resolvedSetRefs = await resolveList(setReferenceImageUrls.slice(0, 2))
-    const resolvedPropRefs = await resolveList(propReferenceImageUrls.slice(0, 2))
-    const resolvedCostumeRefs = await resolveList(costumeReferenceImageUrls.slice(0, 2))
-    const resolvedContinuityRefs = await resolveList(continuityReferenceImageUrls.slice(0, 2))
+    const resolvedSetRefs = await resolveList(setReferenceImageUrls.slice(0, 2), 'set')
+    const resolvedPropRefs = await resolveList(propReferenceImageUrls.slice(0, 2), 'prop')
+    const resolvedCostumeRefs = await resolveList(costumeReferenceImageUrls.slice(0, 2), 'costume')
+    const resolvedContinuityRefs = await resolveList(continuityReferenceImageUrls.slice(0, 2), 'continuity')
 
     let lastErr: unknown = null
     for (let i = 0; i < candidates.length; i++) {
@@ -132,7 +145,7 @@ export default defineEventHandler(async (event) => {
           prompt,
           modelId: candidate,
           apiKey,
-          referenceImageUrl: resolvedCharacterRefs[0],
+          referenceImageUrl: resolvedCharacterRefs[0] || undefined,
           referenceImageUrls: resolvedCharacterRefs.length ? resolvedCharacterRefs : undefined,
           setReferenceImageUrls: resolvedSetRefs.length ? resolvedSetRefs : undefined,
           propReferenceImageUrls: resolvedPropRefs.length ? resolvedPropRefs : undefined,

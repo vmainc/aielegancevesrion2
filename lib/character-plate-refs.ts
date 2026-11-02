@@ -50,8 +50,15 @@ function isIdentityFacePlate (plate: RankedPlate): boolean {
   return !plate.view && (plate.featured || plate.isHeadshot)
 }
 
-/** Face first, then profiles, then the back. A 4-plate cap drops the back before the face. */
+/** All turnaround slots stored in the lookbook (display / manual continuity). */
 const GENERATION_VIEW_ORDER: CharacterTurnaroundViewId[] = ['front', 'left', 'right', 'back']
+
+/**
+ * Turnarounds sent to image/video models when a headshot exists.
+ * Side/back AI plates often drift in face — attaching them tells the model to copy the wrong person.
+ * Face lock stays on the headshot; Front optional for body/costume.
+ */
+const FACE_LOCK_REFERENCE_VIEW_ORDER: CharacterTurnaroundViewId[] = ['front']
 
 /**
  * Featured headshot is the identity plate and is always included first.
@@ -79,13 +86,15 @@ function bundleFromPlates (plates: RankedPlate[], maxPlates: number): CharacterP
   const identity = sorted.find(isIdentityFacePlate)
   if (identity) pushUrl(identity.url)
 
-  for (const viewId of GENERATION_VIEW_ORDER) {
+  const viewOrder = identity ? FACE_LOCK_REFERENCE_VIEW_ORDER : GENERATION_VIEW_ORDER
+  for (const viewId of viewOrder) {
     if (urls.length >= maxPlates) break
     const plate = byView.get(viewId)
     if (plate) pushUrl(plate.url)
   }
 
-  if (urls.length < maxPlates) {
+  // With a headshot, do not pad with side/back turnarounds — they often drift and override the face lock.
+  if (urls.length < maxPlates && !identity) {
     for (const p of sorted) {
       pushUrl(p.url)
       if (urls.length >= maxPlates) break
@@ -112,8 +121,9 @@ export function characterPlateIdentityNote (count: number): string {
     : `The attached ${count} portraits are the production bible plates`
   return [
     `CHARACTER PLATES (identity lock): ${which}.`,
-    'The first plate is the face. Copy that person: same face, age, hair, and facial hair. Do not recast or redesign them.',
-    'Later plates lock the body. Clothing comes from the costume lock when one is set.',
+    'The first plate is the face lock — copy that person exactly: same face, age, hair, and facial hair. Do not recast or redesign them.',
+    'If a second character plate is attached, it is Front body/costume only — do not copy a different face from it. Clothing comes from the costume lock when one is set.',
+    'Lookbook Left/Right/Back slots are not sent to generation when a headshot exists, so bad turnaround faces cannot override the headshot.',
     'If a plate is a scene still, keep the other people, the table, and the room. Do not erase them.',
     'If any written description disagrees with the plates, the plates win for the face and body. When COSTUME LOCK is present, that block wins for the clothes.',
     'Set and continuity images never change the face.'

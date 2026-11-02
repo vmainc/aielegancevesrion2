@@ -153,6 +153,29 @@ async function onSend () {
               <p class="whitespace-pre-wrap">{{ msg.content }}</p>
 
               <div
+                v-if="msg.role === 'assistant' && msg.actions?.length"
+                class="mt-3 space-y-2 border-t border-gray-100 pt-3"
+              >
+                <p class="text-[11px] font-semibold uppercase tracking-wide text-gray-500">
+                  Next steps
+                </p>
+                <div class="flex flex-col gap-2">
+                  <NuxtLink
+                    v-for="a in msg.actions"
+                    :key="a.id"
+                    :to="a.path"
+                    class="block rounded-lg border border-gray-200 bg-gray-50 px-3 py-2.5 hover:border-primary/40 hover:bg-primary/5 transition-colors"
+                  >
+                    <span class="font-semibold text-gray-900">{{ a.label }}</span>
+                    <span
+                      v-if="a.rationale"
+                      class="block text-xs text-gray-500 mt-0.5"
+                    >{{ a.rationale }}</span>
+                  </NuxtLink>
+                </div>
+              </div>
+
+              <div
                 v-if="msg.role === 'assistant' && msg.suggestions?.length"
                 class="mt-3 space-y-2 border-t border-gray-100 pt-3"
               >

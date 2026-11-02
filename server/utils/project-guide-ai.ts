@@ -1,4 +1,11 @@
-import { GUIDE_FIELD_LABELS, type GuideSuggestion } from '~/lib/project-guide'
+import {
+  GUIDE_FIELD_LABELS,
+  catalogProjectGuidePathsForPrompt,
+  projectGuidePathContextFromIds,
+  validateProjectGuidePath,
+  type GuideAction,
+  type GuideSuggestion
+} from '~/lib/project-guide'
 import type { ProjectGuideContext } from '~/server/utils/project-guide-context'
 
 const ALLOWED_PROJECT_FIELDS = new Set([
@@ -51,14 +58,15 @@ function normalizeName (v: string): string {
   return v.trim().toLowerCase().replace(/\s+/g, ' ')
 }
 
-export function buildProjectGuideSystemPrompt (ctx: ProjectGuideContext): string {
+export function buildProjectGuideSystemPrompt (ctx: ProjectGuideContext, projectId: string): string {
   return `You are the Project Guide for AI Film Studio — a film pre-production copilot embedded in one creative project.
 
 Your job:
 1. Help the filmmaker think through story, characters, tone, and continuity.
 2. Answer questions using ONLY the project context below (do not invent cast or plot facts not supported by context unless clearly labeled as a creative suggestion).
 3. When the user states a decision or refinement that should persist in the project bible, propose structured updates via the suggestions array — never silently assume changes were saved.
-4. Keep replies concise, warm, and actionable (2–6 short paragraphs max unless the user asks for depth).
+4. When the user asks what to do next, where to go, or how to continue production, propose 1–3 concrete in-app actions (buttons) using exact paths from the DESTINATION CATALOG — prefer project pages over generic advice.
+5. Keep replies concise, warm, and actionable (2–6 short paragraphs max unless the user asks for depth).
 
 Allowed suggestion targets:
 - target "project" + field: ${[...ALLOWED_PROJECT_FIELDS].join(', ')}
@@ -72,9 +80,29 @@ Rules for suggestions:
 - label: short human label (e.g. "Claude · Personality").
 - Do not suggest empty values. Max 5 suggestions per turn.
 
+Rules for actions:
+- Use actions when navigation or opening a tool is the best next step (not when a bible suggestion is enough).
+- path must be an exact allowed path from DESTINATION CATALOG (use real scene_id and character ids from context).
+- label: 2–5 words, action-oriented.
+- rationale: one sentence why this helps.
+- Max 3 actions per turn. Prefer zero actions on pure Q&A.
+
+=== DESTINATION CATALOG ===
+${catalogProjectGuidePathsForPrompt(projectId)}
+
+=== PRODUCTION READINESS ===
+${ctx.readinessBlock}
+
 OUTPUT FORMAT — respond with ONLY valid JSON (no markdown fences):
 {
   "reply": "your conversational response to the user",
+  "actions": [
+    {
+      "label": "short button label",
+      "path": "/exact/allowed/path",
+      "rationale": "one sentence why this helps"
+    }
+  ],
   "suggestions": [
     {
       "target": "project" | "director" | "character",
@@ -100,15 +128,48 @@ ${ctx.scenesBlock}`
 
 export function parseProjectGuideResponse (
   rawContent: string,
-  ctx: ProjectGuideContext
-): { reply: string; suggestions: GuideSuggestion[] } {
+  ctx: ProjectGuideContext,
+  projectId: string
+): { reply: string; suggestions: GuideSuggestion[]; actions: GuideAction[] } {
   const obj = extractJsonObject(rawContent)
+  const pathCtx = projectGuidePathContextFromIds({
+    projectId,
+    sceneIds: ctx.sceneIds,
+    characterIds: ctx.characterIds
+  })
+
   if (!obj) {
     const fallback = rawContent.trim()
-    return { reply: fallback || 'I could not parse a response. Try again.', suggestions: [] }
+    return {
+      reply: fallback || 'I could not parse a response. Try again.',
+      suggestions: [],
+      actions: []
+    }
   }
 
   const reply = typeof obj.reply === 'string' ? obj.reply.trim() : ''
+  const rawActions = Array.isArray(obj.actions) ? obj.actions : []
+  const actions: GuideAction[] = []
+  let actionIdx = 0
+  for (const item of rawActions) {
+    if (!item || typeof item !== 'object') continue
+    const o = item as Record<string, unknown>
+    const label = typeof o.label === 'string' ? o.label.trim().slice(0, 80) : ''
+    const pathRaw = typeof o.path === 'string' ? o.path.trim() : ''
+    if (!label || !pathRaw) continue
+    const path = validateProjectGuidePath(pathRaw, pathCtx)
+    if (!path) continue
+    if (actions.some(a => a.path === path)) continue
+    actions.push({
+      id: `pa${Date.now().toString(36)}${actionIdx++}`,
+      label,
+      path,
+      rationale:
+        typeof o.rationale === 'string' ? o.rationale.trim().slice(0, 300) : undefined
+    })
+    if (actions.length >= 3) break
+  }
+
   const rawSuggestions = Array.isArray(obj.suggestions) ? obj.suggestions : []
 
   const suggestions: GuideSuggestion[] = []
@@ -160,6 +221,7 @@ export function parseProjectGuideResponse (
 
   return {
     reply: reply || 'Done.',
-    suggestions
+    suggestions,
+    actions
   }
 }

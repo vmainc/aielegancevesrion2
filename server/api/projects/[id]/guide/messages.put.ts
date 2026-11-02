@@ -24,6 +24,7 @@ function parseMessages (raw: unknown): GuideChatMessage[] {
         role: m.role,
         content: m.content.slice(0, 12000),
         suggestions: Array.isArray(m.suggestions) ? m.suggestions : undefined,
+        actions: Array.isArray(m.actions) ? m.actions : undefined,
         createdAt: typeof m.createdAt === 'string' ? m.createdAt : new Date().toISOString()
       })
     }

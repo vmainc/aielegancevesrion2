@@ -15,7 +15,10 @@ export type ProjectGuideContext = {
   projectBlock: string
   charactersBlock: string
   scenesBlock: string
+  readinessBlock: string
   characterIdsByName: Map<string, string>
+  sceneIds: Set<string>
+  characterIds: Set<string>
 }
 
 function normalizeName (v: string): string {
@@ -74,26 +77,50 @@ export async function loadProjectGuideContext (
     charLines.push(bits.join('\n'))
   }
 
+  const sceneIds = new Set<string>()
   let sceneLines: string[] = []
+  let sceneCount = 0
   try {
     const scenes = await pb.collection('creative_scenes').getFullList({
       filter: `project = "${projectId}"`,
       sort: 'sort_order'
     })
+    sceneCount = scenes.length
     sceneLines = (scenes as Array<Record<string, unknown>>).slice(0, 24).map((s, i) => {
       const mapped = pbRecordToCreativeScene(s as Parameters<typeof pbRecordToCreativeScene>[0])
+      if (mapped.id) sceneIds.add(mapped.id)
       const h = mapped.heading.trim() || `Scene ${i + 1}`
       const sum = mapped.summary.trim().slice(0, 200)
-      return sum ? `${i + 1}. ${h} — ${sum}` : `${i + 1}. ${h}`
+      const idTag = mapped.id ? `scene_id=${mapped.id}` : ''
+      const head = idTag ? `${i + 1}. [${idTag}] ${h}` : `${i + 1}. ${h}`
+      return sum ? `${head} — ${sum}` : head
     })
   } catch {
     sceneLines = []
   }
 
+  const characterIds = new Set<string>([...characterIdsByName.values()])
+  const hasStory = Boolean(project.synopsis?.trim() || project.treatment?.trim())
+  const directorReady = Boolean(
+    director?.style?.trim() ||
+      director?.tone?.trim() ||
+      director?.camera_preferences?.trim()
+  )
+  const readinessLines = [
+    `Story on file: ${hasStory ? 'yes' : 'no — suggest /overview or /tools/script-wizard'}`,
+    `Characters: ${characterIds.size}`,
+    `Scenes: ${sceneCount}`,
+    `Director bible started: ${directorReady ? 'yes' : 'no — suggest /director'}`,
+    `Continuity memory: ${project.continuityMemory?.trim() ? 'yes' : 'empty'}`
+  ]
+
   return {
     projectBlock: projectLines.join('\n\n'),
     charactersBlock: charLines.length ? charLines.join('\n\n') : '(No characters yet)',
     scenesBlock: sceneLines.length ? sceneLines.join('\n') : '(No scenes yet)',
-    characterIdsByName
+    readinessBlock: readinessLines.join('\n'),
+    characterIdsByName,
+    sceneIds,
+    characterIds
   }
 }

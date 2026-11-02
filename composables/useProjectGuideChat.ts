@@ -1,4 +1,9 @@
-import { newGuideMessageId, type GuideChatMessage, type GuideSuggestion } from '~/lib/project-guide'
+import {
+  newGuideMessageId,
+  type GuideAction,
+  type GuideChatMessage,
+  type GuideSuggestion
+} from '~/lib/project-guide'
 import { displayProjectSynopsis } from '~/lib/format-stored-concept'
 import { formatApiFetchError } from '~/lib/format-api-fetch-error'
 import type { CreativeProject, ProjectDirector, CreativeCharacter } from '~/types/creative-project'
@@ -135,7 +140,7 @@ export function useProjectGuideChat (projectId: Ref<string>) {
 
     try {
       const history = messages.value.map((m) => ({ role: m.role, content: m.content }))
-      const res = await $fetch<{ reply: string; suggestions: GuideSuggestion[] }>(
+      const res = await $fetch<{ reply: string; suggestions: GuideSuggestion[]; actions?: GuideAction[] }>(
         `/api/projects/${projectId.value}/guide`,
         {
           method: 'POST',
@@ -148,6 +153,7 @@ export function useProjectGuideChat (projectId: Ref<string>) {
         role: 'assistant',
         content: res.reply || 'Done.',
         suggestions: res.suggestions || [],
+        actions: res.actions?.length ? res.actions : undefined,
         createdAt: new Date().toISOString()
       })
     } catch (e: unknown) {

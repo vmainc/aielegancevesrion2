@@ -231,6 +231,8 @@ export interface ProductionPromptContext {
   cast: ProjectCharacterRef[]
   /** Read-only bible context appended at prompt assembly time (not persisted). */
   productionBible?: ProductionBibleResolvedContext | null
+  /** When false, omit cast continuity blocks from the motion prompt (Director still affects storyboard frames). */
+  applyProjectLook?: boolean
 }
 
 /**
@@ -261,9 +263,12 @@ export function buildFullVideoGenerationPrompt (ctx: ProductionPromptContext): s
     cast: ctx.cast.map(c => projectCharacterRefToCastMember(c)),
     productionBible: ctx.productionBible
   })
-  const continuity = buildContinuityPromptBlock(ctx.cast)
-  if (continuity && !/CHARACTER CONTINUITY/i.test(prompt)) {
-    prompt = `${prompt}\n\n${continuity}`
+  const useProjectLook = ctx.applyProjectLook !== false
+  if (useProjectLook) {
+    const continuity = buildContinuityPromptBlock(ctx.cast)
+    if (continuity && !/CHARACTER CONTINUITY/i.test(prompt)) {
+      prompt = `${prompt}\n\n${continuity}`
+    }
   }
   if (isMusicVideoTarget(ctx.targetLength)) {
     prompt +=

@@ -172,6 +172,8 @@ const props = withDefaults(
     setReferenceImageUrls?: string[]
     /** Optional CHARACTER CONTINUITY text block appended when generating the seed frame. */
     castContinuityBlock?: string
+    /** When false, skip Production Bible and cast continuity on frame regen. */
+    applyProjectLook?: boolean
   }>(),
   {
     compact: false,
@@ -182,7 +184,8 @@ const props = withDefaults(
     bibleCharacterIds: () => [],
     referenceImageUrls: () => [],
     setReferenceImageUrls: () => [],
-    castContinuityBlock: ''
+    castContinuityBlock: '',
+    applyProjectLook: true
   }
 )
 
@@ -326,7 +329,7 @@ async function generateFrame () {
     } else if (isBeatFrame.value) {
       promptForApi = `${p}\n\nComposition note: create a mid-shot still for this timeline beat — clear story moment between the start and end of the clip.`
     }
-    if (props.bibleProjectId && PB_ID.test(props.bibleProjectId)) {
+    if (props.applyProjectLook !== false && props.bibleProjectId && PB_ID.test(props.bibleProjectId)) {
       const ctx = await productionBible.loadContextForPrompt(
         mergeProductionBibleGenerationOptions({
           sceneId: props.bibleSceneId || undefined,
@@ -337,9 +340,11 @@ async function generateFrame () {
       bibleDebugLine.value = productionBibleGenerationDebugLabel(ctx)
       promptForApi = appendProductionBibleToPrompt(promptForApi, ctx)
     }
-    const continuity = (props.castContinuityBlock || '').trim()
-    if (continuity && !/CHARACTER CONTINUITY/i.test(promptForApi)) {
-      promptForApi = `${promptForApi}\n\n${continuity}`
+    if (props.applyProjectLook !== false) {
+      const continuity = (props.castContinuityBlock || '').trim()
+      if (continuity && !/CHARACTER CONTINUITY/i.test(promptForApi)) {
+        promptForApi = `${promptForApi}\n\n${continuity}`
+      }
     }
     if (props.referenceImageUrls?.length) {
       promptForApi = `${promptForApi}\n\nHEADSHOT IDENTITY LOCK: Attached character images are lookbook identity plates (headshot first). Match each face exactly — including facial hair (clean-shaven vs beard). Do not invent a beard or change the face from the headshot.`

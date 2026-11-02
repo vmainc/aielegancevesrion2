@@ -20,6 +20,8 @@ export type VideoGenerationPrefs = {
   aspectRatio?: VideoGenerationAspectRatio
   durationSeconds?: number
   resolution?: VideoToolResolution
+  /** When false, video motion prompt omits cast continuity; frame regen skips Production Bible. Default true. */
+  applyProjectLook?: boolean
 }
 
 const ASPECT_RATIOS = new Set<VideoGenerationAspectRatio>(['16:9', '9:16', '1:1'])
@@ -77,11 +79,19 @@ export function readVideoGenerationPrefs (): VideoGenerationPrefs {
       projectId: typeof parsed.projectId === 'string' ? parsed.projectId.trim() : undefined,
       aspectRatio: parseVideoGenerationAspectRatio(parsed.aspectRatio),
       durationSeconds: parseVideoGenerationDurationSeconds(parsed.durationSeconds),
-      resolution: parseVideoGenerationResolution(parsed.resolution)
+      resolution: parseVideoGenerationResolution(parsed.resolution),
+      applyProjectLook: parseApplyProjectLookPref(parsed.applyProjectLook)
     }
   } catch {
     return {}
   }
+}
+
+function parseApplyProjectLookPref (raw: unknown): boolean | undefined {
+  if (raw === undefined || raw === null) return undefined
+  if (raw === false || raw === 'false' || raw === 0 || raw === '0') return false
+  if (raw === true || raw === 'true' || raw === 1 || raw === '1') return true
+  return undefined
 }
 
 export function writeVideoGenerationPrefs (prefs: VideoGenerationPrefs): void {
@@ -123,6 +133,14 @@ export function defaultDurationFromPrefs (bootDuration?: number): number {
     if (fromPrefs) return fromPrefs
   }
   return 5
+}
+
+export function defaultApplyProjectLookFromPrefs (): boolean {
+  if (typeof localStorage !== 'undefined') {
+    const fromPrefs = readVideoGenerationPrefs().applyProjectLook
+    if (fromPrefs === false) return false
+  }
+  return true
 }
 
 export function defaultResolutionFromPrefs (bootResolution?: string): VideoToolResolution {
