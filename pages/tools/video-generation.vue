@@ -633,27 +633,31 @@
               v-if="showProjectLookControl"
               class="mt-2 rounded-lg border px-3 py-2.5 text-xs space-y-1.5"
               :class="applyProjectLook
-                ? 'border-sky-200 bg-sky-50/80 text-sky-950'
+                ? 'border-emerald-400/70 bg-emerald-500/40 ring-1 ring-emerald-400/50 text-emerald-50'
                 : 'border-gray-200 bg-gray-50 text-gray-700'"
             >
-              <label class="inline-flex items-start gap-2 cursor-pointer font-medium text-gray-900">
+              <label
+                class="inline-flex items-start gap-2 cursor-pointer font-semibold"
+                :class="applyProjectLook ? 'text-emerald-50' : 'text-gray-900'"
+              >
                 <input
                   v-model="applyProjectLook"
                   type="checkbox"
-                  class="mt-0.5 rounded border-gray-300 text-primary focus:ring-primary shrink-0"
+                  class="mt-0.5 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400 shrink-0"
                 >
                 Apply project look (Director + cast continuity)
               </label>
               <p
                 v-if="projectLookHint.detail"
-                class="font-normal leading-snug text-[11px] text-gray-700"
+                class="font-normal leading-snug text-[11px]"
+                :class="applyProjectLook ? 'text-emerald-100' : 'text-gray-700'"
               >
-                <span class="font-semibold text-gray-900">{{ projectLookHint.title }}</span>
+                <span class="font-semibold" :class="applyProjectLook ? 'text-white' : 'text-gray-900'">{{ projectLookHint.title }}</span>
                 — {{ projectLookHint.detail }}
               </p>
               <p
                 v-if="productionBibleDebugLine && applyProjectLook"
-                class="text-[11px] text-gray-600"
+                class="text-[11px] text-emerald-100/95"
               >
                 {{ productionBibleDebugLine }}
               </p>
