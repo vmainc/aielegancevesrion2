@@ -16,7 +16,7 @@
           <span v-if="seg.type === 'text'">{{ seg.text }}</span>
           <span
             v-else
-            class="rounded-[3px] bg-primary/20 text-gray-900 underline decoration-primary/60 underline-offset-2 pointer-events-auto cursor-default"
+            class="rounded-[3px] bg-emerald-500/45 text-emerald-50 font-semibold ring-1 ring-emerald-400/70 underline decoration-emerald-300 underline-offset-2 pointer-events-auto cursor-default"
             :data-mention-id="seg.mention.characterId"
             @mouseenter="onMentionEnter($event, seg.mention)"
             @mouseleave="onMentionLeave"
@@ -31,7 +31,7 @@
         :value="modelValue"
         :rows="rows"
         :placeholder="placeholder"
-        class="relative z-[1] w-full px-3 py-2 rounded-lg border-0 bg-transparent text-sm leading-5 text-transparent caret-gray-900 selection:bg-primary/25 focus:outline-none resize-y placeholder:text-gray-400"
+        class="relative z-[1] w-full px-3 py-2 rounded-lg border-0 bg-transparent text-sm leading-5 text-transparent caret-gray-900 selection:bg-emerald-500/35 focus:outline-none resize-y placeholder:text-gray-400"
         spellcheck="true"
         @input="onInput"
         @scroll="syncScroll"
