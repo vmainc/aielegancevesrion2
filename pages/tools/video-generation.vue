@@ -633,31 +633,31 @@
               v-if="showProjectLookControl"
               class="mt-2 rounded-lg border px-3 py-2.5 text-xs space-y-1.5"
               :class="applyProjectLook
-                ? 'border-emerald-400/70 bg-emerald-500/40 ring-1 ring-emerald-400/50 text-emerald-50'
-                : 'border-gray-200 bg-gray-50 text-gray-700'"
+                ? 'border-emerald-600 bg-emerald-950 text-white shadow-sm'
+                : 'border-gray-300 bg-gray-100 text-gray-800'"
             >
               <label
                 class="inline-flex items-start gap-2 cursor-pointer font-semibold"
-                :class="applyProjectLook ? 'text-emerald-50' : 'text-gray-900'"
+                :class="applyProjectLook ? 'text-white' : 'text-gray-900'"
               >
                 <input
                   v-model="applyProjectLook"
                   type="checkbox"
-                  class="mt-0.5 rounded border-gray-300 text-emerald-500 focus:ring-emerald-400 shrink-0"
+                  class="mt-0.5 rounded border-emerald-400 bg-emerald-950 text-emerald-400 focus:ring-emerald-400 shrink-0"
                 >
                 Apply project look (Director + cast continuity)
               </label>
               <p
                 v-if="projectLookHint.detail"
                 class="font-normal leading-snug text-[11px]"
-                :class="applyProjectLook ? 'text-emerald-100' : 'text-gray-700'"
+                :class="applyProjectLook ? 'text-emerald-50' : 'text-gray-700'"
               >
                 <span class="font-semibold" :class="applyProjectLook ? 'text-white' : 'text-gray-900'">{{ projectLookHint.title }}</span>
-                — {{ projectLookHint.detail }}
+                <span :class="applyProjectLook ? 'text-emerald-50' : ''"> — {{ projectLookHint.detail }}</span>
               </p>
               <p
                 v-if="productionBibleDebugLine && applyProjectLook"
-                class="text-[11px] text-emerald-100/95"
+                class="text-[11px] text-emerald-200"
               >
                 {{ productionBibleDebugLine }}
               </p>
